@@ -668,7 +668,7 @@ def _register_transformation(
             f"write to `key_added` to move only the query."
         )
 
-    result = fit_fn(ref_lm, query_lm, source_cs=moving_cs, target_cs=target_coordinate_system)
+    result = fit_fn(ref_lm, query_lm)
     return writeback_affine_sdata(
         result,
         query_container,

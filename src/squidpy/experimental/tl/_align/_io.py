@@ -38,9 +38,6 @@ def writeback_affine_sdata(
     from spatialdata import deepcopy as sd_deepcopy
     from spatialdata.transformations import Affine, Sequence, get_transformation, set_transformation
 
-    if moving_cs is None or target_cs is None:
-        raise ValueError("`moving_cs` and `target_cs` are required to register a transform on a SpatialData.")
-
     out = sdata if inplace else shallow_copy_sdata(sdata)
     sd_affine = Affine(np.asarray(result.matrix), input_axes=("x", "y"), output_axes=("x", "y"))
     touched = False

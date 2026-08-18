@@ -15,6 +15,7 @@ from ._core import jax_dtype, reverse_axes
 
 if TYPE_CHECKING:
     import jax
+    import numpy.typing as npt
 
     JaxArray = jax.Array
 else:  # pragma: no cover - typing only

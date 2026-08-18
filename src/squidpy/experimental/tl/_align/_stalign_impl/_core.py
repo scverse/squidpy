@@ -314,7 +314,7 @@ def _lddmm_loss(
 ) -> tuple[jax.Array, tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]]:
     affine = _to_affine(linear, translation)
     source_grid = transform_grid_row_col(x_target, xv, velocity, affine, direction="backward")
-    warped_source = _interp(x_source, source_image, source_grid, mode="nearest")
+    warped_source = _interp(x_source, source_image, source_grid)
     contrast_source = _contrast_transform(warped_source, target_image, match_weights)
 
     match_energy = jnp.sum((contrast_source - target_image) ** 2 * match_weights) / (2.0 * sigmaM**2)

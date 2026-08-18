@@ -18,8 +18,6 @@ class AffineFitResult:
     """A fitted ``(3, 3)`` homogeneous affine mapping query onto ref, in ``(x, y)``."""
 
     matrix: np.ndarray
-    source_cs: str | None = None
-    target_cs: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -39,8 +37,6 @@ def _fit(
     query: np.ndarray,
     *,
     method: Literal["similarity", "affine"],
-    source_cs: str | None,
-    target_cs: str | None,
 ) -> AffineFitResult:
     ref = validate_xy(ref, name="ref")
     query = validate_xy(query, name="query")
@@ -63,15 +59,12 @@ def _fit(
 
         matrix = np.asarray(estimate_transform("affine", src=query, dst=ref).params)
 
-    return AffineFitResult(matrix=matrix, source_cs=source_cs, target_cs=target_cs, metadata={"method": method})
+    return AffineFitResult(matrix=matrix, metadata={"method": method})
 
 
 def fit_similarity(
     ref: np.ndarray,
     query: np.ndarray,
-    *,
-    source_cs: str | None = None,
-    target_cs: str | None = None,
 ) -> AffineFitResult:
     """4-DOF similarity fit (rotation + uniform scale + translation), via spatialdata.
 
@@ -79,19 +72,13 @@ def fit_similarity(
     ----------
     ref, query
         Pre-paired ``(N, 2)`` ``(x, y)`` landmark arrays (``N >= 3``).
-    source_cs, target_cs
-        Optional coordinate-system labels stamped onto the result for
-        traceability; they do not affect the fit.
     """
-    return _fit(ref, query, method="similarity", source_cs=source_cs, target_cs=target_cs)
+    return _fit(ref, query, method="similarity")
 
 
 def fit_affine(
     ref: np.ndarray,
     query: np.ndarray,
-    *,
-    source_cs: str | None = None,
-    target_cs: str | None = None,
 ) -> AffineFitResult:
     """6-DOF affine fit (rotation + non-uniform scale + shear + translation), via skimage.
 
@@ -99,11 +86,8 @@ def fit_affine(
     ----------
     ref, query
         Pre-paired ``(N, 2)`` ``(x, y)`` landmark arrays (``N >= 3``).
-    source_cs, target_cs
-        Optional coordinate-system labels stamped onto the result for
-        traceability; they do not affect the fit.
     """
-    return _fit(ref, query, method="affine", source_cs=source_cs, target_cs=target_cs)
+    return _fit(ref, query, method="affine")
 
 
 def _extract_affine_matrix(sd_transform: object) -> np.ndarray:
