@@ -58,9 +58,7 @@ def as_chw(image: Any, *, name: str, ndim: int = 2) -> JaxArray:
         return arr[None]
     if arr.ndim != ndim + 1:
         spatial = ", ".join("zyx"[-ndim:])
-        raise ValueError(
-            f"Expected `{name}` to be a `({spatial})` or `(c, {spatial})` image, found shape {arr.shape}."
-        )
+        raise ValueError(f"Expected `{name}` to be a `({spatial})` or `(c, {spatial})` image, found shape {arr.shape}.")
     return arr
 
 

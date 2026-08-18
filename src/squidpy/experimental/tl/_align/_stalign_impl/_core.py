@@ -206,8 +206,7 @@ def _build_regularizer(
     dv = jnp.array([axis[1] - axis[0] for axis in xv])
     shape = tuple(axis.shape[0] for axis in xv)
     frequencies = [
-        jnp.arange(size, dtype=axis.dtype) / (size * step)
-        for size, axis, step in zip(shape, xv, dv, strict=True)
+        jnp.arange(size, dtype=axis.dtype) / (size * step) for size, axis, step in zip(shape, xv, dv, strict=True)
     ]
     frequency_grid = jnp.stack(jnp.meshgrid(*frequencies, indexing="ij"), axis=-1)
     ll = (1.0 + 2.0 * a**2 * jnp.sum((1.0 - jnp.cos(2.0 * np.pi * frequency_grid * dv)) / (dv**2), axis=-1)) ** (
@@ -263,13 +262,9 @@ def _update_mixture_weights(
 
         match = mixing[0] * jnp.exp(-jnp.sum((transformed_source - target_image) ** 2, axis=0) / (2.0 * sigmaM**2))
         match = match / norm_match
-        artifact = mixing[1] * jnp.exp(
-            -jnp.sum((_channelwise(muA) - target_image) ** 2, axis=0) / (2.0 * sigmaA**2)
-        )
+        artifact = mixing[1] * jnp.exp(-jnp.sum((_channelwise(muA) - target_image) ** 2, axis=0) / (2.0 * sigmaA**2))
         artifact = artifact / norm_artifact
-        background = mixing[2] * jnp.exp(
-            -jnp.sum((_channelwise(muB) - target_image) ** 2, axis=0) / (2.0 * sigmaB**2)
-        )
+        background = mixing[2] * jnp.exp(-jnp.sum((_channelwise(muB) - target_image) ** 2, axis=0) / (2.0 * sigmaB**2))
         background = background / norm_background
 
         total = match + artifact + background

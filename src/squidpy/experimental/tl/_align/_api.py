@@ -354,7 +354,10 @@ def _element_axes(
         )
     scale = np.diag(matrix[: len(spatial), : len(spatial)])
     offset = matrix[: len(spatial), -1]
-    return [np.arange(size, dtype=float) * step + shift for size, step, shift in zip(array.shape[1:], scale, offset, strict=True)]
+    return [
+        np.arange(size, dtype=float) * step + shift
+        for size, step, shift in zip(array.shape[1:], scale, offset, strict=True)
+    ]
 
 
 def align_stalign_slice(

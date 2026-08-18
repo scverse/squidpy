@@ -189,9 +189,7 @@ def rasterize_points(
         raise ValueError(f"`points_key={points_key!r}` has no {missing} column(s); found {list(element.columns)}.")
     frame = element[["x", "y"]].compute() if hasattr(element, "compute") else element[["x", "y"]]
 
-    grid_x, grid_y, image = rasterize(
-        np.asarray(frame["x"]), np.asarray(frame["y"]), dx=dx, blur=blur, expand=expand
-    )
+    grid_x, grid_y, image = rasterize(np.asarray(frame["x"]), np.asarray(frame["y"]), dx=dx, blur=blur, expand=expand)
 
     # The raster's own pixel grid is index space; this puts it back where the points are.
     # `Scale` first, then `Translation`, since the grid origin is a physical offset.
