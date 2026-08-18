@@ -250,7 +250,7 @@ _niche_common_params = f"""\
 _niche_leiden_params = """\
 flavor
     Leiden backend passed to :func:`scanpy.tl.leiden`. Defaults to ``'igraph'``
-    (the ``'leidenalg'`` backend is deprecated in :mod:`scanpy`).
+    (the ``'leidenalg'`` backend is deprecated in scanpy).
 n_iterations
     Number of Leiden iterations. ``-1`` iterates until convergence.
 random_state
