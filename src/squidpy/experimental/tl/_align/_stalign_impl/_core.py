@@ -129,7 +129,7 @@ def transform_points_row_col(
             xv,
             jnp.moveaxis(flow_sign * velocity[t], -1, 0),
             pts.T[:, :, None],
-            )[:, :, 0].T
+        )[:, :, 0].T
         pts = pts + disp / n_steps
 
     if direction == "forward":
