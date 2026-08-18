@@ -21,12 +21,12 @@ else:  # pragma: no cover - typing only
     JaxArray = Any
 
 __all__ = [
+    "resolve_axes",
     "affine_from_points",
     "affine_xy_to_rc",
     "as_chw",
     "centred_axes",
     "explicit_axes",
-    "rasterize",
     "rasterize_cloud",
     "validate_points",
 ]
@@ -60,6 +60,26 @@ def as_chw(image: Any, *, name: str, ndim: int = 2) -> JaxArray:
         spatial = ", ".join("zyx"[-ndim:])
         raise ValueError(f"Expected `{name}` to be a `({spatial})` or `(c, {spatial})` image, found shape {arr.shape}.")
     return arr
+
+
+def resolve_axes(
+    axes: Sequence[npt.ArrayLike] | None,
+    scale: tuple[float, ...],
+    shape: tuple[int, ...],
+    name: str,
+) -> tuple[JaxArray, ...]:
+    """Physical axes for one side: explicit if given, otherwise centred on ``scale``.
+
+    Rank-agnostic, and shared by the rank-2 and rank-3 entry points so they cannot drift.
+    They did: the image path raised when explicit axes were combined with a non-unit scale
+    while the slice path silently ignored the scale, so the same mistake was an error at
+    rank 2 and a wrong answer at rank 3.
+    """
+    if axes is None:
+        return centred_axes(shape, scale)
+    if any(s != 1.0 for s in scale):
+        raise ValueError(f"`{name}` is mutually exclusive with a non-unit `{name.replace('_axes', '_scale')}`.")
+    return explicit_axes(axes, shape, name)
 
 
 def centred_axes(shape: tuple[int, ...], scale: Sequence[float]) -> tuple[JaxArray, ...]:

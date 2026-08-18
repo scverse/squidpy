@@ -477,7 +477,7 @@ def fit_stalign_slice(
         raise ImportError(_JAX_REQUIRED) from e
 
     from ._stalign_impl._core import jax_dtype, lddmm
-    from ._stalign_impl._helpers import affine_xy_to_rc, as_chw, centred_axes, explicit_axes
+    from ._stalign_impl._helpers import affine_xy_to_rc, as_chw, resolve_axes
 
     opts: dict[str, Any] = _SLICE_DEFAULTS | solver_kwargs
     dtype = jax_dtype()
@@ -496,16 +496,8 @@ def fit_stalign_slice(
 
     # The reference is the moving image: it is the volume that gets warped onto the
     # section, so it plays LDDMM's `I`/`xI` role and the section plays `J`/`xJ`.
-    source_grid = (
-        centred_axes(source_image.shape[1:], ref_scale)
-        if ref_axes is None
-        else explicit_axes(ref_axes, source_image.shape[1:], "ref_axes")
-    )
-    section_grid = (
-        centred_axes(target_image.shape[1:], query_scale)
-        if query_axes is None
-        else explicit_axes(query_axes, target_image.shape[1:], "query_axes")
-    )
+    source_grid = resolve_axes(ref_axes, ref_scale, source_image.shape[1:], "ref_axes")
+    section_grid = resolve_axes(query_axes, query_scale, target_image.shape[1:], "query_axes")
     # Upstream's whole 3D-to-slice special case: give the section a single-sample z axis
     # at the origin and a length-1 z extent, and the rank-3 solver does the rest.
     target_grid = (jnp.zeros(1, dtype=dtype), *section_grid)
@@ -724,7 +716,7 @@ def fit_stalign_image(
         raise ImportError(_JAX_REQUIRED) from e
 
     from ._stalign_impl._core import jax_dtype, lddmm
-    from ._stalign_impl._helpers import affine_xy_to_rc, as_chw, centred_axes, explicit_axes
+    from ._stalign_impl._helpers import affine_xy_to_rc, as_chw, resolve_axes
 
     opts = _IMAGE_DEFAULTS | solver_kwargs
     initial_affine = opts.get("initial_affine")
@@ -733,24 +725,10 @@ def fit_stalign_image(
     source_image = as_chw(query, name="query")
     target_image = as_chw(ref, name="ref")
 
-    # Each side resolves its own axes. Explicit axes and a non-unit scale are still
-    # mutually exclusive -- one would silently override the other -- but only within a
-    # side, since a reference on centred scaled axes against a query on explicit ones is
-    # a real recipe rather than a mistake.
-    def resolve(
-        axes: Sequence[npt.ArrayLike] | None,
-        scale: tuple[float, float],
-        image: JaxArray,
-        name: str,
-    ) -> tuple[JaxArray, ...]:
-        if axes is None:
-            return centred_axes(image.shape[1:], scale)
-        if scale != (1.0, 1.0):
-            raise ValueError(f"`{name}` is mutually exclusive with a non-unit `{name.replace('_axes', '_scale')}`.")
-        return explicit_axes(axes, image.shape[1:], name)
-
-    source_grid = resolve(query_axes, query_scale, source_image, "query_axes")
-    target_grid = resolve(ref_axes, ref_scale, target_image, "ref_axes")
+    # Explicit axes and a non-unit scale are mutually exclusive within a side; see
+    # `resolve_axes`, which both ranks share so the rule cannot differ between them.
+    source_grid = resolve_axes(query_axes, query_scale, source_image.shape[1:], "query_axes")
+    target_grid = resolve_axes(ref_axes, ref_scale, target_image.shape[1:], "ref_axes")
 
     if initial_affine is None:
         linear, translation = jnp.eye(2, dtype=dtype), jnp.zeros(2, dtype=dtype)

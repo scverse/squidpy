@@ -31,7 +31,6 @@ __all__ = [
     "StainReference",
     "VahadaneParams",
     "WekaParams",
-    "apply_stain_normalization",
     "calculate_image_features",
     "normalize_stains",
     "decompose_stains",

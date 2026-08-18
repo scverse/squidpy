@@ -65,7 +65,6 @@ def _interp(
     image: jax.Array,
     phii: jax.Array,
     *,
-    mode: str = "nearest",
     order: int = 1,
 ) -> jax.Array:
     """Interpolate a channels-first image on physical coordinates, at any rank.
@@ -100,7 +99,7 @@ def _interp(
     idx = jnp.stack([((coords[axis] - x[axis][0]) / (x[axis][1] - x[axis][0])).reshape(-1) for axis in range(ndim)])
 
     def _sample(channel: jax.Array) -> jax.Array:
-        values = jsp.ndimage.map_coordinates(channel, idx, order=order, mode=mode)
+        values = jsp.ndimage.map_coordinates(channel, idx, order=order, mode="nearest")
         return values.reshape(coords.shape[1:])
 
     return jax.vmap(_sample)(arr)
@@ -130,8 +129,7 @@ def transform_points_row_col(
             xv,
             jnp.moveaxis(flow_sign * velocity[t], -1, 0),
             pts.T[:, :, None],
-            mode="nearest",
-        )[:, :, 0].T
+            )[:, :, 0].T
         pts = pts + disp / n_steps
 
     if direction == "forward":
