@@ -15,7 +15,14 @@ from spatialdata import SpatialData
 
 from ._io import shallow_copy_sdata, writeback_affine_sdata
 from ._landmark import fit_affine, fit_similarity
-from ._stalign import StalignObsSolverKwargs, StalignSolverKwargs, fit_stalign_image, fit_stalign_obs
+from ._stalign import (
+    StalignObsSolverKwargs,
+    StalignSliceSolverKwargs,
+    StalignSolverKwargs,
+    fit_stalign_image,
+    fit_stalign_obs,
+    fit_stalign_slice,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -23,9 +30,9 @@ if TYPE_CHECKING:
     import numpy.typing as npt
 
     from ._landmark import AffineFitResult
-    from ._stalign import StalignResult
+    from ._stalign import StalignResult, StalignSliceResult
 
-__all__ = ["align_landmarks", "align_stalign_image", "align_stalign_obs"]
+__all__ = ["align_landmarks", "align_stalign_image", "align_stalign_obs", "align_stalign_slice"]
 
 
 def _resolve_pair(value: str | tuple[str | None, str | None], *, name: str) -> tuple[str | None, str | None]:
@@ -70,18 +77,22 @@ def _read_coords(adata: AnnData, key: str, *, side: str, name: str) -> np.ndarra
     return coords
 
 
-def _as_chw(value: npt.ArrayLike, *, what: str) -> np.ndarray:
-    """Promote a bare ``(y, x)`` array to a single-channel ``(c, y, x)``."""
+def _as_chw(value: npt.ArrayLike, *, what: str, ndim: int = 2) -> np.ndarray:
+    """Promote an unchannelled array to a single-channel one.
+
+    ``ndim`` is the number of *spatial* axes: 2 for a section, 3 for a reference volume.
+    """
     array = np.asarray(value)
-    if array.ndim == 2:
+    if array.ndim == ndim:
         array = array[None]
-    if array.ndim != 3:
-        raise ValueError(f"{what} must be a 2D or (c, y, x) image, found shape {array.shape}.")
+    if array.ndim != ndim + 1:
+        spatial = ", ".join("zyx"[-ndim:])
+        raise ValueError(f"{what} must be a ({spatial}) or (c, {spatial}) image, found shape {array.shape}.")
     return array
 
 
-def _read_image(container: SpatialData, key: str, *, side: str) -> np.ndarray:
-    """Read a channels-first ``(c, y, x)`` array from a SpatialData image element."""
+def _read_image(container: SpatialData, key: str, *, side: str, ndim: int = 2) -> np.ndarray:
+    """Read a channels-first array from a SpatialData image element."""
     if not isinstance(container, SpatialData):
         raise TypeError(f"`image_key` names a SpatialData image, but the {side} is a {type(container).__name__}.")
     if key not in container.images:
@@ -93,7 +104,7 @@ def _read_image(container: SpatialData, key: str, *, side: str) -> np.ndarray:
         element = next(iter(element.values()))
         element = element[next(iter(element.data_vars))]
 
-    return _as_chw(element.data, what=f"`image_key={key!r}`")
+    return _as_chw(element.data, what=f"`image_key={key!r}`", ndim=ndim)
 
 
 def _copy_for_write(container: AnnData | SpatialData, table_key: str | None) -> AnnData | SpatialData:
@@ -312,6 +323,161 @@ def align_stalign_image(
     warped = _as_chw(result.warp_image(query_array), what=f"`key_added={key_added!r}`")
     target.images[key_added] = Image2DModel.parse(warped, dims=("c", "y", "x"))
     return None if inplace else target
+
+
+def _element_axes(
+    container: SpatialData,
+    key: str,
+    array: np.ndarray,
+    *,
+    coordinate_system: str,
+    side: str,
+) -> list[np.ndarray]:
+    """Physical axes of an image element, read off its transformation.
+
+    The scale and translation the element carries into ``coordinate_system`` are what put
+    it in physical units, so the fit reads them rather than taking a ``*_scale`` argument
+    that could disagree with the container. Axis order matches the array's spatial axes.
+    """
+    from spatialdata.transformations import get_transformation
+
+    spatial = ("z", "y", "x")[-(array.ndim - 1) :]
+    transformation = get_transformation(container.images[key], to_coordinate_system=coordinate_system)
+    matrix = np.asarray(transformation.to_affine_matrix(input_axes=spatial, output_axes=spatial), dtype=float)
+
+    off_diagonal = matrix[: len(spatial), : len(spatial)] - np.diag(np.diag(matrix[: len(spatial), : len(spatial)]))
+    if np.any(np.abs(off_diagonal) > 1e-9):
+        raise ValueError(
+            f"`image_key={key!r}` on the {side} carries a rotation or shear into "
+            f"{coordinate_system!r}, which cannot be expressed as per-axis coordinates. "
+            f"Pass the axes explicitly, or move the rotation into the fit's initialisation."
+        )
+    scale = np.diag(matrix[: len(spatial), : len(spatial)])
+    offset = matrix[: len(spatial), -1]
+    return [np.arange(size, dtype=float) * step + shift for size, step, shift in zip(array.shape[1:], scale, offset, strict=True)]
+
+
+def align_stalign_slice(
+    sdata_ref: SpatialData,
+    sdata_query: SpatialData | None = None,
+    *,
+    image_key: str | tuple[str, str],
+    ref_coordinate_system: str = "global",
+    query_coordinate_system: str = "global",
+    initial_slice: int | None = None,
+    initial_rotation: float = 0.0,
+    initial_scale: float = 1.0,
+    initial_affine: npt.ArrayLike | None = None,
+    table_key: str | None = None,
+    spatial_key: str = "spatial",
+    key_added: str | None = None,
+    inplace: bool = False,
+    **solver_kwargs: Unpack[StalignSliceSolverKwargs],
+) -> StalignSliceResult | SpatialData | None:
+    """Place a 2D section into a 3D reference volume with STalign (diffeomorphic LDDMM).
+
+    The plane of a physical section is unknown and generally not exactly coronal, so this
+    fits the full 3D deformation rather than an oblique plane plus an in-plane 2D fit;
+    ``initial_slice`` / ``initial_rotation`` / ``initial_scale`` are an initialisation, not
+    the answer. Every cell in ``spatial_key`` then gets real reference coordinates.
+
+    Parameters
+    ----------
+    sdata_ref, sdata_query
+        The :class:`~spatialdata.SpatialData` objects holding the reference volume and the
+        section. Leave ``sdata_query=None`` with ``sdata_ref`` holding both, distinguished
+        by an ``image_key`` pair.
+    image_key
+        Name of the image element, or a ``(ref, query)`` pair. The reference must be a
+        ``(c, z, y, x)`` volume and the query a ``(c, y, x)`` section -- for cells rather
+        than an image, rasterize them first with
+        :func:`~squidpy.experimental.im.rasterize_points`.
+    ref_coordinate_system, query_coordinate_system
+        Coordinate systems to read each element's physical axes in. The scale and
+        translation the elements carry supply the units, so nothing has to be restated.
+    initial_slice
+        Index along the reference's ``z`` axis to centre the section on. ``None`` centres
+        on the middle of the volume.
+    initial_rotation
+        In-plane rotation of the initial affine, in **radians**.
+    initial_scale
+        Uniform scale of the initial affine. Upstream's notebooks start at 0.9.
+    initial_affine
+        Homogeneous ``(4, 4)`` affine in ``(x, y, z)``, replacing the three ``initial_*``
+        arguments above. The escape hatch when the initialisation needs to be exact.
+    table_key
+        Which of the query's tables holds the cell coordinates to transform. Required when
+        ``key_added`` is given.
+    spatial_key
+        ``obsm`` key on the query table holding the ``(N, 2)`` section coordinates.
+    key_added
+        ``obsm`` key on the query table to write the ``(N, 3)`` reference coordinates to.
+        ``None`` (default) writes nothing and returns the fit instead -- this is an
+        expensive fit and usually worth inspecting first.
+    inplace
+        Whether to write into ``sdata_query`` itself. ``False`` (default) writes into a
+        copy and returns it. Needs ``key_added``.
+    solver_kwargs
+        LDDMM solver tuning; see
+        :class:`~squidpy.experimental.tl.StalignSliceSolverKwargs`.
+
+    Returns
+    -------
+    The fitted :class:`~squidpy.experimental.tl.StalignSliceResult` when ``key_added`` is
+    ``None``; otherwise the modified copy, or ``None`` when ``inplace=True``.
+
+    Notes
+    -----
+    The reference volume typically carries two channels -- a normalised intensity volume
+    and its centred square -- against a single-channel section; the contrast transform
+    fits one to the other, so the channel counts need not match.
+
+    ``muA`` / ``muB`` take one entry per *section* channel. Upstream's published notebook
+    passes three against a single-channel target and relies on broadcasting, which sums
+    three identical terms and makes its effective artifact scale ``sigmaA / sqrt(3)``
+    rather than ``sigmaA``. squidpy validates the length instead, so ``muA=[3.0]`` here is
+    **not** the same fit as that notebook's ``muA=[3, 3, 3]``.
+    """
+    check_inplace(inplace, key_added, names="`key_added`")
+    ref_image, query_image = _resolve_pair(image_key, name="image_key")
+    query_container = _query_of(
+        sdata_ref, sdata_query, ref_address=(ref_image,), query_address=(query_image,), key_name="image_key"
+    )
+    if key_added is not None and table_key is None:
+        raise ValueError(
+            "`key_added` writes the reference coordinates into a table's `obsm`, so "
+            "`table_key` is needed to say which table holds the cells."
+        )
+
+    ref_array = _read_image(sdata_ref, ref_image, side="reference", ndim=3)
+    query_array = _read_image(query_container, query_image, side="query")
+
+    result = fit_stalign_slice(
+        ref=ref_array,
+        query=query_array,
+        ref_axes=_element_axes(
+            sdata_ref, ref_image, ref_array, coordinate_system=ref_coordinate_system, side="reference"
+        ),
+        query_axes=_element_axes(
+            query_container, query_image, query_array, coordinate_system=query_coordinate_system, side="query"
+        ),
+        initial_slice=initial_slice,
+        initial_rotation=initial_rotation,
+        initial_scale=initial_scale,
+        initial_affine=initial_affine,
+        **solver_kwargs,
+    )
+    if key_added is None:
+        return result
+    return _write_coords(
+        query_container,
+        table_key,
+        spatial_key,
+        key_added,
+        transform=result.transform,
+        spatial_key_name="spatial_key",
+        inplace=inplace,
+    )
 
 
 def align_landmarks(

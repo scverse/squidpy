@@ -154,6 +154,7 @@ tuning as flat keyword arguments, listed below, and return the fitted map when
     :toctree: api
 
     experimental.tl.StalignResult
+    experimental.tl.StalignSliceResult
     experimental.tl.AffineFitResult
 ```
 
@@ -165,6 +166,7 @@ tuning as flat keyword arguments, listed below, and return the fitted map when
 
     experimental.tl.StalignSolverKwargs
     experimental.tl.StalignObsSolverKwargs
+    experimental.tl.StalignSliceSolverKwargs
 ```
 
 ## Experimental
@@ -176,10 +178,12 @@ tuning as flat keyword arguments, listed below, and return the fitted map when
     :toctree: api
 
     experimental.im.calculate_image_features
+    experimental.im.rasterize_points
     experimental.tl.calculate_tiling_qc
     experimental.tl.TilingQCParams
     experimental.tl.align_stalign_obs
     experimental.tl.align_stalign_image
+    experimental.tl.align_stalign_slice
     experimental.tl.align_landmarks
     experimental.tl.AlignResult
     experimental.tl.assign_stitch_groups

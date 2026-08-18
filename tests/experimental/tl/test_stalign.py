@@ -289,3 +289,154 @@ def test_recovers_a_known_rigid_transform() -> None:
     after = float(np.median(residual))
     assert after < before / 2.0, f"alignment barely improved: median {before:.2f} -> {after:.2f}"
     assert after < _SOLVE["dx"], f"median residual {after:.2f} exceeds one grid cell ({_SOLVE['dx']})"
+
+
+# --------------------------------------------------------------------------------------
+# Section into a reference volume
+# --------------------------------------------------------------------------------------
+
+#: Smallest rank-3 settings that still exercise the full code path. `a` has to stay small
+#: enough that the velocity grid keeps at least two samples on every axis.
+_TINY_SLICE = {"a": 3.0, "expand": 1.25, "nt": 1, "niter": 1, "epV": 1.0}
+
+
+def _volume(nz: int = 7, ny: int = 11, nx: int = 13) -> np.ndarray:
+    """A two-channel reference volume whose structure genuinely varies with ``z``."""
+    zz, yy, xx = np.meshgrid(np.arange(nz), np.arange(ny), np.arange(nx), indexing="ij")
+    blob = np.exp(-(((zz - nz / 2) / 2.0) ** 2 + ((yy - ny / 2) / 3.0) ** 2 + ((xx - nx / 2) / 3.5) ** 2))
+    return np.stack([blob, (blob - blob.mean()) ** 2])
+
+
+def _section(volume: np.ndarray, index: int = 3) -> np.ndarray:
+    """One channel of one slice, which is what a real section looks like: 1 channel."""
+    return volume[0, index][None]
+
+
+def _slice_fit(**kwargs):
+    from squidpy.experimental.tl._align._stalign import fit_stalign_slice
+
+    volume = _volume()
+    return fit_stalign_slice(volume, _section(volume), **{**_TINY_SLICE, **kwargs})
+
+
+def test_slice_fit_returns_a_rank_three_deformation() -> None:
+    """Shapes first: a (4, 4) affine, a velocity with three spatial axes and 3 components."""
+    from squidpy.experimental.tl import StalignSliceResult
+
+    fit = _slice_fit()
+
+    assert isinstance(fit, StalignSliceResult)
+    assert np.asarray(fit.affine).shape == (4, 4)
+    assert np.asarray(fit.velocity).ndim == 5
+    assert np.asarray(fit.velocity).shape[-1] == 3
+    assert len(fit.velocity_grid) == 3
+    assert len(fit.ref_axes) == 3 and len(fit.query_axes) == 2
+
+
+def test_slice_accepts_mismatched_channel_counts() -> None:
+    """A 2-channel reference against a 1-channel section is upstream's own recipe.
+
+    The contrast transform fits one to the other, so requiring equal counts would reject
+    the case the whole feature exists for.
+    """
+    volume = _volume()
+    assert volume.shape[0] == 2
+    fit = _slice_fit()
+    assert np.isfinite(float(np.asarray(fit.energies)[0]))
+
+
+def test_slice_transform_lifts_and_reverses_axes() -> None:
+    """``(N, 2)`` in ``(x, y)`` out to ``(N, 3)`` in ``(x, y, z)``, at the same z."""
+    fit = _slice_fit(initial_slice=3)
+    points = np.array([[0.0, 0.0], [1.5, -2.0], [-3.0, 2.5]])
+
+    out = np.asarray(fit.transform(points))
+
+    assert out.shape == (3, 3)
+    # A flat section maps into one plane, so with no deformation every z agrees.
+    assert np.allclose(out[:, 2], out[0, 2])
+
+
+def test_slice_transform_rejects_wrong_shape() -> None:
+    fit = _slice_fit()
+    with pytest.raises(ValueError, match=r"\(N, 2\)"):
+        fit.transform(np.zeros((4, 3)))
+
+
+def test_slice_sample_reference_reads_the_volume() -> None:
+    """``order=0`` must return exact stored values; ``order=1`` may interpolate."""
+    volume = _volume()
+    fit = _slice_fit(initial_slice=3)
+    labels = (volume[0] > 0.5).astype(np.int16)
+    points = fit.transform(np.array([[0.0, 0.0], [2.0, 1.0]]))
+
+    ids = np.asarray(fit.sample_reference(labels, fit.ref_axes, points, order=0))
+    values = np.asarray(fit.sample_reference(volume, fit.ref_axes, points, order=1))
+
+    assert ids.shape == (2,)
+    assert set(np.unique(ids)) <= {0.0, 1.0}, "nearest sampling invented an intermediate id"
+    assert values.shape == (2, 2), "a channelled volume must come back channelled"
+
+
+def test_slice_sample_reference_validates_its_inputs() -> None:
+    fit = _slice_fit()
+    with pytest.raises(ValueError, match="three"):
+        fit.sample_reference(_volume(), fit.ref_axes[:2], np.zeros((2, 3)))
+    with pytest.raises(ValueError, match=r"\(N, 3\)"):
+        fit.sample_reference(_volume(), fit.ref_axes, np.zeros((2, 2)))
+    with pytest.raises(ValueError, match=r"\(z, y, x\)"):
+        fit.sample_reference(np.zeros((4, 4)), fit.ref_axes, np.zeros((2, 3)))
+
+
+def test_slice_affine_xyz_is_the_reversed_affine() -> None:
+    """``affine_xyz`` must be the same map, read in the caller's axis order.
+
+    Checked by agreeing with ``transform`` on a point, not by comparing matrices: the
+    point is that the two conventions describe one transformation.
+    """
+    fit = _slice_fit()
+    affine = np.asarray(fit.affine_xyz)
+    assert affine.shape == (4, 4)
+    np.testing.assert_allclose(affine[3], [0.0, 0.0, 0.0, 1.0], atol=1e-12)
+
+    # The affine alone, applied backwards, is `transform` when the velocity is zero.
+    fit.velocity = np.zeros_like(np.asarray(fit.velocity))
+    point_xy = np.array([[1.25, -0.75]])
+    lifted = np.array([1.25, -0.75, 0.0, 1.0])
+    expected = np.linalg.inv(affine) @ lifted
+
+    np.testing.assert_allclose(np.asarray(fit.transform(point_xy))[0], expected[:3], rtol=1e-6, atol=1e-6)
+
+
+def test_slice_initial_affine_excludes_the_shorthand() -> None:
+    """The two initialisation routes would silently override each other."""
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        _slice_fit(initial_affine=np.eye(4), initial_rotation=0.5)
+
+
+def test_slice_initial_slice_is_bounds_checked() -> None:
+    with pytest.raises(ValueError, match="outside the reference"):
+        _slice_fit(initial_slice=99)
+
+
+def test_slice_mixture_means_are_per_section_channel() -> None:
+    """``muA`` has one entry per *section* channel, not per reference channel.
+
+    Upstream's notebook passes three against a single-channel target and lets broadcasting
+    sum three identical terms, which quietly makes its artifact scale ``sigmaA/sqrt(3)``.
+    Raising is the honest behaviour, and this pins that the length checked is the
+    section's -- 1 here -- rather than the reference's 2.
+    """
+    _slice_fit(muA=[3.0], muB=[0.0])
+    with pytest.raises(ValueError, match=r"`muA` to have shape \(1,\)"):
+        _slice_fit(muA=[3.0, 3.0, 3.0])
+
+
+def test_slice_solver_kwargs_do_not_advertise_sigmaP() -> None:
+    """Upstream's 3D path has no point term, so a ``sigmaP`` knob here would do nothing."""
+    from squidpy.experimental.tl import StalignSliceSolverKwargs
+
+    keys = StalignSliceSolverKwargs.__annotations__
+    assert "sigmaP" not in keys
+    assert "initial_affine" not in keys, "`initial_affine` is a named argument, not solver tuning"
+    assert {"a", "niter", "sigmaR", "muA", "tol"} <= set(keys)

@@ -1,10 +1,4 @@
-"""STalign estimator: JAX LDDMM point-cloud registration.
-
-Holds the estimator adapters :func:`fit_stalign_obs` / :func:`fit_stalign_image`, their
-result type :class:`StalignResult`, and the solver-kwargs TypedDicts the public wrappers
-in :mod:`._api` are typed against; the pure numerics live under
-:mod:`._stalign_impl`.
-"""
+"""STalign estimator: JAX LDDMM registration, at rank 2 and rank 3."""
 
 from __future__ import annotations
 
@@ -68,6 +62,51 @@ class StalignSolverKwargs(TypedDict, total=False):
     patience: int
 
 
+class StalignSliceSolverKwargs(TypedDict, total=False):
+    """LDDMM solver tuning accepted by :func:`~squidpy.experimental.tl.align_stalign_slice`.
+
+    :class:`~squidpy.experimental.tl.StalignSolverKwargs` minus its landmark term:
+    upstream's 3D-to-slice path has no point-matching energy, so a ``sigmaP`` here would
+    be a knob that does nothing. Defaults follow upstream's ``LDDMM_3D_to_slice``
+    signature, which differ from the 2D ones in five places -- ``expand`` 1.25,
+    ``epL`` 1e-6, ``epT`` 1e1, ``epV`` 1e3 and ``sigmaR`` 1e8.
+
+    - ``initial_velocity``, ``velocity_grid`` -- continuation state from a prior fit, in
+      the solver's ``(z, y, x)`` convention.
+    - ``a``, ``p``, ``expand``, ``nt``, ``niter``, ``diffeo_start`` -- LDDMM controls:
+      kernel width, regularisation power, velocity-grid padding, integration steps,
+      iterations, and the iteration the diffeomorphic part starts updating.
+    - ``epL``, ``epT``, ``epV`` -- gradient-descent step sizes for the linear part,
+      translation, and velocity field.
+    - ``sigmaM``, ``sigmaB``, ``sigmaA``, ``sigmaR`` -- noise scales for the matching,
+      background, artifact and regularisation terms.
+    - ``muA``, ``muB`` -- optional fixed per-channel artifact/background means, one entry
+      per *section* channel; ``None`` estimates them during fitting.
+    - ``tol``, ``patience`` -- early stopping on relative objective improvement;
+      ``tol=None`` (default) always runs ``niter``.
+    """
+
+    initial_velocity: npt.ArrayLike
+    velocity_grid: tuple[npt.ArrayLike, npt.ArrayLike, npt.ArrayLike]
+    a: float
+    p: float
+    expand: float
+    nt: int
+    niter: int
+    diffeo_start: int
+    epL: float
+    epT: float
+    epV: float
+    sigmaM: float
+    sigmaB: float
+    sigmaA: float
+    sigmaR: float
+    muA: npt.ArrayLike | None
+    muB: npt.ArrayLike | None
+    tol: float | None
+    patience: int
+
+
 class StalignObsSolverKwargs(StalignSolverKwargs, total=False):
     """:class:`~squidpy.experimental.tl.StalignSolverKwargs` plus the point-cloud rasterization knobs.
 
@@ -123,6 +162,19 @@ _IMAGE_DEFAULTS: StalignSolverKwargs = {
     "niter": 200,
     "diffeo_start": 100,
     "epV": 1.0,
+}
+
+#: Slice case: upstream's ``LDDMM_3D_to_slice`` defaults, which differ from the 2D
+#: ``LDDMM``'s in five places. ``sigmaP`` is carried only because ``lddmm`` requires it;
+#: with no landmarks the point term is identically zero, and the public
+#: :class:`StalignSliceSolverKwargs` deliberately does not expose it.
+_SLICE_DEFAULTS: StalignSolverKwargs = {
+    **_SOLVER_DEFAULTS,
+    "expand": 1.25,
+    "epL": 1e-6,
+    "epT": 1e1,
+    "epV": 1e3,
+    "sigmaR": 1e8,
 }
 
 #: Keys the fit functions consume themselves rather than forwarding to the solver:
@@ -242,6 +294,275 @@ class StalignResult:
         return transformed_rc[:, ::-1]
 
 
+@dataclass(slots=True)
+class StalignSliceResult:
+    """A fitted section-into-volume registration, ready to place cells in the reference.
+
+    :meth:`transform` takes ``(x, y)`` section coordinates to ``(x, y, z)`` reference
+    coordinates, and :meth:`sample_reference` reads a reference volume at those points --
+    together, upstream's ``analyze3Dalign`` without the ontology join.
+    """
+
+    #: Homogeneous ``(4, 4)`` affine in the solver's ``(z, y, x)`` array order.
+    affine: JaxArray
+    velocity: JaxArray
+    velocity_grid: tuple[JaxArray, JaxArray, JaxArray]
+    #: Physical ``(z, y, x)`` axes of the reference volume the fit ran on.
+    ref_axes: tuple[JaxArray, JaxArray, JaxArray]
+    #: Physical ``(y, x)`` axes of the section the fit ran on.
+    query_axes: tuple[JaxArray, JaxArray]
+    match_weights: JaxArray | None = None
+    artifact_weights: JaxArray | None = None
+    background_weights: JaxArray | None = None
+    energies: JaxArray | None = None
+    n_iter: int | None = None
+
+    @property
+    def affine_xyz(self) -> JaxArray:
+        """The affine part as a ``(4, 4)`` in public ``(x, y, z)`` order.
+
+        Registerable as a SpatialData :class:`~spatialdata.transformations.Affine` with
+        differing input and output axes. The velocity field is not expressible that way --
+        SpatialData transformations top out at affine -- so this is the coarse part of the
+        fit only, and :meth:`transform` remains the faithful map.
+        """
+        from ._stalign_impl._core import reverse_axes
+
+        swap = reverse_axes(3)
+        return swap @ self.affine @ swap
+
+    def transform(self, points: npt.ArrayLike) -> JaxArray:
+        """Map ``(N, 2)`` ``(x, y)`` section points to ``(N, 3)`` ``(x, y, z)`` reference points.
+
+        This owns both halves of the convention change: the lift of a flat section onto
+        the ``z = 0`` plane, and the reversal between the caller's ``(x, y, z)`` and the
+        solver's ``(z, y, x)``. It is upstream's ``coord0``/``coord1``/``coord2``, except
+        evaluated at each point rather than at the nearest raster cell.
+        """
+        import jax.numpy as jnp
+
+        from ._stalign_impl._core import jax_dtype, transform_points_row_col
+
+        pts = jnp.asarray(points, dtype=jax_dtype())
+        if pts.ndim != 2 or pts.shape[1] != 2:
+            raise ValueError(f"Expected an (N, 2) `(x, y)` array, found shape {pts.shape}.")
+        # The section is the fixed image, so mapping it into the reference is the
+        # *backward* direction -- the same map the objective samples the volume through.
+        lifted = jnp.stack((jnp.zeros(pts.shape[0], dtype=pts.dtype), pts[:, 1], pts[:, 0]), axis=1)
+        transformed = transform_points_row_col(
+            self.velocity_grid, self.velocity, self.affine, lifted, direction="backward"
+        )
+        return transformed[:, ::-1]
+
+    def sample_reference(
+        self,
+        volume: npt.ArrayLike,
+        axes: Sequence[npt.ArrayLike],
+        points: npt.ArrayLike,
+        *,
+        order: int = 1,
+    ) -> JaxArray:
+        """Read ``volume`` at ``(N, 3)`` ``(x, y, z)`` reference points.
+
+        Parameters
+        ----------
+        volume
+            A ``(z, y, x)`` or ``(c, z, y, x)`` reference volume. Need not be the one the
+            fit ran on -- an annotation volume registered to the same reference frame is
+            the point of this method.
+        axes
+            The volume's physical ``(z, y, x)`` axes.
+        points
+            Reference coordinates, as returned by :meth:`transform`.
+        order
+            ``1`` interpolates linearly, for an intensity volume. ``0`` samples the
+            nearest voxel, which is what an annotation volume needs -- interpolating
+            integer structure ids would average two of them into a third, unrelated id.
+
+        Returns
+        -------
+        ``(N,)`` for a bare volume, ``(c, N)`` for a channelled one.
+        """
+        import jax.numpy as jnp
+
+        from ._stalign_impl._core import _interp, jax_dtype
+
+        arr = jnp.asarray(volume, dtype=jax_dtype())
+        if arr.ndim not in {3, 4}:
+            raise ValueError(f"Expected `volume` to be a (z, y, x) or (c, z, y, x) array, found shape {arr.shape}.")
+        if len(axes) != 3:
+            raise ValueError(f"Expected `axes` to hold three `(z, y, x)` coordinate vectors, found {len(axes)}.")
+        pts = jnp.asarray(points, dtype=jax_dtype())
+        if pts.ndim != 2 or pts.shape[1] != 3:
+            raise ValueError(f"Expected an (N, 3) `(x, y, z)` array, found shape {pts.shape}.")
+
+        resolved = tuple(jnp.asarray(axis, dtype=jax_dtype()) for axis in axes)
+        sampled = _interp(resolved, arr, pts[:, ::-1].T[:, :, None], order=order)[..., 0]
+        return sampled[0] if arr.ndim == 3 else sampled
+
+
+def fit_stalign_slice(
+    ref: npt.ArrayLike,
+    query: npt.ArrayLike,
+    *,
+    ref_scale: tuple[float, float, float] = (1.0, 1.0, 1.0),
+    query_scale: tuple[float, float] = (1.0, 1.0),
+    ref_axes: Sequence[npt.ArrayLike] | None = None,
+    query_axes: Sequence[npt.ArrayLike] | None = None,
+    initial_slice: int | None = None,
+    initial_rotation: float = 0.0,
+    initial_scale: float = 1.0,
+    initial_affine: npt.ArrayLike | None = None,
+    **solver_kwargs: Unpack[StalignSliceSolverKwargs],
+) -> StalignSliceResult:
+    """Fit a single 2D section into a 3D reference volume.
+
+    The plane of the cut is unknown and generally not exactly coronal, so this fits the
+    full 3D deformation rather than an affine plus an in-plane 2D fit: measured against
+    upstream's own MERFISH-into-Allen-CCF run, the diffeomorphism bends the fitted
+    surface by 2-5 voxels away from its affine plane for the outer 5% of cells, which in
+    cortex is one to two layers. ``initial_slice``/``initial_rotation``/``initial_scale``
+    are therefore an *initialisation*, not the answer.
+
+    Parameters
+    ----------
+    ref
+        The reference volume, channels-first ``(c, z, y, x)``; a bare ``(z, y, x)`` array
+        is promoted. Upstream's recipe passes two channels -- a normalised Nissl volume
+        and its centred square -- against a single-channel section, which the contrast
+        transform handles.
+    query
+        The section, channels-first ``(c, y, x)``; a bare ``(y, x)`` array is promoted.
+        It need not have the same number of channels as ``ref``.
+    ref_scale, query_scale
+        Physical size of one voxel/pixel, as ``(z, y, x)`` and ``(y, x)``. Used to build
+        centred physical axes when the corresponding ``*_axes`` is not given.
+    ref_axes, query_axes
+        Optional explicit physical axes, ``(z, y, x)`` and ``(y, x)``. Each side is
+        independent: the reference is normally left to ``ref_scale``'s centred axes while
+        the section carries the explicit axes its rasterisation produced.
+    initial_slice
+        Index along the reference's first axis to centre the section on. Sets the
+        translation's out-of-plane component to ``-ref_axes[0][initial_slice]``. ``None``
+        centres on the middle of the volume.
+    initial_rotation
+        In-plane rotation of the initial affine, in **radians**.
+    initial_scale
+        Uniform scale of the initial affine. Upstream's notebooks start at 0.9.
+    initial_affine
+        Homogeneous ``(4, 4)`` affine in public ``(x, y, z)`` order, replacing the
+        ``initial_slice``/``initial_rotation``/``initial_scale`` construction entirely.
+        Mutually exclusive with all three.
+    solver_kwargs
+        LDDMM solver tuning; see
+        :class:`~squidpy.experimental.tl.StalignSliceSolverKwargs`.
+
+    Returns
+    -------
+    A :class:`StalignSliceResult`.
+
+    Notes
+    -----
+    Runs in JAX's active float precision, which is **single** unless x64 is enabled. A
+    reference volume is large and the run is long, so enable double precision before
+    importing JAX for anything beyond a smoke test::
+
+        import jax
+
+        jax.config.update("jax_enable_x64", True)
+    """
+    try:
+        import jax.numpy as jnp
+    except ImportError as e:
+        raise ImportError(_JAX_REQUIRED) from e
+
+    from ._stalign_impl._core import jax_dtype, lddmm
+    from ._stalign_impl._helpers import affine_xy_to_rc, as_chw, centred_axes, explicit_axes
+
+    opts: dict[str, Any] = _SLICE_DEFAULTS | solver_kwargs
+    dtype = jax_dtype()
+
+    target_image = as_chw(query, name="query", ndim=2)
+    source_image = as_chw(ref, name="ref", ndim=3)
+    if source_image.shape[1] < 2:
+        # A `(c, y, x)` section passed as the reference reads as a one-voxel-deep volume,
+        # which is the likely way to arrive here. Named explicitly because there is no
+        # out-of-plane information in it to fit -- `align_stalign_image` is the 2D path.
+        raise ValueError(
+            f"Expected `ref` to be a volume with at least two samples along `z`, found depth "
+            f"{source_image.shape[1]}. A single plane carries no out-of-plane information; use "
+            f"`align_stalign_image` to register two 2D images."
+        )
+
+    # The reference is the moving image: it is the volume that gets warped onto the
+    # section, so it plays LDDMM's `I`/`xI` role and the section plays `J`/`xJ`.
+    source_grid = (
+        centred_axes(source_image.shape[1:], ref_scale)
+        if ref_axes is None
+        else explicit_axes(ref_axes, source_image.shape[1:], "ref_axes")
+    )
+    section_grid = (
+        centred_axes(target_image.shape[1:], query_scale)
+        if query_axes is None
+        else explicit_axes(query_axes, target_image.shape[1:], "query_axes")
+    )
+    # Upstream's whole 3D-to-slice special case: give the section a single-sample z axis
+    # at the origin and a length-1 z extent, and the rank-3 solver does the rest.
+    target_grid = (jnp.zeros(1, dtype=dtype), *section_grid)
+    target_image = target_image[:, None]
+
+    if initial_affine is not None:
+        if initial_slice is not None or initial_rotation != 0.0 or initial_scale != 1.0:
+            raise ValueError(
+                "`initial_affine` replaces the `initial_slice` / `initial_rotation` / "
+                "`initial_scale` construction, so they are mutually exclusive."
+            )
+        linear, translation = affine_xy_to_rc(initial_affine, ndim=3)
+    else:
+        slice_index = source_image.shape[1] // 2 if initial_slice is None else initial_slice
+        if not -source_image.shape[1] <= slice_index < source_image.shape[1]:
+            raise ValueError(
+                f"`initial_slice={initial_slice}` is outside the reference's first axis "
+                f"of length {source_image.shape[1]}."
+            )
+        cos, sin = jnp.cos(initial_rotation), jnp.sin(initial_rotation)
+        # Rotation about the out-of-plane axis, then a uniform scale, in `(z, y, x)`.
+        linear = initial_scale * jnp.array(
+            [[1.0, 0.0, 0.0], [0.0, cos, -sin], [0.0, sin, cos]],
+            dtype=dtype,
+        )
+        translation = jnp.asarray(
+            [
+                -source_grid[0][slice_index],
+                jnp.mean(target_grid[1]),
+                jnp.mean(target_grid[2]),
+            ],
+            dtype=dtype,
+        )
+
+    result = lddmm(
+        source_grid,
+        source_image,
+        target_grid,
+        target_image,
+        L=linear,
+        T=translation,
+        **{key: value for key, value in opts.items() if key not in _CONSUMED_KEYS},
+    )
+    return StalignSliceResult(
+        affine=result["A"],
+        velocity=result["v"],
+        velocity_grid=result["xv"],
+        ref_axes=source_grid,
+        query_axes=section_grid,
+        match_weights=result["WM"],
+        artifact_weights=result["WA"],
+        background_weights=result["WB"],
+        energies=result["energies"],
+        n_iter=int(result["n_iter"]),
+    )
+
+
 def fit_stalign_obs(
     ref: npt.ArrayLike,
     query: npt.ArrayLike,
@@ -357,8 +678,8 @@ def fit_stalign_image(
     *,
     ref_scale: tuple[float, float] = (1.0, 1.0),
     query_scale: tuple[float, float] = (1.0, 1.0),
-    ref_axes: tuple[npt.ArrayLike, npt.ArrayLike] | None = None,
-    query_axes: tuple[npt.ArrayLike, npt.ArrayLike] | None = None,
+    ref_axes: Sequence[npt.ArrayLike] | None = None,
+    query_axes: Sequence[npt.ArrayLike] | None = None,
     **solver_kwargs: Unpack[StalignSolverKwargs],
 ) -> StalignResult:
     """Fit a deformation mapping the ``query`` image onto the ``ref`` image.
@@ -367,14 +688,16 @@ def fit_stalign_image(
     ----------
     ref, query
         Channels-first ``(c, y, x)`` rasters (a bare ``(y, x)`` array is promoted). The
-        query is aligned onto the reference; they need not share a shape.
+        query is aligned onto the reference; they need not share a shape, nor a number of
+        channels -- the contrast transform fits one to the other.
     ref_scale, query_scale
         Physical size of one pixel as ``(y, x)``. Defaults to pixel units. Pass the
         element's scale when the two images have different resolutions, otherwise the
         fit is done in mismatched coordinates.
     ref_axes, query_axes
-        Optional explicit physical row and column axes. Both pairs must be supplied;
-        they are mutually exclusive with non-unit ``ref_scale``/``query_scale``.
+        Optional explicit physical row and column axes, resolved per side: either may be
+        given alone, and each is mutually exclusive with a non-unit scale on *its own*
+        side only.
     initial_affine
         Optional homogeneous ``(3, 3)`` affine in public ``(x, y)`` coordinates.
     solver_kwargs
@@ -401,7 +724,7 @@ def fit_stalign_image(
         raise ImportError(_JAX_REQUIRED) from e
 
     from ._stalign_impl._core import jax_dtype, lddmm
-    from ._stalign_impl._helpers import affine_xy_to_rc, as_chw
+    from ._stalign_impl._helpers import affine_xy_to_rc, as_chw, centred_axes, explicit_axes
 
     opts = _IMAGE_DEFAULTS | solver_kwargs
     initial_affine = opts.get("initial_affine")
@@ -409,40 +732,25 @@ def fit_stalign_image(
 
     source_image = as_chw(query, name="query")
     target_image = as_chw(ref, name="ref")
-    if source_image.shape[0] != target_image.shape[0]:
-        raise ValueError(
-            f"Expected `ref` and `query` to have the same number of channels, found "
-            f"{target_image.shape[0]} and {source_image.shape[0]}."
-        )
 
-    def axes(image: JaxArray, scale: tuple[float, float]) -> tuple[JaxArray, JaxArray]:
-        # Row-col physical coordinates, centred so the affine initialises near identity.
-        rows, cols = image.shape[1], image.shape[2]
-        return (
-            (jnp.arange(rows, dtype=dtype) - (rows - 1) / 2.0) * scale[0],
-            (jnp.arange(cols, dtype=dtype) - (cols - 1) / 2.0) * scale[1],
-        )
+    # Each side resolves its own axes. Explicit axes and a non-unit scale are still
+    # mutually exclusive -- one would silently override the other -- but only within a
+    # side, since a reference on centred scaled axes against a query on explicit ones is
+    # a real recipe rather than a mistake.
+    def resolve(
+        axes: Sequence[npt.ArrayLike] | None,
+        scale: tuple[float, float],
+        image: JaxArray,
+        name: str,
+    ) -> tuple[JaxArray, ...]:
+        if axes is None:
+            return centred_axes(image.shape[1:], scale)
+        if scale != (1.0, 1.0):
+            raise ValueError(f"`{name}` is mutually exclusive with a non-unit `{name.replace('_axes', '_scale')}`.")
+        return explicit_axes(axes, image.shape[1:], name)
 
-    if (query_axes is None) != (ref_axes is None):
-        raise ValueError("Expected both `query_axes` and `ref_axes` to be provided together.")
-
-    def explicit_axes(value: tuple[npt.ArrayLike, npt.ArrayLike], image: JaxArray, name: str):
-        resolved = (jnp.asarray(value[0], dtype=dtype), jnp.asarray(value[1], dtype=dtype))
-        expected = image.shape[1:]
-        if resolved[0].ndim != 1 or resolved[1].ndim != 1 or tuple(map(len, resolved)) != expected:
-            raise ValueError(f"Expected `{name}` lengths {expected}, found {tuple(map(len, resolved))}.")
-        if len(resolved[0]) < 2 or len(resolved[1]) < 2:
-            raise ValueError(f"Expected each `{name}` axis to contain at least two coordinates.")
-        return resolved
-
-    if query_axes is None:
-        source_grid = axes(source_image, query_scale)
-        target_grid = axes(target_image, ref_scale)
-    else:
-        if query_scale != (1.0, 1.0) or ref_scale != (1.0, 1.0):
-            raise ValueError("Explicit axes are mutually exclusive with non-unit image scales.")
-        source_grid = explicit_axes(query_axes, source_image, "query_axes")
-        target_grid = explicit_axes(ref_axes, target_image, "ref_axes")
+    source_grid = resolve(query_axes, query_scale, source_image, "query_axes")
+    target_grid = resolve(ref_axes, ref_scale, target_image, "ref_axes")
 
     if initial_affine is None:
         linear, translation = jnp.eye(2, dtype=dtype), jnp.zeros(2, dtype=dtype)
