@@ -36,7 +36,6 @@ def test_niche_calc_nhood_dummy_adata(dummy_adata2: AnnData):
         dummy_adata2, flavor="neighborhood", groups="celltype", n_neighbors=3, resolutions=1.0, random_state=0
     )
     niches = _assert_all_assigned(dummy_adata2, "nhood_niche_res=1.0")
-    assert 1 <= niches.nunique() <= dummy_adata2.n_obs
 
     # a fixed random_state gives reproducible niches
     calculate_niche(rerun, flavor="neighborhood", groups="celltype", n_neighbors=3, resolutions=1.0, random_state=0)
@@ -48,7 +47,6 @@ def test_niche_calc_utag_dummy_adata(dummy_adata2: AnnData):
     rerun = dummy_adata2.copy()
     calculate_niche(dummy_adata2, flavor="utag", n_neighbors=3, resolutions=1.0, random_state=0)
     niches = _assert_all_assigned(dummy_adata2, "utag_niche_res=1.0")
-    assert 1 <= niches.nunique() <= dummy_adata2.n_obs
 
     # a fixed random_state gives reproducible niches
     calculate_niche(rerun, flavor="utag", n_neighbors=3, resolutions=1.0, random_state=0)
@@ -63,8 +61,7 @@ def test_niche_calc_cellcharter_dummy_adata(dummy_adata2: AnnData):
 
     calculate_niche(dummy_adata2, flavor="cellcharter", distance=2, aggregation="mean", random_state=0)
 
-    niches = _assert_all_assigned(dummy_adata2, "cellcharter_niche")
-    assert 1 <= niches.nunique() <= dummy_adata2.n_obs
+    _assert_all_assigned(dummy_adata2, "cellcharter_niche")
 
 
 def test_niche_calc_spatialleiden_dummy_adata(dummy_adata2: AnnData):
@@ -82,8 +79,7 @@ def test_niche_calc_spatialleiden_dummy_adata(dummy_adata2: AnnData):
         resolutions=1.0,
     )
 
-    niches = _assert_all_assigned(dummy_adata2, "spatialleiden_res=1.0")
-    assert 1 <= niches.nunique() <= dummy_adata2.n_obs
+    _assert_all_assigned(dummy_adata2, "spatialleiden_res=1.0")
 
 
 # more special test cases
