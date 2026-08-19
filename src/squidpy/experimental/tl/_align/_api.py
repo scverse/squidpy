@@ -254,6 +254,8 @@ def align_stalign_image(
     query_coordinate_system: str = "global",
     key_added: str | None = None,
     inplace: bool = False,
+    landmarks_ref: npt.ArrayLike | None = None,
+    landmarks_query: npt.ArrayLike | None = None,
     **solver_kwargs: Unpack[StalignImageSolverKwargs],
 ) -> Stalign2DResult | SpatialData | None:
     """Align a query image onto a reference image with STalign (diffeomorphic LDDMM).
@@ -282,6 +284,12 @@ def align_stalign_image(
         Whether to write into ``sdata_query`` itself. ``False`` (default) writes into a
         copy and returns it, leaving the input untouched. Needs ``key_added``:
         ``inplace=True`` with nothing to write raises rather than being ignored.
+    landmarks_ref, landmarks_query
+        Optional paired ``(x, y)`` landmark arrays (matched by row order), in the units of
+        the corresponding ``*_coordinate_system`` -- the same units the elements' own
+        transformations supply, not pixel indices. They contribute the point-matching term
+        the solver weights by ``sigmaP``, and derive the starting affine unless
+        ``initial_affine`` is given, in which case that wins and the matching term stays.
     solver_kwargs
         LDDMM solver tuning; see
         :class:`~squidpy.experimental.tl.StalignImageSolverKwargs` for the accepted
@@ -312,6 +320,8 @@ def align_stalign_image(
         query_axes=_element_axes(
             query_container, query_image, query_array, coordinate_system=query_coordinate_system, side="query"
         ),
+        landmarks_ref=landmarks_ref,
+        landmarks_query=landmarks_query,
         **solver_kwargs,
     )
     if key_added is None:

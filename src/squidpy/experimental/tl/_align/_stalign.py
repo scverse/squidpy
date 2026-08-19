@@ -249,11 +249,10 @@ class Stalign2DResult:
         query_axes: tuple[JaxArray, JaxArray] | None = None,
         ref_axes: tuple[JaxArray, JaxArray] | None = None,
     ) -> JaxArray:
-        """Return a dense row-column coordinate transform for visualisation.
+        """The dense row-column coordinate transform, shape ``(2, rows, columns)``.
 
-        ``direction="forward"`` evaluates the query grid in the reference frame;
-        ``"backward"`` evaluates the reference grid in the query frame. The returned
-        array has shape ``(2, rows, columns)``.
+        ``direction="backward"`` evaluates the fixed image's grid in the moving image's
+        frame -- at rank 2 that is the reference grid in the query frame.
         """
         from ._stalign_impl._core import transform_grid_row_col
 
@@ -372,6 +371,55 @@ class Stalign3DResult:
         swap = reverse_axes(3)
         return swap @ self.affine @ swap
 
+    def deformation_grid(
+        self,
+        *,
+        direction: Literal["forward", "backward"] = "backward",
+        ref_axes: Sequence[npt.ArrayLike] | None = None,
+        query_axes: Sequence[npt.ArrayLike] | None = None,
+    ) -> JaxArray:
+        """The dense ``(z, y, x)`` coordinate transform, shape ``(3, *grid)``.
+
+        Same contract as :meth:`Stalign2DResult.deformation_grid`: ``"backward"`` evaluates
+        the fixed image's grid in the moving image's frame, and it is the *same* call on
+        the *same* fitted ``affine``/``velocity``/``velocity_grid`` that the objective
+        samples through -- not an approximation for plotting. Given the same axes it agrees
+        with the internal transform exactly.
+
+        Which element is which flips at rank 3, though: the **volume** is the moving image,
+        warped onto the fixed section. So ``"backward"`` (the default here, and the
+        direction :meth:`transform` uses) evaluates the *section's* grid in volume
+        coordinates, shape ``(3, 1, rows, columns)`` -- the section is lifted onto the
+        ``z = 0`` plane, hence the length-1 ``z``. ``"forward"`` evaluates the volume's own
+        grid in the section frame, shape ``(3, *volume_shape)``.
+
+        Parameters
+        ----------
+        direction
+            ``"backward"`` (default) for the section-into-volume map, ``"forward"`` for its
+            inverse.
+        ref_axes, query_axes
+            Override the volume's ``(z, y, x)`` and the section's ``(y, x)`` axes. Default
+            to the ones the fit ran on.
+        """
+        import jax.numpy as jnp
+
+        from ._stalign_impl._core import jax_dtype, transform_grid_row_col
+
+        if direction not in {"forward", "backward"}:
+            raise ValueError(f"Expected `direction` to be 'forward' or 'backward', found {direction!r}.")
+        volume_axes = tuple(self.ref_axes if ref_axes is None else ref_axes)
+        section_axes = tuple(self.query_axes if query_axes is None else query_axes)
+        if len(volume_axes) != 3 or len(section_axes) != 2:
+            raise ValueError(
+                f"Expected 3 reference axes and 2 query axes, found {len(volume_axes)} and {len(section_axes)}."
+            )
+        # The same lift `fit_stalign_volume` applies: a single-sample z axis at the origin
+        # turns the flat section into something the rank-3 solver can address.
+        lifted = (jnp.zeros(1, dtype=jax_dtype()), *section_axes)
+        axes = volume_axes if direction == "forward" else lifted
+        return transform_grid_row_col(axes, self.velocity_grid, self.velocity, self.affine, direction=direction)
+
     def transform(self, points: npt.ArrayLike) -> JaxArray:
         """Map ``(N, 2)`` ``(x, y)`` section points to ``(N, 3)`` ``(x, y, z)`` reference points.
 
@@ -446,10 +494,9 @@ def fit_stalign_volume(
     -------
     A :class:`Stalign3DResult`.
     """
-    try:
-        import jax.numpy as jnp
-    except ImportError as e:
-        raise ImportError(_JAX_REQUIRED) from e
+    _require_jax()
+
+    import jax.numpy as jnp
 
     from ._stalign_impl._core import jax_dtype, lddmm
     from ._stalign_impl._helpers import affine_xy_to_rc, as_chw, resolve_axes
@@ -530,6 +577,62 @@ def fit_stalign_volume(
     )
 
 
+def _require_jax() -> None:
+    """Fail with an actionable message rather than a bare ImportError on the optional extra.
+
+    Called at the top of each fit function: JAX is imported inside them, not at module
+    scope, so ``import squidpy.experimental`` stays cheap and installable without it.
+    """
+    try:
+        import jax  # noqa: F401
+    except ImportError as e:
+        raise ImportError(_JAX_REQUIRED) from e
+
+
+def _initial_affine_and_landmarks(
+    landmarks_ref: npt.ArrayLike | None,
+    landmarks_query: npt.ArrayLike | None,
+    initial_affine: npt.ArrayLike | None,
+) -> tuple[JaxArray, JaxArray, JaxArray | None, JaxArray | None]:
+    """Resolve the starting affine and the row-col landmark pair the point term uses.
+
+    Shared by the point-cloud and image paths: they differ in what they rasterize, not in
+    the landmark contract. Landmarks are ``(x, y)``, matched by row order, and in the same
+    units as the fit's coordinates -- cell coordinates for a point-cloud fit, the images'
+    physical axes for an image fit.
+
+    The two initialisers are not exclusive. Landmarks play two roles: they always
+    contribute the point-matching term the solver weights by ``sigmaP``, and they *also*
+    derive the starting affine when ``initial_affine`` is absent. Passing both is how you
+    keep the matching term while pinning the start yourself.
+    """
+    import jax.numpy as jnp
+
+    from ._stalign_impl._core import jax_dtype
+    from ._stalign_impl._helpers import affine_from_points, affine_xy_to_rc, validate_points
+
+    if (landmarks_ref is None) != (landmarks_query is None):
+        raise ValueError("Expected both landmark arrays to be provided together.")
+
+    dtype = jax_dtype()
+    source_landmarks = target_landmarks = None
+    if landmarks_ref is not None:
+        # The solver runs in row-col (y, x); landmarks arrive as (x, y) like every other
+        # public coordinate, so they swap at the same boundary the clouds do.
+        source_landmarks = validate_points(landmarks_query, name="landmarks_query")[:, ::-1]
+        target_landmarks = validate_points(landmarks_ref, name="landmarks_ref")[:, ::-1]
+
+    if initial_affine is not None:
+        linear, translation = affine_xy_to_rc(initial_affine)
+    elif source_landmarks is not None:
+        linear_np, translation_np = affine_from_points(source_landmarks, target_landmarks)
+        linear = jnp.asarray(linear_np, dtype=dtype)
+        translation = jnp.asarray(translation_np, dtype=dtype)
+    else:
+        linear, translation = jnp.eye(2, dtype=dtype), jnp.zeros(2, dtype=dtype)
+    return linear, translation, source_landmarks, target_landmarks
+
+
 def fit_stalign_obs(
     ref: npt.ArrayLike,
     query: npt.ArrayLike,
@@ -558,22 +661,15 @@ def fit_stalign_obs(
     -------
     A :class:`Stalign2DResult`; its ``aligned_points`` is ``query`` already mapped.
     """
-    # JAX is imported here rather than at module scope so `squidpy.experimental` stays
-    # cheap to import and installable without it.
-    try:
-        import jax.numpy as jnp
-    except ImportError as e:
-        raise ImportError(_JAX_REQUIRED) from e
+    _require_jax()
 
-    from ._stalign_impl._core import jax_dtype, lddmm, transform_points_row_col
-    from ._stalign_impl._helpers import affine_from_points, affine_xy_to_rc, rasterize_cloud, validate_points
+    from ._stalign_impl._core import lddmm, transform_points_row_col
+    from ._stalign_impl._helpers import rasterize_cloud, validate_points
 
-    if (landmarks_ref is None) != (landmarks_query is None):
-        raise ValueError("Expected both landmark arrays to be provided together.")
     opts = _OBS_DEFAULTS | solver_kwargs
-    initial_affine = opts.get("initial_affine")
-    if initial_affine is not None and landmarks_ref is not None:
-        raise ValueError("`initial_affine` is mutually exclusive with landmark initialisation.")
+    linear, translation, src_lm, tgt_lm = _initial_affine_and_landmarks(
+        landmarks_ref, landmarks_query, opts.get("initial_affine")
+    )
 
     # The solver runs internally in row-col (y, x); inputs are (x, y) -- swap at the boundary.
     source_rc = validate_points(query, name="query")[:, ::-1]
@@ -581,19 +677,6 @@ def fit_stalign_obs(
     raster = {"dx": opts["dx"], "blur": opts["blur"], "expand": opts["raster_expand"]}
     source_grid, source_image = rasterize_cloud(source_rc, **raster)
     target_grid, target_image = rasterize_cloud(target_rc, **raster)
-
-    dtype = jax_dtype()
-    if initial_affine is not None:
-        linear, translation = affine_xy_to_rc(initial_affine)
-        src_lm = tgt_lm = None
-    elif landmarks_ref is None:
-        linear, translation = jnp.eye(2, dtype=dtype), jnp.zeros(2, dtype=dtype)
-        src_lm = tgt_lm = None
-    else:
-        src_lm = validate_points(landmarks_query, name="landmarks_query")[:, ::-1]
-        tgt_lm = validate_points(landmarks_ref, name="landmarks_ref")[:, ::-1]
-        linear_np, translation_np = affine_from_points(src_lm, tgt_lm)
-        linear, translation = jnp.asarray(linear_np, dtype=dtype), jnp.asarray(translation_np, dtype=dtype)
 
     result = lddmm(
         source_grid,
@@ -631,6 +714,8 @@ def fit_stalign_image(
     query_scale: tuple[float, float] = (1.0, 1.0),
     ref_axes: Sequence[npt.ArrayLike] | None = None,
     query_axes: Sequence[npt.ArrayLike] | None = None,
+    landmarks_ref: npt.ArrayLike | None = None,
+    landmarks_query: npt.ArrayLike | None = None,
     **solver_kwargs: Unpack[StalignImageSolverKwargs],
 ) -> Stalign2DResult:
     """Fit a deformation mapping the ``query`` image onto the ``ref`` image.
@@ -649,6 +734,10 @@ def fit_stalign_image(
     ref_axes, query_axes
         Explicit physical row/column axes, resolved per side: either may be given alone,
         and each is mutually exclusive with a non-unit scale on *its own* side only.
+    landmarks_ref, landmarks_query
+        Paired ``(x, y)`` landmark arrays in the *images'* physical units, matched by row
+        order. See :func:`_initial_affine_and_landmarks` for how they combine with
+        ``initial_affine``.
     solver_kwargs
         See :class:`StalignImageSolverKwargs`.
 
@@ -656,17 +745,15 @@ def fit_stalign_image(
     -------
     A :class:`Stalign2DResult`.
     """
-    try:
-        import jax.numpy as jnp
-    except ImportError as e:
-        raise ImportError(_JAX_REQUIRED) from e
+    _require_jax()
 
-    from ._stalign_impl._core import jax_dtype, lddmm
-    from ._stalign_impl._helpers import affine_xy_to_rc, as_chw, resolve_axes
+    from ._stalign_impl._core import lddmm
+    from ._stalign_impl._helpers import as_chw, resolve_axes
 
     opts = _IMAGE_DEFAULTS | solver_kwargs
-    initial_affine = opts.get("initial_affine")
-    dtype = jax_dtype()
+    linear, translation, src_lm, tgt_lm = _initial_affine_and_landmarks(
+        landmarks_ref, landmarks_query, opts.get("initial_affine")
+    )
 
     source_image = as_chw(query, name="query")
     target_image = as_chw(ref, name="ref")
@@ -676,11 +763,6 @@ def fit_stalign_image(
     source_grid = resolve_axes(query_axes, query_scale, source_image.shape[1:], "query_axes")
     target_grid = resolve_axes(ref_axes, ref_scale, target_image.shape[1:], "ref_axes")
 
-    if initial_affine is None:
-        linear, translation = jnp.eye(2, dtype=dtype), jnp.zeros(2, dtype=dtype)
-    else:
-        linear, translation = affine_xy_to_rc(initial_affine)
-
     result = lddmm(
         source_grid,
         source_image,
@@ -688,6 +770,8 @@ def fit_stalign_image(
         target_image,
         L=linear,
         T=translation,
+        points_source=src_lm,
+        points_target=tgt_lm,
         **{key: value for key, value in opts.items() if key not in _CONSUMED_KEYS},
     )
     return Stalign2DResult(

@@ -146,3 +146,120 @@ def test_writing_coords_from_a_different_frame_is_refused() -> None:
     out = align_stalign_volume(sdata_ref, _sdata_section_with_table(None), key_added="ref_xyz", **kwargs)
     assert out.tables["t"].obsm["ref_xyz"].shape == (3, 3)
     assert align_stalign_volume(sdata_ref, _sdata_section_with_table(10.0), **kwargs) is not None
+
+
+# --- landmarks on the image path ------------------------------------------------------
+
+_LM_REF = np.array([[2.0, 3.0], [15.0, 4.0], [8.0, 16.0], [4.0, 12.0]])
+_LM_QUERY = _LM_REF + np.array([1.5, -0.5])
+
+
+def _pair() -> tuple[np.ndarray, np.ndarray]:
+    image = np.random.default_rng(0).random((1, 20, 20))
+    return image, np.roll(image, 1, axis=1)
+
+
+def test_image_landmarks_reach_the_solver() -> None:
+    """The point-matching term the solver weights by ``sigmaP`` must actually change the fit."""
+    from squidpy.experimental.tl._align._stalign import fit_stalign_image
+
+    ref, query = _pair()
+    solver = {"a": 4.0, "nt": 1, "niter": 3, "epV": 1.0}
+
+    plain = fit_stalign_image(ref, query, **solver)
+    with_landmarks = fit_stalign_image(ref, query, landmarks_ref=_LM_REF, landmarks_query=_LM_QUERY, **solver)
+
+    assert not np.allclose(plain.affine, with_landmarks.affine)
+
+
+def test_landmarks_and_initial_affine_are_not_exclusive() -> None:
+    """Landmarks have two roles; only one of them collides with ``initial_affine``.
+
+    They always contribute the matching term, and *also* derive the starting affine when
+    ``initial_affine`` is absent. Passing both keeps the term and pins the start -- which
+    is what a fit that supplies its own L/T alongside points needs.
+    """
+    from squidpy.experimental.tl._align._stalign import fit_stalign_image, fit_stalign_obs
+
+    ref, query = _pair()
+    solver = {"a": 4.0, "nt": 1, "niter": 3, "epV": 1.0}
+    landmarks = {"landmarks_ref": _LM_REF, "landmarks_query": _LM_QUERY}
+
+    pinned = fit_stalign_image(ref, query, initial_affine=np.eye(3), **landmarks, **solver)
+    derived = fit_stalign_image(ref, query, **landmarks, **solver)
+    assert not np.allclose(pinned.affine, derived.affine), "the given affine must win over the derived one"
+
+    # the point-cloud path shares the resolution, so it accepts the same combination
+    assert fit_stalign_obs(ALIGN_PTS, ALIGN_PTS + 0.4, initial_affine=np.eye(3), **landmarks, **TINY_SOLVER)
+
+
+@pytest.mark.parametrize("missing", ["landmarks_ref", "landmarks_query"])
+def test_one_sided_landmarks_are_refused(missing: str) -> None:
+    from squidpy.experimental.tl._align._stalign import fit_stalign_image
+
+    ref, query = _pair()
+    given = {"landmarks_ref": _LM_REF, "landmarks_query": _LM_QUERY}
+    del given[missing]
+
+    with pytest.raises(ValueError, match=r"both landmark arrays"):
+        fit_stalign_image(ref, query, **given, a=4.0, nt=1, niter=1, epV=1.0)
+
+
+def test_align_stalign_image_forwards_landmarks() -> None:
+    ref, query = _pair()
+    sdata_ref, sdata_query = _sdata_image(ref, "img"), _sdata_image(query, "img")
+    solver = {"image_key": "img", **IMAGE_SOLVER}
+
+    plain = align_stalign_image(sdata_ref, sdata_query, **solver)
+    with_landmarks = align_stalign_image(
+        sdata_ref, sdata_query, landmarks_ref=_LM_REF, landmarks_query=_LM_QUERY, **solver
+    )
+
+    assert not np.allclose(plain.affine, with_landmarks.affine)
+
+
+# --- deformation_grid at rank 3 -------------------------------------------------------
+
+
+def test_volume_deformation_grid_is_the_transform_the_objective_uses() -> None:
+    """Not an approximation for plotting: the same call on the same fitted state.
+
+    Asserted as bit-for-bit equality, since that is what the docstring promises and what a
+    comparison against an external 3D transform needs to be able to rely on.
+    """
+    import jax.numpy as jnp
+
+    from squidpy.experimental.tl._align._stalign_impl._core import jax_dtype, transform_grid_row_col
+
+    volume = np.random.default_rng(0).random((1, 5, 12, 12))
+    result = align_stalign_volume(
+        _sdata_image(volume, "volume"),
+        _sdata_image(volume[:, 2], "section"),
+        image_key=("volume", "section"),
+        **VOLUME_SOLVER,
+    )
+
+    backward = result.deformation_grid()
+    assert backward.shape == (3, 1, 12, 12), "the section is lifted onto z = 0, hence the length-1 z"
+    assert result.deformation_grid(direction="forward").shape == (3, 5, 12, 12)
+
+    internal = transform_grid_row_col(
+        (jnp.zeros(1, dtype=jax_dtype()), *result.query_axes),
+        result.velocity_grid,
+        result.velocity,
+        result.affine,
+        direction="backward",
+    )
+    assert jnp.array_equal(backward, internal)
+
+
+def test_volume_deformation_grid_rejects_a_bad_direction() -> None:
+    volume = np.random.default_rng(0).random((1, 5, 12, 12))
+    result = align_stalign_volume(
+        _sdata_image(volume, "volume"),
+        _sdata_image(volume[:, 2], "section"),
+        image_key=("volume", "section"),
+        **VOLUME_SOLVER,
+    )
+    with pytest.raises(ValueError, match=r"'forward' or 'backward'"):
+        result.deformation_grid(direction="sideways")
