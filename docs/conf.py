@@ -145,6 +145,9 @@ nitpick_ignore = [
     ("py:class", "np.number"),
     ("py:class", "csr_matrix"),
     ("py:class", "numpy._typing._array_like.ArrayLike"),
+    # `npt.ArrayLike` in a signature resolves to its union members, which are private
+    ("py:class", "numpy._typing._array_like._SupportsArray"),
+    ("py:class", "numpy._typing._nested_sequence._NestedSequence"),
     # optional dep mocked at build time (see autodoc_mock_imports), so no resolvable target
     ("py:class", "jax.Array"),
     ("py:class", "JaxArray"),
