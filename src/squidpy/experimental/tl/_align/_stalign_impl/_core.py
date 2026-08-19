@@ -288,7 +288,7 @@ def _velocity_axes(velocity: jax.Array) -> tuple[int, ...]:
     energy while smoothing over all three (STalign.py:1215 vs its 3D energy term), and
     autograd carries that discrepancy into the search direction; squidpy uses every
     spatial axis in both places. At rank 2 the two readings coincide, so the 2D path is
-    unaffected -- see ledger row D11.
+    unaffected.
     """
     return tuple(range(1, velocity.ndim - 1))
 

@@ -33,7 +33,9 @@ class StalignSolverKwargs(TypedDict, total=False):
       iterations, and the iteration the diffeomorphic part starts updating.
       Defaults obs/image: ``a`` 500/20, ``niter`` 5000/200, ``diffeo_start`` 0/100.
     - ``epL``, ``epT``, ``epV`` -- gradient-descent step sizes for the linear part,
-      translation, and velocity field. Default ``epV`` obs/image: 2e3/1.0.
+      translation, and velocity field. Default ``epV`` obs/image: 2e3/1.0. All three are
+      **scale dependent**, so coordinates in other units need them rescaled; ``epV`` is
+      the one to reach for first -- too large and the deformation overwhelms the affine.
     - ``sigmaM``, ``sigmaB``, ``sigmaA``, ``sigmaR``, ``sigmaP`` -- noise scales for
       the matching, background, artifact, regularisation, and landmark terms.
     - ``muA``, ``muB`` -- optional fixed per-channel artifact/background means;
@@ -157,7 +159,7 @@ _OBS_DEFAULTS: StalignObsSolverKwargs = {
 
 #: Image case: a kernel width of 500 would exceed most images, and starting the
 #: diffeomorphic part halfway lets the affine settle before the velocity field can
-#: absorb what is really a translation.
+#: absorb what is really a translation and fit it worse than the affine would have.
 _IMAGE_DEFAULTS: StalignSolverKwargs = {
     **_SOLVER_DEFAULTS,
     "a": 20.0,
@@ -525,40 +527,25 @@ def fit_stalign_obs(
     landmarks_query: npt.ArrayLike | None = None,
     **solver_kwargs: Unpack[StalignObsSolverKwargs],
 ) -> Stalign2DResult:
-    """Fit a deformation mapping ``query`` onto ``ref``.
+    """Fit a deformation mapping the ``query`` cloud onto the ``ref`` cloud.
+
+    Internal: :func:`~squidpy.experimental.tl.align_stalign_obs` is the container-aware
+    entry point and carries the user-facing documentation.
 
     Parameters
     ----------
     ref, query
-        ``(N, 2)`` / ``(M, 2)`` reference and query point clouds in ``(x, y)``
-        order; the query is aligned onto the reference. Both are plain in-memory
-        arrays -- extracting them from an ``AnnData`` / ``SpatialData`` is the
-        caller's responsibility.
+        ``(N, 2)`` / ``(M, 2)`` point clouds in ``(x, y)`` order; the query is aligned
+        onto the reference.
     landmarks_ref, landmarks_query
-        Optional corresponding ``(x, y)`` landmark arrays used to initialise the
-        affine, matched by row order. Must be provided together.
+        Paired ``(x, y)`` landmark arrays initialising the affine, matched by row order.
+        Must be given together, and are mutually exclusive with ``initial_affine``.
     solver_kwargs
-        Rasterization and LDDMM solver tuning; see
-        :class:`StalignObsSolverKwargs` for the accepted keys and their meaning. Its
-        ``initial_affine`` -- a homogeneous ``(3, 3)`` affine in public ``(x, y)``
-        coordinates -- is mutually exclusive with landmark initialisation.
+        See :class:`StalignObsSolverKwargs`.
 
     Returns
     -------
-    A :class:`Stalign2DResult` whose :meth:`~Stalign2DResult.transform` maps
-    ``(x, y)`` points into the reference frame; ``aligned_points`` is the fitted
-    ``query`` already mapped.
-
-    Notes
-    -----
-    Runs in JAX's active float precision, which is **single** unless x64 is enabled.
-    The original STalign is double throughout, so results differ correspondingly. For
-    ``niter`` in the thousands, or a large ``sigmaR``, enable double precision before
-    importing JAX::
-
-        import jax
-
-        jax.config.update("jax_enable_x64", True)
+    A :class:`Stalign2DResult`; its ``aligned_points`` is ``query`` already mapped.
     """
     # JAX is imported here rather than at module scope so `squidpy.experimental` stays
     # cheap to import and installable without it.
@@ -637,38 +624,26 @@ def fit_stalign_image(
 ) -> Stalign2DResult:
     """Fit a deformation mapping the ``query`` image onto the ``ref`` image.
 
+    Internal: :func:`~squidpy.experimental.tl.align_stalign_image` is the container-aware
+    entry point and carries the user-facing documentation.
+
     Parameters
     ----------
     ref, query
-        Channels-first ``(c, y, x)`` rasters (a bare ``(y, x)`` array is promoted). The
-        query is aligned onto the reference; they need not share a shape, nor a number of
-        channels -- the contrast transform fits one to the other.
+        Channels-first ``(c, y, x)`` rasters; a bare ``(y, x)`` array is promoted. They
+        need not share a shape nor a channel count.
     ref_scale, query_scale
-        Physical size of one pixel as ``(y, x)``. Defaults to pixel units. Pass the
-        element's scale when the two images have different resolutions, otherwise the
-        fit is done in mismatched coordinates.
+        Physical size of one pixel as ``(y, x)``, defaulting to pixel units. Builds
+        centred axes when the matching ``*_axes`` is not given.
     ref_axes, query_axes
-        Optional explicit physical row and column axes, resolved per side: either may be
-        given alone, and each is mutually exclusive with a non-unit scale on *its own*
-        side only.
+        Explicit physical row/column axes, resolved per side: either may be given alone,
+        and each is mutually exclusive with a non-unit scale on *its own* side only.
     solver_kwargs
-        LDDMM solver tuning; see :class:`StalignSolverKwargs` for the accepted keys,
-        including ``initial_affine``, a homogeneous ``(3, 3)`` affine in public
-        ``(x, y)`` coordinates. The image defaults differ from :func:`fit_stalign_obs`'s in four places: ``a``
-        is a length in the same units as ``ref_scale``, so 20 suits pixel units where
-        the point-cloud default of 500 would exceed most images; ``diffeo_start`` sits
-        at half of ``niter`` so the affine settles before the deformable part switches
-        on, since starting both at once lets the velocity field absorb what is really a
-        translation and fit it worse than the affine would have. ``epL``, ``epT`` and
-        ``epV`` are **scale dependent** -- tuned here for pixel units, so a non-unit
-        ``ref_scale`` needs them rescaled. ``epV`` is the one to reach for first: too
-        large and the deformation overwhelms the affine.
+        See :class:`StalignSolverKwargs`.
 
     Returns
     -------
-    A :class:`Stalign2DResult`. Its :meth:`~Stalign2DResult.transform` maps ``(x, y)`` points
-    in query pixel coordinates into the reference frame, and
-    :meth:`~Stalign2DResult.warp_image` resamples a query image onto the reference grid.
+    A :class:`Stalign2DResult`.
     """
     try:
         import jax.numpy as jnp

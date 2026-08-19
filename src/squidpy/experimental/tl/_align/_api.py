@@ -449,7 +449,7 @@ def align_stalign_volume(
     initial_rotation
         In-plane rotation of the initial affine, in **radians**.
     initial_scale
-        Uniform scale of the initial affine. Upstream's notebooks start at 0.9.
+        Uniform scale of the initial affine. A little under 1 is a common start.
     initial_affine
         Homogeneous ``(4, 4)`` affine in ``(x, y, z)``, replacing the three ``initial_*``
         arguments above. The escape hatch when the initialisation needs to be exact.

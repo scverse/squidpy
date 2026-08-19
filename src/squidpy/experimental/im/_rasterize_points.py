@@ -224,9 +224,8 @@ def sample_volume(
 
     The inverse of :func:`rasterize_points`: that one turns points into an image, this
     reads an image back at points. Pair it with
-    :meth:`~squidpy.experimental.tl.Stalign3DResult.transform` to put a section's cells
-    in a reference volume and read an annotation volume there -- upstream STalign's
-    ``analyze3Dalign`` without the ontology join.
+    :meth:`~squidpy.experimental.tl.Stalign3DResult.transform` to put a section's cells in
+    a reference volume and read an annotation volume there.
 
     Parameters
     ----------
