@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -14,12 +15,7 @@ from .._common import validate_xy
 from ._core import jax_dtype, reverse_axes
 
 if TYPE_CHECKING:
-    import jax
     import numpy.typing as npt
-
-    JaxArray = jax.Array
-else:  # pragma: no cover - typing only
-    JaxArray = Any
 
 __all__ = [
     "resolve_axes",
@@ -34,19 +30,19 @@ __all__ = [
 
 
 def rasterize_cloud(
-    points_rc: JaxArray, *, dx: float, blur: float | Sequence[float], expand: float
-) -> tuple[tuple[JaxArray, JaxArray], JaxArray]:
+    points_rc: jax.Array, *, dx: float, blur: float | Sequence[float], expand: float
+) -> tuple[tuple[jax.Array, jax.Array], jax.Array]:
     """Rasterize a row-col cloud into a ``((grid_y, grid_x), image)`` density."""
     grid_x, grid_y, image = rasterize(points_rc[:, 1], points_rc[:, 0], dx=dx, blur=blur, expand=expand)
     return (grid_y, grid_x), image
 
 
-def validate_points(points: Any, *, name: str) -> JaxArray:
+def validate_points(points: npt.ArrayLike, *, name: str) -> jax.Array:
     """Coerce ``points`` to a finite ``(n, 2)`` JAX array."""
     return jnp.asarray(validate_xy(points, name=name), dtype=jax_dtype())
 
 
-def as_chw(image: Any, *, name: str, ndim: int = 2) -> JaxArray:
+def as_chw(image: npt.ArrayLike, *, name: str, ndim: int = 2) -> jax.Array:
     """Coerce an image to channels-first, promoting an unchannelled array.
 
     ``ndim`` is the number of *spatial* axes: 2 for a ``(y, x)`` section, 3 for a
@@ -68,7 +64,7 @@ def resolve_axes(
     scale: tuple[float, ...],
     shape: tuple[int, ...],
     name: str,
-) -> tuple[JaxArray, ...]:
+) -> tuple[jax.Array, ...]:
     """Physical axes for one side: explicit if given, otherwise centred on ``scale``.
 
     Rank-agnostic, and shared by the rank-2 and rank-3 entry points so they cannot drift.
@@ -83,7 +79,7 @@ def resolve_axes(
     return explicit_axes(axes, shape, name)
 
 
-def centred_axes(shape: tuple[int, ...], scale: Sequence[float]) -> tuple[JaxArray, ...]:
+def centred_axes(shape: tuple[int, ...], scale: Sequence[float]) -> tuple[jax.Array, ...]:
     """Physical axes for ``shape``, centred on the origin and spaced by ``scale``.
 
     Centring is what lets the affine initialise near identity: with axes running from 0
@@ -97,7 +93,7 @@ def centred_axes(shape: tuple[int, ...], scale: Sequence[float]) -> tuple[JaxArr
     )
 
 
-def explicit_axes(value: Sequence[Any], shape: tuple[int, ...], name: str) -> tuple[JaxArray, ...]:
+def explicit_axes(value: Sequence[npt.ArrayLike], shape: tuple[int, ...], name: str) -> tuple[jax.Array, ...]:
     """Validate caller-supplied physical axes against the image they describe."""
     dtype = jax_dtype()
     resolved = tuple(jnp.asarray(axis, dtype=dtype) for axis in value)
@@ -111,7 +107,9 @@ def explicit_axes(value: Sequence[Any], shape: tuple[int, ...], name: str) -> tu
     return resolved
 
 
-def affine_xy_to_rc(matrix: Any, *, name: str = "initial_affine", ndim: int = 2) -> tuple[JaxArray, JaxArray]:
+def affine_xy_to_rc(
+    matrix: npt.ArrayLike, *, name: str = "initial_affine", ndim: int = 2
+) -> tuple[jax.Array, jax.Array]:
     """Split a homogeneous ``(x, y[, z])`` affine into array-order ``(linear, translation)``.
 
     The solver works in array order -- ``(y, x)`` at rank 2, ``(z, y, x)`` at rank 3 --
@@ -128,8 +126,8 @@ def affine_xy_to_rc(matrix: Any, *, name: str = "initial_affine", ndim: int = 2)
 
 
 def affine_from_points(
-    points_source: JaxArray,
-    points_target: JaxArray,
+    points_source: jax.Array,
+    points_target: jax.Array,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Compute an affine initialization from corresponding landmarks."""
     source = np.asarray(points_source, dtype=float)

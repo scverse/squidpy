@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Literal
+from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 import numpy.typing as npt
@@ -18,7 +18,7 @@ class AffineFitResult:
     """A fitted ``(3, 3)`` homogeneous affine mapping query onto ref, in ``(x, y)``."""
 
     matrix: np.ndarray
-    metadata: dict[str, Any] = field(default_factory=dict)
+    method: Literal["similarity", "affine"]
 
     def __post_init__(self) -> None:
         if self.matrix.shape != (3, 3):
@@ -59,7 +59,7 @@ def _fit(
 
         matrix = np.asarray(estimate_transform("affine", src=query, dst=ref).params)
 
-    return AffineFitResult(matrix=matrix, metadata={"method": method})
+    return AffineFitResult(matrix=matrix, method=method)
 
 
 def fit_similarity(

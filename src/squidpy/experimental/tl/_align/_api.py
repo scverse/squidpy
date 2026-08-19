@@ -98,12 +98,9 @@ def _read_image(container: SpatialData, key: str, *, side: str, ndim: int = 2) -
     if key not in container.images:
         raise KeyError(f"`image_key={key!r}`: no such image in the {side}. Available: {sorted(container.images)}.")
 
-    element = container.images[key]
-    # Multiscale images are a DataTree; the full-resolution level is the first scale.
-    if not hasattr(element, "dims"):
-        element = next(iter(element.values()))
-        element = element[next(iter(element.data_vars))]
+    from squidpy.experimental.im._utils import get_element_data
 
+    element = get_element_data(container.images[key], "scale0", "image", key)
     return _as_chw(element.data, what=f"`image_key={key!r}`", ndim=ndim)
 
 

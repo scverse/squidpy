@@ -12,7 +12,10 @@ if TYPE_CHECKING:
     import jax
 
     JaxArray = jax.Array
-else:  # pragma: no cover - typing only
+else:
+    # Bound at runtime, not just under TYPE_CHECKING: `sphinx_autodoc_typehints` calls
+    # `get_type_hints` on the result dataclasses, and jax is an optional extra that must
+    # not be imported here. `Any` is the placeholder that keeps that resolvable.
     JaxArray = Any
 
 

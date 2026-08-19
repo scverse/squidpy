@@ -48,7 +48,7 @@ def test_returns_an_affine_result(fit: str) -> None:
     assert isinstance(result, AffineFitResult)
     assert result.matrix.shape == (3, 3)
     np.testing.assert_allclose(result.transform(_QUERY), _REF, atol=1e-6)
-    assert result.metadata["method"] == fit
+    assert result.method == fit
 
 
 def test_fit_defaults_to_similarity() -> None:
@@ -56,7 +56,7 @@ def test_fit_defaults_to_similarity() -> None:
         shapes={"lm_ref": _shapes(_REF), "lm_query": _shapes(_QUERY)}
     )
     result = align_landmarks(sdata, landmark_key=("lm_ref", "lm_query"))
-    assert result.metadata["method"] == "similarity"
+    assert result.method == "similarity"
 
 
 def test_landmarks_need_not_live_in_a_shapes_element() -> None:
