@@ -428,18 +428,6 @@ def align_stalign_slice(
     -------
     The fitted :class:`~squidpy.experimental.tl.StalignSliceResult` when ``key_added`` is
     ``None``; otherwise the modified copy, or ``None`` when ``inplace=True``.
-
-    Notes
-    -----
-    The reference volume typically carries two channels -- a normalised intensity volume
-    and its centred square -- against a single-channel section; the contrast transform
-    fits one to the other, so the channel counts need not match.
-
-    ``muA`` / ``muB`` take one entry per *section* channel. Upstream's published notebook
-    passes three against a single-channel target and relies on broadcasting, which sums
-    three identical terms and makes its effective artifact scale ``sigmaA / sqrt(3)``
-    rather than ``sigmaA``. squidpy validates the length instead, so ``muA=[3.0]`` here is
-    **not** the same fit as that notebook's ``muA=[3, 3, 3]``.
     """
     check_inplace(inplace, key_added, names="`key_added`")
     ref_image, query_image = _resolve_pair(image_key, name="image_key")
