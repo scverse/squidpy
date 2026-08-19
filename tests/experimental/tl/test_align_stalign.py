@@ -57,6 +57,34 @@ def test_image_fit_reads_both_element_layouts(scale_factors: list[int] | None) -
     assert "warped" not in sdata_query.images, "the input must be left untouched"
 
 
+def test_image_fit_reads_units_and_placement_off_the_elements() -> None:
+    """The elements' own scale and translation are the units the fit runs in.
+
+    Nothing is restated as a `*_scale` argument that could contradict the container, and
+    the warped element -- which lands on the reference's grid -- inherits the reference's
+    placement rather than a reconstructed one.
+    """
+    from spatialdata.transformations import Scale, Sequence, Translation, get_transformation
+
+    image = np.random.default_rng(0).random((1, 24, 24))
+    placement = Sequence([Scale([2.0, 2.0], axes=("y", "x")), Translation([100.0, 50.0], axes=("y", "x"))])
+    sdata_ref = _sdata_image(image, "img", transformations={"global": placement})
+    sdata_query = _sdata_image(np.roll(image, 1, axis=1), "img", transformations={"global": placement})
+
+    result = align_stalign_image(sdata_ref, sdata_query, image_key="img", a=8.0, nt=1, niter=2, epV=1.0)
+
+    assert float(result.ref_axes[0][1] - result.ref_axes[0][0]) == 2.0, "the element's scale is the unit"
+    assert float(result.ref_axes[0][0]) == 100.0, "the element's translation is the origin"
+    assert float(result.query_axes[1][0]) == 50.0
+
+    out = align_stalign_image(sdata_ref, sdata_query, image_key="img", key_added="w", a=8.0, nt=1, niter=2, epV=1.0)
+    axes = {"input_axes": ("y", "x"), "output_axes": ("y", "x")}
+    np.testing.assert_allclose(
+        get_transformation(out.images["w"], to_coordinate_system="global").to_affine_matrix(**axes),
+        get_transformation(sdata_ref.images["img"], to_coordinate_system="global").to_affine_matrix(**axes),
+    )
+
+
 def test_slice_fit_places_a_section_in_a_volume() -> None:
     volume = np.random.default_rng(0).random((1, 6, 12, 12))
     sdata_ref = _sdata_image(volume, "volume")

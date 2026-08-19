@@ -250,12 +250,10 @@ def align_stalign_image(
     sdata_query: SpatialData | None = None,
     *,
     image_key: str | tuple[str, str],
+    ref_coordinate_system: str = "global",
+    query_coordinate_system: str = "global",
     key_added: str | None = None,
     inplace: bool = False,
-    ref_scale: tuple[float, float] = (1.0, 1.0),
-    query_scale: tuple[float, float] = (1.0, 1.0),
-    ref_axes: tuple[npt.ArrayLike, npt.ArrayLike] | None = None,
-    query_axes: tuple[npt.ArrayLike, npt.ArrayLike] | None = None,
     **solver_kwargs: Unpack[StalignSolverKwargs],
 ) -> StalignResult | SpatialData | None:
     """Align a query image onto a reference image with STalign (diffeomorphic LDDMM).
@@ -268,26 +266,29 @@ def align_stalign_image(
         distinguished by an ``image_key`` pair.
     image_key
         Name of the image element, or a ``(ref, query)`` pair.
+    ref_coordinate_system, query_coordinate_system
+        Coordinate systems to read each element's physical axes in. The scale and
+        translation the elements carry supply the units, so two images at different
+        resolutions need nothing restated -- and nothing can be restated to contradict
+        the container. For arrays not in a SpatialData, :func:`fit_stalign_image` takes
+        the axes directly.
     key_added
         Image element name on the query to materialise the warped image under. The
         fitted diffeomorphism cannot be expressed as a SpatialData transformation --
         the available types are affine at most -- so the aligned image is written as a
-        new element. ``None`` (default) writes nothing and returns the fitted
+        new element, on the reference's pixel grid and inheriting the reference
+        element's placement. ``None`` (default) writes nothing and returns the fitted
         alignment instead.
     inplace
         Whether to write into ``sdata_query`` itself. ``False`` (default) writes into a
         copy and returns it, leaving the input untouched. Needs ``key_added``:
         ``inplace=True`` with nothing to write raises rather than being ignored.
-    ref_scale, query_scale
-        Physical size of one pixel as ``(y, x)``; pass these when the two images have
-        different resolutions.
-    ref_axes, query_axes
-        Optional explicit physical row/column axes; mutually exclusive with non-unit
-        scales.
     solver_kwargs
         LDDMM solver tuning; see
         :class:`~squidpy.experimental.tl.StalignSolverKwargs` for the accepted
-        keys, their meaning, and their defaults.
+        keys, their meaning, and their defaults. ``a``, ``epL``, ``epT`` and ``epV`` are
+        lengths and step sizes in the units the elements carry, and their defaults are
+        tuned for pixel-sized units -- an element scaled to microns needs them rescaled.
 
     Returns
     -------
@@ -301,24 +302,36 @@ def align_stalign_image(
         sdata_ref, sdata_query, ref_address=(ref_image,), query_address=(query_image,), key_name="image_key"
     )
 
+    ref_array = _read_image(sdata_ref, ref_image, side="reference")
     query_array = _read_image(query_container, query_image, side="query")
     result = fit_stalign_image(
-        ref=_read_image(sdata_ref, ref_image, side="reference"),
+        ref=ref_array,
         query=query_array,
-        ref_scale=ref_scale,
-        query_scale=query_scale,
-        ref_axes=ref_axes,
-        query_axes=query_axes,
+        ref_axes=_element_axes(
+            sdata_ref, ref_image, ref_array, coordinate_system=ref_coordinate_system, side="reference"
+        ),
+        query_axes=_element_axes(
+            query_container, query_image, query_array, coordinate_system=query_coordinate_system, side="query"
+        ),
         **solver_kwargs,
     )
     if key_added is None:
         return result
 
     from spatialdata.models import Image2DModel
+    from spatialdata.transformations import get_transformation
 
     target = query_container if inplace else shallow_copy_sdata(query_container)
-    warped = _as_chw(result.warp_image(query_array), what=f"`key_added={key_added!r}`")
-    target.images[key_added] = Image2DModel.parse(warped, dims=("c", "y", "x"))
+    # `np.asarray` because `warp_image` returns a JAX array, which the parser rejects.
+    warped = np.asarray(result.warp_image(query_array))
+    # A forward warp resamples the query onto the *reference's* grid, so the new element
+    # is placed by the reference's own transformations -- reconstructing a scale and
+    # translation from the fitted axes would be the same numbers, spelled less reliably.
+    target.images[key_added] = Image2DModel.parse(
+        warped,
+        dims=("c", "y", "x"),
+        transformations=dict(get_transformation(sdata_ref.images[ref_image], get_all=True)),
+    )
     return None if inplace else target
 
 
