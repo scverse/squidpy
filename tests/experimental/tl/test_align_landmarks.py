@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 from anndata import AnnData
 
-from squidpy.experimental.tl import AffineFitResult, align_landmarks
+from squidpy.experimental.tl import align_landmarks
 from tests.experimental.conftest import make_adata
 
 # square corners; query = ref shifted by (5, 7) -> a pure translation both models recover
@@ -40,23 +40,35 @@ def _shapes(points: np.ndarray, cs: str = "global"):
 # --- fitting ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("fit", ["similarity", "affine"])
-def test_returns_an_affine_result(fit: str) -> None:
-    ref, query = _adata(_REF), _adata(_QUERY)
-    result = align_landmarks(ref, query, landmark_key="landmarks", fit=fit)
+def _apply(matrix: np.ndarray, points: np.ndarray) -> np.ndarray:
+    """The returned matrix needs no squidpy helper to use -- this is the whole of it."""
+    return points @ matrix[:2, :2].T + matrix[:2, 2]
 
-    assert isinstance(result, AffineFitResult)
-    assert result.matrix.shape == (3, 3)
-    np.testing.assert_allclose(result.transform(_QUERY), _REF, atol=1e-6)
-    assert result.method == fit
+
+@pytest.mark.parametrize("fit", ["similarity", "affine"])
+def test_returns_the_homogeneous_affine(fit: str) -> None:
+    ref, query = _adata(_REF), _adata(_QUERY)
+    matrix = align_landmarks(ref, query, landmark_key="landmarks", fit=fit)
+
+    assert isinstance(matrix, np.ndarray)
+    assert matrix.shape == (3, 3)
+    np.testing.assert_allclose(_apply(matrix, _QUERY), _REF, atol=1e-6)
 
 
 def test_fit_defaults_to_similarity() -> None:
-    sdata = pytest.importorskip("spatialdata").SpatialData(
-        shapes={"lm_ref": _shapes(_REF), "lm_query": _shapes(_QUERY)}
-    )
-    result = align_landmarks(sdata, landmark_key=("lm_ref", "lm_query"))
-    assert result.method == "similarity"
+    """Asserted behaviourally: 4-DOF cannot absorb a non-uniform scale, 6-DOF can.
+
+    A pure translation is recovered identically by both fits, so it cannot tell them
+    apart -- a query stretched along one axis only can.
+    """
+    stretched = _REF * np.array([3.0, 1.0])
+    ref, query = _adata(_REF), _adata(stretched)
+
+    default = align_landmarks(ref, query, landmark_key="landmarks")
+    affine = align_landmarks(ref, query, landmark_key="landmarks", fit="affine")
+
+    assert np.abs(_apply(default, stretched) - _REF).max() > 0.1, "the default must be the constrained fit"
+    np.testing.assert_allclose(_apply(affine, stretched), _REF, atol=1e-6)
 
 
 def test_landmarks_need_not_live_in_a_shapes_element() -> None:
@@ -64,7 +76,7 @@ def test_landmarks_need_not_live_in_a_shapes_element() -> None:
     would tax AnnData users for nothing."""
     ref, query = _adata(_REF), _adata(_QUERY)
     result = align_landmarks(ref, query, landmark_key="landmarks", fit="affine")
-    np.testing.assert_allclose(result.transform(_QUERY), _REF, atol=1e-6)
+    np.testing.assert_allclose(_apply(result, _QUERY), _REF, atol=1e-6)
 
 
 def test_table_key_reads_landmarks_from_a_table() -> None:
@@ -73,7 +85,7 @@ def test_table_key_reads_landmarks_from_a_table() -> None:
 
     sdata = sd.SpatialData(tables={"r": TableModel.parse(_adata(_REF)), "q": TableModel.parse(_adata(_QUERY))})
     result = align_landmarks(sdata, landmark_key="landmarks", table_key=("r", "q"), fit="affine")
-    np.testing.assert_allclose(result.transform(_QUERY), _REF, atol=1e-6)
+    np.testing.assert_allclose(_apply(result, _QUERY), _REF, atol=1e-6)
 
 
 def test_unknown_fit_lists_available() -> None:

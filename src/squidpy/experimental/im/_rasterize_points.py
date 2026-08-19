@@ -1,8 +1,13 @@
-"""Turn a point cloud into a density image.
+"""Moving between a point cloud and an image, in both directions.
+
+:func:`rasterize_points` turns points into a density image; :func:`sample_volume` is the
+inverse, reading an image or volume at arbitrary physical points.
 
 The numerics here are deliberately free of JAX: the STalign solver in
 :mod:`squidpy.experimental.tl` imports :func:`rasterize` and :func:`axis` from this
 module, so the primitive is usable -- and installable -- without the optional JAX extra.
+Sampling stays JAX-free for the same reason, and because :mod:`~squidpy.experimental.im`
+is the layer the solver imports *from* -- reaching back into it would invert that.
 """
 
 from __future__ import annotations
@@ -18,7 +23,7 @@ if TYPE_CHECKING:
 
 #: ``axis`` and ``rasterize`` are the JAX-free primitives the STalign solver imports, so
 #: they are part of this module's surface even though only ``rasterize_points`` is public API.
-__all__ = ["axis", "rasterize", "rasterize_points"]
+__all__ = ["axis", "rasterize", "rasterize_points", "sample_volume"]
 
 
 def axis(start: float, stop: float, step: float) -> np.ndarray:
@@ -206,3 +211,68 @@ def rasterize_points(
     if key_added is not None:
         sdata.images[key_added] = parsed
     return parsed
+
+
+def sample_volume(
+    volume: np.ndarray,
+    axes: Sequence[np.ndarray],
+    points: np.ndarray,
+    *,
+    order: int = 1,
+) -> np.ndarray:
+    """Read ``volume`` at ``(N, D)`` physical points, in ``(x, y[, z])`` order.
+
+    The inverse of :func:`rasterize_points`: that one turns points into an image, this
+    reads an image back at points. Pair it with
+    :meth:`~squidpy.experimental.tl.StalignVolumeResult.transform` to put a section's cells
+    in a reference volume and read an annotation volume there -- upstream STalign's
+    ``analyze3Dalign`` without the ontology join.
+
+    Parameters
+    ----------
+    volume
+        A ``(z, y, x)`` volume or ``(y, x)`` image, optionally channelled as
+        ``(c, z, y, x)`` / ``(c, y, x)``. Need not be the array a fit ran on -- an
+        annotation volume registered to the same frame is the point.
+    axes
+        The array's physical axes in array order, ``(z, y, x)`` or ``(y, x)``: one
+        increasing 1D coordinate vector per spatial axis.
+    points
+        Physical coordinates in ``(x, y[, z])`` order, i.e. the reverse of ``axes``.
+    order
+        ``1`` interpolates linearly, for an intensity image. ``0`` samples the nearest
+        voxel, which is what an annotation volume needs -- interpolating integer structure
+        ids would average two of them into a third, unrelated id.
+
+    Returns
+    -------
+    ``(N,)`` for a bare array, ``(c, N)`` for a channelled one.
+    """
+    from scipy.ndimage import map_coordinates
+
+    arr = np.asarray(volume, dtype=float)
+    ndim = len(axes)
+    if ndim not in {2, 3}:
+        raise ValueError(f"Expected `axes` to hold two or three coordinate vectors, found {ndim}.")
+    if arr.ndim not in {ndim, ndim + 1}:
+        raise ValueError(f"Expected `volume` to have {ndim} or {ndim + 1} axes, found shape {arr.shape}.")
+    resolved = [np.asarray(axis, dtype=float) for axis in axes]
+    for position, values in enumerate(resolved):
+        # A single-sample axis has no spacing to divide by; without this the index comes
+        # out as inf or nan and every sampled value is silently garbage.
+        if values.ndim != 1 or values.shape[0] < 2:
+            raise ValueError(f"Expected `axes[{position}]` to hold at least two coordinates, found {values.shape}.")
+    pts = np.asarray(points, dtype=float)
+    if pts.ndim != 2 or pts.shape[1] != ndim:
+        raise ValueError(f"Expected an (N, {ndim}) array of `(x, y[, z])` points, found shape {pts.shape}.")
+
+    channelled = arr if arr.ndim == ndim + 1 else arr[None]
+    # `points` is (x, y[, z]); the array and `axes` are in array order -- reverse to match.
+    index = np.stack(
+        [
+            (pts[:, ndim - 1 - position] - values[0]) / (values[1] - values[0])
+            for position, values in enumerate(resolved)
+        ]
+    )
+    sampled = np.stack([map_coordinates(channel, index, order=order, mode="nearest") for channel in channelled])
+    return sampled[0] if arr.ndim == ndim else sampled

@@ -155,7 +155,6 @@ tuning as flat keyword arguments, listed below, and return the fitted map when
 
     experimental.tl.StalignResult
     experimental.tl.StalignVolumeResult
-    experimental.tl.AffineFitResult
 ```
 
 ```{eval-rst}
@@ -179,6 +178,7 @@ tuning as flat keyword arguments, listed below, and return the fitted map when
 
     experimental.im.calculate_image_features
     experimental.im.rasterize_points
+    experimental.im.sample_volume
     experimental.tl.calculate_tiling_qc
     experimental.tl.TilingQCParams
     experimental.tl.align_stalign_obs

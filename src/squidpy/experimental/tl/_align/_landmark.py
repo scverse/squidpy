@@ -2,42 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Literal
 
 import numpy as np
-import numpy.typing as npt
 
 from squidpy._utils import NDArrayA
 
 from ._common import validate_xy
 
 
-@dataclass
-class AffineFitResult:
-    """A fitted ``(3, 3)`` homogeneous affine mapping query onto ref, in ``(x, y)``."""
-
-    matrix: np.ndarray
-    method: Literal["similarity", "affine"]
-
-    def __post_init__(self) -> None:
-        if self.matrix.shape != (3, 3):
-            raise ValueError(f"Expected a (3, 3) homogeneous matrix, found shape {self.matrix.shape}.")
-
-    def transform(self, x: npt.ArrayLike) -> NDArrayA:
-        """Apply the affine to an ``(N, 2)`` ``(x, y)`` coordinate array."""
-        coords = np.asarray(x, dtype=float)
-        if coords.ndim != 2 or coords.shape[1] != 2:
-            raise ValueError(f"Expected an (N, 2) coordinate array, found shape {coords.shape}.")
-        return coords @ self.matrix[:2, :2].T + self.matrix[:2, 2]
-
-
-def _fit(
-    ref: np.ndarray,
-    query: np.ndarray,
-    *,
-    method: Literal["similarity", "affine"],
-) -> AffineFitResult:
+def _fit(ref: np.ndarray, query: np.ndarray, *, method: Literal["similarity", "affine"]) -> NDArrayA:
     ref = validate_xy(ref, name="ref")
     query = validate_xy(query, name="query")
     if ref.shape != query.shape:
@@ -59,33 +33,45 @@ def _fit(
 
         matrix = np.asarray(estimate_transform("affine", src=query, dst=ref).params)
 
-    return AffineFitResult(matrix=matrix, method=method)
+    if matrix.shape != (3, 3):
+        raise ValueError(f"Expected a (3, 3) homogeneous matrix, found shape {matrix.shape}.")
+    return matrix
 
 
-def fit_similarity(
-    ref: np.ndarray,
-    query: np.ndarray,
-) -> AffineFitResult:
+def apply_affine(matrix: np.ndarray, points: np.ndarray) -> NDArrayA:
+    """Apply a homogeneous ``(3, 3)`` ``(x, y)`` affine to an ``(N, 2)`` coordinate array."""
+    coords = np.asarray(points, dtype=float)
+    if coords.ndim != 2 or coords.shape[1] != 2:
+        raise ValueError(f"Expected an (N, 2) coordinate array, found shape {coords.shape}.")
+    return coords @ matrix[:2, :2].T + matrix[:2, 2]
+
+
+def fit_similarity(ref: np.ndarray, query: np.ndarray) -> NDArrayA:
     """4-DOF similarity fit (rotation + uniform scale + translation), via spatialdata.
 
     Parameters
     ----------
     ref, query
         Pre-paired ``(N, 2)`` ``(x, y)`` landmark arrays (``N >= 3``).
+
+    Returns
+    -------
+    The homogeneous ``(3, 3)`` affine mapping query onto ref, in ``(x, y)``.
     """
     return _fit(ref, query, method="similarity")
 
 
-def fit_affine(
-    ref: np.ndarray,
-    query: np.ndarray,
-) -> AffineFitResult:
+def fit_affine(ref: np.ndarray, query: np.ndarray) -> NDArrayA:
     """6-DOF affine fit (rotation + non-uniform scale + shear + translation), via skimage.
 
     Parameters
     ----------
     ref, query
         Pre-paired ``(N, 2)`` ``(x, y)`` landmark arrays (``N >= 3``).
+
+    Returns
+    -------
+    The homogeneous ``(3, 3)`` affine mapping query onto ref, in ``(x, y)``.
     """
     return _fit(ref, query, method="affine")
 

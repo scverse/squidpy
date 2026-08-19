@@ -7,6 +7,7 @@ container; SpatialData transformation write-back lives in :mod:`._io`.
 
 from __future__ import annotations
 
+import functools
 from typing import TYPE_CHECKING, Literal, Unpack
 
 import numpy as np
@@ -14,7 +15,7 @@ from anndata import AnnData
 from spatialdata import SpatialData
 
 from ._io import shallow_copy_sdata, writeback_affine_sdata
-from ._landmark import fit_affine, fit_similarity
+from ._landmark import apply_affine, fit_affine, fit_similarity
 from ._stalign import (
     StalignObsSolverKwargs,
     StalignSolverKwargs,
@@ -29,7 +30,6 @@ if TYPE_CHECKING:
 
     import numpy.typing as npt
 
-    from ._landmark import AffineFitResult
     from ._stalign import StalignResult, StalignVolumeResult
 
 __all__ = ["align_landmarks", "align_stalign_image", "align_stalign_obs", "align_stalign_volume"]
@@ -533,7 +533,7 @@ def align_landmarks(
     key_added: str | None = None,
     target_coordinate_system: str | None = None,
     inplace: bool = False,
-) -> AffineFitResult | AnnData | SpatialData | None:
+) -> npt.NDArray[np.float64] | AnnData | SpatialData | None:
     """Align a query sample onto a reference from paired landmarks (closed-form affine).
 
     Parameters
@@ -578,9 +578,10 @@ def align_landmarks(
 
     Returns
     -------
-    The fitted :class:`~squidpy.experimental.tl.AffineFitResult`
-    when neither ``key_added`` nor ``target_coordinate_system`` is given; otherwise
-    the modified copy, or ``None`` when ``inplace=True``.
+    The fitted homogeneous ``(3, 3)`` affine in ``(x, y)`` when neither ``key_added``
+    nor ``target_coordinate_system`` is given -- directly usable as a
+    :class:`~spatialdata.transformations.Affine`; otherwise the modified copy, or
+    ``None`` when ``inplace=True``.
     """
     _check_inplace(inplace, key_added, target_coordinate_system, names="`key_added` or `target_coordinate_system`")
     if fit not in {"similarity", "affine"}:
@@ -622,9 +623,9 @@ def align_landmarks(
             inplace=inplace,
         )
 
-    result = fit_fn(ref_lm, query_lm)
+    matrix = fit_fn(ref_lm, query_lm)
     if key_added is None:
-        return result
+        return matrix
     if spatial_key is None:
         raise ValueError(
             "`key_added` needs `spatial_key` when aligning by landmarks: the landmarks are "
@@ -637,7 +638,7 @@ def align_landmarks(
         query_table,
         spatial_key,
         key_added,
-        transform=result.transform,
+        transform=functools.partial(apply_affine, matrix),
         spatial_key_name="spatial_key",
         inplace=inplace,
     )
@@ -667,7 +668,7 @@ def _read_landmarks(
 
 
 def _register_transformation(
-    fit_fn: Callable[..., AffineFitResult],
+    fit_fn: Callable[..., np.ndarray],
     ref_lm: np.ndarray,
     query_lm: np.ndarray,
     *,
@@ -707,9 +708,8 @@ def _register_transformation(
             f"write to `key_added` to move only the query."
         )
 
-    result = fit_fn(ref_lm, query_lm)
     return writeback_affine_sdata(
-        result,
+        fit_fn(ref_lm, query_lm),
         query_container,
         inplace=inplace,
         moving_cs=moving_cs,

@@ -9,7 +9,6 @@ Importing stays cheap -- JAX is pulled in only when a STalign fit actually runs.
 from __future__ import annotations
 
 from ._api import align_landmarks, align_stalign_image, align_stalign_obs, align_stalign_volume
-from ._landmark import AffineFitResult
 from ._stalign import (
     StalignObsSolverKwargs,
     StalignResult,
@@ -19,7 +18,6 @@ from ._stalign import (
 )
 
 __all__ = [
-    "AffineFitResult",
     "StalignObsSolverKwargs",
     "StalignResult",
     "StalignVolumeResult",

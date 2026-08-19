@@ -10,20 +10,15 @@ never see a container.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import numpy as np
 from anndata import AnnData
 from spatialdata import SpatialData
-
-if TYPE_CHECKING:
-    from ._landmark import AffineFitResult
 
 __all__ = ["shallow_copy_sdata", "writeback_affine_sdata"]
 
 
 def writeback_affine_sdata(
-    result: AffineFitResult,
+    matrix: np.ndarray,
     sdata: SpatialData,
     *,
     inplace: bool,
@@ -39,7 +34,7 @@ def writeback_affine_sdata(
     from spatialdata.transformations import Affine, Sequence, get_transformation, set_transformation
 
     out = sdata if inplace else shallow_copy_sdata(sdata)
-    sd_affine = Affine(np.asarray(result.matrix), input_axes=("x", "y"), output_axes=("x", "y"))
+    sd_affine = Affine(np.asarray(matrix), input_axes=("x", "y"), output_axes=("x", "y"))
     touched = False
     for etype, name, element in list(out.gen_elements()):
         if isinstance(element, AnnData):

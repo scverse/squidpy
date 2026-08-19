@@ -191,14 +191,17 @@ _JAX_REQUIRED = 'STalign alignment requires JAX: `pip install "squidpy[jax]"`.'
 class StalignResult:
     """A fitted STalign diffeomorphism, ready to transform arbitrary points.
 
-    :meth:`transform` works in ``(x, y)``; ``aligned_points`` is the fitted query
-    cloud already mapped into the reference frame.
+    :meth:`transform` works in ``(x, y)``, and unlike
+    :class:`StalignVolumeResult`'s it takes a ``direction``: at rank 2 both images are
+    flat, so mapping the reference back into the query frame is equally meaningful.
     """
 
     affine: JaxArray
     velocity: JaxArray
     velocity_grid: tuple[JaxArray, JaxArray]
-    aligned_points: JaxArray
+    #: The fitted query cloud already mapped into the reference frame. ``None`` for image
+    #: fits, where there is no cloud -- an empty array would read as "zero points aligned".
+    aligned_points: JaxArray | None = None
     #: Row-col axes of the query and reference rasters the fit ran on, when it ran on
     #: images. ``None`` for point-cloud fits, where no raster survives the call.
     query_axes: tuple[JaxArray, JaxArray] | None = None
@@ -208,6 +211,20 @@ class StalignResult:
     background_weights: JaxArray | None = None
     energies: JaxArray | None = None
     n_iter: int | None = None
+
+    @property
+    def affine_xyz(self) -> JaxArray:
+        """The affine part as a ``(3, 3)`` in public ``(x, y)`` order.
+
+        :attr:`affine` is in the solver's row-column order; this is the same matrix in the
+        order the public API speaks, registerable as a SpatialData
+        :class:`~spatialdata.transformations.Affine`. The velocity field is not expressible
+        that way, so this is the coarse part of the fit only.
+        """
+        from ._stalign_impl._core import reverse_axes
+
+        swap = reverse_axes(2)
+        return swap @ self.affine @ swap
 
     def deformation_grid(
         self,
@@ -302,8 +319,10 @@ class StalignVolumeResult:
     """A fitted section-into-volume registration, ready to place cells in the reference.
 
     :meth:`transform` takes ``(x, y)`` section coordinates to ``(x, y, z)`` reference
-    coordinates, and :meth:`sample_reference` reads a reference volume at those points --
-    together, upstream's ``analyze3Dalign`` without the ontology join.
+    coordinates. Unlike :class:`StalignResult`'s it has no ``direction``: the section is
+    the fixed image and it is flat, so only section-into-volume is meaningful. Pair it with
+    :func:`~squidpy.experimental.im.sample_volume` to read a reference volume at the
+    mapped points.
     """
 
     #: Homogeneous ``(4, 4)`` affine in the solver's ``(z, y, x)`` array order.
@@ -356,52 +375,6 @@ class StalignVolumeResult:
             self.velocity_grid, self.velocity, self.affine, lifted, direction="backward"
         )
         return transformed[:, ::-1]
-
-    def sample_reference(
-        self,
-        volume: npt.ArrayLike,
-        axes: Sequence[npt.ArrayLike],
-        points: npt.ArrayLike,
-        *,
-        order: int = 1,
-    ) -> JaxArray:
-        """Read ``volume`` at ``(N, 3)`` ``(x, y, z)`` reference points.
-
-        Parameters
-        ----------
-        volume
-            A ``(z, y, x)`` or ``(c, z, y, x)`` reference volume. Need not be the one the
-            fit ran on -- an annotation volume registered to the same reference frame is
-            the point of this method.
-        axes
-            The volume's physical ``(z, y, x)`` axes.
-        points
-            Reference coordinates, as returned by :meth:`transform`.
-        order
-            ``1`` interpolates linearly, for an intensity volume. ``0`` samples the
-            nearest voxel, which is what an annotation volume needs -- interpolating
-            integer structure ids would average two of them into a third, unrelated id.
-
-        Returns
-        -------
-        ``(N,)`` for a bare volume, ``(c, N)`` for a channelled one.
-        """
-        import jax.numpy as jnp
-
-        from ._stalign_impl._core import interp, jax_dtype
-
-        arr = jnp.asarray(volume, dtype=jax_dtype())
-        if arr.ndim not in {3, 4}:
-            raise ValueError(f"Expected `volume` to be a (z, y, x) or (c, z, y, x) array, found shape {arr.shape}.")
-        if len(axes) != 3:
-            raise ValueError(f"Expected `axes` to hold three `(z, y, x)` coordinate vectors, found {len(axes)}.")
-        pts = jnp.asarray(points, dtype=jax_dtype())
-        if pts.ndim != 2 or pts.shape[1] != 3:
-            raise ValueError(f"Expected an (N, 3) `(x, y, z)` array, found shape {pts.shape}.")
-
-        resolved = tuple(jnp.asarray(axis, dtype=jax_dtype()) for axis in axes)
-        sampled = interp(resolved, arr, pts[:, ::-1].T[:, :, None], order=order)[..., 0]
-        return sampled[0] if arr.ndim == 3 else sampled
 
 
 def fit_stalign_volume(
@@ -749,7 +722,6 @@ def fit_stalign_image(
         affine=result["A"],
         velocity=result["v"],
         velocity_grid=result["xv"],
-        aligned_points=jnp.zeros((0, 2), dtype=dtype),
         query_axes=source_grid,
         ref_axes=target_grid,
         match_weights=result["WM"],
