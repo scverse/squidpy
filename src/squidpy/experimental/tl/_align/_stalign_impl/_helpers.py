@@ -9,9 +9,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from squidpy._validators import validate_xy
 from squidpy.experimental.im._rasterize_points import rasterize
 
-from .._common import validate_xy
 from ._core import jax_dtype, reverse_axes
 
 if TYPE_CHECKING:

@@ -7,8 +7,7 @@ from typing import Literal
 import numpy as np
 
 from squidpy._utils import NDArrayA
-
-from ._common import validate_xy
+from squidpy._validators import validate_xy
 
 
 def _fit(ref: np.ndarray, query: np.ndarray, *, method: Literal["similarity", "affine"]) -> NDArrayA:
