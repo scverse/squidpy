@@ -17,11 +17,11 @@ from ._io import shallow_copy_sdata, writeback_affine_sdata
 from ._landmark import fit_affine, fit_similarity
 from ._stalign import (
     StalignObsSolverKwargs,
-    StalignSliceSolverKwargs,
     StalignSolverKwargs,
+    StalignVolumeSolverKwargs,
     fit_stalign_image,
     fit_stalign_obs,
-    fit_stalign_slice,
+    fit_stalign_volume,
 )
 
 if TYPE_CHECKING:
@@ -30,9 +30,9 @@ if TYPE_CHECKING:
     import numpy.typing as npt
 
     from ._landmark import AffineFitResult
-    from ._stalign import StalignResult, StalignSliceResult
+    from ._stalign import StalignResult, StalignVolumeResult
 
-__all__ = ["align_landmarks", "align_stalign_image", "align_stalign_obs", "align_stalign_slice"]
+__all__ = ["align_landmarks", "align_stalign_image", "align_stalign_obs", "align_stalign_volume"]
 
 
 def _resolve_pair(value: str | tuple[str | None, str | None], *, name: str) -> tuple[str | None, str | None]:
@@ -270,8 +270,7 @@ def align_stalign_image(
         Coordinate systems to read each element's physical axes in. The scale and
         translation the elements carry supply the units, so two images at different
         resolutions need nothing restated -- and nothing can be restated to contradict
-        the container. For arrays not in a SpatialData, :func:`fit_stalign_image` takes
-        the axes directly.
+        the container.
     key_added
         Image element name on the query to materialise the warped image under. The
         fitted diffeomorphism cannot be expressed as a SpatialData transformation --
@@ -370,7 +369,7 @@ def _element_axes(
     ]
 
 
-def align_stalign_slice(
+def align_stalign_volume(
     sdata_ref: SpatialData,
     sdata_query: SpatialData | None = None,
     *,
@@ -385,8 +384,8 @@ def align_stalign_slice(
     spatial_key: str = "spatial",
     key_added: str | None = None,
     inplace: bool = False,
-    **solver_kwargs: Unpack[StalignSliceSolverKwargs],
-) -> StalignSliceResult | SpatialData | None:
+    **solver_kwargs: Unpack[StalignVolumeSolverKwargs],
+) -> StalignVolumeResult | SpatialData | None:
     """Place a 2D section into a 3D reference volume with STalign (diffeomorphic LDDMM).
 
     The plane of a physical section is unknown and generally not exactly coronal, so this
@@ -432,11 +431,11 @@ def align_stalign_slice(
         copy and returns it. Needs ``key_added``.
     solver_kwargs
         LDDMM solver tuning; see
-        :class:`~squidpy.experimental.tl.StalignSliceSolverKwargs`.
+        :class:`~squidpy.experimental.tl.StalignVolumeSolverKwargs`.
 
     Returns
     -------
-    The fitted :class:`~squidpy.experimental.tl.StalignSliceResult` when ``key_added`` is
+    The fitted :class:`~squidpy.experimental.tl.StalignVolumeResult` when ``key_added`` is
     ``None``; otherwise the modified copy, or ``None`` when ``inplace=True``.
     """
     check_inplace(inplace, key_added, names="`key_added`")
@@ -453,7 +452,7 @@ def align_stalign_slice(
     ref_array = _read_image(sdata_ref, ref_image, side="reference", ndim=3)
     query_array = _read_image(query_container, query_image, side="query")
 
-    result = fit_stalign_slice(
+    result = fit_stalign_volume(
         ref=ref_array,
         query=query_array,
         ref_axes=_element_axes(

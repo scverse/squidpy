@@ -15,7 +15,7 @@ from tests.experimental.conftest import ALIGN_PTS, TINY_SOLVER, make_adata
 
 pytest.importorskip("jax")
 
-from squidpy.experimental.tl import align_stalign_image, align_stalign_obs, align_stalign_slice  # noqa: E402
+from squidpy.experimental.tl import align_stalign_image, align_stalign_obs, align_stalign_volume  # noqa: E402
 
 IMAGE_SOLVER = {"a": 4.0, "nt": 1, "niter": 2, "epV": 1.0}
 
@@ -90,7 +90,9 @@ def test_slice_fit_places_a_section_in_a_volume() -> None:
     sdata_ref = _sdata_image(volume, "volume")
     sdata_query = _sdata_image(volume[:, 3], "section")
 
-    result = align_stalign_slice(sdata_ref, sdata_query, image_key=("volume", "section"), a=3.0, nt=1, niter=2, epV=1.0)
+    result = align_stalign_volume(
+        sdata_ref, sdata_query, image_key=("volume", "section"), a=3.0, nt=1, niter=2, epV=1.0
+    )
 
     assert result.affine_xyz.shape == (4, 4)
     assert result.transform(ALIGN_PTS).shape == (len(ALIGN_PTS), 3)
@@ -101,4 +103,4 @@ def test_a_2d_reference_is_rejected_with_a_pointer_to_the_2d_path() -> None:
     sdata = _sdata_image(section, "section")
 
     with pytest.raises(ValueError, match=r"align_stalign_image"):
-        align_stalign_slice(sdata, sdata, image_key=("section", "section"), **IMAGE_SOLVER)
+        align_stalign_volume(sdata, sdata, image_key=("section", "section"), **IMAGE_SOLVER)

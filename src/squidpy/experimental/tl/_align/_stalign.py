@@ -65,8 +65,8 @@ class StalignSolverKwargs(TypedDict, total=False):
     patience: int
 
 
-class StalignSliceSolverKwargs(TypedDict, total=False):
-    """LDDMM solver tuning accepted by :func:`~squidpy.experimental.tl.align_stalign_slice`.
+class StalignVolumeSolverKwargs(TypedDict, total=False):
+    """LDDMM solver tuning accepted by :func:`~squidpy.experimental.tl.align_stalign_volume`.
 
     :class:`~squidpy.experimental.tl.StalignSolverKwargs` minus its landmark term:
     upstream's 3D-to-slice path has no point-matching energy, so a ``sigmaP`` here would
@@ -170,8 +170,8 @@ _IMAGE_DEFAULTS: StalignSolverKwargs = {
 #: Slice case: upstream's ``LDDMM_3D_to_slice`` defaults, which differ from the 2D
 #: ``LDDMM``'s in five places. ``sigmaP`` is carried only because ``lddmm`` requires it;
 #: with no landmarks the point term is identically zero, and the public
-#: :class:`StalignSliceSolverKwargs` deliberately does not expose it.
-_SLICE_DEFAULTS: StalignSolverKwargs = {
+#: :class:`StalignVolumeSolverKwargs` deliberately does not expose it.
+_VOLUME_DEFAULTS: StalignSolverKwargs = {
     **_SOLVER_DEFAULTS,
     "expand": 1.25,
     "epL": 1e-6,
@@ -298,7 +298,7 @@ class StalignResult:
 
 
 @dataclass(slots=True)
-class StalignSliceResult:
+class StalignVolumeResult:
     """A fitted section-into-volume registration, ready to place cells in the reference.
 
     :meth:`transform` takes ``(x, y)`` section coordinates to ``(x, y, z)`` reference
@@ -404,7 +404,7 @@ class StalignSliceResult:
         return sampled[0] if arr.ndim == 3 else sampled
 
 
-def fit_stalign_slice(
+def fit_stalign_volume(
     ref: npt.ArrayLike,
     query: npt.ArrayLike,
     *,
@@ -416,8 +416,8 @@ def fit_stalign_slice(
     initial_rotation: float = 0.0,
     initial_scale: float = 1.0,
     initial_affine: npt.ArrayLike | None = None,
-    **solver_kwargs: Unpack[StalignSliceSolverKwargs],
-) -> StalignSliceResult:
+    **solver_kwargs: Unpack[StalignVolumeSolverKwargs],
+) -> StalignVolumeResult:
     """Fit a single 2D section into a 3D reference volume.
 
     The plane of the cut is unknown and generally not exactly coronal, so this fits the
@@ -458,11 +458,11 @@ def fit_stalign_slice(
         Mutually exclusive with all three.
     solver_kwargs
         LDDMM solver tuning; see
-        :class:`~squidpy.experimental.tl.StalignSliceSolverKwargs`.
+        :class:`~squidpy.experimental.tl.StalignVolumeSolverKwargs`.
 
     Returns
     -------
-    A :class:`StalignSliceResult`.
+    A :class:`StalignVolumeResult`.
 
     Notes
     -----
@@ -482,7 +482,7 @@ def fit_stalign_slice(
     from ._stalign_impl._core import jax_dtype, lddmm
     from ._stalign_impl._helpers import affine_xy_to_rc, as_chw, resolve_axes
 
-    opts: dict[str, Any] = _SLICE_DEFAULTS | solver_kwargs
+    opts: dict[str, Any] = _VOLUME_DEFAULTS | solver_kwargs
     dtype = jax_dtype()
 
     target_image = as_chw(query, name="query", ndim=2)
@@ -544,7 +544,7 @@ def fit_stalign_slice(
         T=translation,
         **{key: value for key, value in opts.items() if key not in _CONSUMED_KEYS},
     )
-    return StalignSliceResult(
+    return StalignVolumeResult(
         affine=result["A"],
         velocity=result["v"],
         velocity_grid=result["xv"],

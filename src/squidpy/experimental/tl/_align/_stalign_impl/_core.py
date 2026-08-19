@@ -339,25 +339,11 @@ def _lddmm_loss(
     return total, (contrast_source, transformed_points, match_energy, reg_energy, point_energy)
 
 
-@partial(
-    jax.jit,
-    static_argnames=(
-        "niter",
-        "diffeo_start",
-        "epL",
-        "epT",
-        "epV",
-        "sigmaM",
-        "sigmaA",
-        "sigmaB",
-        "sigmaR",
-        "sigmaP",
-        "tol",
-        "patience",
-        "estimate_muA",
-        "estimate_muB",
-    ),
-)
+# Only what genuinely cannot be traced is static: `niter` sizes the energy trace, `tol`
+# is tested against `None` in Python, and `estimate_mu*` pick a branch in Python. The
+# tuning scalars are traced, so retuning any of them reuses the compiled loop instead of
+# paying for a fresh trace of `value_and_grad` through the interpolation and FFTs.
+@partial(jax.jit, static_argnames=("niter", "tol", "estimate_muA", "estimate_muB"))
 def _lddmm_run(
     linear,
     translation,
@@ -380,8 +366,8 @@ def _lddmm_run(
     target_landmarks,
     niter,
     diffeo_start,
-    epL,
-    epT,
+    steps_before,
+    steps_after,
     epV,
     sigmaM,
     sigmaA,
@@ -401,11 +387,6 @@ def _lddmm_run(
     """
     loss_and_grad = jax.value_and_grad(_lddmm_loss, argnums=(0, 1, 2), has_aux=True)
 
-    # Precomputed in Python so the two step sizes are bit-identical to `epL / 1.0` and
-    # `epL / 10.0` -- the `(it >= diffeo_start) * 9` scaling at STalign.py:1205-1206.
-    steps_before = (epL, epT)
-    steps_after = (epL / 10.0, epT / 10.0)
-
     dtype = jax_dtype()
     # `niter=0` means "evaluate the initial state and stop"; the trace still needs a
     # slot so the carry has a fixed shape.
@@ -420,13 +401,11 @@ def _lddmm_run(
         background_weights,
         muA,
         muB,
-        jnp.asarray(jnp.nan, dtype=dtype),
-        source_landmarks,
         energies,
     )
 
     def _step(carry: tuple[Any, ...]) -> tuple[Any, ...]:
-        iteration, linear, translation, velocity, wm, wa, wb, muA, muB, _, _, energies = carry
+        iteration, linear, translation, velocity, wm, wa, wb, muA, muB, energies = carry
 
         (energy, aux), (grad_linear, grad_translation, grad_velocity) = loss_and_grad(
             linear,
@@ -446,7 +425,7 @@ def _lddmm_run(
             sigmaR=sigmaR,
             sigmaP=sigmaP,
         )
-        contrast_source, transformed_points, _, _, _ = aux
+        contrast_source, *_ = aux
 
         diffeo = iteration >= diffeo_start
         step_linear = jnp.where(diffeo, steps_after[0], steps_before[0])
@@ -489,8 +468,6 @@ def _lddmm_run(
             wb,
             muA,
             muB,
-            energy,
-            transformed_points,
             energies.at[iteration].set(energy),
         )
 
@@ -573,8 +550,8 @@ def lddmm(
 
     Returns
     -------
-    A dict with the fitted ``A``/``v``/``xv``, the mixture weights, the final energy
-    ``E``, the per-iteration ``energies`` trace, and ``n_iter`` actually run.
+    A dict with the fitted ``A``/``v``/``xv``, the mixture weights, the per-iteration
+    ``energies`` trace, and ``n_iter`` actually run.
     """
     x_source = tuple(jnp.asarray(axis) for axis in xI)
     x_target = tuple(jnp.asarray(axis) for axis in xJ)
@@ -630,6 +607,9 @@ def lddmm(
     estimate_muA = muA is None
     estimate_muB = muB is None
 
+    # Precomputed here in Python so the diffeo-phase step sizes stay bit-identical to
+    # `epL / 10.0` -- the `(it >= diffeo_start) * 9` scaling at STalign.py:1205-1206 --
+    # rather than being derived from a traced scalar at the solver's active precision.
     final = _lddmm_run(
         linear,
         translation,
@@ -651,8 +631,8 @@ def lddmm(
         target_landmarks=target_landmarks,
         niter=niter,
         diffeo_start=diffeo_start,
-        epL=epL,
-        epT=epT,
+        steps_before=(epL, epT),
+        steps_after=(epL / 10.0, epT / 10.0),
         epV=epV,
         sigmaM=sigmaM,
         sigmaA=sigmaA,
@@ -674,8 +654,6 @@ def lddmm(
         background_weights,
         muA,
         muB,
-        energy,
-        transformed_points,
         energies,
     ) = final
 
@@ -687,8 +665,6 @@ def lddmm(
         "WM": match_weights,
         "WB": background_weights,
         "WA": artifact_weights,
-        "E": energy,
-        "points": transformed_points,
         # Per-iteration objective, so a caller can tell a converged run from a diverged
         # one without running it again. Trailing entries stay NaN if `tol` stopped early.
         "energies": energies[:niter],

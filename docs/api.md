@@ -154,7 +154,7 @@ tuning as flat keyword arguments, listed below, and return the fitted map when
     :toctree: api
 
     experimental.tl.StalignResult
-    experimental.tl.StalignSliceResult
+    experimental.tl.StalignVolumeResult
     experimental.tl.AffineFitResult
 ```
 
@@ -166,12 +166,13 @@ tuning as flat keyword arguments, listed below, and return the fitted map when
 
     experimental.tl.StalignSolverKwargs
     experimental.tl.StalignObsSolverKwargs
-    experimental.tl.StalignSliceSolverKwargs
+    experimental.tl.StalignVolumeSolverKwargs
 ```
 
 ## Experimental
 ```{eval-rst}
 .. module:: squidpy.experimental
+.. module:: squidpy.experimental.tl
 .. currentmodule:: squidpy
 .. autosummary::
     :toctree: api
@@ -182,9 +183,8 @@ tuning as flat keyword arguments, listed below, and return the fitted map when
     experimental.tl.TilingQCParams
     experimental.tl.align_stalign_obs
     experimental.tl.align_stalign_image
-    experimental.tl.align_stalign_slice
+    experimental.tl.align_stalign_volume
     experimental.tl.align_landmarks
-    experimental.tl.AlignResult
     experimental.tl.assign_stitch_groups
     experimental.tl.StitchParams
     experimental.tl.make_stitched_labels
