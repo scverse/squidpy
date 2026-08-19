@@ -3,10 +3,10 @@ from __future__ import annotations
 # The concrete result classes and the solver-tuning TypedDicts are exported because
 # callers need them: a result is what a fit returns, and the TypedDicts document the knobs.
 from ._align import (
+    Stalign2DResult,
+    Stalign3DResult,
     StalignObsSolverKwargs,
-    StalignPlaneResult,
     StalignSolverKwargs,
-    StalignVolumeResult,
     StalignVolumeSolverKwargs,
     align_landmarks,
     align_stalign_image,
@@ -19,8 +19,8 @@ from ._tiling_stitch import StitchParams, assign_stitch_groups
 
 __all__ = [
     "StalignObsSolverKwargs",
-    "StalignPlaneResult",
-    "StalignVolumeResult",
+    "Stalign2DResult",
+    "Stalign3DResult",
     "StalignVolumeSolverKwargs",
     "StalignSolverKwargs",
     "StitchParams",

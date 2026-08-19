@@ -153,8 +153,8 @@ tuning as flat keyword arguments, listed below, and return the fitted map when
 .. autosummary::
     :toctree: api
 
-    experimental.tl.StalignPlaneResult
-    experimental.tl.StalignVolumeResult
+    experimental.tl.Stalign2DResult
+    experimental.tl.Stalign3DResult
 ```
 
 ```{eval-rst}

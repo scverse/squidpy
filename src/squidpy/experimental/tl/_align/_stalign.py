@@ -68,11 +68,10 @@ class StalignSolverKwargs(TypedDict, total=False):
 class StalignVolumeSolverKwargs(TypedDict, total=False):
     """LDDMM solver tuning accepted by :func:`~squidpy.experimental.tl.align_stalign_volume`.
 
-    :class:`~squidpy.experimental.tl.StalignSolverKwargs` minus its landmark term:
-    upstream's 3D-to-slice path has no point-matching energy, so a ``sigmaP`` here would
-    be a knob that does nothing. Defaults follow upstream's ``LDDMM_3D_to_slice``
-    signature, which differ from the 2D ones in five places -- ``expand`` 1.25,
-    ``epL`` 1e-6, ``epT`` 1e1, ``epV`` 1e3 and ``sigmaR`` 1e8.
+    :class:`~squidpy.experimental.tl.StalignSolverKwargs` minus its landmark term: the
+    3D path has no point-matching energy, so a ``sigmaP`` here would be a knob that does
+    nothing. Five defaults differ from the 2D case -- ``expand`` 1.25, ``epL`` 1e-6,
+    ``epT`` 1e1, ``epV`` 1e3 and ``sigmaR`` 1e8.
 
     - ``initial_velocity``, ``velocity_grid`` -- continuation state from a prior fit, in
       the solver's ``(z, y, x)`` convention.
@@ -188,15 +187,15 @@ _JAX_REQUIRED = 'STalign alignment requires JAX: `pip install "squidpy[jax]"`.'
 
 
 @dataclass(slots=True)
-class StalignPlaneResult:
+class Stalign2DResult:
     """A fitted STalign diffeomorphism whose reference frame is a plane.
 
-    The rank-2 counterpart to :class:`StalignVolumeResult`: both carry the same fitted
+    The rank-2 counterpart to :class:`Stalign3DResult`: both carry the same fitted
     fields, and the reference frame's dimensionality is what separates them --
     :meth:`transform` returns ``(N, 2)`` here and ``(N, 3)`` there.
 
     :meth:`transform` works in ``(x, y)``, and unlike
-    :class:`StalignVolumeResult`'s it takes a ``direction``: at rank 2 both images are
+    :class:`Stalign3DResult`'s it takes a ``direction``: at rank 2 both images are
     flat, so mapping the reference back into the query frame is equally meaningful.
     """
 
@@ -319,14 +318,14 @@ class StalignPlaneResult:
 
 
 @dataclass(slots=True)
-class StalignVolumeResult:
+class Stalign3DResult:
     """A fitted STalign registration whose reference frame is a volume.
 
-    The rank-3 counterpart to :class:`StalignPlaneResult`, placing a flat section's cells
+    The rank-3 counterpart to :class:`Stalign2DResult`, placing a flat section's cells
     in a 3D reference.
 
     :meth:`transform` takes ``(x, y)`` section coordinates to ``(x, y, z)`` reference
-    coordinates. Unlike :class:`StalignPlaneResult`'s it has no ``direction``: the section is
+    coordinates. Unlike :class:`Stalign2DResult`'s it has no ``direction``: the section is
     the fixed image and it is flat, so only section-into-volume is meaningful. Pair it with
     :func:`~squidpy.experimental.im.sample_volume` to read a reference volume at the
     mapped points.
@@ -365,8 +364,8 @@ class StalignVolumeResult:
 
         This owns both halves of the convention change: the lift of a flat section onto
         the ``z = 0`` plane, and the reversal between the caller's ``(x, y, z)`` and the
-        solver's ``(z, y, x)``. It is upstream's ``coord0``/``coord1``/``coord2``, except
-        evaluated at each point rather than at the nearest raster cell.
+        solver's ``(z, y, x)``. Evaluated at each point rather than at the nearest raster
+        cell, so it does not quantise to the fit's grid.
         """
         import jax.numpy as jnp
 
@@ -384,6 +383,10 @@ class StalignVolumeResult:
         return transformed[:, ::-1]
 
 
+# Why the full 3D deformation rather than an affine plane plus an in-plane 2D fit: on a
+# MERFISH-into-Allen-CCF run the diffeomorphism bends the fitted surface 2-5 voxels away
+# from its affine plane for the outer 5% of cells -- one to two cortical layers. The
+# `initial_*` arguments are therefore an initialisation, not the answer.
 def fit_stalign_volume(
     ref: npt.ArrayLike,
     query: npt.ArrayLike,
@@ -397,62 +400,38 @@ def fit_stalign_volume(
     initial_scale: float = 1.0,
     initial_affine: npt.ArrayLike | None = None,
     **solver_kwargs: Unpack[StalignVolumeSolverKwargs],
-) -> StalignVolumeResult:
-    """Fit a single 2D section into a 3D reference volume.
+) -> Stalign3DResult:
+    """Fit a single 2D section into a 3D reference volume, array-in / array-out.
 
-    The plane of the cut is unknown and generally not exactly coronal, so this fits the
-    full 3D deformation rather than an affine plus an in-plane 2D fit: measured against
-    upstream's own MERFISH-into-Allen-CCF run, the diffeomorphism bends the fitted
-    surface by 2-5 voxels away from its affine plane for the outer 5% of cells, which in
-    cortex is one to two layers. ``initial_slice``/``initial_rotation``/``initial_scale``
-    are therefore an *initialisation*, not the answer.
+    Internal: :func:`~squidpy.experimental.tl.align_stalign_volume` is the container-aware
+    entry point and carries the user-facing documentation.
 
     Parameters
     ----------
     ref
-        The reference volume, channels-first ``(c, z, y, x)``; a bare ``(z, y, x)`` array
-        is promoted. Upstream's recipe passes two channels -- a normalised Nissl volume
-        and its centred square -- against a single-channel section, which the contrast
-        transform handles.
+        Reference volume, channels-first ``(c, z, y, x)``; a bare ``(z, y, x)`` array is
+        promoted. Need not match ``query``'s channel count.
     query
         The section, channels-first ``(c, y, x)``; a bare ``(y, x)`` array is promoted.
-        It need not have the same number of channels as ``ref``.
     ref_scale, query_scale
-        Physical size of one voxel/pixel, as ``(z, y, x)`` and ``(y, x)``. Used to build
-        centred physical axes when the corresponding ``*_axes`` is not given.
+        Physical size of one voxel/pixel, ``(z, y, x)`` and ``(y, x)``. Builds centred
+        axes when the matching ``*_axes`` is not given.
     ref_axes, query_axes
-        Optional explicit physical axes, ``(z, y, x)`` and ``(y, x)``. Each side is
-        independent: the reference is normally left to ``ref_scale``'s centred axes while
-        the section carries the explicit axes its rasterisation produced.
+        Explicit physical axes, ``(z, y, x)`` and ``(y, x)``, resolved per side.
     initial_slice
-        Index along the reference's first axis to centre the section on. Sets the
-        translation's out-of-plane component to ``-ref_axes[0][initial_slice]``. ``None``
-        centres on the middle of the volume.
-    initial_rotation
-        In-plane rotation of the initial affine, in **radians**.
-    initial_scale
-        Uniform scale of the initial affine. Upstream's notebooks start at 0.9.
+        Index along the reference's first axis to centre the section on; sets the
+        translation's out-of-plane component. ``None`` centres on the middle.
+    initial_rotation, initial_scale
+        In-plane rotation (**radians**) and uniform scale of the initial affine.
     initial_affine
-        Homogeneous ``(4, 4)`` affine in public ``(x, y, z)`` order, replacing the
-        ``initial_slice``/``initial_rotation``/``initial_scale`` construction entirely.
-        Mutually exclusive with all three.
+        Homogeneous ``(4, 4)`` affine in ``(x, y, z)`` order, replacing the three
+        ``initial_*`` arguments above and mutually exclusive with them.
     solver_kwargs
-        LDDMM solver tuning; see
-        :class:`~squidpy.experimental.tl.StalignVolumeSolverKwargs`.
+        See :class:`StalignVolumeSolverKwargs`.
 
     Returns
     -------
-    A :class:`StalignVolumeResult`.
-
-    Notes
-    -----
-    Runs in JAX's active float precision, which is **single** unless x64 is enabled. A
-    reference volume is large and the run is long, so enable double precision before
-    importing JAX for anything beyond a smoke test::
-
-        import jax
-
-        jax.config.update("jax_enable_x64", True)
+    A :class:`Stalign3DResult`.
     """
     try:
         import jax.numpy as jnp
@@ -524,7 +503,7 @@ def fit_stalign_volume(
         T=translation,
         **{key: value for key, value in opts.items() if key not in _CONSUMED_KEYS},
     )
-    return StalignVolumeResult(
+    return Stalign3DResult(
         affine=result["A"],
         velocity=result["v"],
         velocity_grid=result["xv"],
@@ -545,7 +524,7 @@ def fit_stalign_obs(
     landmarks_ref: npt.ArrayLike | None = None,
     landmarks_query: npt.ArrayLike | None = None,
     **solver_kwargs: Unpack[StalignObsSolverKwargs],
-) -> StalignPlaneResult:
+) -> Stalign2DResult:
     """Fit a deformation mapping ``query`` onto ``ref``.
 
     Parameters
@@ -566,7 +545,7 @@ def fit_stalign_obs(
 
     Returns
     -------
-    A :class:`StalignPlaneResult` whose :meth:`~StalignPlaneResult.transform` maps
+    A :class:`Stalign2DResult` whose :meth:`~Stalign2DResult.transform` maps
     ``(x, y)`` points into the reference frame; ``aligned_points`` is the fitted
     ``query`` already mapped.
 
@@ -630,7 +609,7 @@ def fit_stalign_obs(
         **{key: value for key, value in opts.items() if key not in _CONSUMED_KEYS},
     )
     aligned_rc = transform_points_row_col(result["xv"], result["v"], result["A"], source_rc, direction="forward")
-    return StalignPlaneResult(
+    return Stalign2DResult(
         affine=result["A"],
         velocity=result["v"],
         velocity_grid=result["xv"],
@@ -655,7 +634,7 @@ def fit_stalign_image(
     ref_axes: Sequence[npt.ArrayLike] | None = None,
     query_axes: Sequence[npt.ArrayLike] | None = None,
     **solver_kwargs: Unpack[StalignSolverKwargs],
-) -> StalignPlaneResult:
+) -> Stalign2DResult:
     """Fit a deformation mapping the ``query`` image onto the ``ref`` image.
 
     Parameters
@@ -687,9 +666,9 @@ def fit_stalign_image(
 
     Returns
     -------
-    A :class:`StalignPlaneResult`. Its :meth:`~StalignPlaneResult.transform` maps ``(x, y)`` points
+    A :class:`Stalign2DResult`. Its :meth:`~Stalign2DResult.transform` maps ``(x, y)`` points
     in query pixel coordinates into the reference frame, and
-    :meth:`~StalignPlaneResult.warp_image` resamples a query image onto the reference grid.
+    :meth:`~Stalign2DResult.warp_image` resamples a query image onto the reference grid.
     """
     try:
         import jax.numpy as jnp
@@ -725,7 +704,7 @@ def fit_stalign_image(
         T=translation,
         **{key: value for key, value in opts.items() if key not in _CONSUMED_KEYS},
     )
-    return StalignPlaneResult(
+    return Stalign2DResult(
         affine=result["A"],
         velocity=result["v"],
         velocity_grid=result["xv"],

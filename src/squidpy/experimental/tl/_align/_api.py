@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
     import numpy.typing as npt
 
-    from ._stalign import StalignPlaneResult, StalignVolumeResult
+    from ._stalign import Stalign2DResult, Stalign3DResult
 
 __all__ = ["align_landmarks", "align_stalign_image", "align_stalign_obs", "align_stalign_volume"]
 
@@ -173,7 +173,7 @@ def align_stalign_obs(
     landmarks_ref: npt.ArrayLike | None = None,
     landmarks_query: npt.ArrayLike | None = None,
     **solver_kwargs: Unpack[StalignObsSolverKwargs],
-) -> StalignPlaneResult | AnnData | SpatialData | None:
+) -> Stalign2DResult | AnnData | SpatialData | None:
     """Align a query point cloud onto a reference with STalign (diffeomorphic LDDMM).
 
     Parameters
@@ -207,7 +207,7 @@ def align_stalign_obs(
 
     Returns
     -------
-    The fitted :class:`~squidpy.experimental.tl.StalignPlaneResult` when
+    The fitted :class:`~squidpy.experimental.tl.Stalign2DResult` when
     ``key_added`` is ``None``; otherwise the modified copy, or ``None`` when
     ``inplace=True``.
     """
@@ -255,7 +255,7 @@ def align_stalign_image(
     key_added: str | None = None,
     inplace: bool = False,
     **solver_kwargs: Unpack[StalignSolverKwargs],
-) -> StalignPlaneResult | SpatialData | None:
+) -> Stalign2DResult | SpatialData | None:
     """Align a query image onto a reference image with STalign (diffeomorphic LDDMM).
 
     Parameters
@@ -291,7 +291,7 @@ def align_stalign_image(
 
     Returns
     -------
-    The fitted :class:`~squidpy.experimental.tl.StalignPlaneResult` when
+    The fitted :class:`~squidpy.experimental.tl.Stalign2DResult` when
     ``key_added`` is ``None``; otherwise the modified copy, or ``None`` when
     ``inplace=True``.
     """
@@ -421,7 +421,7 @@ def align_stalign_volume(
     key_added: str | None = None,
     inplace: bool = False,
     **solver_kwargs: Unpack[StalignVolumeSolverKwargs],
-) -> StalignVolumeResult | SpatialData | None:
+) -> Stalign3DResult | SpatialData | None:
     """Place a 2D section into a 3D reference volume with STalign (diffeomorphic LDDMM).
 
     The plane of a physical section is unknown and generally not exactly coronal, so this
@@ -471,7 +471,7 @@ def align_stalign_volume(
 
     Returns
     -------
-    The fitted :class:`~squidpy.experimental.tl.StalignVolumeResult` when ``key_added`` is
+    The fitted :class:`~squidpy.experimental.tl.Stalign3DResult` when ``key_added`` is
     ``None``; otherwise the modified copy, or ``None`` when ``inplace=True``.
     """
     _check_inplace(inplace, key_added, names="`key_added`")
