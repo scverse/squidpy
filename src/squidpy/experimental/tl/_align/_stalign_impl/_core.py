@@ -13,7 +13,7 @@ import numpy as np
 
 from squidpy.experimental.im import _rasterize_points
 
-__all__ = ["jax_dtype", "lddmm", "reverse_axes", "transform_grid_row_col", "transform_points_row_col"]
+__all__ = ["interp", "jax_dtype", "lddmm", "reverse_axes", "transform_grid_row_col", "transform_points_row_col"]
 
 #: An ordered per-axis coordinate vector, one entry per spatial axis. Two entries for the
 #: 2D section-to-section fits, three for fitting a section into a reference volume; the
@@ -60,7 +60,7 @@ def _grid_points(x: Axes) -> jax.Array:
     return jnp.stack(jnp.meshgrid(*x, indexing="ij"))
 
 
-def _interp(
+def interp(
     x: Axes,
     image: jax.Array,
     phii: jax.Array,
@@ -125,7 +125,7 @@ def transform_points_row_col(
         time_steps = reversed(time_steps)
 
     for t in time_steps:
-        disp = _interp(
+        disp = interp(
             xv,
             jnp.moveaxis(flow_sign * velocity[t], -1, 0),
             pts.T[:, :, None],
@@ -314,7 +314,7 @@ def _lddmm_loss(
 ) -> tuple[jax.Array, tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]]:
     affine = _to_affine(linear, translation)
     source_grid = transform_grid_row_col(x_target, xv, velocity, affine, direction="backward")
-    warped_source = _interp(x_source, source_image, source_grid)
+    warped_source = interp(x_source, source_image, source_grid)
     contrast_source = _contrast_transform(warped_source, target_image, match_weights)
 
     match_energy = jnp.sum((contrast_source - target_image) ** 2 * match_weights) / (2.0 * sigmaM**2)

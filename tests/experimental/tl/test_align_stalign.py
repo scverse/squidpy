@@ -18,6 +18,7 @@ pytest.importorskip("jax")
 from squidpy.experimental.tl import align_stalign_image, align_stalign_obs, align_stalign_volume  # noqa: E402
 
 IMAGE_SOLVER = {"a": 4.0, "nt": 1, "niter": 2, "epV": 1.0}
+VOLUME_SOLVER = {"a": 3.0, "nt": 1, "niter": 2, "epV": 1.0}
 
 
 def _sdata_image(array: np.ndarray, key: str, **kwargs: object) -> SpatialData:
@@ -104,3 +105,44 @@ def test_a_2d_reference_is_rejected_with_a_pointer_to_the_2d_path() -> None:
 
     with pytest.raises(ValueError, match=r"align_stalign_image"):
         align_stalign_volume(sdata, sdata, image_key=("section", "section"), **IMAGE_SOLVER)
+
+
+def _sdata_section_with_table(shapes_scale: float | None) -> SpatialData:
+    """A section plus a table whose coordinates live in a shapes element's intrinsic frame."""
+    import geopandas as gpd
+    from anndata import AnnData
+    from shapely.geometry import Point
+    from spatialdata.models import ShapesModel, TableModel
+    from spatialdata.transformations import Scale, set_transformation
+
+    coords = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+    shapes = ShapesModel.parse(gpd.GeoDataFrame({"radius": [1.0] * 3}, geometry=[Point(*c) for c in coords]))
+    if shapes_scale is not None:
+        set_transformation(shapes, Scale([shapes_scale] * 2, axes=("x", "y")), to_coordinate_system="global")
+    adata = AnnData(np.zeros((3, 1)), obs={"region": ["cells"] * 3, "id": list(range(3))})
+    adata.obs["region"] = adata.obs["region"].astype("category")
+    adata.obsm["spatial"] = coords.copy()
+
+    sdata = _sdata_image(np.random.default_rng(0).random((1, 12, 12)), "section")
+    sdata.shapes["cells"] = shapes
+    sdata.tables["t"] = TableModel.parse(adata, region="cells", region_key="region", instance_key="id")
+    return sdata
+
+
+def test_writing_coords_from_a_different_frame_is_refused() -> None:
+    """The fit's units come from the image element, so the coordinates must share that frame.
+
+    A table's ``obsm`` sits in the intrinsic frame of the element it annotates. Applying the
+    fit to it under a non-identity transform yields plausible-looking reference coordinates
+    that are simply wrong, with nothing to reveal it -- so it raises instead.
+    """
+    sdata_ref = _sdata_image(np.random.default_rng(0).random((1, 6, 12, 12)), "volume")
+    kwargs = {"image_key": ("volume", "section"), "table_key": "t", "spatial_key": "spatial", **VOLUME_SOLVER}
+
+    with pytest.raises(ValueError, match=r"non-identity transformation into 'global'"):
+        align_stalign_volume(sdata_ref, _sdata_section_with_table(10.0), key_added="ref_xyz", **kwargs)
+
+    # identity frame writes, and returning the fit is allowed either way
+    out = align_stalign_volume(sdata_ref, _sdata_section_with_table(None), key_added="ref_xyz", **kwargs)
+    assert out.tables["t"].obsm["ref_xyz"].shape == (3, 3)
+    assert align_stalign_volume(sdata_ref, _sdata_section_with_table(10.0), **kwargs) is not None

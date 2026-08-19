@@ -16,7 +16,9 @@ if TYPE_CHECKING:
     from spatialdata import SpatialData
     from xarray import DataArray
 
-__all__ = ["rasterize_points"]
+#: ``axis`` and ``rasterize`` are the JAX-free primitives the STalign solver imports, so
+#: they are part of this module's surface even though only ``rasterize_points`` is public API.
+__all__ = ["axis", "rasterize", "rasterize_points"]
 
 
 def axis(start: float, stop: float, step: float) -> np.ndarray:

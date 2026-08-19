@@ -154,7 +154,7 @@ def _query_of(
     return data_ref
 
 
-def check_inplace(inplace: bool, *targets: str | None, names: str) -> None:
+def _check_inplace(inplace: bool, *targets: str | None, names: str) -> None:
     if inplace and all(target is None for target in targets):
         raise ValueError(
             f"`inplace=True` has nothing to write: pass {names} to say what to write. "
@@ -211,7 +211,7 @@ def align_stalign_obs(
     ``key_added`` is ``None``; otherwise the modified copy, or ``None`` when
     ``inplace=True``.
     """
-    check_inplace(inplace, key_added, names="`key_added`")
+    _check_inplace(inplace, key_added, names="`key_added`")
     ref_spatial, query_spatial = _resolve_pair(spatial_key, name="spatial_key")
     ref_table, query_table = (None, None) if table_key is None else _resolve_pair(table_key, name="table_key")
     query_container = _query_of(
@@ -295,7 +295,7 @@ def align_stalign_image(
     ``key_added`` is ``None``; otherwise the modified copy, or ``None`` when
     ``inplace=True``.
     """
-    check_inplace(inplace, key_added, names="`key_added`")
+    _check_inplace(inplace, key_added, names="`key_added`")
     ref_image, query_image = _resolve_pair(image_key, name="image_key")
     query_container = _query_of(
         sdata_ref, sdata_query, ref_address=(ref_image,), query_address=(query_image,), key_name="image_key"
@@ -369,6 +369,42 @@ def _element_axes(
     ]
 
 
+def _assert_table_coords_share_frame(
+    sdata: SpatialData, adata: AnnData, spatial_key: str, *, coordinate_system: str
+) -> None:
+    """Refuse to transform ``obsm`` coordinates that are not in ``coordinate_system``.
+
+    The fit's units come from the image element's transformation, so the coordinates it is
+    applied to have to be in that same system. A table's ``obsm`` sits in the intrinsic
+    frame of the element it annotates, which only coincides when that element's transform
+    into ``coordinate_system`` is the identity. Checked rather than silently applied: the
+    result is plausible reference coordinates that are simply wrong, with nothing to
+    reveal it.
+    """
+    from spatialdata.transformations import get_transformation
+
+    region = adata.uns.get("spatialdata_attrs", {}).get("region")
+    regions = [region] if isinstance(region, str) else list(region or [])
+    for name in regions:
+        if name not in sdata:
+            continue
+        matrix = np.asarray(
+            get_transformation(sdata[name], to_coordinate_system=coordinate_system).to_affine_matrix(
+                input_axes=("x", "y"), output_axes=("x", "y")
+            ),
+            dtype=float,
+        )
+        if not np.allclose(matrix, np.eye(3)):
+            raise ValueError(
+                f"`spatial_key={spatial_key!r}` lives in the intrinsic frame of element {name!r}, which "
+                f"carries a non-identity transformation into {coordinate_system!r} -- the coordinate system "
+                f"the fit's units come from. Transforming it would silently produce wrong reference "
+                f"coordinates. Store the coordinates in {coordinate_system!r} units, or return the fit "
+                f"(leave `key_added` unset) and apply `result.transform` to coordinates you have placed "
+                f"there yourself."
+            )
+
+
 def align_stalign_volume(
     sdata_ref: SpatialData,
     sdata_query: SpatialData | None = None,
@@ -438,7 +474,7 @@ def align_stalign_volume(
     The fitted :class:`~squidpy.experimental.tl.StalignVolumeResult` when ``key_added`` is
     ``None``; otherwise the modified copy, or ``None`` when ``inplace=True``.
     """
-    check_inplace(inplace, key_added, names="`key_added`")
+    _check_inplace(inplace, key_added, names="`key_added`")
     ref_image, query_image = _resolve_pair(image_key, name="image_key")
     query_container = _query_of(
         sdata_ref, sdata_query, ref_address=(ref_image,), query_address=(query_image,), key_name="image_key"
@@ -469,6 +505,12 @@ def align_stalign_volume(
     )
     if key_added is None:
         return result
+    _assert_table_coords_share_frame(
+        query_container,
+        _resolve_table(query_container, table_key, side="query"),
+        spatial_key,
+        coordinate_system=query_coordinate_system,
+    )
     return _write_coords(
         query_container,
         table_key,
@@ -540,7 +582,7 @@ def align_landmarks(
     when neither ``key_added`` nor ``target_coordinate_system`` is given; otherwise
     the modified copy, or ``None`` when ``inplace=True``.
     """
-    check_inplace(inplace, key_added, target_coordinate_system, names="`key_added` or `target_coordinate_system`")
+    _check_inplace(inplace, key_added, target_coordinate_system, names="`key_added` or `target_coordinate_system`")
     if fit not in {"similarity", "affine"}:
         raise ValueError(f"Unknown `fit={fit!r}`. Expected one of affine, similarity.")
     fit_fn = fit_similarity if fit == "similarity" else fit_affine

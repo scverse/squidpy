@@ -255,7 +255,7 @@ class StalignResult:
         grid. Explicit axes allow results fitted from point clouds to warp their density
         rasters without pretending those rasters are original image elements.
         """
-        from ._stalign_impl._core import _interp
+        from ._stalign_impl._core import interp
         from ._stalign_impl._helpers import as_chw
 
         arr = as_chw(image, name="image")
@@ -271,7 +271,7 @@ class StalignResult:
         sampling_axes = source_axes if direction == "forward" else target_axes
         if sampling_axes is None:  # guarded by deformation_grid; keeps the type checker honest
             raise AssertionError("missing sampling axes")
-        return _interp(sampling_axes, arr, grid)
+        return interp(sampling_axes, arr, grid)
 
     def transform(
         self,
@@ -388,7 +388,7 @@ class StalignVolumeResult:
         """
         import jax.numpy as jnp
 
-        from ._stalign_impl._core import _interp, jax_dtype
+        from ._stalign_impl._core import interp, jax_dtype
 
         arr = jnp.asarray(volume, dtype=jax_dtype())
         if arr.ndim not in {3, 4}:
@@ -400,7 +400,7 @@ class StalignVolumeResult:
             raise ValueError(f"Expected an (N, 3) `(x, y, z)` array, found shape {pts.shape}.")
 
         resolved = tuple(jnp.asarray(axis, dtype=jax_dtype()) for axis in axes)
-        sampled = _interp(resolved, arr, pts[:, ::-1].T[:, :, None], order=order)[..., 0]
+        sampled = interp(resolved, arr, pts[:, ::-1].T[:, :, None], order=order)[..., 0]
         return sampled[0] if arr.ndim == 3 else sampled
 
 
