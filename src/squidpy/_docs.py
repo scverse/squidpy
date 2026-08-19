@@ -247,6 +247,14 @@ _niche_common_params = f"""\
 {_niche_mask}
 {_library_key}
 {_niche_inplace}"""
+_niche_leiden_params = """\
+flavor
+    Leiden backend passed to :func:`scanpy.tl.leiden`. Defaults to ``'igraph'``
+    (the ``'leidenalg'`` backend is deprecated in scanpy).
+n_iterations
+    Number of Leiden iterations. ``-1`` iterates until convergence.
+random_state
+    Random seed for the Leiden clustering, for reproducible niche labels."""
 
 # static plotting docs
 _plotting_kwargs_static = """\
@@ -504,6 +512,7 @@ d = DocstringProcessor(
     niche_min_niche_size=_niche_min_niche_size,
     niche_inplace=_niche_inplace,
     niche_common_params=_niche_common_params,
+    niche_leiden_params=_niche_leiden_params,
     sdata_params=_sdata_params,
     graph_common_params=_graph_common_params,
     n_jobs_libraries=_n_jobs_libraries,
