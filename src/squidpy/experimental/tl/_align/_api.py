@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
     import numpy.typing as npt
 
-    from ._stalign import StalignResult, StalignVolumeResult
+    from ._stalign import StalignPlaneResult, StalignVolumeResult
 
 __all__ = ["align_landmarks", "align_stalign_image", "align_stalign_obs", "align_stalign_volume"]
 
@@ -173,7 +173,7 @@ def align_stalign_obs(
     landmarks_ref: npt.ArrayLike | None = None,
     landmarks_query: npt.ArrayLike | None = None,
     **solver_kwargs: Unpack[StalignObsSolverKwargs],
-) -> StalignResult | AnnData | SpatialData | None:
+) -> StalignPlaneResult | AnnData | SpatialData | None:
     """Align a query point cloud onto a reference with STalign (diffeomorphic LDDMM).
 
     Parameters
@@ -207,7 +207,7 @@ def align_stalign_obs(
 
     Returns
     -------
-    The fitted :class:`~squidpy.experimental.tl.StalignResult` when
+    The fitted :class:`~squidpy.experimental.tl.StalignPlaneResult` when
     ``key_added`` is ``None``; otherwise the modified copy, or ``None`` when
     ``inplace=True``.
     """
@@ -255,7 +255,7 @@ def align_stalign_image(
     key_added: str | None = None,
     inplace: bool = False,
     **solver_kwargs: Unpack[StalignSolverKwargs],
-) -> StalignResult | SpatialData | None:
+) -> StalignPlaneResult | SpatialData | None:
     """Align a query image onto a reference image with STalign (diffeomorphic LDDMM).
 
     Parameters
@@ -291,7 +291,7 @@ def align_stalign_image(
 
     Returns
     -------
-    The fitted :class:`~squidpy.experimental.tl.StalignResult` when
+    The fitted :class:`~squidpy.experimental.tl.StalignPlaneResult` when
     ``key_added`` is ``None``; otherwise the modified copy, or ``None`` when
     ``inplace=True``.
     """

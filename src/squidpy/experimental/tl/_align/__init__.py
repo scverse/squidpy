@@ -11,7 +11,7 @@ from __future__ import annotations
 from ._api import align_landmarks, align_stalign_image, align_stalign_obs, align_stalign_volume
 from ._stalign import (
     StalignObsSolverKwargs,
-    StalignResult,
+    StalignPlaneResult,
     StalignSolverKwargs,
     StalignVolumeResult,
     StalignVolumeSolverKwargs,
@@ -19,7 +19,7 @@ from ._stalign import (
 
 __all__ = [
     "StalignObsSolverKwargs",
-    "StalignResult",
+    "StalignPlaneResult",
     "StalignVolumeResult",
     "StalignVolumeSolverKwargs",
     "StalignSolverKwargs",

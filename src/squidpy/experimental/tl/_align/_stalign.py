@@ -188,8 +188,12 @@ _JAX_REQUIRED = 'STalign alignment requires JAX: `pip install "squidpy[jax]"`.'
 
 
 @dataclass(slots=True)
-class StalignResult:
-    """A fitted STalign diffeomorphism, ready to transform arbitrary points.
+class StalignPlaneResult:
+    """A fitted STalign diffeomorphism whose reference frame is a plane.
+
+    The rank-2 counterpart to :class:`StalignVolumeResult`: both carry the same fitted
+    fields, and the reference frame's dimensionality is what separates them --
+    :meth:`transform` returns ``(N, 2)`` here and ``(N, 3)`` there.
 
     :meth:`transform` works in ``(x, y)``, and unlike
     :class:`StalignVolumeResult`'s it takes a ``direction``: at rank 2 both images are
@@ -316,10 +320,13 @@ class StalignResult:
 
 @dataclass(slots=True)
 class StalignVolumeResult:
-    """A fitted section-into-volume registration, ready to place cells in the reference.
+    """A fitted STalign registration whose reference frame is a volume.
+
+    The rank-3 counterpart to :class:`StalignPlaneResult`, placing a flat section's cells
+    in a 3D reference.
 
     :meth:`transform` takes ``(x, y)`` section coordinates to ``(x, y, z)`` reference
-    coordinates. Unlike :class:`StalignResult`'s it has no ``direction``: the section is
+    coordinates. Unlike :class:`StalignPlaneResult`'s it has no ``direction``: the section is
     the fixed image and it is flat, so only section-into-volume is meaningful. Pair it with
     :func:`~squidpy.experimental.im.sample_volume` to read a reference volume at the
     mapped points.
@@ -538,7 +545,7 @@ def fit_stalign_obs(
     landmarks_ref: npt.ArrayLike | None = None,
     landmarks_query: npt.ArrayLike | None = None,
     **solver_kwargs: Unpack[StalignObsSolverKwargs],
-) -> StalignResult:
+) -> StalignPlaneResult:
     """Fit a deformation mapping ``query`` onto ``ref``.
 
     Parameters
@@ -559,7 +566,7 @@ def fit_stalign_obs(
 
     Returns
     -------
-    A :class:`StalignResult` whose :meth:`~StalignResult.transform` maps
+    A :class:`StalignPlaneResult` whose :meth:`~StalignPlaneResult.transform` maps
     ``(x, y)`` points into the reference frame; ``aligned_points`` is the fitted
     ``query`` already mapped.
 
@@ -623,7 +630,7 @@ def fit_stalign_obs(
         **{key: value for key, value in opts.items() if key not in _CONSUMED_KEYS},
     )
     aligned_rc = transform_points_row_col(result["xv"], result["v"], result["A"], source_rc, direction="forward")
-    return StalignResult(
+    return StalignPlaneResult(
         affine=result["A"],
         velocity=result["v"],
         velocity_grid=result["xv"],
@@ -648,7 +655,7 @@ def fit_stalign_image(
     ref_axes: Sequence[npt.ArrayLike] | None = None,
     query_axes: Sequence[npt.ArrayLike] | None = None,
     **solver_kwargs: Unpack[StalignSolverKwargs],
-) -> StalignResult:
+) -> StalignPlaneResult:
     """Fit a deformation mapping the ``query`` image onto the ``ref`` image.
 
     Parameters
@@ -680,9 +687,9 @@ def fit_stalign_image(
 
     Returns
     -------
-    A :class:`StalignResult`. Its :meth:`~StalignResult.transform` maps ``(x, y)`` points
+    A :class:`StalignPlaneResult`. Its :meth:`~StalignPlaneResult.transform` maps ``(x, y)`` points
     in query pixel coordinates into the reference frame, and
-    :meth:`~StalignResult.warp_image` resamples a query image onto the reference grid.
+    :meth:`~StalignPlaneResult.warp_image` resamples a query image onto the reference grid.
     """
     try:
         import jax.numpy as jnp
@@ -718,7 +725,7 @@ def fit_stalign_image(
         T=translation,
         **{key: value for key, value in opts.items() if key not in _CONSUMED_KEYS},
     )
-    return StalignResult(
+    return StalignPlaneResult(
         affine=result["A"],
         velocity=result["v"],
         velocity_grid=result["xv"],

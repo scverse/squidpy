@@ -4,7 +4,7 @@ from __future__ import annotations
 # callers need them: a result is what a fit returns, and the TypedDicts document the knobs.
 from ._align import (
     StalignObsSolverKwargs,
-    StalignResult,
+    StalignPlaneResult,
     StalignSolverKwargs,
     StalignVolumeResult,
     StalignVolumeSolverKwargs,
@@ -19,7 +19,7 @@ from ._tiling_stitch import StitchParams, assign_stitch_groups
 
 __all__ = [
     "StalignObsSolverKwargs",
-    "StalignResult",
+    "StalignPlaneResult",
     "StalignVolumeResult",
     "StalignVolumeSolverKwargs",
     "StalignSolverKwargs",
