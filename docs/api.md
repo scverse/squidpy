@@ -172,7 +172,6 @@ tuning as flat keyword arguments, listed below, and return the fitted map when
 ## Experimental
 ```{eval-rst}
 .. module:: squidpy.experimental
-.. module:: squidpy.experimental.tl
 .. currentmodule:: squidpy
 .. autosummary::
     :toctree: api

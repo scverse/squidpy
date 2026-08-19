@@ -578,12 +578,11 @@ def fit_stalign_obs(
     landmarks_ref, landmarks_query
         Optional corresponding ``(x, y)`` landmark arrays used to initialise the
         affine, matched by row order. Must be provided together.
-    initial_affine
-        Optional homogeneous ``(3, 3)`` affine in public ``(x, y)`` coordinates.
-        Mutually exclusive with landmark initialisation.
     solver_kwargs
         Rasterization and LDDMM solver tuning; see
-        :class:`StalignObsSolverKwargs` for the accepted keys and their meaning.
+        :class:`StalignObsSolverKwargs` for the accepted keys and their meaning. Its
+        ``initial_affine`` -- a homogeneous ``(3, 3)`` affine in public ``(x, y)``
+        coordinates -- is mutually exclusive with landmark initialisation.
 
     Returns
     -------
@@ -693,11 +692,10 @@ def fit_stalign_image(
         Optional explicit physical row and column axes, resolved per side: either may be
         given alone, and each is mutually exclusive with a non-unit scale on *its own*
         side only.
-    initial_affine
-        Optional homogeneous ``(3, 3)`` affine in public ``(x, y)`` coordinates.
     solver_kwargs
-        LDDMM solver tuning; see :class:`StalignSolverKwargs` for the accepted keys.
-        The image defaults differ from :func:`fit_stalign_obs`'s in four places: ``a``
+        LDDMM solver tuning; see :class:`StalignSolverKwargs` for the accepted keys,
+        including ``initial_affine``, a homogeneous ``(3, 3)`` affine in public
+        ``(x, y)`` coordinates. The image defaults differ from :func:`fit_stalign_obs`'s in four places: ``a``
         is a length in the same units as ``ref_scale``, so 20 suits pixel units where
         the point-cloud default of 500 would exceed most images; ``diffeo_start`` sits
         at half of ``niter`` so the affine settles before the deformable part switches

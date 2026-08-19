@@ -145,7 +145,6 @@ nitpick_ignore = [
     ("py:class", "np.number"),
     ("py:class", "csr_matrix"),
     ("py:class", "numpy._typing._array_like.ArrayLike"),
-    ("py:class", "numpy._typing._array_like.NDArray"),
     # optional dep mocked at build time (see autodoc_mock_imports), so no resolvable target
     ("py:class", "jax.Array"),
     ("py:class", "JaxArray"),
