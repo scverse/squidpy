@@ -19,8 +19,14 @@ else:
     JaxArray = Any
 
 
-class StalignSolverKwargs(TypedDict, total=False):
-    """LDDMM solver tuning accepted by the ``align_stalign_*`` functions.
+class StalignImageSolverKwargs(TypedDict, total=False):
+    """The LDDMM controls :func:`~squidpy.experimental.tl.align_stalign_image` takes.
+
+    Also the shared set the other two entry points vary from:
+    :class:`~squidpy.experimental.tl.StalignObsSolverKwargs` extends it with rasterization
+    knobs, and :class:`~squidpy.experimental.tl.StalignVolumeSolverKwargs` drops the two
+    keys that mean nothing at rank 3. The image path neither adds nor removes anything,
+    which is why this set carries its name.
 
     Every key is optional. Defaults differ between the point-cloud and image solvers
     where noted below, since a kernel width in cell coordinates is not one in pixels.
@@ -70,10 +76,12 @@ class StalignSolverKwargs(TypedDict, total=False):
 class StalignVolumeSolverKwargs(TypedDict, total=False):
     """LDDMM solver tuning accepted by :func:`~squidpy.experimental.tl.align_stalign_volume`.
 
-    :class:`~squidpy.experimental.tl.StalignSolverKwargs` minus its landmark term: the
-    3D path has no point-matching energy, so a ``sigmaP`` here would be a knob that does
-    nothing. Five defaults differ from the 2D case -- ``expand`` 1.25, ``epL`` 1e-6,
-    ``epT`` 1e1, ``epV`` 1e3 and ``sigmaR`` 1e8.
+    :class:`~squidpy.experimental.tl.StalignImageSolverKwargs` minus two keys: ``sigmaP``,
+    because the rank-3 path has no point-matching energy and it would be a knob that does
+    nothing, and ``initial_affine``, which is a named ``(4, 4)`` argument on
+    :func:`~squidpy.experimental.tl.align_stalign_volume` rather than a solver key. Five
+    defaults differ from the 2D case -- ``expand`` 1.25, ``epL`` 1e-6, ``epT`` 1e1,
+    ``epV`` 1e3 and ``sigmaR`` 1e8.
 
     - ``initial_velocity``, ``velocity_grid`` -- continuation state from a prior fit, in
       the solver's ``(z, y, x)`` convention.
@@ -111,8 +119,11 @@ class StalignVolumeSolverKwargs(TypedDict, total=False):
     patience: int
 
 
-class StalignObsSolverKwargs(StalignSolverKwargs, total=False):
-    """:class:`~squidpy.experimental.tl.StalignSolverKwargs` plus the point-cloud rasterization knobs.
+class StalignObsSolverKwargs(StalignImageSolverKwargs, total=False):
+    """:class:`~squidpy.experimental.tl.StalignImageSolverKwargs` plus the rasterization knobs.
+
+    The point-cloud path rasterizes both clouds into density images and then runs the same
+    solver, so it accepts everything the image path does and three keys more.
 
     - ``dx`` -- grid spacing of the density rasters (default 30).
     - ``blur`` -- Gaussian blur scale(s) applied to the rasters (default (2, 1, 0.5)).
@@ -128,7 +139,7 @@ class StalignObsSolverKwargs(StalignSolverKwargs, total=False):
 #: which keeps the parameter names but carries no defaults of its own -- so these values
 #: exist in exactly one place. Annotating the dict with the TypedDict makes the type
 #: checker verify every value against its key.
-_SOLVER_DEFAULTS: StalignSolverKwargs = {
+_SOLVER_DEFAULTS: StalignImageSolverKwargs = {
     "a": 500.0,
     "p": 2.0,
     "expand": 2.0,
@@ -160,7 +171,7 @@ _OBS_DEFAULTS: StalignObsSolverKwargs = {
 #: Image case: a kernel width of 500 would exceed most images, and starting the
 #: diffeomorphic part halfway lets the affine settle before the velocity field can
 #: absorb what is really a translation and fit it worse than the affine would have.
-_IMAGE_DEFAULTS: StalignSolverKwargs = {
+_IMAGE_DEFAULTS: StalignImageSolverKwargs = {
     **_SOLVER_DEFAULTS,
     "a": 20.0,
     "niter": 200,
@@ -172,7 +183,7 @@ _IMAGE_DEFAULTS: StalignSolverKwargs = {
 #: ``LDDMM``'s in five places. ``sigmaP`` is carried only because ``lddmm`` requires it;
 #: with no landmarks the point term is identically zero, and the public
 #: :class:`StalignVolumeSolverKwargs` deliberately does not expose it.
-_VOLUME_DEFAULTS: StalignSolverKwargs = {
+_VOLUME_DEFAULTS: StalignImageSolverKwargs = {
     **_SOLVER_DEFAULTS,
     "expand": 1.25,
     "epL": 1e-6,
@@ -620,7 +631,7 @@ def fit_stalign_image(
     query_scale: tuple[float, float] = (1.0, 1.0),
     ref_axes: Sequence[npt.ArrayLike] | None = None,
     query_axes: Sequence[npt.ArrayLike] | None = None,
-    **solver_kwargs: Unpack[StalignSolverKwargs],
+    **solver_kwargs: Unpack[StalignImageSolverKwargs],
 ) -> Stalign2DResult:
     """Fit a deformation mapping the ``query`` image onto the ``ref`` image.
 
@@ -639,7 +650,7 @@ def fit_stalign_image(
         Explicit physical row/column axes, resolved per side: either may be given alone,
         and each is mutually exclusive with a non-unit scale on *its own* side only.
     solver_kwargs
-        See :class:`StalignSolverKwargs`.
+        See :class:`StalignImageSolverKwargs`.
 
     Returns
     -------

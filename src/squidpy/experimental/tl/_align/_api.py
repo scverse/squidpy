@@ -17,8 +17,8 @@ from spatialdata import SpatialData
 from ._io import shallow_copy_sdata, writeback_affine_sdata
 from ._landmark import apply_affine, fit_affine, fit_similarity
 from ._stalign import (
+    StalignImageSolverKwargs,
     StalignObsSolverKwargs,
-    StalignSolverKwargs,
     StalignVolumeSolverKwargs,
     fit_stalign_image,
     fit_stalign_obs,
@@ -254,7 +254,7 @@ def align_stalign_image(
     query_coordinate_system: str = "global",
     key_added: str | None = None,
     inplace: bool = False,
-    **solver_kwargs: Unpack[StalignSolverKwargs],
+    **solver_kwargs: Unpack[StalignImageSolverKwargs],
 ) -> Stalign2DResult | SpatialData | None:
     """Align a query image onto a reference image with STalign (diffeomorphic LDDMM).
 
@@ -284,7 +284,7 @@ def align_stalign_image(
         ``inplace=True`` with nothing to write raises rather than being ignored.
     solver_kwargs
         LDDMM solver tuning; see
-        :class:`~squidpy.experimental.tl.StalignSolverKwargs` for the accepted
+        :class:`~squidpy.experimental.tl.StalignImageSolverKwargs` for the accepted
         keys, their meaning, and their defaults. ``a``, ``epL``, ``epT`` and ``epV`` are
         lengths and step sizes in the units the elements carry, and their defaults are
         tuned for pixel-sized units -- an element scaled to microns needs them rescaled.

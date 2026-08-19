@@ -12,8 +12,8 @@ from ._api import align_landmarks, align_stalign_image, align_stalign_obs, align
 from ._stalign import (
     Stalign2DResult,
     Stalign3DResult,
+    StalignImageSolverKwargs,
     StalignObsSolverKwargs,
-    StalignSolverKwargs,
     StalignVolumeSolverKwargs,
 )
 
@@ -22,7 +22,7 @@ __all__ = [
     "Stalign2DResult",
     "Stalign3DResult",
     "StalignVolumeSolverKwargs",
-    "StalignSolverKwargs",
+    "StalignImageSolverKwargs",
     "align_landmarks",
     "align_stalign_image",
     "align_stalign_obs",

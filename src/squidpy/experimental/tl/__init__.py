@@ -5,8 +5,8 @@ from __future__ import annotations
 from ._align import (
     Stalign2DResult,
     Stalign3DResult,
+    StalignImageSolverKwargs,
     StalignObsSolverKwargs,
-    StalignSolverKwargs,
     StalignVolumeSolverKwargs,
     align_landmarks,
     align_stalign_image,
@@ -22,7 +22,7 @@ __all__ = [
     "Stalign2DResult",
     "Stalign3DResult",
     "StalignVolumeSolverKwargs",
-    "StalignSolverKwargs",
+    "StalignImageSolverKwargs",
     "StitchParams",
     "TilingQCParams",
     "align_landmarks",

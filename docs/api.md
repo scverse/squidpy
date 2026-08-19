@@ -163,7 +163,7 @@ tuning as flat keyword arguments, listed below, and return the fitted map when
     :toctree: api
     :template: typeddict.rst
 
-    experimental.tl.StalignSolverKwargs
+    experimental.tl.StalignImageSolverKwargs
     experimental.tl.StalignObsSolverKwargs
     experimental.tl.StalignVolumeSolverKwargs
 ```
