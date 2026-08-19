@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 from importlib.metadata import version
+from typing import TYPE_CHECKING
 
 from packaging.version import Version
+from scanpy.get import obs_df
+
+if TYPE_CHECKING:
+    import numpy as np
+    from anndata import AnnData
 
 __all__ = [
     # scanpy
@@ -17,6 +23,7 @@ __all__ = [
     "ArrayView",
     "SparseCSCView",
     "SparseCSRView",
+    "get_vector",
 ]
 
 # Scanpy 1.13 moved the pre-v2 plotting internals under ``scanpy.plotting.legacy``.
@@ -68,6 +75,21 @@ except ImportError:
 
     def vector_friendly() -> bool:
         return _sc_settings._vector_friendly
+
+
+def get_vector(adata: AnnData, key: str, *, layer: str | None = None, use_raw: bool | None = None) -> np.ndarray:
+    """Return a 1-D vector of values for ``key`` from ``.obs`` or ``.var_names``.
+
+    Drop-in replacement for ``AnnData.obs_vector`` that avoids the ``FutureWarning``
+    emitted by anndata >= 0.13 (see https://github.com/scverse/squidpy/issues/1261).
+    Delegates to :func:`scanpy.get.obs_df`, whose contract already covers ``.obs``
+    columns and ``.var_names`` genes (honoring ``layer`` / ``use_raw`` and preserving
+    ``Categorical`` dtype), mirroring the ``use_raw``-then-``layer`` precedence of the
+    original ``obs_vector`` calls.
+    """
+    if use_raw and key not in adata.obs:
+        return obs_df(adata, keys=[key], use_raw=True)[key].values
+    return obs_df(adata, keys=[key], layer=layer)[key].values
 
 
 CAN_USE_SPARSE_ARRAY = Version(version("anndata")) >= Version("0.11.0rc1")
