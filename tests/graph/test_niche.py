@@ -7,7 +7,13 @@ from scipy.sparse import csr_matrix
 from spatialdata import SpatialData
 from spatialdata.models import TableModel
 
-from squidpy.gr import calculate_niche, calculate_niche_neighborhood, spatial_neighbors_knn
+from squidpy.gr import (
+    _niche,
+    calculate_niche,
+    calculate_niche_cellcharter,
+    calculate_niche_neighborhood,
+    spatial_neighbors_knn,
+)
 
 N_NEIGHBORS = 20
 GROUPS = "celltype_mapped_refined"
@@ -45,12 +51,12 @@ def test_niche_calc_cellcharter_dummy_adata(dummy_adata2: AnnData):
     # since cellcharter throws an error if the object's expression matrix is not sparse, first ensure that is the case
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
 
-    calculate_niche(dummy_adata2, flavor="cellcharter", distance=2, aggregation="mean", random_state=0)
+    calculate_niche(dummy_adata2, flavor="cellcharter", distance=2, aggregation="mean", seed=0)
 
     assert "cellcharter_niche" in dummy_adata2.obs.columns
 
     expected_niches = Series(
-        Categorical([8, 4, 0, 7, 2, 9, 5, 6, 1, 3], categories=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
+        Categorical([2, 6, 4, 9, 3, 0, 1, 5, 8, 7], categories=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
         index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
         name="cellcharter_niche",
     )
@@ -69,6 +75,7 @@ def test_niche_calc_spatialleiden_dummy_adata(dummy_adata2: AnnData):
         latent_connectivities_key="connectivities",
         spatial_connectivities_key="spatial_connectivities",
         resolutions=1.0,
+        seed=0,
     )
 
     assert "spatialleiden_res=1.0" in dummy_adata2.obs.columns
@@ -79,6 +86,56 @@ def test_niche_calc_spatialleiden_dummy_adata(dummy_adata2: AnnData):
     )
 
     assert (expected_niches == dummy_adata2.obs["spatialleiden_res=1.0"]).all()
+
+
+# seed handling
+
+
+def test_niche_cellcharter_seed_reproducible(dummy_adata2: AnnData):
+    "The same `seed` must give the same niches, a different one must be free to differ."
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    kwargs = {"distance": 2, "aggregation": "mean"}
+
+    first = calculate_niche_cellcharter(dummy_adata2, seed=0, inplace=False, **kwargs)
+    second = calculate_niche_cellcharter(dummy_adata2, seed=0, inplace=False, **kwargs)
+    assert (first.obs["cellcharter_niche"] == second.obs["cellcharter_niche"]).all()
+
+    # not a guarantee about the labels themselves, only that the seed is actually wired through
+    other = calculate_niche_cellcharter(dummy_adata2, seed=1, inplace=False, **kwargs)
+    assert list(other.obs["cellcharter_niche"]) != list(first.obs["cellcharter_niche"])
+
+
+def test_niche_cellcharter_seed_none_runs(dummy_adata2: AnnData):
+    "`seed=None` (the default) must work: it means 'draw from OS entropy', not 'missing argument'."
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean")
+    assert "cellcharter_niche" in dummy_adata2.obs.columns
+
+
+def test_niche_cellcharter_library_seeds_are_independent(dummy_adata2: AnnData, monkeypatch):
+    "Each library must be fitted with its own seed, while the whole run stays reproducible."
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    dummy_adata2.obs["batch"] = ["batch1"] * 5 + ["batch2"] * 5
+    kwargs = {"distance": 2, "aggregation": "mean", "library_key": "batch", "n_components": 2}
+
+    first = calculate_niche_cellcharter(dummy_adata2, seed=0, inplace=False, **kwargs)
+    second = calculate_niche_cellcharter(dummy_adata2, seed=0, inplace=False, **kwargs)
+    assert (first.obs["cellcharter_niche"] == second.obs["cellcharter_niche"]).all()
+
+    # the clusterer is built once and reused for every library, so record what each fit
+    # is actually seeded with
+    seen: list[int] = []
+    original = _niche.GaussianMixture
+
+    def spy(*args, **kwargs):
+        seen.append(kwargs["random_state"])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(_niche, "GaussianMixture", spy)
+    calculate_niche_cellcharter(dummy_adata2, seed=0, inplace=False, **kwargs)
+
+    assert len(seen) == 2, "expected one mixture fit per library"
+    assert seen[0] != seen[1], "libraries were fitted with the same seed"
 
 
 # more special test cases
@@ -155,6 +212,7 @@ def test_niche_calc_spatialleiden_library_key_dummy_adata(dummy_adata2: AnnData)
         spatial_connectivities_key="spatial_connectivities",
         resolutions=1.0,
         library_key="batch",
+        seed=0,
     )
 
     assert "spatialleiden_res=1.0" in dummy_adata2.obs.columns
