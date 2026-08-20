@@ -189,7 +189,15 @@ _VOLUME_DEFAULTS: StalignImageSolverKwargs = {
     "epL": 1e-6,
     "epT": 1e1,
     "epV": 1e3,
-    "sigmaR": 1e8,
+    # Upstream's rank-3 default is 1e8. Against *this* regularisation energy -- the coherent
+    # one, transforming every spatial axis -- 1e8 leaves the term at ~1e-5 of the objective on
+    # a real volume-to-section fit, i.e. switched off, and the fit runs unregularised: rms |v|
+    # 20.7 against 9.4 for upstream, and thin cortical laminae (VISam1-6a, AUDd6a, PERI5) lose
+    # their last cell and vanish from the annotation. 1e8 is the right number for upstream's
+    # line, which inflates the same field 3460-8880x by dropping one axis from the transform
+    # and one size from the Parseval normalisation; it is the wrong number for a term without
+    # that inflation. 1e6 restores the weight upstream gets by accident.
+    "sigmaR": 1e6,
 }
 
 #: Keys the fit functions consume themselves rather than forwarding to the solver:
