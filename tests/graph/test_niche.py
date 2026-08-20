@@ -138,6 +138,205 @@ def test_niche_cellcharter_library_seeds_are_independent(dummy_adata2: AnnData, 
     assert seen[0] != seen[1], "libraries were fitted with the same seed"
 
 
+def test_niche_cellcharter_seeds_the_pca(dummy_adata2: AnnData, monkeypatch):
+    "PCA is part of the embedding, so `seed` must reach it too, not only the mixture fits."
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    kwargs = {"distance": 2, "aggregation": "mean", "inplace": False}
+
+    seen: list[int] = []
+    original = _niche.sc.tl.pca
+
+    def spy(*args, **kwargs_):
+        seen.append(kwargs_["random_state"])
+        return original(*args, **kwargs_)
+
+    monkeypatch.setattr(_niche.sc.tl, "pca", spy)
+    for seed in (0, 0, 1):
+        calculate_niche_cellcharter(dummy_adata2, rng=seed, **kwargs)
+
+    assert seen[0] == seen[1], "the same seed must give the same PCA"
+    assert seen[2] != seen[0], "a different seed must reach the PCA"
+
+
+def test_niche_neighborhood_seeds_the_knn_graph(dummy_adata2: AnnData, monkeypatch):
+    "`sc.pp.neighbors` is approximate above ~4096 obs, so `seed` has to control it as well."
+    kwargs = {"groups": "celltype", "n_neighbors": 3, "resolutions": 1.0, "inplace": False}
+
+    seen: list[int] = []
+    original = _niche.sc.pp.neighbors
+
+    def spy(*args, **kwargs_):
+        seen.append(kwargs_["random_state"])
+        return original(*args, **kwargs_)
+
+    monkeypatch.setattr(_niche.sc.pp, "neighbors", spy)
+    for seed in (0, 0, 1):
+        calculate_niche_neighborhood(dummy_adata2, rng=seed, **kwargs)
+
+    assert seen[0] == seen[1], "the same seed must build the same graph"
+    assert seen[2] != seen[0], "a different seed must reach the graph"
+
+
+def test_niche_leiden_resolution_seeds_are_independent(dummy_adata2: AnnData, monkeypatch):
+    "Each resolution is its own clustering run, so each must be seeded independently."
+    seen: list[int] = []
+    original = _niche.sc.tl.leiden
+
+    def spy(*args, **kwargs):
+        seen.append(kwargs["random_state"])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(_niche.sc.tl, "leiden", spy)
+    calculate_niche_neighborhood(dummy_adata2, groups="celltype", n_neighbors=3, resolutions=[0.5, 1.0], rng=0)
+
+    assert len(seen) == 2, "expected one leiden run per resolution"
+    assert seen[0] != seen[1], "resolutions were clustered with the same seed"
+
+
+def test_niche_leiden_library_seeds_are_independent(dummy_adata2: AnnData, monkeypatch):
+    "The clusterer is reused across libraries, so it must not replay the same seeds for each one."
+    dummy_adata2.obs["batch"] = ["batch1"] * 5 + ["batch2"] * 5
+    seen: list[int] = []
+    original = _niche.sc.tl.leiden
+
+    def spy(*args, **kwargs):
+        seen.append(kwargs["random_state"])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(_niche.sc.tl, "leiden", spy)
+    calculate_niche_neighborhood(
+        dummy_adata2, groups="celltype", n_neighbors=3, resolutions=[0.5, 1.0], rng=0, library_key="batch"
+    )
+
+    assert len(seen) == 4, "expected one leiden run per library per resolution"
+    assert len(set(seen)) == 4, "libraries were clustered with the same seeds"
+
+
+@pytest.mark.parametrize("aggregation", ["mean", "variance"])
+def test_niche_cellcharter_accepts_a_dense_x(dummy_adata2: AnnData, aggregation: str):
+    "A dense `adata.X` used to reach `scipy.sparse.hstack`/`.toarray()` with nothing sparse to work on."
+    dense = dummy_adata2.copy()
+    sparse = dummy_adata2.copy()
+    sparse.X = csr_matrix(sparse.X)
+    kwargs = {"distance": 2, "aggregation": aggregation, "n_components": 2, "seed": 0, "inplace": False}
+
+    from_dense = calculate_niche_cellcharter(dense, **kwargs)
+    from_sparse = calculate_niche_cellcharter(sparse, **kwargs)
+    assert (from_dense.obs["cellcharter_niche"] == from_sparse.obs["cellcharter_niche"]).all()
+
+
+# selecting the number of clusters by stability
+
+
+def test_niche_cellcharter_n_clusters_none_keeps_a_single_fit(dummy_adata2: AnnData):
+    "`n_clusters=None` must behave exactly like today: one fit at `n_components`, no diagnostics."
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    kwargs = {"distance": 2, "aggregation": "mean", "n_components": 4, "seed": 0, "inplace": False}
+
+    default = calculate_niche_cellcharter(dummy_adata2, **kwargs)
+    explicit = calculate_niche_cellcharter(dummy_adata2, n_clusters=4, **kwargs)
+
+    assert "cellcharter_niche_autok" not in default.uns
+    assert (default.obs["cellcharter_niche"] == explicit.obs["cellcharter_niche"]).all()
+
+
+def test_niche_cellcharter_auto_k_stores_per_k_diagnostics(dummy_adata2: AnnData):
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean", rng=0, n_clusters=(2, 3), max_runs=2)
+
+    # the niche column stays independent of the selected K
+    assert "cellcharter_niche" in dummy_adata2.obs.columns
+
+    diagnostics = dummy_adata2.uns["cellcharter_niche_autok"]
+    assert set(diagnostics) == {"table", "stability", "best_k", "n_runs", "converged"}
+
+    table = diagnostics["table"]
+    assert list(table.index) == [1, 2, 3, 4], "a (min, max) request gains a +-1 halo"
+    assert table.loc[[1, 4], "stability_mean"].isna().all(), "the halo is fitted but not scored"
+
+    # the scored K values are exactly the interior ones, readable off the table
+    interior = table.index[table["stability_mean"].notna()].tolist()
+    assert interior == [2, 3]
+    assert diagnostics["stability"].shape[0] == len(interior)
+    assert table["nll"].notna().all()
+    assert diagnostics["best_k"] in interior
+
+
+def test_niche_cellcharter_auto_k_store_labels(dummy_adata2: AnnData):
+    "`store_labels` must emit one obs column per fitted K, usable as a `color=` key."
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    calculate_niche_cellcharter(
+        dummy_adata2, distance=2, aggregation="mean", rng=0, n_clusters=(2, 3), max_runs=2, store_labels=True
+    )
+
+    for k in dummy_adata2.uns["cellcharter_niche_autok"]["table"].index:
+        column = f"cellcharter_niche_k{k}"
+        assert column in dummy_adata2.obs.columns
+        assert dummy_adata2.obs[column].nunique() <= k
+
+
+def test_niche_cellcharter_auto_k_labels_go_through_postprocessing(dummy_adata2: AnnData):
+    "Per-K columns are returned from `cluster()`, so `min_niche_size` must apply to them too."
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    calculate_niche_cellcharter(
+        dummy_adata2,
+        distance=2,
+        aggregation="mean",
+        rng=0,
+        n_clusters=(2, 3),
+        max_runs=2,
+        store_labels=True,
+        min_niche_size=100,  # larger than the object, so every label is dropped
+    )
+
+    for k in dummy_adata2.uns["cellcharter_niche_autok"]["table"].index:
+        assert (dummy_adata2.obs[f"cellcharter_niche_k{k}"] == "not_a_niche").all()
+
+
+def test_niche_cellcharter_auto_k_is_keyed_by_library(dummy_adata2: AnnData):
+    "Each library sweeps independently, so the diagnostics must be stored per library id."
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    dummy_adata2.obs["batch"] = ["batch1"] * 5 + ["batch2"] * 5
+
+    calculate_niche_cellcharter(
+        dummy_adata2,
+        distance=2,
+        aggregation="mean",
+        rng=0,
+        n_clusters=(2, 3),
+        max_runs=2,
+        library_key="batch",
+        store_labels=True,
+    )
+
+    diagnostics = dummy_adata2.uns["cellcharter_niche_autok"]
+    assert sorted(diagnostics) == ["batch1", "batch2"]
+    for per_library in diagnostics.values():
+        table = per_library["table"]
+        assert per_library["best_k"] in table.index[table["stability_mean"].notna()]
+
+    # the per-library merge carries obs columns, including the per-K ones, with a lib prefix
+    assert dummy_adata2.obs["cellcharter_niche"].str.startswith("lib=").all()
+    assert dummy_adata2.obs["cellcharter_niche_k2"].str.startswith("lib=").all()
+
+
+def test_niche_cellcharter_auto_k_diagnostics_roundtrip_h5ad(dummy_adata2: AnnData, tmp_path):
+    "The diagnostics land in `uns`, so they have to survive being written out."
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean", rng=0, n_clusters=(2, 3), max_runs=2)
+
+    path = tmp_path / "niche.h5ad"
+    dummy_adata2.write_h5ad(path)
+    restored = read_h5ad(path)
+
+    original = dummy_adata2.uns["cellcharter_niche_autok"]
+    reloaded = restored.uns["cellcharter_niche_autok"]
+    assert set(reloaded) == set(original)
+    assert_frame_equal(reloaded["table"], original["table"])
+    assert reloaded["converged"] == original["converged"]
+    assert reloaded["best_k"] == original["best_k"]
+
+
 # more special test cases
 
 

@@ -16,6 +16,7 @@ from numpy.typing import NDArray
 from pandas import CategoricalDtype
 from scanpy import logging as logg
 from scipy.sparse import csr_matrix
+from scipy.stats import entropy
 from spatialdata import SpatialData
 
 from squidpy._constants._constants import Centrality
@@ -40,7 +41,7 @@ from squidpy.gr._utils import (
     extract_adata_if_sdata,
 )
 
-__all__ = ["nhood_enrichment", "centrality_scores", "interaction_matrix"]
+__all__ = ["nhood_enrichment", "centrality_scores", "interaction_matrix", "nhood_entropy"]
 
 
 class NhoodEnrichmentResult(NamedTuple):
@@ -432,6 +433,79 @@ def _interaction_matrix(
             cur_col = cats[j]
             output[cur_row, cur_col] += val
     return output
+
+
+def _nhood_profile(labels: pd.Series, adj: csr_matrix, *, normalize: bool = True) -> pd.DataFrame:
+    """Frequency of every ``labels`` category in each observation's neighborhood.
+
+    This is ``adj @ onehot(labels)``: row ``i`` sums the edge weights from ``i`` to the
+    members of each category. Observations whose label is unassigned (``NaN``) are counted
+    in nobody's neighborhood, and with ``normalize`` an observation without neighbors gets
+    an all-zero row rather than ``NaN``.
+    """
+    labels = labels.astype("category")
+    codes = labels.cat.codes.to_numpy()
+    keep = codes >= 0
+    onehot = csr_matrix(
+        (np.ones(keep.sum()), (np.flatnonzero(keep), codes[keep])),
+        shape=(len(codes), len(labels.cat.categories)),
+    )
+    profile = pd.DataFrame((adj @ onehot).toarray(), index=labels.index, columns=labels.cat.categories)
+    if not normalize:
+        return profile
+    return profile.div(profile.sum(axis=1), axis=0).fillna(0.0)
+
+
+@d.dedent
+def nhood_entropy(
+    adata: AnnData | SpatialData,
+    cluster_key: str,
+    connectivity_key: str | None = None,
+    copy: bool = False,
+    *,
+    table_key: str | None = None,
+) -> pd.Series | None:
+    """
+    Compute the Shannon entropy of each observation's neighborhood composition.
+
+    High entropy marks observations whose spatial neighbors are a mix of many ``cluster_key``
+    categories, low entropy marks observations sitting inside a homogeneous domain. Averaged
+    over all observations it summarises how spatially coherent a clustering is, which makes it
+    a way to compare competing clusterings -- e.g. across a smoothing-parameter sweep.
+
+    Parameters
+    ----------
+    %(adata)s
+    %(cluster_key)s
+    %(conn_key)s
+    %(copy)s
+    %(table_key)s
+
+    Returns
+    -------
+    If ``copy = True``, returns a :class:`pandas.Series`. Otherwise, modifies the ``adata`` with the following key:
+
+        - :attr:`anndata.AnnData.obs` ``['{cluster_key}_nhood_entropy']`` - the per-observation entropy, in nats.
+
+    Notes
+    -----
+    The neighborhood is whatever ``connectivity_key`` holds, so keep it fixed when sweeping a
+    clustering parameter -- otherwise the measuring stick moves with the thing being measured.
+    """
+    adata = extract_adata_if_sdata(adata, table_key=table_key)
+    connectivity_key = Key.obsp.spatial_conn(connectivity_key)
+    _assert_categorical_obs(adata, cluster_key)
+    _assert_connectivity_key(adata, connectivity_key)
+
+    start = logg.info(f"Calculating neighborhood entropy of `{cluster_key}`")
+    profile = _nhood_profile(adata.obs[cluster_key], adata.obsp[connectivity_key])
+    # observations without neighbors give 0/0 in `entropy`; no neighbors means no diversity
+    ent = pd.Series(np.nan_to_num(entropy(profile.to_numpy(), axis=1)), index=adata.obs_names)
+
+    if copy:
+        return ent
+    _save_data(adata, attr="obs", key=f"{cluster_key}_nhood_entropy", data=ent, time=start)
+    return None
 
 
 def _build_graph(conn: Any) -> tuple[rx.PyGraph, csr_matrix]:
