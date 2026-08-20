@@ -293,18 +293,19 @@ strict = true
 testpaths = [ "tests/" ]
 
 [tool.coverage]
-run.branch = true
+run.source = [ "squidpy" ]
 run.omit = [
   "*/__init__.py",
   "*/_version.py",
   "tox/*",
 ]
+run.branch = true
 run.parallel = true
-run.source = [ "squidpy" ]
 paths.source = [
   "squidpy",
   "*/site-packages/squidpy",
 ]
+report.precision = 2
 report.exclude_lines = [
   "\\#.*pragma:\\s*no.?cover",
   "^\\s*raise AssertionError\\b",
@@ -312,9 +313,8 @@ report.exclude_lines = [
   "^\\s*return NotImplemented\\b",
   "^if __name__ == .__main__.:$",
 ]
-report.precision = 2
-report.show_missing = true
 report.skip_empty = true
+report.show_missing = true
 report.sort = "Miss"
 
 [tool.cruft]
