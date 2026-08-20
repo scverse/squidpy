@@ -325,3 +325,32 @@ def test_non_finite_landmarks_rejected() -> None:
     ref, query = _adata(_REF), _adata(bad)
     with pytest.raises(ValueError, match="finite"):
         align_landmarks(ref, query, landmark_key="landmarks", fit="affine")
+
+
+def test_align_landmarks_accepts_arrays():
+    """Landmarks are correspondences, so they need no container to be passed in."""
+    query = np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 5.0], [0.0, 5.0]])
+    expected = np.array([[2.0, 0.0, 7.0], [0.0, 2.0, -3.0], [0.0, 0.0, 1.0]])
+    ref = query @ expected[:2, :2].T + expected[:2, 2]
+
+    matrix = align_landmarks(ref, query, fit="affine")
+    np.testing.assert_allclose(matrix, expected, atol=1e-9)
+    # Same answer either way in: the array path is a shortcut, not a second algorithm.
+    np.testing.assert_allclose(
+        align_landmarks(
+            AnnData(X=np.zeros((len(ref), 1)), obsm={"lm": ref}),
+            AnnData(X=np.zeros((len(query), 1)), obsm={"lm": query}),
+            landmark_key="lm",
+            fit="affine",
+        ),
+        matrix,
+    )
+
+
+def test_align_landmarks_rejects_container_arguments_for_arrays():
+    """A key that addresses nothing is an error, not something to ignore."""
+    points = np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
+    with pytest.raises(ValueError, match="addresses a container"):
+        align_landmarks(points, points, landmark_key="lm")
+    with pytest.raises(ValueError, match="must be the matching"):
+        align_landmarks(points)

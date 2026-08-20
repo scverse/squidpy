@@ -533,10 +533,10 @@ def align_stalign_volume(
 
 
 def align_landmarks(
-    data_ref: AnnData | SpatialData,
-    data_query: AnnData | SpatialData | None = None,
+    data_ref: AnnData | SpatialData | npt.ArrayLike,
+    data_query: AnnData | SpatialData | npt.ArrayLike | None = None,
     *,
-    landmark_key: str | tuple[str, str],
+    landmark_key: str | tuple[str, str] | None = None,
     fit: Literal["similarity", "affine"] = "similarity",
     table_key: str | tuple[str | None, str | None] | None = None,
     spatial_key: str | None = None,
@@ -553,9 +553,17 @@ def align_landmarks(
         :class:`~spatialdata.SpatialData`. Leave ``data_query=None`` with ``data_ref``
         a SpatialData holding both samples' landmarks, distinguished by a
         ``landmark_key`` pair.
+
+        Both may instead be the ``(N, 2)`` landmark arrays themselves, matched by row order --
+        the same form ``landmarks_ref`` / ``landmarks_query`` take on
+        :func:`~squidpy.experimental.tl.align_stalign_obs`. Landmarks are correspondences
+        *between* two samples rather than observations *of* one, so they do not always have a
+        container to live in: thirteen of them cannot sit in the ``obsm`` of a sample with
+        eighty thousand cells. Given arrays, this returns the affine, and every argument that
+        addresses a container must be left unset.
     landmark_key
         Where the ``(N, 2)`` landmark correspondences live (matched by row order), or a
-        ``(ref, query)`` pair. On an AnnData -- or a SpatialData with ``table_key`` --
+        ``(ref, query)`` pair. Required for container input, rejected for arrays. On an AnnData -- or a SpatialData with ``table_key`` --
         this is an ``obsm`` key; on a SpatialData without ``table_key`` it names a
         shapes element, the layout napari-spatialdata writes when landmarks are picked
         interactively.
@@ -604,6 +612,33 @@ def align_landmarks(
         )
     if spatial_key is not None and key_added is None:
         raise ValueError("`spatial_key` says what `key_added` transforms, so it needs `key_added` to be set.")
+
+    if not isinstance(data_ref, AnnData | SpatialData):
+        # The landmarks themselves, not containers holding them. There is no key to address
+        # and nothing to write into, so this returns the matrix and refuses the arguments that
+        # only mean something for a container rather than silently ignoring them.
+        # `fit_similarity` / `fit_affine` validate the pair, so nothing is re-checked here.
+        if data_query is None:
+            raise ValueError(
+                "`data_ref` is an array of landmarks, so `data_query` must be the matching "
+                "array of query landmarks rather than `None`."
+            )
+        for name, value in (
+            ("landmark_key", landmark_key),
+            ("table_key", table_key),
+            ("spatial_key", spatial_key),
+            ("key_added", key_added),
+            ("target_coordinate_system", target_coordinate_system),
+        ):
+            if value is not None:
+                raise ValueError(f"`{name}` addresses a container, and landmark arrays have none.")
+        return fit_fn(data_ref, data_query)
+
+    if landmark_key is None:
+        raise ValueError(
+            "`landmark_key` says where the landmarks live on a container. Pass the landmark "
+            "arrays directly as `data_ref` and `data_query` if they are not stored on one."
+        )
 
     ref_lm_key, query_lm_key = _resolve_pair(landmark_key, name="landmark_key")
     ref_table, query_table = (None, None) if table_key is None else _resolve_pair(table_key, name="table_key")
