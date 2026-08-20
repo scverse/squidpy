@@ -45,9 +45,9 @@ dependencies = [
   "aiohttp>=3.8.1",
   "anndata>=0.9",
   "centrosome>=1.2.3",
-  "cp-measure>=0.1.19,<0.2",
+  "cp-measure>=0.2,<0.3",
   "cycler>=0.11",
-  "dask[array,distributed]>=2021.2", # distributed is the only scheduler that forks for GIL-bound featurization
+  "dask[array,distributed]>=2021.2",    # distributed is the only scheduler that forks for GIL-bound featurization
   "dask-image>=0.5",
   "docrep>=0.3.1",
   "fast-array-utils",
@@ -69,10 +69,12 @@ dependencies = [
   "scikit-image>=0.25",
   # due to https://github.com/scikit-image/scikit-image/issues/6850 breaks rescale ufunc
   "scikit-learn>=0.24",
-  "spatialdata>=0.7.2",              # 0.7.2 dropped xarray-schema (pkg_resources break, #1115)
+  # dataset registry + downloader now live in scverse-misc
+  "scverse-misc[datasets]>=0.1.1,<0.2",
+  "spatialdata>=0.7.2",                 # 0.7.2 dropped xarray-schema (pkg_resources break, #1115)
   "spatialdata-plot>=0.4.1",
   "statsmodels>=0.12",
-  "threadpoolctl>=3",                # clamp BLAS/OpenMP per worker in tiled featurization
+  "threadpoolctl>=3",                   # clamp BLAS/OpenMP per worker in tiled featurization
   # https://github.com/scverse/squidpy/issues/526
   "tifffile!=2022.4.22",
   "tqdm>=4.50.2",
@@ -121,6 +123,7 @@ docs = [
   "ipywidgets>=8",
   "myst-nb>=0.17.1",
   "nbsphinx>=0.8.1",
+  "scverse-misc[sphinx]>=0.1.2,<0.2",
   "sphinx>=5.3",
   "sphinx-autodoc-annotation",
   "sphinx-autodoc-typehints>=1.10.3",
@@ -139,10 +142,10 @@ include-package-data = true
 [tool.setuptools_scm]
 
 [tool.hatch]
+version.source = "vcs"
+metadata.allow-direct-references = true
 build.hooks.vcs.version-file = "_version.py"
 build.targets.wheel.packages = [ "src/squidpy" ]
-metadata.allow-direct-references = true
-version.source = "vcs"
 
 [tool.pixi]
 workspace.channels = [ "conda-forge" ]
@@ -188,7 +191,6 @@ lint.select = [
   "UP",  # pyupgrade
   "W",   # pycodestyle
 ]
-# "squidpy/*.py"= ["RST303"]
 lint.ignore = [
   # B008 Do not perform function calls in argument defaults.
   "B008",
@@ -264,19 +266,17 @@ lint.unfixable = [
 # Disallow all relative imports.
 lint.flake8-tidy-imports.ban-relative-imports = "all"
 lint.isort.required-imports = [ "from __future__ import annotations" ]
+# "squidpy/*.py" = [ "RST303" ]
 
 [tool.pytest]
-strict = true
+addopts = [
+  "--ignore=docs",
+]
 filterwarnings = [
   "error::numba.NumbaPerformanceWarning",
   "ignore::UserWarning",
   "ignore::anndata.OldFormatWarning",
   "ignore:.*pkg_resources:DeprecationWarning",
-]
-python_files = [ "test_*.py" ]
-testpaths = [ "tests/" ]
-addopts = [
-  "--ignore=docs",
 ]
 markers = [
   "internet: tests that require internet",
@@ -285,6 +285,9 @@ markers = [
   "gpu: tests that require GPU",
   "array_api: tests that require array-api-compat",
 ]
+python_files = [ "test_*.py" ]
+strict = true
+testpaths = [ "tests/" ]
 
 [tool.coverage]
 run.branch = true

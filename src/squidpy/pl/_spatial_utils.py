@@ -34,7 +34,7 @@ from skimage.morphology import erosion, square
 from skimage.segmentation import find_boundaries
 from skimage.util import map_array
 
-from squidpy._compat import add_categorical_legend, default_frameon, vector_friendly
+from squidpy._compat import add_categorical_legend, default_frameon, get_vector, vector_friendly
 from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
 from squidpy._utils import NDArrayA
@@ -461,10 +461,7 @@ def _set_color_source_vec(
 
     if alt_var is not None and value_to_plot not in adata.obs and value_to_plot not in adata.var_names:
         value_to_plot = adata.var_names[adata.var[alt_var] == value_to_plot][0]
-    if use_raw and value_to_plot not in adata.obs:
-        color_source_vector = adata.raw.obs_vector(value_to_plot)
-    else:
-        color_source_vector = adata.obs_vector(value_to_plot, layer=layer)
+    color_source_vector = get_vector(adata, value_to_plot, layer=layer, use_raw=use_raw)
 
     if not isinstance(color_source_vector.dtype, CategoricalDtype):
         return None, color_source_vector, False

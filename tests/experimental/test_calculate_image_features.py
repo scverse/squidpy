@@ -1153,8 +1153,10 @@ class TestParallelEngine:
         Exercises the Client-first dispatch, scatter of a zarr-backed dask graph,
         and cp_measure running in worker processes (picklability of the config).
         """
-        from dask.distributed import Client, LocalCluster
+        from dask.distributed import Client
         from spatialdata import read_zarr
+
+        from squidpy.experimental.im._tiling import _local_cluster
 
         sdata_synthetic.write(tmp_path / "data.zarr")
         sdata = read_zarr(tmp_path / "data.zarr")  # zarr/dask-backed
@@ -1168,9 +1170,8 @@ class TestParallelEngine:
         # Serial baseline must be computed with no Client in scope.
         serial = _sorted_frame(sq.experimental.im.calculate_image_features(sdata, n_jobs=1, **kw))
 
-        with LocalCluster(n_workers=2, threads_per_worker=1, processes=True, dashboard_address=None) as cluster:
-            with Client(cluster):  # Client-first dispatch picks this up
-                parallel = _sorted_frame(sq.experimental.im.calculate_image_features(sdata, **kw))
+        with _local_cluster(2) as cluster, Client(cluster):  # Client-first dispatch picks this up
+            parallel = _sorted_frame(sq.experimental.im.calculate_image_features(sdata, **kw))
 
         pd.testing.assert_frame_equal(serial, parallel[serial.columns], rtol=1e-5, atol=1e-6)
 

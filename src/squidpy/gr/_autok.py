@@ -220,7 +220,13 @@ class ClusterAutoKResult:
 def _fit_once(X: Any, k: int, random_state: int, model_params: Mapping[str, Any]) -> tuple[np.ndarray, float]:
     """Fit one mixture at ``k`` and return its labeling and negative log-likelihood."""
     gmm = GaussianMixture(n_components=k, random_state=random_state, **model_params)
-    gmm.fit(X)
+    try:
+        gmm.fit(X)
+    except ValueError as err:  # a collapsed component otherwise aborts the whole sweep opaquely
+        raise ValueError(
+            f"the mixture fit at K={k} failed: {err} Pass a stronger regularisation with "
+            "model_params={'reg_covar': 1e-4}, or request a smaller range of K values."
+        ) from err
     # scikit-learn has no `nll_`; `score` is the mean log-likelihood per observation
     return gmm.predict(X), -float(gmm.score(X))
 

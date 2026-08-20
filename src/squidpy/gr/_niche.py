@@ -11,7 +11,7 @@ import pandas as pd
 import scanpy as sc
 import scipy.sparse as sps
 from anndata import AnnData
-from scipy.sparse import hstack, issparse, spdiags
+from scipy.sparse import issparse, spdiags
 from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import normalize
 from spatialdata import SpatialData, sanitize_table
@@ -233,6 +233,8 @@ def calculate_niche(
             library_key,
             inplace,
             table_key,
+            n_iterations=n_iterations,
+            seed=seed,
         )
 
     elif flavor == "utag":
@@ -246,6 +248,8 @@ def calculate_niche(
             library_key,
             inplace,
             table_key,
+            n_iterations=n_iterations,
+            seed=seed,
         )
 
     elif flavor == "cellcharter":
@@ -301,6 +305,10 @@ def calculate_niche_neighborhood(
     library_key: str | None = None,
     inplace: bool = True,
     table_key: str | None = None,
+    *,
+    flavor: Literal["igraph", "leidenalg"] = "igraph",
+    n_iterations: int = -1,
+    seed: int | None = None,
 ) -> AnnData | None:
     """Compute niche neighborhoods using a neighborhood profile embedding and Leiden clustering.
 
@@ -329,6 +337,7 @@ def calculate_niche_neighborhood(
         Weights for combining neighborhood profiles across hops.
     %(niche_common_params)s
     %(table_key)s
+    %(niche_leiden_params)s
 
     Returns
     -------
@@ -348,7 +357,9 @@ def calculate_niche_neighborhood(
     )
 
     # Create instance of _LeidenClusterer using provided inputs
-    clusterer = _LeidenClusterer(n_neighbors, resolutions, "nhood_niche")
+    clusterer = _LeidenClusterer(
+        n_neighbors, resolutions, "nhood_niche", flavor=flavor, n_iterations=n_iterations, seed=seed
+    )
 
     return _calculate_niche_custom(
         data,
@@ -373,6 +384,10 @@ def calculate_niche_utag(
     library_key: str | None = None,
     inplace: bool = True,
     table_key: str | None = None,
+    *,
+    flavor: Literal["igraph", "leidenalg"] = "igraph",
+    n_iterations: int = -1,
+    seed: int | None = None,
 ) -> AnnData | None:
     """Compute niche assignments using a UTAG-style neighborhood embedding.
 
@@ -389,6 +404,7 @@ def calculate_niche_utag(
     %(niche_spatial_conn_key)s
     %(niche_common_params)s
     %(table_key)s
+    %(niche_leiden_params)s
 
     Returns
     -------
@@ -399,7 +415,9 @@ def calculate_niche_utag(
 
     embedder = _UtagEmbedder(spatial_connectivities_key)
 
-    clusterer = _LeidenClusterer(n_neighbors, resolutions, "utag_niche")
+    clusterer = _LeidenClusterer(
+        n_neighbors, resolutions, "utag_niche", flavor=flavor, n_iterations=n_iterations, seed=seed
+    )
 
     return _calculate_niche_custom(
         data,
@@ -916,21 +934,21 @@ def _validate_niche_args(
                 "abs_nhood",
                 "distance",
                 "n_hop_weights",
+                "seed",
+                "n_iterations",
             ],
             "unused": [
                 "aggregation",
                 "n_components",
-                "seed",
                 "latent_connectivities_key",
                 "layer_ratio",
-                "n_iterations",
                 "use_weights",
                 "use_rep",
             ],
         },
         "utag": {
             "required": ["n_neighbors", "resolutions", "spatial_connectivities_key"],
-            "optional": [],
+            "optional": ["seed", "n_iterations"],
             "unused": [
                 "groups",
                 "min_niche_size",
@@ -940,10 +958,8 @@ def _validate_niche_args(
                 "n_hop_weights",
                 "aggregation",
                 "n_components",
-                "seed",
                 "latent_connectivities_key",
                 "layer_ratio",
-                "n_iterations",
                 "use_weights",
                 "use_rep",
             ],
@@ -1398,8 +1414,10 @@ class _CellcharterEmbedder(_NicheEmbedder):
                     aggregated_matrix = _aggregate(adata, adj_hop_norm, self.aggregation)
                     aggregated_matrices.append(aggregated_matrix)
 
-            concatenated_matrix = hstack(aggregated_matrices)  # Stack all matrices horizontally
-            arr = concatenated_matrix.toarray()  # Densify
+            # `scipy.sparse.hstack` needs at least one sparse block and otherwise raises
+            # "blocks must be 2-D", which is what a dense `adata.X` produced. Everything is
+            # densified here anyway, so stacking densely costs nothing and works either way.
+            arr = np.hstack([m.toarray() if issparse(m) else np.asarray(m) for m in aggregated_matrices])
 
             arr_ad = ad.AnnData(X=arr)
             sc.tl.pca(arr_ad)
@@ -1461,10 +1479,17 @@ class _LeidenClusterer(_NicheClusterer):
         n_neighbors: int,
         resolutions: float | list[float],
         base_colname: str = "niche_leiden",
+        *,
+        flavor: Literal["igraph", "leidenalg"] = "igraph",
+        n_iterations: int = -1,
+        seed: int | None = None,
     ):
         self.n_neighbors = n_neighbors
         self.resolutions = resolutions if isinstance(resolutions, list) else [resolutions]
         self.base_colname = base_colname
+        self.flavor = flavor
+        self.n_iterations = n_iterations
+        self.seed = seed
 
     def cluster(self, adata: AnnData, embedding: NDArrayA) -> tuple[list[str], dict[str, Any] | None]:
         # first create an adata object using the embedding provided
@@ -1475,18 +1500,30 @@ class _LeidenClusterer(_NicheClusterer):
 
         # For each resolution, apply leiden on neighborhood profile. Each cluster label equals to a niche label
         niche_keys = []
-        for res in self.resolutions:
+        # every resolution is a separate clustering run, so seed each one independently,
+        # matching how `calculate_niche_spatialleiden` derives its per-resolution seeds
+        resolution_rngs = spawn_generators(self.seed, len(self.resolutions))
+
+        for res, res_rng in zip(self.resolutions, resolution_rngs, strict=True):
             niche_key = f"{self.base_colname}_res={res}"
             niche_keys.append(niche_key)
 
             if niche_key in adata.obs.columns:
                 logg.info(f"Overwriting existing column '{niche_key}'")
 
-            sc.tl.leiden(
-                adata_embedding,
-                resolution=res,
-                key_added=niche_key,
-            )
+            # Default to the igraph backend so niche labels are reproducible across
+            # versions; leidenalg is deprecated in scanpy and unstable on small graphs.
+            # See scverse/squidpy#1260.
+            leiden_kwargs: dict[str, Any] = {
+                "flavor": self.flavor,
+                "n_iterations": self.n_iterations,
+                "random_state": rng_to_random_state(res_rng),
+            }
+            # scanpy's igraph backend only supports undirected graphs and errors if
+            # ``directed`` is left at the leidenalg default of True, so pin it to False.
+            if self.flavor == "igraph":
+                leiden_kwargs["directed"] = False
+            sc.tl.leiden(adata_embedding, resolution=res, key_added=niche_key, **leiden_kwargs)
 
             adata.obs[niche_key] = list(
                 adata_embedding.obs[niche_key]

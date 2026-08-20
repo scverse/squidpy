@@ -314,3 +314,12 @@ def test_cluster_stability_rejects_a_missing_column():
     keys[3] = ["not_a_column", *keys[3][1:]]
     with pytest.raises(KeyError, match=r"not_a_column"):
         cluster_stability(adata, keys)
+
+
+def test_sweep_auto_k_points_at_reg_covar_when_a_component_collapses():
+    "sklearn's raw message does not say what to do about it; ours must name the escape hatch."
+    # only two distinct points, so with the regularisation switched off every component
+    # lands on a singular covariance
+    X = np.repeat(np.array([[0.0, 0.0], [1.0, 1.0]]), 15, axis=0)
+    with pytest.raises(ValueError, match=r"model_params=\{'reg_covar'"):
+        sweep_auto_k(X, [2, 3, 4], max_runs=2, model_params={"reg_covar": 0.0}, rng=np.random.default_rng(0))

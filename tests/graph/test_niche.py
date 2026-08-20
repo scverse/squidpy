@@ -9,36 +9,53 @@ from scipy.sparse import csr_matrix
 from spatialdata import SpatialData
 from spatialdata.models import TableModel
 
-from squidpy.gr import _niche, calculate_niche, calculate_niche_cellcharter, spatial_neighbors_knn
+from squidpy.gr import (
+    _niche,
+    calculate_niche,
+    calculate_niche_cellcharter,
+    calculate_niche_neighborhood,
+    spatial_neighbors_knn,
+)
 
 N_NEIGHBORS = 20
 GROUPS = "celltype_mapped_refined"
 
-# test if calculate_niche() gives appropriate output for dummy_adata2 for the different flavors
+# Niche labels come from Leiden clustering, whose exact partition is not stable across
+# igraph/leidenalg versions on tiny toy graphs (multiple equal-modularity optima). These
+# tests therefore assert squidpy's behavioural contract - every cell is assigned, the
+# postprocessors and library stratification behave, and a fixed seed is reproducible -
+# rather than a specific (arbitrary) partition. See scverse/squidpy#1260.
+
+
+def _assert_all_assigned(adata: AnnData, column: str) -> Series:
+    """Every observation receives a niche label under ``column``."""
+    assert column in adata.obs.columns
+    niches = adata.obs[column]
+    assert len(niches) == adata.n_obs
+    assert niches.notna().all()
+    return niches
 
 
 def test_niche_calc_nhood_dummy_adata(dummy_adata2: AnnData):
     "Check whether niche calculation using neighborhood profile approach works as intended for dummy_adata2."
-    calculate_niche(dummy_adata2, flavor="neighborhood", groups="celltype", n_neighbors=3, resolutions=1.0)
-    assert "nhood_niche_res=1.0" in dummy_adata2.obs.columns
-    expected_niches = Series(
-        ["0", "2", "0", "2", "1", "0", "0", "1", "0", "1"],
-        index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
-        name="nhood_niche_res=1.0",
-    )
-    assert (expected_niches == dummy_adata2.obs["nhood_niche_res=1.0"]).all()
+    rerun = dummy_adata2.copy()
+    calculate_niche(dummy_adata2, flavor="neighborhood", groups="celltype", n_neighbors=3, resolutions=1.0, seed=0)
+    niches = _assert_all_assigned(dummy_adata2, "nhood_niche_res=1.0")
+
+    # a fixed seed gives reproducible niches
+    calculate_niche(rerun, flavor="neighborhood", groups="celltype", n_neighbors=3, resolutions=1.0, seed=0)
+    assert (niches.to_numpy() == rerun.obs["nhood_niche_res=1.0"].to_numpy()).all()
 
 
 def test_niche_calc_utag_dummy_adata(dummy_adata2: AnnData):
     "Check whether niche calculation using utag approach works as intended for dummy_adata2."
-    calculate_niche(dummy_adata2, flavor="utag", n_neighbors=3, resolutions=1.0)
-    assert "utag_niche_res=1.0" in dummy_adata2.obs.columns
-    expected_niches = Series(
-        Categorical(["1", "0", "0", "0", "1", "0", "0", "1", "1", "0"], categories=["0", "1"]),
-        index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
-        name="utag_niche_res=1.0",
-    )
-    assert (expected_niches == dummy_adata2.obs["utag_niche_res=1.0"]).all()
+    rerun = dummy_adata2.copy()
+    calculate_niche(dummy_adata2, flavor="utag", n_neighbors=3, resolutions=1.0, seed=0)
+    niches = _assert_all_assigned(dummy_adata2, "utag_niche_res=1.0")
+
+    # a fixed seed gives reproducible niches
+    calculate_niche(rerun, flavor="utag", n_neighbors=3, resolutions=1.0, seed=0)
+    assert (niches.to_numpy() == rerun.obs["utag_niche_res=1.0"].to_numpy()).all()
 
 
 def test_niche_calc_cellcharter_dummy_adata(dummy_adata2: AnnData):
@@ -49,8 +66,10 @@ def test_niche_calc_cellcharter_dummy_adata(dummy_adata2: AnnData):
 
     calculate_niche(dummy_adata2, flavor="cellcharter", distance=2, aggregation="mean", seed=0)
 
-    assert "cellcharter_niche" in dummy_adata2.obs.columns
+    _assert_all_assigned(dummy_adata2, "cellcharter_niche")
 
+    # cellcharter clusters with a GMM, not Leiden, so unlike the flavors above its labels are
+    # fully determined by `seed` and can still be pinned. See scverse/squidpy#1260.
     expected_niches = Series(
         Categorical([2, 6, 4, 9, 3, 0, 1, 5, 8, 7], categories=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
         index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
@@ -61,6 +80,7 @@ def test_niche_calc_cellcharter_dummy_adata(dummy_adata2: AnnData):
 
 def test_niche_calc_spatialleiden_dummy_adata(dummy_adata2: AnnData):
     "Check whether niche calculation using spatialleiden approach works as intended for dummy_adata2."
+    pytest.importorskip("spatialleiden")
 
     # need the latent_connectivities_key, meaning have to run the graph construction
     neighbors(dummy_adata2, n_neighbors=3, use_rep="X")
@@ -74,14 +94,7 @@ def test_niche_calc_spatialleiden_dummy_adata(dummy_adata2: AnnData):
         seed=0,
     )
 
-    assert "spatialleiden_res=1.0" in dummy_adata2.obs.columns
-    expected_niches = Series(
-        Categorical([0, 0, 0, 0, 1, 1, 1, 2, 2, 2], categories=[0, 1, 2]),
-        index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
-        name="spatialleiden_res=1.0",
-    )
-
-    assert (expected_niches == dummy_adata2.obs["spatialleiden_res=1.0"]).all()
+    _assert_all_assigned(dummy_adata2, "spatialleiden_res=1.0")
 
 
 # seed handling
@@ -138,6 +151,34 @@ def test_niche_cellcharter_library_seeds_are_independent(dummy_adata2: AnnData, 
 
     assert len(seen) == 2, "expected one mixture fit per library"
     assert seen[0] != seen[1], "libraries were fitted with the same seed"
+
+
+def test_niche_leiden_resolution_seeds_are_independent(dummy_adata2: AnnData, monkeypatch):
+    "Each resolution is its own clustering run, so each must be seeded independently."
+    seen: list[int] = []
+    original = _niche.sc.tl.leiden
+
+    def spy(*args, **kwargs):
+        seen.append(kwargs["random_state"])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(_niche.sc.tl, "leiden", spy)
+    calculate_niche_neighborhood(dummy_adata2, groups="celltype", n_neighbors=3, resolutions=[0.5, 1.0], seed=0)
+
+    assert len(seen) == 2, "expected one leiden run per resolution"
+    assert seen[0] != seen[1], "resolutions were clustered with the same seed"
+
+
+def test_niche_cellcharter_accepts_a_dense_x(dummy_adata2: AnnData):
+    "A dense `adata.X` used to reach `scipy.sparse.hstack` with no sparse block at all."
+    dense = dummy_adata2.copy()
+    sparse = dummy_adata2.copy()
+    sparse.X = csr_matrix(sparse.X)
+    kwargs = {"distance": 2, "aggregation": "mean", "n_components": 2, "seed": 0, "inplace": False}
+
+    from_dense = calculate_niche_cellcharter(dense, **kwargs)
+    from_sparse = calculate_niche_cellcharter(sparse, **kwargs)
+    assert (from_dense.obs["cellcharter_niche"] == from_sparse.obs["cellcharter_niche"]).all()
 
 
 # selecting the number of clusters by stability
@@ -255,65 +296,27 @@ def test_niche_calc_library_key_dummy_adata(dummy_adata2: AnnData):
     "Check whether niche calculation when library_key is supplied works as intended for dummy_adata2."
 
     # add library_key information in dummy_adata
-    dummy_adata2.obs["batch"] = [
-        "batch1",
-        "batch1",
-        "batch1",
-        "batch1",
-        "batch1",
-        "batch2",
-        "batch2",
-        "batch2",
-        "batch2",
-        "batch2",
-    ]
+    dummy_adata2.obs["batch"] = ["batch1"] * 5 + ["batch2"] * 5
 
     calculate_niche(
         dummy_adata2, flavor="neighborhood", groups="celltype", n_neighbors=3, resolutions=1.5, library_key="batch"
     )
 
-    assert "nhood_niche_res=1.5" in dummy_adata2.obs.columns
-
-    expected_niches = Series(
-        [
-            "lib=batch1_1",
-            "lib=batch1_0",
-            "lib=batch1_2",
-            "lib=batch1_0",
-            "lib=batch1_1",
-            "lib=batch2_2",
-            "lib=batch2_0",
-            "lib=batch2_1",
-            "lib=batch2_0",
-            "lib=batch2_1",
-        ],
-        index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
-        name="nhood_niche_res=1.5",
-        dtype=str,
-    )
-
-    assert (expected_niches == dummy_adata2.obs["nhood_niche_res=1.5"]).all()
+    niches = _assert_all_assigned(dummy_adata2, "nhood_niche_res=1.5")
+    # niches are computed per library and prefixed with the originating library
+    for cell, label in niches.items():
+        assert label.startswith(f"lib={dummy_adata2.obs['batch'][cell]}_")
 
 
 def test_niche_calc_spatialleiden_library_key_dummy_adata(dummy_adata2: AnnData):
     "Check whether niche calculation for spatialleiden works as intended for dummy_adata2 when library_key is supplied."
+    pytest.importorskip("spatialleiden")
 
     # need the latent_connectivities_key, meaning have to run the graph construction
     neighbors(dummy_adata2, n_neighbors=3, use_rep="X")
 
     # add library_key information in dummy_adata
-    dummy_adata2.obs["batch"] = [
-        "batch1",
-        "batch1",
-        "batch1",
-        "batch1",
-        "batch1",
-        "batch2",
-        "batch2",
-        "batch2",
-        "batch2",
-        "batch2",
-    ]
+    dummy_adata2.obs["batch"] = ["batch1"] * 5 + ["batch2"] * 5
 
     calculate_niche(
         dummy_adata2,
@@ -325,27 +328,10 @@ def test_niche_calc_spatialleiden_library_key_dummy_adata(dummy_adata2: AnnData)
         seed=0,
     )
 
-    assert "spatialleiden_res=1.0" in dummy_adata2.obs.columns
-
-    expected_niches = Series(
-        [
-            "lib=batch1_1",
-            "lib=batch1_0",
-            "lib=batch1_0",
-            "lib=batch1_1",
-            "lib=batch1_0",
-            "lib=batch2_1",
-            "lib=batch2_1",
-            "lib=batch2_0",
-            "lib=batch2_0",
-            "lib=batch2_0",
-        ],
-        index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
-        name="spatialleiden_res=1.0",
-        dtype=str,
-    )
-
-    assert (expected_niches == dummy_adata2.obs["spatialleiden_res=1.0"]).all()
+    niches = _assert_all_assigned(dummy_adata2, "spatialleiden_res=1.0")
+    # niches are computed per library and prefixed with the originating library
+    for cell, label in niches.items():
+        assert label.startswith(f"lib={dummy_adata2.obs['batch'][cell]}_")
 
 
 def test_niche_calc_nhood_multipostprocessor_dummy_adata(dummy_adata2: AnnData):
@@ -363,13 +349,12 @@ def test_niche_calc_nhood_multipostprocessor_dummy_adata(dummy_adata2: AnnData):
         mask=mask,
         min_niche_size=3,
     )
-    assert "nhood_niche_res=1.0" in dummy_adata2.obs.columns
-    expected_niches = Series(
-        ["not_a_niche", "not_a_niche", "0", "not_a_niche", "1", "0", "0", "1", "0", "1"],
-        index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
-        name="nhood_niche_res=1.0",
-    )
-    assert (expected_niches == dummy_adata2.obs["nhood_niche_res=1.0"]).all()
+    niches = _assert_all_assigned(dummy_adata2, "nhood_niche_res=1.0")
+    # masked-out observations are never assigned to a real niche
+    assert (niches[["a", "b"]] == "not_a_niche").all()
+    # every real niche respects the requested minimum size
+    real = niches[niches != "not_a_niche"]
+    assert (real.value_counts() >= 3).all()
 
 
 def test_niche_calc_nhood_dummy_sdata(dummy_adata2: AnnData):
@@ -385,16 +370,7 @@ def test_niche_calc_nhood_dummy_sdata(dummy_adata2: AnnData):
 
     calculate_niche(sdata, flavor="neighborhood", groups="celltype", n_neighbors=3, resolutions=1.0, table_key="adata")
 
-    assert "nhood_niche_res_1.0" in sdata["adata"].obs.columns
-
-    expected_niches = Series(
-        ["0", "2", "0", "2", "1", "0", "0", "1", "0", "1"],
-        index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
-        name="nhood_niche_res_1.0",
-        dtype=str,
-    )
-
-    assert (expected_niches == sdata["adata"].obs["nhood_niche_res_1.0"]).all()
+    _assert_all_assigned(sdata["adata"], "nhood_niche_res_1.0")
 
 
 # older tests
