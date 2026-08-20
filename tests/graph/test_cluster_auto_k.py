@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import pytest
 from anndata import AnnData
 from scipy.sparse import csr_matrix
+from sklearn.metrics import fowlkes_mallows_score
 
-from squidpy.gr import cluster_auto_k
+from squidpy.gr import cluster_auto_k, cluster_stability
 from squidpy.gr._autok import (
     DEFAULT_INIT_PARAMS,
+    _score_block,
     expand_n_clusters,
     mirror_stability,
     sweep_auto_k,
 )
+from squidpy.gr._autok import cluster_stability as _cluster_stability
 
 
 def make_blobs(n_per_blob: int = 30, n_features: int = 5, seed: int = 0) -> np.ndarray:
@@ -220,3 +224,93 @@ def test_cluster_auto_k_is_reproducible_from_the_seed():
     second = cluster_auto_k(adata, (2, 4), max_runs=3, seed=0)
     assert first.best_k == second.best_k
     assert np.array_equal(first.stability, second.stability)
+
+
+# scoring labelings that were produced elsewhere
+
+
+def _runs(ks: list[int], n_runs: int, seed: int = 0) -> list[dict[int, np.ndarray]]:
+    "One dict of labelings per run, as `sweep_auto_k` accumulates them internally."
+    rng = np.random.default_rng(seed)
+    return [{k: rng.integers(0, k, 40) for k in ks} for _ in range(n_runs)]
+
+
+def test_cluster_stability_pairs_runs_like_the_sweep():
+    "The batch entry point must compare the same run pairs, in the same direction, as `sweep_auto_k` does."
+    ks = [2, 3, 4, 5]
+    runs = _runs(ks, n_runs=4)
+    pairs = list(zip(ks[:-1], ks[1:], strict=True))
+
+    expected: list[list[float]] = []
+    for i, new in enumerate(runs):  # the incremental pairing inside `sweep_auto_k`
+        expected.extend(_score_block(new, stored, pairs, fowlkes_mallows_score) for stored in runs[:i])
+
+    _, stability = _cluster_stability({k: [run[k] for run in runs] for k in ks})
+    assert stability.shape == (len(ks) - 2, 2 * len(expected))
+    # column order is arbitrary, the multiset of comparisons per interior K is not
+    np.testing.assert_allclose(np.sort(mirror_stability(expected), axis=1), np.sort(stability, axis=1))
+
+
+def test_cluster_stability_returns_only_interior_k():
+    ks = [2, 3, 4, 5, 6]
+    interior, stability = _cluster_stability({k: [run[k] for run in _runs(ks, n_runs=2)] for k in ks})
+    assert interior == [3, 4, 5]
+    assert stability.shape[0] == len(interior)
+
+
+def test_cluster_stability_honours_score_fn():
+    ks = [2, 3, 4]
+    labels = {k: [run[k] for run in _runs(ks, n_runs=3)] for k in ks}
+    _, stability = _cluster_stability(labels, score_fn=lambda a, b: 1.0)
+    np.testing.assert_allclose(stability, 1.0)
+
+
+@pytest.mark.parametrize(
+    ("n_runs_per_k", "match"),
+    [
+        ({2: 2, 3: 2}, r"at least 3 K values"),
+        ({2: 2, 3: 3, 4: 2}, r"same number of runs"),
+        ({2: 1, 3: 1, 4: 1}, r"at least 2 runs"),
+    ],
+)
+def test_cluster_stability_rejects_unusable_input(n_runs_per_k: dict[int, int], match: str):
+    labels = {k: [np.zeros(4, dtype=int)] * n for k, n in n_runs_per_k.items()}
+    with pytest.raises(ValueError, match=match):
+        _cluster_stability(labels)
+
+
+def _adata_with_runs(ks: list[int], n_runs: int) -> tuple[AnnData, dict[int, list[str]]]:
+    runs = _runs(ks, n_runs=n_runs)
+    adata = AnnData(np.zeros((40, 2), dtype=np.float32))
+    keys = {}
+    for k in ks:
+        keys[k] = [f"clust_k{k}_run{r}" for r in range(n_runs)]
+        for r, run in enumerate(runs):
+            adata.obs[keys[k][r]] = pd.Categorical(run[k])
+    return adata, keys
+
+
+def test_cluster_stability_scores_obs_columns():
+    "The AnnData entry point scores labelings already in `obs`, so any clusterer can be fed to it."
+    adata, keys = _adata_with_runs([2, 3, 4], n_runs=3)
+
+    df = cluster_stability(adata, keys, copy=True)
+    assert list(df.index) == [2, 3, 4]
+    # only the interior K is scored, the bounds are a halo that is compared against but never selectable
+    assert df["stability_mean"].isna().tolist() == [True, False, True]
+    assert df["is_best"].tolist() == [False, True, False]
+
+
+def test_cluster_stability_writes_to_uns():
+    adata, keys = _adata_with_runs([2, 3, 4], n_runs=2)
+    expected = cluster_stability(adata, keys, copy=True)
+
+    assert cluster_stability(adata, keys, key_added="my_stability") is None
+    pd.testing.assert_frame_equal(adata.uns["my_stability"], expected)
+
+
+def test_cluster_stability_rejects_a_missing_column():
+    adata, keys = _adata_with_runs([2, 3, 4], n_runs=2)
+    keys[3] = ["not_a_column", *keys[3][1:]]
+    with pytest.raises(KeyError, match=r"not_a_column"):
+        cluster_stability(adata, keys)

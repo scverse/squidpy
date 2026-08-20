@@ -2,21 +2,24 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 import numpy as np
+import pandas as pd
 from anndata import AnnData
 from scipy.sparse import issparse
+from sklearn.metrics import fowlkes_mallows_score
 from spatialdata import SpatialData
 from spatialdata._logging import logger as logg
 
 from squidpy._docs import d
 from squidpy._validators import assert_isinstance, assert_key_in_adata
-from squidpy.gr._autok import ClusterAutoKResult, expand_n_clusters, sweep_auto_k
-from squidpy.gr._utils import extract_adata_if_sdata
+from squidpy.gr._autok import ClusterAutoKResult, _stability_frame, expand_n_clusters, sweep_auto_k
+from squidpy.gr._autok import cluster_stability as _cluster_stability
+from squidpy.gr._utils import _save_data, extract_adata_if_sdata
 
-__all__ = ["cluster_auto_k"]
+__all__ = ["cluster_auto_k", "cluster_stability"]
 
 
 @d.dedent
@@ -112,3 +115,62 @@ def cluster_auto_k(
     )
     logg.info(f"Selected K={result.best_k} after {result.n_runs} runs (peaks at K={result.peaks})")
     return result
+
+
+@d.dedent
+def cluster_stability(
+    data: AnnData | SpatialData,
+    cluster_keys: Mapping[int, Sequence[str]],
+    *,
+    score_fn: Callable[[Any, Any], float] = fowlkes_mallows_score,
+    key_added: str = "cluster_stability",
+    copy: bool = False,
+    table_key: str | None = None,
+) -> pd.DataFrame | None:
+    """Score existing clusterings by how stably each number of clusters reproduces across runs.
+
+    Where :func:`~squidpy.gr.cluster_auto_k` fits the mixtures itself, this reads labelings that
+    are already in ``adata.obs``, so they may come from any clusterer as long as every K was run
+    repeatedly. Each K is scored by how similar its labeling is to the labeling of the adjacent K
+    across runs; see :func:`~squidpy.gr.cluster_auto_k` for the reasoning.
+
+    Parameters
+    ----------
+    %(adata)s
+    cluster_keys
+        Mapping of a number of clusters to the ``adata.obs`` columns holding that K's labelings,
+        one column per run. Every K needs the same number of runs and at least two of them, and
+        at least 3 K values are needed since stability is only defined on interior K. The lowest
+        and highest K are therefore a halo: compared against, but never selectable.
+    score_fn
+        Similarity of two labelings. Any ``(labels_true, labels_pred) -> float`` works, e.g.
+        :func:`~sklearn.metrics.adjusted_rand_score`.
+    key_added
+        Key in ``adata.uns`` under which the diagnostics are stored.
+    %(copy)s
+    %(table_key)s
+
+    Returns
+    -------
+    If ``copy = True``, returns a :class:`pandas.DataFrame`. Otherwise, modifies the ``adata`` with
+    the following key:
+
+        - :attr:`anndata.AnnData.uns` ``['{key_added}']`` - per-K stability indexed by K, with
+          ``NaN`` on the two halo rows that are never scored.
+    """
+    assert_isinstance(data, (AnnData, SpatialData), name="data")
+    adata = extract_adata_if_sdata(data, table_key=table_key)
+
+    for columns in cluster_keys.values():
+        for column in columns:
+            assert_key_in_adata(adata, column, attr="obs")
+
+    labels = {int(k): [adata.obs[c].to_numpy() for c in columns] for k, columns in cluster_keys.items()}
+    logg.info(f"Scoring the stability of K={sorted(labels)} over {len(next(iter(labels.values())))} runs each")
+    interior, stability = _cluster_stability(labels, score_fn=score_fn)
+    df = _stability_frame(sorted(labels), interior, stability)
+
+    if copy:
+        return df
+    _save_data(adata, attr="uns", key=key_added, data=df)
+    return None

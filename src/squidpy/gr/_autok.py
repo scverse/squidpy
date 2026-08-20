@@ -12,8 +12,9 @@ machinery or its validators belongs in :mod:`squidpy.gr._cluster_auto_k` instead
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from itertools import combinations
 from typing import Any
 
 import numpy as np
@@ -22,7 +23,7 @@ from scipy.signal import find_peaks
 from sklearn.metrics import fowlkes_mallows_score, mean_absolute_percentage_error
 from sklearn.mixture import GaussianMixture
 
-__all__ = ["ClusterAutoKResult", "expand_n_clusters", "mirror_stability", "sweep_auto_k"]
+__all__ = ["ClusterAutoKResult", "cluster_stability", "expand_n_clusters", "mirror_stability", "sweep_auto_k"]
 
 # `best_k` is a function of run-to-run variability, and therefore of the initialization.
 # Pinned so that the selected K does not silently change with a scikit-learn default.
@@ -77,6 +78,77 @@ def mirror_stability(blocks: Sequence[Sequence[float]]) -> np.ndarray:
     """
     per_pair = list(zip(*blocks, strict=True))  # index by K pair instead of by run pair
     return np.array([list(per_pair[i]) + list(per_pair[i - 1]) for i in range(1, len(per_pair))])
+
+
+def _score_block(
+    run_a: Mapping[int, Any],
+    run_b: Mapping[int, Any],
+    pairs: Sequence[tuple[int, int]],
+    score_fn: Callable[[Any, Any], float],
+) -> list[float]:
+    """Similarity of ``run_a`` at each K against ``run_b`` at the next K, one block per run pair."""
+    return [score_fn(run_a[low], run_b[high]) for low, high in pairs]
+
+
+def cluster_stability(
+    labels: Mapping[int, Sequence[Any]],
+    *,
+    score_fn: Callable[[Any, Any], float] = fowlkes_mallows_score,
+) -> tuple[list[int], np.ndarray]:
+    """Score already-computed labelings by how stably each K reproduces across runs.
+
+    The batch counterpart to the sweep inside :func:`sweep_auto_k`, for labelings produced
+    elsewhere: only the labels are compared, so any clusterer will do.
+
+    Parameters
+    ----------
+    labels
+        Mapping of K to that K's labelings, one per run. Every K needs the same number of
+        runs, and at least two, since a run can only be scored against another run.
+    score_fn
+        Similarity of two labelings. Any ``(labels_true, labels_pred) -> float`` works, e.g.
+        :func:`~sklearn.metrics.adjusted_rand_score`.
+
+    Returns
+    -------
+    The interior K values and their stability matrix of shape
+    ``(len(interior), n_runs * (n_runs - 1))``, row ``i`` belonging to ``interior[i]``.
+    """
+    ks = sorted(labels)
+    if len(ks) < 3:
+        raise ValueError(
+            f"stability is only defined on interior K values, so at least 3 K values are needed, got {ks!r}"
+        )
+    run_counts = {len(labels[k]) for k in ks}
+    if len(run_counts) != 1:
+        raise ValueError(f"every K needs the same number of runs, got { ({k: len(labels[k]) for k in ks})!r}")
+    n_runs = run_counts.pop()
+    if n_runs < 2:
+        raise ValueError(f"stability needs at least 2 runs to compare, got {n_runs}")
+
+    pairs = list(zip(ks[:-1], ks[1:], strict=True))
+    runs = [{k: labels[k][r] for k in ks} for r in range(n_runs)]
+    # each unordered pair of runs once, in the same direction as `sweep_auto_k` compares them
+    blocks = [_score_block(runs[b], runs[a], pairs, score_fn) for a, b in combinations(range(n_runs), 2)]
+    return ks[1:-1], mirror_stability(blocks)
+
+
+def _stability_frame(n_clusters: Sequence[int], interior: Sequence[int], stability: np.ndarray) -> pd.DataFrame:
+    """Per-K stability diagnostics indexed by K, carrying ``NaN`` on the unscored halo rows."""
+    mean = stability.mean(axis=1)
+    best_k = interior[int(np.argmax(mean))]
+    peaks = {interior[i] for i in find_peaks(mean)[0]}
+    per_k_mean = dict(zip(interior, mean, strict=True))
+    per_k_std = dict(zip(interior, stability.std(axis=1), strict=True))
+    return pd.DataFrame(
+        {
+            "stability_mean": [per_k_mean.get(k, np.nan) for k in n_clusters],
+            "stability_std": [per_k_std.get(k, np.nan) for k in n_clusters],
+            "is_peak": [k in peaks for k in n_clusters],
+            "is_best": [k == best_k for k in n_clusters],
+        },
+        index=pd.Index(n_clusters, name="k"),
+    )
 
 
 @dataclass
@@ -140,20 +212,9 @@ class ClusterAutoKResult:
         fitted, and therefore have an ``nll``, but are never scored. Plots should use
         ``interior`` as their x-axis.
         """
-        peaks = set(self.peaks)
-        best_k = self.best_k
-        stability_mean = dict(zip(self.interior, self.stability_mean, strict=True))
-        stability_std = dict(zip(self.interior, self.stability.std(axis=1), strict=True))
-        return pd.DataFrame(
-            {
-                "stability_mean": [stability_mean.get(k, np.nan) for k in self.n_clusters],
-                "stability_std": [stability_std.get(k, np.nan) for k in self.n_clusters],
-                "nll": [self.nll[k] for k in self.n_clusters],
-                "is_peak": [k in peaks for k in self.n_clusters],
-                "is_best": [k == best_k for k in self.n_clusters],
-            },
-            index=pd.Index(self.n_clusters, name="k"),
-        )
+        df = _stability_frame(self.n_clusters, self.interior, self.stability)
+        df.insert(2, "nll", [self.nll[k] for k in self.n_clusters])
+        return df
 
 
 def _fit_once(X: Any, k: int, random_state: int, model_params: Mapping[str, Any]) -> tuple[np.ndarray, float]:
@@ -236,10 +297,7 @@ def sweep_auto_k(
         if labels_per_run:
             # this run's K against every stored run's K+1 -- one direction only, which
             # `mirror_stability` then folds into a symmetric per-K score
-            blocks.extend(
-                [fowlkes_mallows_score(run_labels[low], stored[high]) for low, high in pairs]
-                for stored in labels_per_run
-            )
+            blocks.extend(_score_block(run_labels, stored, pairs, fowlkes_mallows_score) for stored in labels_per_run)
             curve = mirror_stability(blocks).mean(axis=1)
             if previous_curve is not None and mean_absolute_percentage_error(previous_curve, curve) < convergence_tol:
                 labels_per_run.append(run_labels)

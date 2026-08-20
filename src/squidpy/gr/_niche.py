@@ -11,7 +11,7 @@ import pandas as pd
 import scanpy as sc
 import scipy.sparse as sps
 from anndata import AnnData
-from scipy.sparse import coo_matrix, hstack, issparse, lil_matrix, spdiags
+from scipy.sparse import hstack, issparse, spdiags
 from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import normalize
 from spatialdata import SpatialData, sanitize_table
@@ -22,6 +22,7 @@ from squidpy._docs import d, inject_docs
 from squidpy._utils import NDArrayA, rng_to_random_state, spawn_generators
 from squidpy._validators import assert_isinstance, assert_key_in_adata, assert_one_of
 from squidpy.gr._autok import DEFAULT_INIT_PARAMS, expand_n_clusters, sweep_auto_k
+from squidpy.gr._nhood import _nhood_profile
 from squidpy.gr._utils import extract_adata_if_sdata
 
 __all__ = [
@@ -1214,70 +1215,15 @@ class _NhoodProfileEmbedder(_NicheEmbedder):
         self.abs_nhood = abs_nhood
         self.n_hop_weights = n_hop_weights
 
-    def _calculate_neighborhood_profile(
-        self,
-        adata: AnnData,
-        matrix: coo_matrix,
-    ) -> pd.DataFrame:
-        """
-        Returns an obs x category matrix where each column is the absolute/relative frequency of a category in the neighborhood
-        """
-
-        # ensure that adata.obs[group] is of categorical type, as that makes it explicit, which cols of the returned profile_df
-        # correspond to which categories in group
-        if adata.obs[self.groups].dtype.name != "category":
-            warnings.warn(
-                "Since adata.obs[groups] does not already have categorical dtype, converting it into categorical type.",
-                stacklevel=2,
-            )
-            adata.obs[self.groups] = adata.obs[self.groups].astype("category")
-
-        # ensure matrix is in csc format for efficient column slicing
-        if matrix.format != "csc":
-            matrix = matrix.tocsc()
-
-        # get cell categories in order
-        categories_order = adata.obs[self.groups].cat.categories
-        n_categories = len(categories_order)
-
-        # map category to column index
-        category_to_idx = {ct: i for i, ct in enumerate(categories_order)}
-
-        # pre allocate sparse LIL matrix for efficient assignment (n_cells x n_categories)
-        profile_sparse = lil_matrix((matrix.shape[0], n_categories), dtype=np.float64)
-
-        # for each category, sum over cells of that category
-        for ct in categories_order:
-            ct_mask = adata.obs[self.groups] == ct  # boolean mask for cells of this category
-            col_indices = np.where(ct_mask)[0]  # indices of those cells
-            if len(col_indices) > 0:
-                col_slice = matrix[:, col_indices]  # sparse submatrix
-                profile_sparse[:, category_to_idx[ct]] = col_slice.sum(axis=1).A1
-
-        # convert to dataframe (csr for final storage, dense for pandas)
-        profile_df = pd.DataFrame(
-            profile_sparse.tocsr().todense(), index=adata.obs[self.groups].index, columns=categories_order
-        )
-
-        # now according to parameter abs_nhood, make raw counts into proportions or not
-        if not self.abs_nhood:
-            total_neighs = profile_df.sum(axis=1)
-            profile_df = profile_df.div(total_neighs, axis=0)
-            # this may lead to some values being nan, as some cells might have had no neighbors. Make those values as 0
-            profile_df = profile_df.fillna(0.0)
-
-        return profile_df
-
     def get_embedding(self, adata: AnnData) -> NDArrayA:
         """
         adapted from https://github.com/immunitastx/monkeybread/blob/main/src/monkeybread/calc/_neighborhood_profile.py
         """
 
-        # get obs x neighbor matrix from sparse matrix
-        matrix = adata.obsp[self.spatial_connectivities_key].tocoo()
-
-        # get obs x category matrix where each column is the absolute/relative frequency of a category in the neighborhood
-        nhood_profile = self._calculate_neighborhood_profile(adata, matrix)
+        # obs x category matrix where each column is the absolute/relative frequency of a category in the neighborhood
+        nhood_profile = _nhood_profile(
+            adata.obs[self.groups], adata.obsp[self.spatial_connectivities_key], normalize=not self.abs_nhood
+        )
 
         # Additionally use n-hop neighbors if distance > 1. This sums up the (weighted) neighborhood profiles of all n-hop neighbors.
         if self.distance > 1:
@@ -1302,10 +1248,11 @@ class _NhoodProfileEmbedder(_NicheEmbedder):
                 logg.debug(f"Calculating {n_hop + 1}-hop neighbors")
                 # Multiply adjacency matrix by itself to get n+1 hop adjacency
                 n_hop_adjacency_matrix = n_hop_adjacency_matrix @ adata.obsp[self.spatial_connectivities_key]
-                matrix = n_hop_adjacency_matrix.tocoo()
 
                 # Calculate and add weighted profile
-                hop_profile = self._calculate_neighborhood_profile(adata, matrix)
+                hop_profile = _nhood_profile(
+                    adata.obs[self.groups], n_hop_adjacency_matrix, normalize=not self.abs_nhood
+                )
                 weighted_profile += weights[n_hop] * hop_profile
 
             if not self.abs_nhood:
