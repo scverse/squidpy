@@ -323,3 +323,42 @@ def test_sweep_auto_k_points_at_reg_covar_when_a_component_collapses():
     X = np.repeat(np.array([[0.0, 0.0], [1.0, 1.0]]), 15, axis=0)
     with pytest.raises(ValueError, match=r"model_params=\{'reg_covar'"):
         sweep_auto_k(X, [2, 3, 4], max_runs=2, model_params={"reg_covar": 0.0}, rng=np.random.default_rng(0))
+
+
+def test_cluster_stability_rejects_empty_cluster_keys():
+    "An empty mapping must raise the usual ValueError, not a bare StopIteration from the log line."
+    adata = AnnData(np.zeros((10, 2), dtype=np.float32))
+    with pytest.raises(ValueError, match=r"at least 3 K values"):
+        cluster_stability(adata, {})
+
+
+def test_sweep_auto_k_does_not_blame_reg_covar_for_unrelated_failures():
+    "The regularisation hint only fits singular covariances; other sklearn errors must pass through clean."
+    X = np.zeros((2, 2))  # fewer samples than components
+    with pytest.raises(ValueError, match=r"the mixture fit at K=\d+ failed") as excinfo:
+        sweep_auto_k(X, [2, 3, 4], max_runs=2, rng=np.random.default_rng(0))
+    assert "reg_covar" not in str(excinfo.value)
+
+
+def test_sweep_auto_k_keeps_labels_narrow():
+    "Every run's labeling is held for the whole sweep, so the dtype is the memory bottleneck."
+    result = sweep_auto_k(make_blobs(), [2, 3, 4], max_runs=2, rng=np.random.default_rng(0))
+    assert {labels.dtype for labels in result.labels.values()} == {np.dtype(np.uint32)}
+
+
+def test_cellcharter_forwards_model_params():
+    "The regularisation the sweep's error message names has to be reachable from the niche API."
+    import pytest as _pytest
+
+    from squidpy.gr import calculate_niche_cellcharter
+
+    adata = AnnData(np.repeat(np.array([[0.0, 0.0], [1.0, 1.0]]), 15, axis=0).astype(np.float32))
+    adata.obsm["spatial"] = np.random.default_rng(0).random((30, 2)) * 10
+    import squidpy as sq
+
+    sq.gr.spatial_neighbors_knn(adata, n_neighs=4)
+    kwargs = {"distance": 1, "n_clusters": 3, "seed": 0, "inplace": False}
+
+    with _pytest.raises(ValueError, match=r"ill-defined empirical covariance"):
+        calculate_niche_cellcharter(adata, model_params={"reg_covar": 0.0}, **kwargs)
+    assert calculate_niche_cellcharter(adata, model_params={"reg_covar": 1e-2}, **kwargs) is not None

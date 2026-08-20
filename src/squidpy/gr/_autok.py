@@ -222,13 +222,19 @@ def _fit_once(X: Any, k: int, random_state: int, model_params: Mapping[str, Any]
     gmm = GaussianMixture(n_components=k, random_state=random_state, **model_params)
     try:
         gmm.fit(X)
-    except ValueError as err:  # a collapsed component otherwise aborts the whole sweep opaquely
-        raise ValueError(
-            f"the mixture fit at K={k} failed: {err} Pass a stronger regularisation with "
-            "model_params={'reg_covar': 1e-4}, or request a smaller range of K values."
-        ) from err
+    except ValueError as err:  # a failed fit otherwise aborts the whole sweep opaquely
+        hint = (
+            " Pass a stronger regularisation with model_params={'reg_covar': 1e-4}, or request a "
+            "smaller range of K values."
+            if "ill-defined empirical covariance" in str(err)
+            else ""
+        )
+        raise ValueError(f"the mixture fit at K={k} failed: {err}{hint}") from err
+    # labels are in [0, k), and `GaussianMixture` already rejects k > n_samples, so uint32
+    # cannot overflow. Every run's labeling is kept for the whole sweep, so the narrower
+    # dtype is what keeps that affordable.
     # scikit-learn has no `nll_`; `score` is the mean log-likelihood per observation
-    return gmm.predict(X), -float(gmm.score(X))
+    return gmm.predict(X).astype(np.uint32, copy=False), -float(gmm.score(X))
 
 
 def sweep_auto_k(

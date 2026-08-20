@@ -166,8 +166,8 @@ def cluster_stability(
             assert_key_in_adata(adata, column, attr="obs")
 
     labels = {int(k): [adata.obs[c].to_numpy() for c in columns] for k, columns in cluster_keys.items()}
-    logg.info(f"Scoring the stability of K={sorted(labels)} over {len(next(iter(labels.values())))} runs each")
     interior, stability = _cluster_stability(labels, score_fn=score_fn)
+    logg.info(f"Scored the stability of K={sorted(labels)} over {len(next(iter(labels.values())))} runs each")
     df = _stability_frame(sorted(labels), interior, stability)
 
     if copy:

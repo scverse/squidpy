@@ -169,12 +169,32 @@ def test_niche_leiden_resolution_seeds_are_independent(dummy_adata2: AnnData, mo
     assert seen[0] != seen[1], "resolutions were clustered with the same seed"
 
 
-def test_niche_cellcharter_accepts_a_dense_x(dummy_adata2: AnnData):
-    "A dense `adata.X` used to reach `scipy.sparse.hstack` with no sparse block at all."
+def test_niche_leiden_library_seeds_are_independent(dummy_adata2: AnnData, monkeypatch):
+    "The clusterer is reused across libraries, so it must not replay the same seeds for each one."
+    dummy_adata2.obs["batch"] = ["batch1"] * 5 + ["batch2"] * 5
+    seen: list[int] = []
+    original = _niche.sc.tl.leiden
+
+    def spy(*args, **kwargs):
+        seen.append(kwargs["random_state"])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(_niche.sc.tl, "leiden", spy)
+    calculate_niche_neighborhood(
+        dummy_adata2, groups="celltype", n_neighbors=3, resolutions=[0.5, 1.0], seed=0, library_key="batch"
+    )
+
+    assert len(seen) == 4, "expected one leiden run per library per resolution"
+    assert len(set(seen)) == 4, "libraries were clustered with the same seeds"
+
+
+@pytest.mark.parametrize("aggregation", ["mean", "variance"])
+def test_niche_cellcharter_accepts_a_dense_x(dummy_adata2: AnnData, aggregation: str):
+    "A dense `adata.X` used to reach `scipy.sparse.hstack`/`.toarray()` with nothing sparse to work on."
     dense = dummy_adata2.copy()
     sparse = dummy_adata2.copy()
     sparse.X = csr_matrix(sparse.X)
-    kwargs = {"distance": 2, "aggregation": "mean", "n_components": 2, "seed": 0, "inplace": False}
+    kwargs = {"distance": 2, "aggregation": aggregation, "n_components": 2, "seed": 0, "inplace": False}
 
     from_dense = calculate_niche_cellcharter(dense, **kwargs)
     from_sparse = calculate_niche_cellcharter(sparse, **kwargs)

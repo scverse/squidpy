@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import warnings
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any, Literal
 
 import anndata as ad
@@ -358,7 +358,12 @@ def calculate_niche_neighborhood(
 
     # Create instance of _LeidenClusterer using provided inputs
     clusterer = _LeidenClusterer(
-        n_neighbors, resolutions, "nhood_niche", flavor=flavor, n_iterations=n_iterations, seed=seed
+        n_neighbors,
+        resolutions,
+        "nhood_niche",
+        flavor=flavor,
+        n_iterations=n_iterations,
+        rng=np.random.default_rng(seed),
     )
 
     return _calculate_niche_custom(
@@ -416,7 +421,12 @@ def calculate_niche_utag(
     embedder = _UtagEmbedder(spatial_connectivities_key)
 
     clusterer = _LeidenClusterer(
-        n_neighbors, resolutions, "utag_niche", flavor=flavor, n_iterations=n_iterations, seed=seed
+        n_neighbors,
+        resolutions,
+        "utag_niche",
+        flavor=flavor,
+        n_iterations=n_iterations,
+        rng=np.random.default_rng(seed),
     )
 
     return _calculate_niche_custom(
@@ -450,6 +460,7 @@ def calculate_niche_cellcharter(
     max_runs: int = 10,
     convergence_tol: float = 1e-2,
     store_labels: bool = False,
+    model_params: Mapping[str, Any] | None = None,
 ) -> AnnData | None:
     """Compute niche assignments using a CellCharter-style aggregation embedding.
 
@@ -492,6 +503,10 @@ def calculate_niche_cellcharter(
     store_labels
         Also keep the labeling of every fitted K as ``cellcharter_niche_k{K}`` columns in
         ``adata.obs``, for comparing resolutions.
+    model_params
+        Extra keyword arguments for :class:`~sklearn.mixture.GaussianMixture`, e.g.
+        ``{'reg_covar': 1e-4}`` when a component collapses. The mapping is never modified.
+        ``n_components`` and ``random_state`` are controlled by ``n_clusters`` and ``seed``.
 
     Returns
     -------
@@ -519,7 +534,10 @@ def calculate_niche_cellcharter(
         # `n_components` carries two meanings today: the rep truncation width above and the
         # number of mixture components here. `n_clusters` takes over the latter.
         clusterer = _GMMClusterer(
-            n_components if n_clusters is None else n_clusters, rng, base_colname="cellcharter_niche"
+            n_components if n_clusters is None else n_clusters,
+            rng,
+            base_colname="cellcharter_niche",
+            model_params=model_params,
         )
     else:
         clusterer = _AutoKGMMClusterer(
@@ -530,6 +548,7 @@ def calculate_niche_cellcharter(
             store_labels=store_labels,
             base_colname="cellcharter_niche",
             uns_key="cellcharter_niche_autok",
+            model_params=model_params,
         )
 
     return _calculate_niche_custom(
@@ -1155,14 +1174,19 @@ def _normalize(adj: sps.spmatrix) -> sps.spmatrix:
     return spdiags(deg_inv, 0, len(deg_inv), len(deg_inv)) * adj
 
 
+def _densify(matrix: Any) -> NDArrayA:
+    """Dense view of *matrix*, which may already be dense."""
+    return matrix.toarray() if issparse(matrix) else np.asarray(matrix)
+
+
 def _aggregate(adata: AnnData, normalized_adjacency_matrix: sps.spmatrix, aggregation: str = "mean") -> Any:
     """aggregate count and adjacency matrix either by mean or variance"""
     # TODO: add support for other aggregation methods
     if aggregation == "mean":
         aggregated_matrix = normalized_adjacency_matrix @ adata.X
     elif aggregation == "variance":
-        mean_matrix = (normalized_adjacency_matrix @ adata.X).toarray()
-        X_to_arr = adata.X.toarray()
+        mean_matrix = _densify(normalized_adjacency_matrix @ adata.X)
+        X_to_arr = _densify(adata.X)
         mean_squared_matrix = normalized_adjacency_matrix @ (X_to_arr * X_to_arr)
         aggregated_matrix = mean_squared_matrix - mean_matrix * mean_matrix
     else:
@@ -1417,7 +1441,7 @@ class _CellcharterEmbedder(_NicheEmbedder):
             # `scipy.sparse.hstack` needs at least one sparse block and otherwise raises
             # "blocks must be 2-D", which is what a dense `adata.X` produced. Everything is
             # densified here anyway, so stacking densely costs nothing and works either way.
-            arr = np.hstack([m.toarray() if issparse(m) else np.asarray(m) for m in aggregated_matrices])
+            arr = np.hstack([_densify(m) for m in aggregated_matrices])
 
             arr_ad = ad.AnnData(X=arr)
             sc.tl.pca(arr_ad)
@@ -1482,14 +1506,14 @@ class _LeidenClusterer(_NicheClusterer):
         *,
         flavor: Literal["igraph", "leidenalg"] = "igraph",
         n_iterations: int = -1,
-        seed: int | None = None,
+        rng: np.random.Generator | None = None,
     ):
         self.n_neighbors = n_neighbors
         self.resolutions = resolutions if isinstance(resolutions, list) else [resolutions]
         self.base_colname = base_colname
         self.flavor = flavor
         self.n_iterations = n_iterations
-        self.seed = seed
+        self.rng = rng if rng is not None else np.random.default_rng()
 
     def cluster(self, adata: AnnData, embedding: NDArrayA) -> tuple[list[str], dict[str, Any] | None]:
         # first create an adata object using the embedding provided
@@ -1500,9 +1524,10 @@ class _LeidenClusterer(_NicheClusterer):
 
         # For each resolution, apply leiden on neighborhood profile. Each cluster label equals to a niche label
         niche_keys = []
-        # every resolution is a separate clustering run, so seed each one independently,
-        # matching how `calculate_niche_spatialleiden` derives its per-resolution seeds
-        resolution_rngs = spawn_generators(self.seed, len(self.resolutions))
+        # every resolution is a separate clustering run, so seed each one independently.
+        # drawn from `self.rng` rather than a fixed seed, so that reusing this clusterer
+        # across libraries gives each library its own runs, as `_GMMClusterer` does.
+        resolution_rngs = spawn_generators(rng_to_random_state(self.rng), len(self.resolutions))
 
         for res, res_rng in zip(self.resolutions, resolution_rngs, strict=True):
             niche_key = f"{self.base_colname}_res={res}"
@@ -1559,10 +1584,12 @@ class _GMMClusterer(_NicheClusterer):
         n_components: int,
         rng: np.random.Generator,
         base_colname: str = "niche_gmm",
+        model_params: Mapping[str, Any] | None = None,
     ):
         self.n_components = n_components
         self.rng = rng
         self.base_colname = base_colname
+        self.model_params = dict(model_params or {})
 
     def cluster(self, adata: AnnData, embedding: NDArrayA) -> tuple[list[str], dict[str, Any] | None]:
         """Returns niche labels generated by GMM clustering.
@@ -1573,7 +1600,7 @@ class _GMMClusterer(_NicheClusterer):
         gmm = GaussianMixture(
             n_components=self.n_components,
             random_state=rng_to_random_state(self.rng),
-            init_params=DEFAULT_INIT_PARAMS,
+            **{"init_params": DEFAULT_INIT_PARAMS, **self.model_params},
         )
         gmm.fit(embedding)
         niches = gmm.predict(embedding)
@@ -1626,6 +1653,7 @@ class _AutoKGMMClusterer(_NicheClusterer):
         store_labels: bool = False,
         base_colname: str = "niche_gmm",
         uns_key: str = "niche_gmm_autok",
+        model_params: Mapping[str, Any] | None = None,
     ):
         self.n_clusters = expand_n_clusters(n_clusters)
         self.rng = rng
@@ -1634,6 +1662,7 @@ class _AutoKGMMClusterer(_NicheClusterer):
         self.store_labels = store_labels
         self.base_colname = base_colname
         self.uns_key = uns_key
+        self.model_params = model_params
 
     def cluster(self, adata: AnnData, embedding: NDArrayA) -> tuple[list[str], dict[str, Any] | None]:
         """Returns the niche labels of the most stable number of clusters, plus the per-K diagnostics."""
@@ -1646,6 +1675,7 @@ class _AutoKGMMClusterer(_NicheClusterer):
             self.n_clusters,
             max_runs=self.max_runs,
             convergence_tol=self.convergence_tol,
+            model_params=self.model_params,
             rng=self.rng,
         )
         logg.info(f"Selected K={result.best_k} after {result.n_runs} runs (peaks at K={result.peaks})")

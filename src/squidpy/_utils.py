@@ -242,13 +242,6 @@ def spawn_generators(seed: int | None, n: int) -> list[np.random.Generator]:
 
 
 def rng_to_random_state(rng: np.random.Generator) -> int:
-    """Draw an integer ``random_state`` from *rng*, advancing its state.
-
-    For third-party APIs that only accept an ``int`` seed (:mod:`sklearn`, ``leidenalg``)
-    and cannot consume a :class:`numpy.random.Generator` directly. Drawing once per call
-    gives every consumer an independent seed while keeping the whole sequence reproducible
-    from the ``seed`` that created *rng*.
-    """
     return int(rng.integers(np.iinfo(np.int32).max))
 
 
