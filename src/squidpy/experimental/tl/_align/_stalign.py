@@ -81,7 +81,9 @@ class StalignVolumeSolverKwargs(TypedDict, total=False):
     nothing, and ``initial_affine``, which is a named ``(4, 4)`` argument on
     :func:`~squidpy.experimental.tl.align_stalign_volume` rather than a solver key. Five
     defaults differ from the 2D case -- ``expand`` 1.25, ``epL`` 1e-6, ``epT`` 1e1,
-    ``epV`` 1e3 and ``sigmaR`` 1e8.
+    ``epV`` 1e3 and ``sigmaR`` 1e6. That last one is the only one that is not upstream's:
+    ``LDDMM_3D_to_slice`` declares ``sigmaR=1e8``, which weights the regulariser so weakly that
+    the velocity field grows unchecked and the reported objective climbs after its minimum.
 
     - ``initial_velocity``, ``velocity_grid`` -- continuation state from a prior fit, in
       the solver's ``(z, y, x)`` convention.
