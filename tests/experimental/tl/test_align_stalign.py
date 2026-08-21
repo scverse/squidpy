@@ -44,13 +44,13 @@ def test_obs_fit_returns_a_result_and_applies_to_a_copy() -> None:
     result = align_stalign_obs(ref, query, **TINY_SOLVER)
     assert result["aligned_points"].shape == ALIGN_PTS.shape
 
-    out = stalign_apply_transform(result, query, key_added="aligned", copy=True)
-    assert out.obsm["aligned"].shape == ALIGN_PTS.shape
-    assert "aligned" not in query.obsm, "`copy=True` must leave the input untouched"
+    handed_back = stalign_apply_transform(result, query, key_added="aligned", inplace=False)
+    assert handed_back.shape == ALIGN_PTS.shape
+    assert "aligned" not in query.obsm, "`inplace=False` must leave the input untouched"
 
-    # one fit, applied more than once: to a copy above and in place here
+    # one fit, applied more than once, and writing agrees with what was handed back
     assert stalign_apply_transform(result, query, key_added="aligned") is None
-    assert query.obsm["aligned"].shape == ALIGN_PTS.shape
+    np.testing.assert_array_equal(query.obsm["aligned"], handed_back)
 
 
 @pytest.mark.parametrize("scale_factors", [None, [2]], ids=["single_scale", "multiscale"])
@@ -68,12 +68,12 @@ def test_image_fit_reads_both_element_layouts(scale_factors: list[int] | None) -
     result = align_stalign_image(sdata_ref, sdata_query, image_key="img", **IMAGE_SOLVER)
     assert result["ref_axes"][0].shape == (32,)
 
-    out = stalign_apply_warp(result, sdata_ref, sdata_query, image_key="img", key_added="warped", copy=True)
-    assert out.images["warped"].shape == image.shape
-    assert "warped" not in sdata_query.images, "`copy=True` must leave the input untouched"
+    handed_back = stalign_apply_warp(result, sdata_ref, sdata_query, image_key="img", key_added="w", inplace=False)
+    assert handed_back.shape == image.shape
+    assert "w" not in sdata_query.images, "`inplace=False` must leave the input untouched"
 
     assert stalign_apply_warp(result, sdata_ref, sdata_query, image_key="img", key_added="warped") is None
-    assert sdata_query.images["warped"].shape == image.shape
+    np.testing.assert_array_equal(np.asarray(sdata_query.images["warped"]), handed_back)
 
 
 def test_image_fit_reads_units_and_placement_off_the_elements() -> None:
@@ -96,10 +96,10 @@ def test_image_fit_reads_units_and_placement_off_the_elements() -> None:
     assert float(result["ref_axes"][0][0]) == 100.0, "the element's translation is the origin"
     assert float(result["query_axes"][1][0]) == 50.0
 
-    out = stalign_apply_warp(result, sdata_ref, sdata_query, image_key="img", key_added="w", copy=True)
+    assert stalign_apply_warp(result, sdata_ref, sdata_query, image_key="img", key_added="w") is None
     axes = {"input_axes": ("y", "x"), "output_axes": ("y", "x")}
     np.testing.assert_allclose(
-        get_transformation(out.images["w"], to_coordinate_system="global").to_affine_matrix(**axes),
+        get_transformation(sdata_query.images["w"], to_coordinate_system="global").to_affine_matrix(**axes),
         get_transformation(sdata_ref.images["img"], to_coordinate_system="global").to_affine_matrix(**axes),
     )
 
@@ -166,7 +166,7 @@ def test_writing_coords_from_a_different_frame_is_refused() -> None:
 
     identity = _sdata_section_with_table(None)
     out = stalign_apply_transform(align_stalign_volume(sdata_ref, identity, **kwargs), identity, **applied)
-    assert out is None, "`copy` defaults to False"
+    assert out is None, "`inplace` defaults to True"
     assert identity.tables["t"].obsm["ref_xyz"].shape == (3, 3)
 
 

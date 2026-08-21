@@ -10,6 +10,12 @@ representation, so the fit cannot live in a container: it is the return value, a
 it also keeps what only a fit can do -- warp an image, evaluate the dense deformation, map
 points the fit never saw. :func:`align_landmarks` fits and writes in one call, which its
 result being an affine, and so representable, makes honest.
+
+The ``stalign_apply_*`` functions take ``inplace``, with the meaning scanpy gives it:
+``inplace=False`` hands back what would have been written instead of writing it. A
+function that returns a fit takes no such flag -- there is nothing to write yet, and
+``copy`` in scanpy's sense (operate on a duplicated container) is a caller's ``.copy()``
+away.
 """
 
 from __future__ import annotations
@@ -21,7 +27,7 @@ import numpy as np
 from anndata import AnnData
 from spatialdata import SpatialData
 
-from ._io import shallow_copy_sdata, writeback_affine_sdata
+from ._io import writeback_affine_sdata
 from ._landmark import apply_affine, fit_affine, fit_similarity
 from ._stalign import (
     StalignImageSolverKwargs,
@@ -128,18 +134,6 @@ def _read_image(container: SpatialData, key: str, *, side: str, ndim: int = 2) -
     return _as_chw(element.data, what=f"`image_key={key!r}`", ndim=ndim)
 
 
-def _copy_for_write(container: AnnData | SpatialData, table_key: str | None) -> AnnData | SpatialData:
-    """Duplicate just enough of ``container`` that writing into its table leaves it untouched."""
-    if isinstance(container, AnnData):
-        return container.copy()
-    out = shallow_copy_sdata(container)
-    # `shallow_copy_sdata` shares element objects with the original, so the one table
-    # we are about to write through still has to be duplicated.
-    if table_key is not None and table_key in out.tables:
-        out.tables[table_key] = out.tables[table_key].copy()
-    return out
-
-
 def _write_coords(
     container: AnnData | SpatialData,
     table_key: str | None,
@@ -148,14 +142,16 @@ def _write_coords(
     *,
     transform: Callable[[np.ndarray], npt.ArrayLike],
     spatial_key_name: str,
-    copy: bool,
-) -> AnnData | SpatialData | None:
+    inplace: bool = True,
+) -> np.ndarray | None:
     """Transform ``obsm[spatial_key]`` and write it to ``obsm[key_added]`` on the query."""
-    target = _copy_for_write(container, table_key) if copy else container
-    adata = _resolve_table(target, table_key, side="query")
+    adata = _resolve_table(container, table_key, side="query")
     coords = _read_coords(adata, spatial_key, side="query", name=spatial_key_name)
-    adata.obsm[key_added] = np.asarray(transform(coords))
-    return target if copy else None
+    transformed = np.asarray(transform(coords))
+    if not inplace:
+        return transformed
+    adata.obsm[key_added] = transformed
+    return None
 
 
 def _query_of(
@@ -176,14 +172,6 @@ def _query_of(
             f"With a single SpatialData, pass `{key_name}=(ref, query)` to say which of its elements holds each sample."
         )
     return data_ref
-
-
-def _check_copy(copy: bool, *targets: str | None, names: str) -> None:
-    if copy and all(target is None for target in targets):
-        raise ValueError(
-            f"`copy=True` has nothing to copy: pass {names} to say what to write. "
-            f"Without it the fit is returned and nothing is modified."
-        )
 
 
 def align_stalign_obs(
@@ -481,8 +469,8 @@ def stalign_apply_transform(
     spatial_key: str = "spatial",
     table_key: str | None = None,
     coordinate_system: str = "global",
-    copy: bool = False,
-) -> AnnData | SpatialData | None:
+    inplace: bool = True,
+) -> np.ndarray | None:
     """Write a fit's transformed coordinates into a container's ``obsm``.
 
     The container-level counterpart of
@@ -507,13 +495,16 @@ def stalign_apply_transform(
         The coordinate system the fit's units came from. Consulted only when ``result`` was
         fitted on image elements, whose transformations supplied those units; a
         point-cloud fit's units are the coordinates' own and nothing can disagree.
-    copy
-        ``False`` (default) writes into ``data`` itself and returns ``None``. ``True``
-        writes into a copy and returns it, leaving the input untouched.
+    inplace
+        ``True`` (default) writes ``obsm[key_added]`` and returns ``None``. ``False``
+        leaves ``data`` untouched and returns the transformed coordinates, which saves
+        digging ``spatial_key`` out of the container to pass to
+        :func:`~squidpy.experimental.tl.stalign_transform_points` by hand.
 
     Returns
     -------
-    ``None``, or the modified copy when ``copy=True``.
+    ``None``, or the ``(N, 2)`` / ``(N, 3)`` transformed coordinates when
+    ``inplace=False``.
     """
     if isinstance(data, SpatialData) and "query_axes" in result:
         # A fit carrying raster axes took its units from an image element's transformation,
@@ -531,7 +522,7 @@ def stalign_apply_transform(
         key_added,
         transform=functools.partial(stalign_transform_points, result),
         spatial_key_name="spatial_key",
-        copy=copy,
+        inplace=inplace,
     )
 
 
@@ -541,8 +532,7 @@ def stalign_to_uns(
     key: str,
     *,
     table_key: str | None = None,
-    copy: bool = False,
-) -> AnnData | SpatialData | None:
+) -> None:
     """Store a fit in a table's ``uns``, in a form that survives a write.
 
     A fit is what re-applies an alignment, and none of the other write paths keep it: a
@@ -564,20 +554,12 @@ def stalign_to_uns(
         ``uns`` key to write to.
     table_key
         For a :class:`~spatialdata.SpatialData`, which table's ``uns`` to use.
-    copy
-        ``False`` (default) writes into ``data`` itself and returns ``None``. ``True``
-        writes into a copy and returns it, leaving the input untouched.
-
-    Returns
-    -------
-    ``None``, or the modified copy when ``copy=True``.
 
     See Also
     --------
     :func:`~squidpy.experimental.tl.stalign_from_uns` reads one back.
     """
-    target = _copy_for_write(data, table_key) if copy else data
-    adata = _resolve_table(target, table_key, side="query")
+    adata = _resolve_table(data, table_key, side="query")
     stored: dict[str, object] = {}
     for name, value in result.items():
         if name in _AXIS_KEYS:
@@ -587,7 +569,6 @@ def stalign_to_uns(
         else:
             stored[name] = np.asarray(value)
     adata.uns[key] = stored
-    return target if copy else None
 
 
 def stalign_from_uns(
@@ -627,8 +608,8 @@ def stalign_apply_warp(
     *,
     image_key: str | tuple[str, str],
     key_added: str,
-    copy: bool = False,
-) -> SpatialData | None:
+    inplace: bool = True,
+) -> np.ndarray | None:
     """Materialise a fit's warped query image as a new element on the query.
 
     The container-level counterpart of
@@ -649,13 +630,13 @@ def stalign_apply_warp(
         Name of the image element, or the ``(ref, query)`` pair the fit ran on.
     key_added
         Image element name on the query to write the warped image under.
-    copy
-        ``False`` (default) writes into ``sdata_query`` itself and returns ``None``.
-        ``True`` writes into a shallow copy and returns it.
+    inplace
+        ``True`` (default) writes the element and returns ``None``. ``False`` leaves
+        ``sdata_query`` untouched and returns the warped ``(c, y, x)`` array.
 
     Returns
     -------
-    ``None``, or the modified copy when ``copy=True``.
+    ``None``, or the warped image when ``inplace=False``.
     """
     from spatialdata.models import Image2DModel
     from spatialdata.transformations import get_transformation
@@ -665,18 +646,19 @@ def stalign_apply_warp(
         sdata_ref, sdata_query, ref_address=(ref_image,), query_address=(query_image,), key_name="image_key"
     )
     query_array = _read_image(query_container, query_image, side="query")
-    target = shallow_copy_sdata(query_container) if copy else query_container
     # `np.asarray` because `stalign_warp_image` returns a JAX array, which the parser rejects.
     warped = np.asarray(stalign_warp_image(result, query_array))
+    if not inplace:
+        return warped
     # A forward warp resamples the query onto the *reference's* grid, so the new element
     # is placed by the reference's own transformations -- reconstructing a scale and
     # translation from the fitted axes would be the same numbers, spelled less reliably.
-    target.images[key_added] = Image2DModel.parse(
+    query_container.images[key_added] = Image2DModel.parse(
         warped,
         dims=("c", "y", "x"),
         transformations=dict(get_transformation(sdata_ref.images[ref_image], get_all=True)),
     )
-    return target if copy else None
+    return None
 
 
 def align_landmarks(
@@ -689,8 +671,7 @@ def align_landmarks(
     spatial_key: str | None = None,
     key_added: str | None = None,
     target_coordinate_system: str | None = None,
-    copy: bool = False,
-) -> npt.NDArray[np.float64] | AnnData | SpatialData | None:
+) -> npt.NDArray[np.float64] | None:
     """Align a query sample onto a reference from paired landmarks (closed-form affine).
 
     Parameters
@@ -735,20 +716,14 @@ def align_landmarks(
         to the query's coordinate system inherits the alignment. Requires the
         landmarks to come from shapes elements, and refuses when the reference sits in
         the same coordinate system of the same object (it would be dragged along).
-    copy
-        ``False`` (default) writes into the query container itself and returns ``None``.
-        ``True`` writes into a copy and returns it, leaving the input untouched. It needs
-        one of ``key_added`` or ``target_coordinate_system``: ``copy=True`` with nothing
-        to write raises rather than being ignored.
 
     Returns
     -------
     The fitted homogeneous ``(3, 3)`` affine in ``(x, y)`` when neither ``key_added``
     nor ``target_coordinate_system`` is given -- directly usable as a
-    :class:`~spatialdata.transformations.Affine`; otherwise ``None``, or the modified
-    copy when ``copy=True``.
+    :class:`~spatialdata.transformations.Affine`; otherwise ``None``, having written into
+    the query container itself. Copy it first if the original must survive.
     """
-    _check_copy(copy, key_added, target_coordinate_system, names="`key_added` or `target_coordinate_system`")
     if fit not in {"similarity", "affine"}:
         raise ValueError(f"Unknown `fit={fit!r}`. Expected one of affine, similarity.")
     fit_fn = fit_similarity if fit == "similarity" else fit_affine
@@ -812,7 +787,6 @@ def align_landmarks(
             ref_table=ref_table,
             query_table=query_table,
             target_coordinate_system=target_coordinate_system,
-            copy=copy,
         )
 
     matrix = fit_fn(ref_lm, query_lm)
@@ -832,7 +806,6 @@ def align_landmarks(
         key_added,
         transform=functools.partial(apply_affine, matrix),
         spatial_key_name="spatial_key",
-        copy=copy,
     )
 
 
@@ -871,8 +844,7 @@ def _register_transformation(
     ref_table: str | None,
     query_table: str | None,
     target_coordinate_system: str,
-    copy: bool,
-) -> SpatialData | None:
+) -> None:
     """Register an affine fit into a coordinate system instead of materialising it."""
     if not isinstance(query_container, SpatialData):
         raise TypeError("`target_coordinate_system` registers a transformation, which only a SpatialData has.")
@@ -900,13 +872,13 @@ def _register_transformation(
             f"write to `key_added` to move only the query."
         )
 
-    return writeback_affine_sdata(
+    writeback_affine_sdata(
         fit_fn(ref_lm, query_lm),
         query_container,
-        copy=copy,
         moving_cs=moving_cs,
         target_cs=target_coordinate_system,
     )
+    return None
 
 
 def _coordinate_system_of(sdata: SpatialData, element: str, *, side: str) -> str:

@@ -14,38 +14,30 @@ import numpy as np
 from anndata import AnnData
 from spatialdata import SpatialData
 
-__all__ = ["shallow_copy_sdata", "writeback_affine_sdata"]
+__all__ = ["writeback_affine_sdata"]
 
 
 def writeback_affine_sdata(
     matrix: np.ndarray,
     sdata: SpatialData,
     *,
-    copy: bool,
     moving_cs: str | None,
     target_cs: str | None,
-) -> SpatialData | None:
+) -> None:
     """Register the fitted affine on every element living in ``moving_cs``.
 
     Non-destructive: it adds a transformation into ``target_cs`` so the whole
     coordinate system inherits the alignment. Nothing is materialised.
     """
-    from spatialdata import deepcopy as sd_deepcopy
     from spatialdata.transformations import Affine, Sequence, get_transformation, set_transformation
 
-    out = shallow_copy_sdata(sdata) if copy else sdata
     sd_affine = Affine(np.asarray(matrix), input_axes=("x", "y"), output_axes=("x", "y"))
     touched = False
-    for etype, name, element in list(out.gen_elements()):
+    for _, _, element in sdata.gen_elements():
         if isinstance(element, AnnData):
             continue
         if moving_cs not in get_transformation(element, get_all=True):
             continue
-        if copy:
-            # `shallow_copy_sdata` shares element objects with the original; deep-copy each
-            # element we register a transform on so `copy=True` leaves the input untouched.
-            element = sd_deepcopy(element)
-            getattr(out, etype)[name] = element
         # The fitted affine maps `moving_cs` coords into `target_cs`, not the element's
         # intrinsic frame. Compose it after the element's existing intrinsic -> `moving_cs`
         # transform so a non-identity placement into `moving_cs` is preserved.
@@ -54,10 +46,3 @@ def writeback_affine_sdata(
         touched = True
     if not touched:
         raise KeyError(f"No elements in the SpatialData are registered to coordinate system {moving_cs!r}.")
-    return out if copy else None
-
-
-def shallow_copy_sdata(sdata: SpatialData) -> SpatialData:
-    """Shallow copy of a SpatialData for ``copy=True`` (via ``subset``)."""
-    names = [name for _, name, _ in sdata.gen_elements()]
-    return sdata.subset(names, filter_tables=False, include_orphan_tables=True)

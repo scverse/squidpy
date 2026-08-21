@@ -121,25 +121,22 @@ def test_spatial_key_without_key_added_is_rejected() -> None:
         align_landmarks(ref, query, landmark_key="landmarks", spatial_key="spatial")
 
 
-def test_copy_without_a_write_target_is_rejected() -> None:
-    """Neither `key_added` nor `target_coordinate_system` means there is nothing to copy."""
+def test_neither_write_target_returns_the_fit() -> None:
+    """Nothing to write is the fit-only call, not an error: the matrix is the result."""
     ref, query = _adata(_REF), _adata(_QUERY)
-    with pytest.raises(ValueError, match=r"`copy=True` has nothing to copy"):
-        align_landmarks(ref, query, landmark_key="landmarks", copy=True)
+    matrix = align_landmarks(ref, query, landmark_key="landmarks", fit="affine")
+
+    assert matrix.shape == (3, 3)
+    assert not any(key.startswith("aligned") for key in query.obsm), "nothing may be written"
 
 
-def test_key_added_writes_in_place_by_default_and_copies_on_request() -> None:
+def test_key_added_writes_into_the_query_itself() -> None:
     ref, query = _adata(_REF), _adata(_QUERY)
     args = {"landmark_key": "landmarks", "fit": "affine", "spatial_key": "spatial", "key_added": "aligned"}
 
     assert align_landmarks(ref, query, **args) is None
-    assert "aligned" in query.obsm
-
-    untouched = _adata(_QUERY)
-    out = align_landmarks(ref, untouched, copy=True, **args)
-    assert isinstance(out, AnnData) and out is not untouched
-    assert "aligned" in out.obsm
-    assert "aligned" not in untouched.obsm
+    np.testing.assert_allclose(query.obsm["aligned"], _REF, atol=1e-6)
+    np.testing.assert_allclose(query.obsm["spatial"], _QUERY, err_msg="the source array must survive")
 
 
 # --- registering a transformation --------------------------------------------------------
@@ -158,24 +155,6 @@ def test_registers_a_transformation_on_the_coordinate_system() -> None:
 
     assert out is None
     assert "ref_cs" in get_transformation(sdata.points["pts"], get_all=True)
-
-
-def test_registering_copies_on_request() -> None:
-    sd = pytest.importorskip("spatialdata")
-    from spatialdata.models import PointsModel
-    from spatialdata.transformations import Identity, get_transformation
-
-    sdata = sd.SpatialData(
-        shapes={"lm_ref": _shapes(_REF, "ref_cs"), "lm_query": _shapes(_QUERY, "query_cs")},
-        points={"pts": PointsModel.parse(_QUERY, transformations={"query_cs": Identity()})},
-    )
-    out = align_landmarks(
-        sdata, landmark_key=("lm_ref", "lm_query"), fit="affine", target_coordinate_system="ref_cs", copy=True
-    )
-
-    assert out is not sdata
-    assert "ref_cs" in get_transformation(out.points["pts"], get_all=True)
-    assert "ref_cs" not in get_transformation(sdata.points["pts"], get_all=True)
 
 
 def test_registration_composes_with_an_existing_transform() -> None:
