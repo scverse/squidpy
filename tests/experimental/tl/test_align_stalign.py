@@ -23,6 +23,8 @@ from squidpy.experimental.tl import (  # noqa: E402
     stalign_apply_transform,
     stalign_apply_warp,
     stalign_deformation_grid,
+    stalign_from_uns,
+    stalign_to_uns,
     stalign_transform_points,
 )
 
@@ -42,9 +44,9 @@ def test_obs_fit_returns_a_result_and_applies_to_a_copy() -> None:
     result = align_stalign_obs(ref, query, **TINY_SOLVER)
     assert result["aligned_points"].shape == ALIGN_PTS.shape
 
-    out = stalign_apply_transform(result, query, key_added="aligned", inplace=False)
+    out = stalign_apply_transform(result, query, key_added="aligned", copy=True)
     assert out.obsm["aligned"].shape == ALIGN_PTS.shape
-    assert "aligned" not in query.obsm, "`inplace=False` must leave the input untouched"
+    assert "aligned" not in query.obsm, "`copy=True` must leave the input untouched"
 
     # one fit, applied more than once: to a copy above and in place here
     assert stalign_apply_transform(result, query, key_added="aligned") is None
@@ -66,9 +68,9 @@ def test_image_fit_reads_both_element_layouts(scale_factors: list[int] | None) -
     result = align_stalign_image(sdata_ref, sdata_query, image_key="img", **IMAGE_SOLVER)
     assert result["ref_axes"][0].shape == (32,)
 
-    out = stalign_apply_warp(result, sdata_ref, sdata_query, image_key="img", key_added="warped", inplace=False)
+    out = stalign_apply_warp(result, sdata_ref, sdata_query, image_key="img", key_added="warped", copy=True)
     assert out.images["warped"].shape == image.shape
-    assert "warped" not in sdata_query.images, "`inplace=False` must leave the input untouched"
+    assert "warped" not in sdata_query.images, "`copy=True` must leave the input untouched"
 
     assert stalign_apply_warp(result, sdata_ref, sdata_query, image_key="img", key_added="warped") is None
     assert sdata_query.images["warped"].shape == image.shape
@@ -94,7 +96,7 @@ def test_image_fit_reads_units_and_placement_off_the_elements() -> None:
     assert float(result["ref_axes"][0][0]) == 100.0, "the element's translation is the origin"
     assert float(result["query_axes"][1][0]) == 50.0
 
-    out = stalign_apply_warp(result, sdata_ref, sdata_query, image_key="img", key_added="w", inplace=False)
+    out = stalign_apply_warp(result, sdata_ref, sdata_query, image_key="img", key_added="w", copy=True)
     axes = {"input_axes": ("y", "x"), "output_axes": ("y", "x")}
     np.testing.assert_allclose(
         get_transformation(out.images["w"], to_coordinate_system="global").to_affine_matrix(**axes),
@@ -164,7 +166,7 @@ def test_writing_coords_from_a_different_frame_is_refused() -> None:
 
     identity = _sdata_section_with_table(None)
     out = stalign_apply_transform(align_stalign_volume(sdata_ref, identity, **kwargs), identity, **applied)
-    assert out is None, "`inplace` defaults to True"
+    assert out is None, "`copy` defaults to False"
     assert identity.tables["t"].obsm["ref_xyz"].shape == (3, 3)
 
 
@@ -236,6 +238,55 @@ def test_align_stalign_image_forwards_landmarks() -> None:
     )
 
     assert not np.allclose(plain["affine"], with_landmarks["affine"])
+
+
+# --- storing a fit --------------------------------------------------------------------
+
+
+def test_a_stored_fit_survives_a_zarr_round_trip_and_still_transforms(tmp_path) -> None:
+    """The point of storing it: `uns` is the only place either container has for a fit.
+
+    Asserted through an actual write, because the trap is on that path and not in memory:
+    anndata has no writer for a tuple, and a *list* of the axes only survives when they
+    happen to be equal length -- a non-square raster fails. Hence the mapping, and hence a
+    12x9 raster here rather than a square one.
+    """
+    import anndata as ad
+
+    volume = np.random.default_rng(0).random((1, 5, 12, 9))
+    fit = align_stalign_volume(
+        _sdata_image(volume, "volume"),
+        _sdata_image(volume[:, 2], "section"),
+        image_key=("volume", "section"),
+        **VOLUME_SOLVER,
+    )
+    adata = make_adata(ALIGN_PTS)
+    assert stalign_to_uns(fit, adata, "align") is None
+
+    path = tmp_path / "a.zarr"
+    adata.write_zarr(path)
+    restored = stalign_from_uns(ad.read_zarr(path), "align")
+
+    assert restored["rank"] == 3
+    assert len(restored["velocity_grid"]) == 3
+    assert [a.shape for a in restored["ref_axes"]] == [a.shape for a in fit["ref_axes"]]
+    # the ragged pair is what a list would have destroyed
+    assert restored["query_axes"][0].shape != restored["query_axes"][1].shape
+    np.testing.assert_allclose(
+        np.asarray(stalign_transform_points(restored, ALIGN_PTS)),
+        np.asarray(stalign_transform_points(fit, ALIGN_PTS)),
+        rtol=0,
+        atol=1e-6,
+    )
+
+
+def test_reading_a_key_that_is_not_a_fit_says_so() -> None:
+    adata = make_adata(ALIGN_PTS)
+    adata.uns["junk"] = {"affine": np.eye(3)}
+    with pytest.raises(ValueError, match=r"carries no `rank`"):
+        stalign_from_uns(adata, "junk")
+    with pytest.raises(KeyError, match=r"no `uns\['missing'\]`"):
+        stalign_from_uns(adata, "missing")
 
 
 # --- deformation_grid at rank 3 -------------------------------------------------------

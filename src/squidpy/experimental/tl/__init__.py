@@ -17,6 +17,8 @@ from ._align import (
     stalign_apply_transform,
     stalign_apply_warp,
     stalign_deformation_grid,
+    stalign_from_uns,
+    stalign_to_uns,
     stalign_transform_points,
     stalign_warp_image,
 )
@@ -43,6 +45,8 @@ __all__ = [
     "stalign_affine_xyz",
     "stalign_apply_transform",
     "stalign_apply_warp",
+    "stalign_from_uns",
+    "stalign_to_uns",
     "stalign_deformation_grid",
     "stalign_transform_points",
     "stalign_warp_image",

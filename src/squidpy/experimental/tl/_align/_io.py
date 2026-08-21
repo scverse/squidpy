@@ -21,7 +21,7 @@ def writeback_affine_sdata(
     matrix: np.ndarray,
     sdata: SpatialData,
     *,
-    inplace: bool,
+    copy: bool,
     moving_cs: str | None,
     target_cs: str | None,
 ) -> SpatialData | None:
@@ -33,7 +33,7 @@ def writeback_affine_sdata(
     from spatialdata import deepcopy as sd_deepcopy
     from spatialdata.transformations import Affine, Sequence, get_transformation, set_transformation
 
-    out = sdata if inplace else shallow_copy_sdata(sdata)
+    out = shallow_copy_sdata(sdata) if copy else sdata
     sd_affine = Affine(np.asarray(matrix), input_axes=("x", "y"), output_axes=("x", "y"))
     touched = False
     for etype, name, element in list(out.gen_elements()):
@@ -41,7 +41,7 @@ def writeback_affine_sdata(
             continue
         if moving_cs not in get_transformation(element, get_all=True):
             continue
-        if not inplace:
+        if copy:
             # `shallow_copy_sdata` shares element objects with the original; deep-copy each
             # element we register a transform on so `copy=True` leaves the input untouched.
             element = sd_deepcopy(element)
@@ -54,7 +54,7 @@ def writeback_affine_sdata(
         touched = True
     if not touched:
         raise KeyError(f"No elements in the SpatialData are registered to coordinate system {moving_cs!r}.")
-    return None if inplace else out
+    return out if copy else None
 
 
 def shallow_copy_sdata(sdata: SpatialData) -> SpatialData:
