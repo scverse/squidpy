@@ -184,6 +184,14 @@ tuning as flat keyword arguments, listed below, and return the fitted map when
     experimental.tl.align_stalign_obs
     experimental.tl.align_stalign_image
     experimental.tl.align_stalign_volume
+    experimental.tl.stalign_apply_transform
+    experimental.tl.stalign_apply_warp
+    experimental.tl.stalign_transform_points
+    experimental.tl.stalign_warp_image
+    experimental.tl.stalign_deformation_grid
+    experimental.tl.stalign_affine_xyz
+    experimental.tl.Stalign2DResult
+    experimental.tl.Stalign3DResult
     experimental.tl.align_landmarks
     experimental.tl.assign_stitch_groups
     experimental.tl.StitchParams

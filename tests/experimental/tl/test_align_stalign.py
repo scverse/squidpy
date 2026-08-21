@@ -15,7 +15,16 @@ from tests.experimental.conftest import ALIGN_PTS, TINY_SOLVER, make_adata
 
 pytest.importorskip("jax")
 
-from squidpy.experimental.tl import align_stalign_image, align_stalign_obs, align_stalign_volume  # noqa: E402
+from squidpy.experimental.tl import (  # noqa: E402
+    align_stalign_image,
+    align_stalign_obs,
+    align_stalign_volume,
+    stalign_affine_xyz,
+    stalign_apply_transform,
+    stalign_apply_warp,
+    stalign_deformation_grid,
+    stalign_transform_points,
+)
 
 IMAGE_SOLVER = {"a": 4.0, "nt": 1, "niter": 2, "epV": 1.0}
 VOLUME_SOLVER = {"a": 3.0, "nt": 1, "niter": 2, "epV": 1.0}
@@ -27,15 +36,19 @@ def _sdata_image(array: np.ndarray, key: str, **kwargs: object) -> SpatialData:
     return SpatialData(images={key: model.parse(array, dims=dims, **kwargs)})
 
 
-def test_obs_fit_returns_a_result_and_writes_a_copy() -> None:
+def test_obs_fit_returns_a_result_and_applies_to_a_copy() -> None:
     ref, query = make_adata(ALIGN_PTS), make_adata(ALIGN_PTS + 0.4)
 
     result = align_stalign_obs(ref, query, **TINY_SOLVER)
-    assert result.aligned_points.shape == ALIGN_PTS.shape
+    assert result["aligned_points"].shape == ALIGN_PTS.shape
 
-    out = align_stalign_obs(ref, query, key_added="aligned", **TINY_SOLVER)
+    out = stalign_apply_transform(result, query, key_added="aligned", inplace=False)
     assert out.obsm["aligned"].shape == ALIGN_PTS.shape
-    assert "aligned" not in query.obsm, "the input must be left untouched"
+    assert "aligned" not in query.obsm, "`inplace=False` must leave the input untouched"
+
+    # one fit, applied more than once: to a copy above and in place here
+    assert stalign_apply_transform(result, query, key_added="aligned") is None
+    assert query.obsm["aligned"].shape == ALIGN_PTS.shape
 
 
 @pytest.mark.parametrize("scale_factors", [None, [2]], ids=["single_scale", "multiscale"])
@@ -51,11 +64,14 @@ def test_image_fit_reads_both_element_layouts(scale_factors: list[int] | None) -
     sdata_query = _sdata_image(np.roll(image, 1, axis=1), "img", **kwargs)
 
     result = align_stalign_image(sdata_ref, sdata_query, image_key="img", **IMAGE_SOLVER)
-    assert result.ref_axes[0].shape == (32,)
+    assert result["ref_axes"][0].shape == (32,)
 
-    out = align_stalign_image(sdata_ref, sdata_query, image_key="img", key_added="warped", **IMAGE_SOLVER)
+    out = stalign_apply_warp(result, sdata_ref, sdata_query, image_key="img", key_added="warped", inplace=False)
     assert out.images["warped"].shape == image.shape
-    assert "warped" not in sdata_query.images, "the input must be left untouched"
+    assert "warped" not in sdata_query.images, "`inplace=False` must leave the input untouched"
+
+    assert stalign_apply_warp(result, sdata_ref, sdata_query, image_key="img", key_added="warped") is None
+    assert sdata_query.images["warped"].shape == image.shape
 
 
 def test_image_fit_reads_units_and_placement_off_the_elements() -> None:
@@ -74,11 +90,11 @@ def test_image_fit_reads_units_and_placement_off_the_elements() -> None:
 
     result = align_stalign_image(sdata_ref, sdata_query, image_key="img", a=8.0, nt=1, niter=2, epV=1.0)
 
-    assert float(result.ref_axes[0][1] - result.ref_axes[0][0]) == 2.0, "the element's scale is the unit"
-    assert float(result.ref_axes[0][0]) == 100.0, "the element's translation is the origin"
-    assert float(result.query_axes[1][0]) == 50.0
+    assert float(result["ref_axes"][0][1] - result["ref_axes"][0][0]) == 2.0, "the element's scale is the unit"
+    assert float(result["ref_axes"][0][0]) == 100.0, "the element's translation is the origin"
+    assert float(result["query_axes"][1][0]) == 50.0
 
-    out = align_stalign_image(sdata_ref, sdata_query, image_key="img", key_added="w", a=8.0, nt=1, niter=2, epV=1.0)
+    out = stalign_apply_warp(result, sdata_ref, sdata_query, image_key="img", key_added="w", inplace=False)
     axes = {"input_axes": ("y", "x"), "output_axes": ("y", "x")}
     np.testing.assert_allclose(
         get_transformation(out.images["w"], to_coordinate_system="global").to_affine_matrix(**axes),
@@ -95,8 +111,8 @@ def test_slice_fit_places_a_section_in_a_volume() -> None:
         sdata_ref, sdata_query, image_key=("volume", "section"), a=3.0, nt=1, niter=2, epV=1.0
     )
 
-    assert result.affine_xyz.shape == (4, 4)
-    assert result.transform(ALIGN_PTS).shape == (len(ALIGN_PTS), 3)
+    assert stalign_affine_xyz(result).shape == (4, 4)
+    assert stalign_transform_points(result, ALIGN_PTS).shape == (len(ALIGN_PTS), 3)
 
 
 def test_a_2d_reference_is_rejected_with_a_pointer_to_the_2d_path() -> None:
@@ -137,15 +153,19 @@ def test_writing_coords_from_a_different_frame_is_refused() -> None:
     that are simply wrong, with nothing to reveal it -- so it raises instead.
     """
     sdata_ref = _sdata_image(np.random.default_rng(0).random((1, 6, 12, 12)), "volume")
-    kwargs = {"image_key": ("volume", "section"), "table_key": "t", "spatial_key": "spatial", **VOLUME_SOLVER}
+    kwargs = {"image_key": ("volume", "section"), **VOLUME_SOLVER}
+    applied = {"table_key": "t", "spatial_key": "spatial", "key_added": "ref_xyz"}
 
+    # the fit itself is indifferent to the frame; only applying it to `obsm` is not
+    skewed = _sdata_section_with_table(10.0)
+    fit = align_stalign_volume(sdata_ref, skewed, **kwargs)
     with pytest.raises(ValueError, match=r"non-identity transformation into 'global'"):
-        align_stalign_volume(sdata_ref, _sdata_section_with_table(10.0), key_added="ref_xyz", **kwargs)
+        stalign_apply_transform(fit, skewed, **applied)
 
-    # identity frame writes, and returning the fit is allowed either way
-    out = align_stalign_volume(sdata_ref, _sdata_section_with_table(None), key_added="ref_xyz", **kwargs)
-    assert out.tables["t"].obsm["ref_xyz"].shape == (3, 3)
-    assert align_stalign_volume(sdata_ref, _sdata_section_with_table(10.0), **kwargs) is not None
+    identity = _sdata_section_with_table(None)
+    out = stalign_apply_transform(align_stalign_volume(sdata_ref, identity, **kwargs), identity, **applied)
+    assert out is None, "`inplace` defaults to True"
+    assert identity.tables["t"].obsm["ref_xyz"].shape == (3, 3)
 
 
 # --- landmarks on the image path ------------------------------------------------------
@@ -169,7 +189,7 @@ def test_image_landmarks_reach_the_solver() -> None:
     plain = fit_stalign_image(ref, query, **solver)
     with_landmarks = fit_stalign_image(ref, query, landmarks_ref=_LM_REF, landmarks_query=_LM_QUERY, **solver)
 
-    assert not np.allclose(plain.affine, with_landmarks.affine)
+    assert not np.allclose(plain["affine"], with_landmarks["affine"])
 
 
 def test_landmarks_and_initial_affine_are_not_exclusive() -> None:
@@ -187,7 +207,7 @@ def test_landmarks_and_initial_affine_are_not_exclusive() -> None:
 
     pinned = fit_stalign_image(ref, query, initial_affine=np.eye(3), **landmarks, **solver)
     derived = fit_stalign_image(ref, query, **landmarks, **solver)
-    assert not np.allclose(pinned.affine, derived.affine), "the given affine must win over the derived one"
+    assert not np.allclose(pinned["affine"], derived["affine"]), "the given affine must win over the derived one"
 
     # the point-cloud path shares the resolution, so it accepts the same combination
     assert fit_stalign_obs(ALIGN_PTS, ALIGN_PTS + 0.4, initial_affine=np.eye(3), **landmarks, **TINY_SOLVER)
@@ -215,7 +235,7 @@ def test_align_stalign_image_forwards_landmarks() -> None:
         sdata_ref, sdata_query, landmarks_ref=_LM_REF, landmarks_query=_LM_QUERY, **solver
     )
 
-    assert not np.allclose(plain.affine, with_landmarks.affine)
+    assert not np.allclose(plain["affine"], with_landmarks["affine"])
 
 
 # --- deformation_grid at rank 3 -------------------------------------------------------
@@ -239,15 +259,15 @@ def test_volume_deformation_grid_is_the_transform_the_objective_uses() -> None:
         **VOLUME_SOLVER,
     )
 
-    backward = result.deformation_grid()
+    backward = stalign_deformation_grid(result)
     assert backward.shape == (3, 1, 12, 12), "the section is lifted onto z = 0, hence the length-1 z"
-    assert result.deformation_grid(direction="forward").shape == (3, 5, 12, 12)
+    assert stalign_deformation_grid(result, direction="forward").shape == (3, 5, 12, 12)
 
     internal = transform_grid_row_col(
-        (jnp.zeros(1, dtype=jax_dtype()), *result.query_axes),
-        result.velocity_grid,
-        result.velocity,
-        result.affine,
+        (jnp.zeros(1, dtype=jax_dtype()), *result["query_axes"]),
+        result["velocity_grid"],
+        result["velocity"],
+        result["affine"],
         direction="backward",
     )
     assert jnp.array_equal(backward, internal)
@@ -262,4 +282,4 @@ def test_volume_deformation_grid_rejects_a_bad_direction() -> None:
         **VOLUME_SOLVER,
     )
     with pytest.raises(ValueError, match=r"'forward' or 'backward'"):
-        result.deformation_grid(direction="sideways")
+        stalign_deformation_grid(result, direction="sideways")

@@ -1,8 +1,15 @@
 """The public alignment functions, built on the array-in / array-out estimators.
 
-Thin orchestrators, one per method: resolve the ``*_key`` arguments to in-memory arrays,
-call the estimator, write the result back. The estimators themselves never see a
-container; SpatialData transformation write-back lives in :mod:`._io`.
+Thin orchestrators: resolve the ``*_key`` arguments to in-memory arrays and call the
+estimator. The estimators themselves never see a container; SpatialData transformation
+write-back lives in :mod:`._io`.
+
+Fitting and writing are separate calls for STalign. A diffeomorphism has no SpatialData
+representation, so the fit cannot live in a container: it is the return value, and
+:func:`stalign_apply_transform` and :func:`stalign_apply_warp` take one and write. Keeping
+it also keeps what only a fit can do -- warp an image, evaluate the dense deformation, map
+points the fit never saw. :func:`align_landmarks` fits and writes in one call, which its
+result being an affine, and so representable, makes honest.
 """
 
 from __future__ import annotations
@@ -23,6 +30,8 @@ from ._stalign import (
     fit_stalign_image,
     fit_stalign_obs,
     fit_stalign_volume,
+    stalign_transform_points,
+    stalign_warp_image,
 )
 
 if TYPE_CHECKING:
@@ -30,9 +39,16 @@ if TYPE_CHECKING:
 
     import numpy.typing as npt
 
-    from ._stalign import Stalign2DResult, Stalign3DResult
+    from ._stalign import Stalign2DResult, Stalign3DResult, StalignResult
 
-__all__ = ["align_landmarks", "align_stalign_image", "align_stalign_obs", "align_stalign_volume"]
+__all__ = [
+    "align_landmarks",
+    "align_stalign_image",
+    "align_stalign_obs",
+    "align_stalign_volume",
+    "stalign_apply_transform",
+    "stalign_apply_warp",
+]
 
 
 def _resolve_pair(value: str | tuple[str | None, str | None], *, name: str) -> tuple[str | None, str | None]:
@@ -168,13 +184,15 @@ def align_stalign_obs(
     *,
     spatial_key: str | tuple[str, str] = "spatial",
     table_key: str | tuple[str | None, str | None] | None = None,
-    key_added: str | None = None,
-    inplace: bool = False,
     landmarks_ref: npt.ArrayLike | None = None,
     landmarks_query: npt.ArrayLike | None = None,
     **solver_kwargs: Unpack[StalignObsSolverKwargs],
-) -> Stalign2DResult | AnnData | SpatialData | None:
+) -> Stalign2DResult:
     """Align a query point cloud onto a reference with STalign (diffeomorphic LDDMM).
+
+    Fits and returns; nothing is written. Pass the fit to
+    :func:`~squidpy.experimental.tl.stalign_apply_transform` to write transformed
+    coordinates into a container.
 
     Parameters
     ----------
@@ -189,14 +207,6 @@ def align_stalign_obs(
         For SpatialData input, which table holds the coordinates. A single key applies
         to both sides; a ``(ref, query)`` pair addresses each side separately (entries
         may be ``None`` for an AnnData side).
-    key_added
-        ``obsm`` key on the query to write the transformed coordinates to. ``None``
-        (default) writes nothing and returns the fitted alignment instead -- fitting is
-        expensive and usually worth inspecting before it overwrites anything.
-    inplace
-        Whether to write into the query container itself. ``False`` (default) writes
-        into a copy and returns it, leaving the input untouched. Needs ``key_added``:
-        ``inplace=True`` with nothing to write raises rather than being ignored.
     landmarks_ref, landmarks_query
         Optional paired ``(x, y)`` landmark arrays (matched by row order) used to
         initialise the affine.
@@ -207,11 +217,8 @@ def align_stalign_obs(
 
     Returns
     -------
-    The fitted :class:`~squidpy.experimental.tl.Stalign2DResult` when
-    ``key_added`` is ``None``; otherwise the modified copy, or ``None`` when
-    ``inplace=True``.
+    The fitted :class:`~squidpy.experimental.tl.Stalign2DResult`.
     """
-    _check_inplace(inplace, key_added, names="`key_added`")
     ref_spatial, query_spatial = _resolve_pair(spatial_key, name="spatial_key")
     ref_table, query_table = (None, None) if table_key is None else _resolve_pair(table_key, name="table_key")
     query_container = _query_of(
@@ -225,23 +232,12 @@ def align_stalign_obs(
     ref_adata = _resolve_table(data_ref, ref_table, side="reference")
     query_adata = _resolve_table(query_container, query_table, side="query")
 
-    result = fit_stalign_obs(
+    return fit_stalign_obs(
         ref=_read_coords(ref_adata, ref_spatial, side="reference", name="spatial_key"),
         query=_read_coords(query_adata, query_spatial, side="query", name="spatial_key"),
         landmarks_ref=landmarks_ref,
         landmarks_query=landmarks_query,
         **solver_kwargs,
-    )
-    if key_added is None:
-        return result
-    return _write_coords(
-        query_container,
-        query_table,
-        query_spatial,
-        key_added,
-        transform=result.transform,
-        spatial_key_name="spatial_key",
-        inplace=inplace,
     )
 
 
@@ -252,13 +248,16 @@ def align_stalign_image(
     image_key: str | tuple[str, str],
     ref_coordinate_system: str = "global",
     query_coordinate_system: str = "global",
-    key_added: str | None = None,
-    inplace: bool = False,
     landmarks_ref: npt.ArrayLike | None = None,
     landmarks_query: npt.ArrayLike | None = None,
     **solver_kwargs: Unpack[StalignImageSolverKwargs],
-) -> Stalign2DResult | SpatialData | None:
+) -> Stalign2DResult:
     """Align a query image onto a reference image with STalign (diffeomorphic LDDMM).
+
+    Fits and returns; nothing is written. Pass the fit to
+    :func:`~squidpy.experimental.tl.stalign_apply_warp` to materialise the aligned image,
+    or to :func:`~squidpy.experimental.tl.stalign_apply_transform` to place a table's
+    cells in the reference frame.
 
     Parameters
     ----------
@@ -273,17 +272,6 @@ def align_stalign_image(
         translation the elements carry supply the units, so two images at different
         resolutions need nothing restated -- and nothing can be restated to contradict
         the container.
-    key_added
-        Image element name on the query to materialise the warped image under. The
-        fitted diffeomorphism cannot be expressed as a SpatialData transformation --
-        the available types are affine at most -- so the aligned image is written as a
-        new element, on the reference's pixel grid and inheriting the reference
-        element's placement. ``None`` (default) writes nothing and returns the fitted
-        alignment instead.
-    inplace
-        Whether to write into ``sdata_query`` itself. ``False`` (default) writes into a
-        copy and returns it, leaving the input untouched. Needs ``key_added``:
-        ``inplace=True`` with nothing to write raises rather than being ignored.
     landmarks_ref, landmarks_query
         Optional paired ``(x, y)`` landmark arrays (matched by row order), in the units of
         the corresponding ``*_coordinate_system`` -- the same units the elements' own
@@ -299,11 +287,8 @@ def align_stalign_image(
 
     Returns
     -------
-    The fitted :class:`~squidpy.experimental.tl.Stalign2DResult` when
-    ``key_added`` is ``None``; otherwise the modified copy, or ``None`` when
-    ``inplace=True``.
+    The fitted :class:`~squidpy.experimental.tl.Stalign2DResult`.
     """
-    _check_inplace(inplace, key_added, names="`key_added`")
     ref_image, query_image = _resolve_pair(image_key, name="image_key")
     query_container = _query_of(
         sdata_ref, sdata_query, ref_address=(ref_image,), query_address=(query_image,), key_name="image_key"
@@ -311,7 +296,7 @@ def align_stalign_image(
 
     ref_array = _read_image(sdata_ref, ref_image, side="reference")
     query_array = _read_image(query_container, query_image, side="query")
-    result = fit_stalign_image(
+    return fit_stalign_image(
         ref=ref_array,
         query=query_array,
         ref_axes=_element_axes(
@@ -324,24 +309,6 @@ def align_stalign_image(
         landmarks_query=landmarks_query,
         **solver_kwargs,
     )
-    if key_added is None:
-        return result
-
-    from spatialdata.models import Image2DModel
-    from spatialdata.transformations import get_transformation
-
-    target = query_container if inplace else shallow_copy_sdata(query_container)
-    # `np.asarray` because `warp_image` returns a JAX array, which the parser rejects.
-    warped = np.asarray(result.warp_image(query_array))
-    # A forward warp resamples the query onto the *reference's* grid, so the new element
-    # is placed by the reference's own transformations -- reconstructing a scale and
-    # translation from the fitted axes would be the same numbers, spelled less reliably.
-    target.images[key_added] = Image2DModel.parse(
-        warped,
-        dims=("c", "y", "x"),
-        transformations=dict(get_transformation(sdata_ref.images[ref_image], get_all=True)),
-    )
-    return None if inplace else target
 
 
 def _element_axes(
@@ -409,9 +376,8 @@ def _assert_table_coords_share_frame(
                 f"`spatial_key={spatial_key!r}` lives in the intrinsic frame of element {name!r}, which "
                 f"carries a non-identity transformation into {coordinate_system!r} -- the coordinate system "
                 f"the fit's units come from. Transforming it would silently produce wrong reference "
-                f"coordinates. Store the coordinates in {coordinate_system!r} units, or return the fit "
-                f"(leave `key_added` unset) and apply `result.transform` to coordinates you have placed "
-                f"there yourself."
+                f"coordinates. Store the coordinates in {coordinate_system!r} units, or apply "
+                f"`stalign_transform_points` to coordinates you have placed there yourself."
             )
 
 
@@ -426,18 +392,21 @@ def align_stalign_volume(
     initial_rotation: float = 0.0,
     initial_scale: float = 1.0,
     initial_affine: npt.ArrayLike | None = None,
-    table_key: str | None = None,
-    spatial_key: str = "spatial",
-    key_added: str | None = None,
-    inplace: bool = False,
     **solver_kwargs: Unpack[StalignVolumeSolverKwargs],
-) -> Stalign3DResult | SpatialData | None:
+) -> Stalign3DResult:
     """Place a 2D section into a 3D reference volume with STalign (diffeomorphic LDDMM).
 
     The plane of a physical section is unknown and generally not exactly coronal, so this
     fits the full 3D deformation rather than an oblique plane plus an in-plane 2D fit;
     ``initial_slice`` / ``initial_rotation`` / ``initial_scale`` are an initialisation, not
-    the answer. Every cell in ``spatial_key`` then gets real reference coordinates.
+    the answer.
+
+    Fits and returns; nothing is written. Pass the fit to
+    :func:`~squidpy.experimental.tl.stalign_apply_transform` to give every cell real
+    ``(x, y, z)`` reference coordinates, or to
+    :func:`~squidpy.experimental.tl.stalign_transform_points` and
+    :func:`~squidpy.experimental.im.sample_volume` to read the reference volume where the
+    cells land.
 
     Parameters
     ----------
@@ -463,42 +432,23 @@ def align_stalign_volume(
     initial_affine
         Homogeneous ``(4, 4)`` affine in ``(x, y, z)``, replacing the three ``initial_*``
         arguments above. The escape hatch when the initialisation needs to be exact.
-    table_key
-        Which of the query's tables holds the cell coordinates to transform. Required when
-        ``key_added`` is given.
-    spatial_key
-        ``obsm`` key on the query table holding the ``(N, 2)`` section coordinates.
-    key_added
-        ``obsm`` key on the query table to write the ``(N, 3)`` reference coordinates to.
-        ``None`` (default) writes nothing and returns the fit instead -- this is an
-        expensive fit and usually worth inspecting first.
-    inplace
-        Whether to write into ``sdata_query`` itself. ``False`` (default) writes into a
-        copy and returns it. Needs ``key_added``.
     solver_kwargs
         LDDMM solver tuning; see
         :class:`~squidpy.experimental.tl.StalignVolumeSolverKwargs`.
 
     Returns
     -------
-    The fitted :class:`~squidpy.experimental.tl.Stalign3DResult` when ``key_added`` is
-    ``None``; otherwise the modified copy, or ``None`` when ``inplace=True``.
+    The fitted :class:`~squidpy.experimental.tl.Stalign3DResult`.
     """
-    _check_inplace(inplace, key_added, names="`key_added`")
     ref_image, query_image = _resolve_pair(image_key, name="image_key")
     query_container = _query_of(
         sdata_ref, sdata_query, ref_address=(ref_image,), query_address=(query_image,), key_name="image_key"
     )
-    if key_added is not None and table_key is None:
-        raise ValueError(
-            "`key_added` writes the reference coordinates into a table's `obsm`, so "
-            "`table_key` is needed to say which table holds the cells."
-        )
 
     ref_array = _read_image(sdata_ref, ref_image, side="reference", ndim=3)
     query_array = _read_image(query_container, query_image, side="query")
 
-    result = fit_stalign_volume(
+    return fit_stalign_volume(
         ref=ref_array,
         query=query_array,
         ref_axes=_element_axes(
@@ -513,23 +463,127 @@ def align_stalign_volume(
         initial_affine=initial_affine,
         **solver_kwargs,
     )
-    if key_added is None:
-        return result
-    _assert_table_coords_share_frame(
-        query_container,
-        _resolve_table(query_container, table_key, side="query"),
-        spatial_key,
-        coordinate_system=query_coordinate_system,
-    )
+
+
+def stalign_apply_transform(
+    result: StalignResult,
+    data: AnnData | SpatialData,
+    *,
+    key_added: str,
+    spatial_key: str = "spatial",
+    table_key: str | None = None,
+    coordinate_system: str = "global",
+    inplace: bool = True,
+) -> AnnData | SpatialData | None:
+    """Write a fit's transformed coordinates into a container's ``obsm``.
+
+    The container-level counterpart of
+    :func:`~squidpy.experimental.tl.stalign_transform_points`: read ``obsm[spatial_key]``,
+    map it through ``result``, store it under ``obsm[key_added]``. A rank-2 fit writes
+    ``(N, 2)`` coordinates in the reference frame; a rank-3 fit writes ``(N, 3)``
+    ``(x, y, z)`` positions in the reference volume.
+
+    Parameters
+    ----------
+    result
+        A fit from any of the ``align_stalign_*`` functions.
+    data
+        The container to write into -- the query side the fit was given.
+    key_added
+        ``obsm`` key to write the transformed coordinates to.
+    spatial_key
+        ``obsm`` key holding the ``(N, 2)`` coordinates to transform.
+    table_key
+        For a :class:`~spatialdata.SpatialData`, which table holds them.
+    coordinate_system
+        The coordinate system the fit's units came from. Consulted only when ``result`` was
+        fitted on image elements, whose transformations supplied those units; a
+        point-cloud fit's units are the coordinates' own and nothing can disagree.
+    inplace
+        Whether to write into ``data`` itself. ``True`` (default) returns ``None``;
+        ``False`` writes into a copy and returns it, leaving the input untouched.
+
+    Returns
+    -------
+    ``None`` when ``inplace=True``, otherwise the modified copy.
+    """
+    if isinstance(data, SpatialData) and "query_axes" in result:
+        # A fit carrying raster axes took its units from an image element's transformation,
+        # so the coordinates it is applied to have to sit in that same frame.
+        _assert_table_coords_share_frame(
+            data,
+            _resolve_table(data, table_key, side="query"),
+            spatial_key,
+            coordinate_system=coordinate_system,
+        )
     return _write_coords(
-        query_container,
+        data,
         table_key,
         spatial_key,
         key_added,
-        transform=result.transform,
+        transform=functools.partial(stalign_transform_points, result),
         spatial_key_name="spatial_key",
         inplace=inplace,
     )
+
+
+def stalign_apply_warp(
+    result: Stalign2DResult,
+    sdata_ref: SpatialData,
+    sdata_query: SpatialData | None = None,
+    *,
+    image_key: str | tuple[str, str],
+    key_added: str,
+    inplace: bool = True,
+) -> SpatialData | None:
+    """Materialise a fit's warped query image as a new element on the query.
+
+    The container-level counterpart of
+    :func:`~squidpy.experimental.tl.stalign_warp_image`. The fitted diffeomorphism cannot
+    be expressed as a SpatialData transformation -- the available types are affine at most
+    -- so the aligned image is written as a new element rather than registered: resampled
+    onto the reference's pixel grid, and inheriting the reference element's placement.
+
+    Parameters
+    ----------
+    result
+        A rank-2 fit, from :func:`~squidpy.experimental.tl.align_stalign_image`.
+    sdata_ref, sdata_query
+        The containers holding the reference and query images, as the fit was given them.
+        The reference is what places the output element, so it is needed here too. Leave
+        ``sdata_query=None`` when one container holds both, with an ``image_key`` pair.
+    image_key
+        Name of the image element, or the ``(ref, query)`` pair the fit ran on.
+    key_added
+        Image element name on the query to write the warped image under.
+    inplace
+        Whether to write into ``sdata_query`` itself. ``True`` (default) returns ``None``;
+        ``False`` writes into a shallow copy and returns it.
+
+    Returns
+    -------
+    ``None`` when ``inplace=True``, otherwise the modified copy.
+    """
+    from spatialdata.models import Image2DModel
+    from spatialdata.transformations import get_transformation
+
+    ref_image, query_image = _resolve_pair(image_key, name="image_key")
+    query_container = _query_of(
+        sdata_ref, sdata_query, ref_address=(ref_image,), query_address=(query_image,), key_name="image_key"
+    )
+    query_array = _read_image(query_container, query_image, side="query")
+    target = query_container if inplace else shallow_copy_sdata(query_container)
+    # `np.asarray` because `stalign_warp_image` returns a JAX array, which the parser rejects.
+    warped = np.asarray(stalign_warp_image(result, query_array))
+    # A forward warp resamples the query onto the *reference's* grid, so the new element
+    # is placed by the reference's own transformations -- reconstructing a scale and
+    # translation from the fitted axes would be the same numbers, spelled less reliably.
+    target.images[key_added] = Image2DModel.parse(
+        warped,
+        dims=("c", "y", "x"),
+        transformations=dict(get_transformation(sdata_ref.images[ref_image], get_all=True)),
+    )
+    return None if inplace else target
 
 
 def align_landmarks(
