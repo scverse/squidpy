@@ -16,6 +16,10 @@ The ``stalign_apply_*`` functions take ``inplace``, with the meaning scanpy give
 function that returns a fit takes no such flag -- there is nothing to write yet, and
 ``copy`` in scanpy's sense (operate on a duplicated container) is a caller's ``.copy()``
 away.
+
+``key_added`` always names a write target, defaulting to a conventional key the way
+scanpy's does -- it is never the switch for whether to write. That is ``inplace``'s job,
+and one flag with one meaning beats two spellings of the same thing.
 """
 
 from __future__ import annotations
@@ -465,7 +469,7 @@ def stalign_apply_transform(
     result: StalignResult,
     data: AnnData | SpatialData,
     *,
-    key_added: str,
+    key_added: str = "spatial_aligned",
     spatial_key: str = "spatial",
     table_key: str | None = None,
     coordinate_system: str = "global",
@@ -486,7 +490,8 @@ def stalign_apply_transform(
     data
         The container to write into -- the query side the fit was given.
     key_added
-        ``obsm`` key to write the transformed coordinates to.
+        ``obsm`` key to write the transformed coordinates to, ``"spatial_aligned"`` by
+        default.
     spatial_key
         ``obsm`` key holding the ``(N, 2)`` coordinates to transform.
     table_key
@@ -529,7 +534,7 @@ def stalign_apply_transform(
 def stalign_to_uns(
     result: StalignResult,
     data: AnnData | SpatialData,
-    key: str,
+    key: str = "stalign",
     *,
     table_key: str | None = None,
 ) -> None:
@@ -551,7 +556,7 @@ def stalign_to_uns(
     data
         The container to store it on.
     key
-        ``uns`` key to write to.
+        ``uns`` key to write to, ``"stalign"`` by default.
     table_key
         For a :class:`~spatialdata.SpatialData`, which table's ``uns`` to use.
 
@@ -573,7 +578,7 @@ def stalign_to_uns(
 
 def stalign_from_uns(
     data: AnnData | SpatialData,
-    key: str,
+    key: str = "stalign",
     *,
     table_key: str | None = None,
 ) -> StalignResult:
@@ -607,7 +612,7 @@ def stalign_apply_warp(
     sdata_query: SpatialData | None = None,
     *,
     image_key: str | tuple[str, str],
-    key_added: str,
+    key_added: str | None = None,
     inplace: bool = True,
 ) -> np.ndarray | None:
     """Materialise a fit's warped query image as a new element on the query.
@@ -629,7 +634,9 @@ def stalign_apply_warp(
     image_key
         Name of the image element, or the ``(ref, query)`` pair the fit ran on.
     key_added
-        Image element name on the query to write the warped image under.
+        Image element name on the query to write the warped image under. ``None``
+        (default) uses the query element's own name with an ``_aligned`` suffix -- a
+        conventional key, not a request to skip the write, which is ``inplace=False``.
     inplace
         ``True`` (default) writes the element and returns ``None``. ``False`` leaves
         ``sdata_query`` untouched and returns the warped ``(c, y, x)`` array.
@@ -646,6 +653,7 @@ def stalign_apply_warp(
         sdata_ref, sdata_query, ref_address=(ref_image,), query_address=(query_image,), key_name="image_key"
     )
     query_array = _read_image(query_container, query_image, side="query")
+    added = f"{query_image}_aligned" if key_added is None else key_added
     # `np.asarray` because `stalign_warp_image` returns a JAX array, which the parser rejects.
     warped = np.asarray(stalign_warp_image(result, query_array))
     if not inplace:
@@ -653,7 +661,7 @@ def stalign_apply_warp(
     # A forward warp resamples the query onto the *reference's* grid, so the new element
     # is placed by the reference's own transformations -- reconstructing a scale and
     # translation from the fitted axes would be the same numbers, spelled less reliably.
-    query_container.images[key_added] = Image2DModel.parse(
+    query_container.images[added] = Image2DModel.parse(
         warped,
         dims=("c", "y", "x"),
         transformations=dict(get_transformation(sdata_ref.images[ref_image], get_all=True)),

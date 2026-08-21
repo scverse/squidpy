@@ -44,13 +44,15 @@ def test_obs_fit_returns_a_result_and_applies_to_a_copy() -> None:
     result = align_stalign_obs(ref, query, **TINY_SOLVER)
     assert result["aligned_points"].shape == ALIGN_PTS.shape
 
-    handed_back = stalign_apply_transform(result, query, key_added="aligned", inplace=False)
+    handed_back = stalign_apply_transform(result, query, inplace=False)
     assert handed_back.shape == ALIGN_PTS.shape
-    assert "aligned" not in query.obsm, "`inplace=False` must leave the input untouched"
+    assert "spatial_aligned" not in query.obsm, "`inplace=False` must leave the input untouched"
 
     # one fit, applied more than once, and writing agrees with what was handed back
-    assert stalign_apply_transform(result, query, key_added="aligned") is None
-    np.testing.assert_array_equal(query.obsm["aligned"], handed_back)
+    assert stalign_apply_transform(result, query) is None
+    np.testing.assert_array_equal(query.obsm["spatial_aligned"], handed_back)
+    assert stalign_apply_transform(result, query, key_added="elsewhere") is None
+    np.testing.assert_array_equal(query.obsm["elsewhere"], handed_back)
 
 
 @pytest.mark.parametrize("scale_factors", [None, [2]], ids=["single_scale", "multiscale"])
@@ -68,12 +70,13 @@ def test_image_fit_reads_both_element_layouts(scale_factors: list[int] | None) -
     result = align_stalign_image(sdata_ref, sdata_query, image_key="img", **IMAGE_SOLVER)
     assert result["ref_axes"][0].shape == (32,)
 
-    handed_back = stalign_apply_warp(result, sdata_ref, sdata_query, image_key="img", key_added="w", inplace=False)
+    handed_back = stalign_apply_warp(result, sdata_ref, sdata_query, image_key="img", inplace=False)
     assert handed_back.shape == image.shape
-    assert "w" not in sdata_query.images, "`inplace=False` must leave the input untouched"
+    assert not sdata_query.images.keys() - {"img"}, "`inplace=False` must leave the input untouched"
 
-    assert stalign_apply_warp(result, sdata_ref, sdata_query, image_key="img", key_added="warped") is None
-    np.testing.assert_array_equal(np.asarray(sdata_query.images["warped"]), handed_back)
+    # the default key derives from the element it warps, the way `sc.tl.dendrogram`'s does
+    assert stalign_apply_warp(result, sdata_ref, sdata_query, image_key="img") is None
+    np.testing.assert_array_equal(np.asarray(sdata_query.images["img_aligned"]), handed_back)
 
 
 def test_image_fit_reads_units_and_placement_off_the_elements() -> None:
@@ -261,11 +264,11 @@ def test_a_stored_fit_survives_a_zarr_round_trip_and_still_transforms(tmp_path) 
         **VOLUME_SOLVER,
     )
     adata = make_adata(ALIGN_PTS)
-    assert stalign_to_uns(fit, adata, "align") is None
+    assert stalign_to_uns(fit, adata) is None
 
     path = tmp_path / "a.zarr"
     adata.write_zarr(path)
-    restored = stalign_from_uns(ad.read_zarr(path), "align")
+    restored = stalign_from_uns(ad.read_zarr(path))
 
     assert restored["rank"] == 3
     assert len(restored["velocity_grid"]) == 3
