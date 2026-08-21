@@ -7,7 +7,7 @@ from scipy.sparse import csr_matrix
 from spatialdata import SpatialData
 from spatialdata.models import TableModel
 
-from squidpy.gr import calculate_niche, spatial_neighbors_knn
+from squidpy.gr import calculate_niche, calculate_niche_neighborhood, spatial_neighbors_knn
 
 N_NEIGHBORS = 20
 GROUPS = "celltype_mapped_refined"
@@ -263,3 +263,16 @@ def test_niche_calc_utag(adata_seqfish: AnnData):
 
     assert niches.isna().sum() == 0
     assert niches.nunique() > niches_low_res.nunique()
+
+
+def test_niche_copy_semantics(dummy_adata2: AnnData):
+    "copy=True returns an annotated copy and leaves the input untouched; copy=False mutates and returns None."
+    key = "nhood_niche_res=1.0"
+    kwargs = {"groups": "celltype", "n_neighbors": 3, "resolutions": 1.0}
+
+    out = calculate_niche_neighborhood(dummy_adata2, copy=True, **kwargs)
+    assert key in out.obs.columns
+    assert key not in dummy_adata2.obs.columns
+
+    assert calculate_niche_neighborhood(dummy_adata2, **kwargs) is None
+    assert (dummy_adata2.obs[key] == out.obs[key]).all()
