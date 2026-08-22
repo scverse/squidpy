@@ -1,30 +1,35 @@
+"""Alignment for :mod:`squidpy.experimental.tl`.
+
+Layered so the numerics never touch a container: :mod:`._api` holds the public
+``align_*`` functions, which resolve the ``*_key`` arguments to plain arrays and hand
+them to the array-in / array-out estimators in :mod:`._landmark` and :mod:`._stalign`.
+Importing stays cheap -- JAX is pulled in only when a STalign fit actually runs.
+"""
+
 from __future__ import annotations
 
-# The concrete result classes and the solver-tuning TypedDicts are exported because
-# callers need them: a result is what a fit returns, and the TypedDicts document the knobs.
-from ._align import (
+from ._api import (
+    align_landmarks,
+    stalign_align_image,
+    stalign_align_obs,
+    stalign_align_volume,
+    stalign_apply_transform,
+    stalign_apply_warp,
+    stalign_from_uns,
+    stalign_to_uns,
+)
+from ._stalign import (
     Stalign2DResult,
     Stalign3DResult,
     StalignImageSolverKwargs,
     StalignObsSolverKwargs,
     StalignResult,
     StalignVolumeSolverKwargs,
-    align_landmarks,
     stalign_affine_xyz,
-    stalign_align_image,
-    stalign_align_obs,
-    stalign_align_volume,
-    stalign_apply_transform,
-    stalign_apply_warp,
     stalign_deformation_grid,
-    stalign_from_uns,
-    stalign_to_uns,
     stalign_transform_points,
     stalign_warp_image,
 )
-from ._stitched_labels import make_stitched_labels
-from ._tiling_qc import TilingQCParams, calculate_tiling_qc
-from ._tiling_stitch import StitchParams, assign_stitch_groups
 
 __all__ = [
     "StalignObsSolverKwargs",
@@ -33,15 +38,10 @@ __all__ = [
     "StalignResult",
     "StalignVolumeSolverKwargs",
     "StalignImageSolverKwargs",
-    "StitchParams",
-    "TilingQCParams",
     "align_landmarks",
     "stalign_align_image",
     "stalign_align_obs",
     "stalign_align_volume",
-    "assign_stitch_groups",
-    "calculate_tiling_qc",
-    "make_stitched_labels",
     "stalign_affine_xyz",
     "stalign_apply_transform",
     "stalign_apply_warp",

@@ -241,6 +241,10 @@ def spawn_generators(seed: int | None, n: int) -> list[np.random.Generator]:
     return [np.random.default_rng(s) for s in np.random.SeedSequence(seed).spawn(n)]
 
 
+def rng_to_random_state(rng: np.random.Generator) -> int:
+    return int(rng.integers(np.iinfo(np.int32).max))
+
+
 @contextmanager
 def numba_threads(n_jobs: int | None) -> Generator[None, None, None]:
     """Temporarily cap numba's thread pool to ``n_jobs``, restoring the previous value on exit.

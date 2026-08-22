@@ -97,6 +97,7 @@ autosummary_generate = True
 autodoc_member_order = "groupwise"
 autodoc_typehints = "signature"
 autodoc_docstring_signature = True
+autodoc_mock_imports = ["jax"]
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
@@ -143,6 +144,13 @@ nitpick_ignore = [
     ("py:class", "numpy._typing._array_like.NDArray"),
     ("py:class", "np.number"),
     ("py:class", "csr_matrix"),
+    ("py:class", "numpy._typing._array_like.ArrayLike"),
+    # `npt.ArrayLike` in a signature resolves to its union members, which are private
+    ("py:class", "numpy._typing._array_like._SupportsArray"),
+    ("py:class", "numpy._typing._nested_sequence._NestedSequence"),
+    # optional dep mocked at build time (see autodoc_mock_imports), so no resolvable target
+    ("py:class", "jax.Array"),
+    ("py:class", "JaxArray"),
     # no idea why those aren’t exported
     ("py:class", "squidpy._constants._constants.SpatialAutocorr"),
     ("py:class", "squidpy._constants._constants.CoordType"),

@@ -10,6 +10,7 @@ from ._detect_tissue import (
 from ._make_tiles import make_tiles, make_tiles_from_spots
 from ._qc_image import qc_image
 from ._qc_metrics import QCMetric
+from ._rasterize_points import rasterize_points, sample_volume
 from ._stain import (
     MacenkoParams,
     ReinhardParams,
@@ -30,7 +31,6 @@ __all__ = [
     "StainReference",
     "VahadaneParams",
     "WekaParams",
-    "apply_stain_normalization",
     "calculate_image_features",
     "normalize_stains",
     "decompose_stains",
@@ -40,4 +40,6 @@ __all__ = [
     "make_tiles",
     "make_tiles_from_spots",
     "qc_image",
+    "rasterize_points",
+    "sample_volume",
 ]

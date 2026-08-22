@@ -5,9 +5,12 @@ from __future__ import annotations
 from collections.abc import Hashable, Iterable, Sequence
 from typing import TYPE_CHECKING, Any
 
-from squidpy._utils import _unique_order_preserving
+import numpy as np
+
+from squidpy._utils import NDArrayA, _unique_order_preserving
 
 if TYPE_CHECKING:
+    import numpy.typing as npt
     from anndata import AnnData
     from spatialdata import SpatialData
 
@@ -63,6 +66,16 @@ def get_valid_values(needle: Sequence[Any], haystack: Sequence[Any]) -> Sequence
     if len(res) == 0:
         raise ValueError(f"No valid values were found. Valid values are `{sorted(set(haystack))}`.")
     return res
+
+
+def validate_xy(points: npt.ArrayLike, *, name: str) -> NDArrayA:
+    """Coerce ``points`` to a finite ``(n, 2)`` float array of ``(x, y)`` pairs."""
+    arr = np.asarray(points, dtype=float)
+    if arr.ndim != 2 or arr.shape[1] != 2:
+        raise ValueError(f"Expected `{name}` to be a sequence of (x, y) pairs, found shape {arr.shape}.")
+    if not np.all(np.isfinite(arr)):
+        raise ValueError(f"Expected `{name}` to contain only finite values.")
+    return arr
 
 
 def assert_positive(value: float, *, name: str) -> None:

@@ -85,7 +85,7 @@ class WekaParams:
     rf_estimators: int = 100
     rf_max_depth: int | None = 10
     rf_max_samples: float = 0.05
-    random_state: int | None = 0
+    seed: int | None = 0
 
     # Second-stage refinement with a simple classifier
     refine_with_classifier: bool = True
@@ -747,7 +747,7 @@ def _segment_weka(
         n_jobs=-1,
         max_depth=weka_params.rf_max_depth,
         max_samples=weka_params.rf_max_samples,
-        random_state=weka_params.random_state,
+        random_state=weka_params.seed,
     )
     clf = future.fit_segmenter(training_labels, feats, clf)
     result = future.predict_segmenter(feats, clf)
@@ -761,7 +761,7 @@ def _segment_weka(
             prior_mask=prior_mask,
             n_samples_per_class=weka_params.refine_n_samples_per_class,
             bg_prob_threshold=weka_params.refine_bg_prob_threshold,
-            random_state=weka_params.random_state,
+            seed=weka_params.seed,
         )
 
     return prior_mask
@@ -772,7 +772,7 @@ def _refine_with_background_classifier(
     prior_mask: np.ndarray,
     n_samples_per_class: int,
     bg_prob_threshold: float,
-    random_state: int | None = 0,
+    seed: int | None = 0,
 ) -> np.ndarray:
     """
     Refine a prior tissue mask using a simple classifier on multiscale features.
@@ -795,7 +795,7 @@ def _refine_with_background_classifier(
     bg_prob_threshold
         Background probability threshold above which an inside-mask pixel
         is reclassified as background.
-    random_state
+    seed
         Seed for subsampling; use None for non-deterministic.
 
     Returns
@@ -815,7 +815,7 @@ def _refine_with_background_classifier(
         # Nothing to refine
         return prior_mask
 
-    rng = np.random.default_rng(random_state)
+    rng = np.random.default_rng(seed)
 
     # Subsample for training
     n_tissue = min(n_samples_per_class, idx_tissue.size)
