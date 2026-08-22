@@ -226,7 +226,7 @@ def sweep_auto_k(
 
     Returns
     -------
-    The sweep result; see ``ClusterAutoKResult``.
+    The sweep result; see :class:`~squidpy.gr.ClusterAutoKResult`.
     """
     if max_runs <= 1:
         raise ValueError(f"stability needs at least 2 runs to compare, got max_runs={max_runs}")
