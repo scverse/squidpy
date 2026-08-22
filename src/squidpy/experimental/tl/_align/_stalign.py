@@ -19,7 +19,7 @@ else:
 
 
 class StalignImageSolverKwargs(TypedDict, total=False):
-    """The LDDMM controls :func:`~squidpy.experimental.tl.align_stalign_image` takes.
+    """The LDDMM controls :func:`~squidpy.experimental.tl.stalign_align_image` takes.
 
     Also the shared set the other two entry points vary from:
     :class:`~squidpy.experimental.tl.StalignObsSolverKwargs` extends it with rasterization
@@ -73,12 +73,12 @@ class StalignImageSolverKwargs(TypedDict, total=False):
 
 
 class StalignVolumeSolverKwargs(TypedDict, total=False):
-    """LDDMM solver tuning accepted by :func:`~squidpy.experimental.tl.align_stalign_volume`.
+    """LDDMM solver tuning accepted by :func:`~squidpy.experimental.tl.stalign_align_volume`.
 
     :class:`~squidpy.experimental.tl.StalignImageSolverKwargs` minus two keys: ``sigmaP``,
     because the rank-3 path has no point-matching energy and it would be a knob that does
     nothing, and ``initial_affine``, which is a named ``(4, 4)`` argument on
-    :func:`~squidpy.experimental.tl.align_stalign_volume` rather than a solver key. Five
+    :func:`~squidpy.experimental.tl.stalign_align_volume` rather than a solver key. Five
     defaults differ from the 2D case -- ``expand`` 1.25, ``epL`` 1e-6, ``epT`` 1e1,
     ``epV`` 1e3 and ``sigmaR`` 1e6. That last one is the only one that is not upstream's:
     ``LDDMM_3D_to_slice`` declares ``sigmaR=1e8``, which weights the regulariser so weakly that
@@ -341,7 +341,7 @@ def stalign_deformation_grid(
     Parameters
     ----------
     result
-        A fit from any of the ``align_stalign_*`` functions.
+        A fit from any of the ``stalign_align_*`` functions.
     direction
         ``None`` (default) takes the direction the fit's rank makes natural: ``"forward"``
         at rank 2, ``"backward"`` at rank 3 -- the direction
@@ -379,7 +379,7 @@ def stalign_deformation_grid(
             raise ValueError(
                 "This result was fitted on point clouds and carries no raster axes. "
                 "Pass both `query_axes=` and `ref_axes=`, or fit with "
-                "`align_stalign_image`."
+                "`stalign_align_image`."
             )
         # Forward evaluates the query grid in the reference frame; backward the reverse.
         axes = source_axes if resolved == "forward" else target_axes
@@ -501,7 +501,7 @@ def fit_stalign_volume(
 ) -> Stalign3DResult:
     """Fit a single 2D section into a 3D reference volume, array-in / array-out.
 
-    Internal: :func:`~squidpy.experimental.tl.align_stalign_volume` is the container-aware
+    Internal: :func:`~squidpy.experimental.tl.stalign_align_volume` is the container-aware
     entry point and carries the user-facing documentation.
 
     Parameters
@@ -546,11 +546,11 @@ def fit_stalign_volume(
     if source_image.shape[1] < 2:
         # A `(c, y, x)` section passed as the reference reads as a one-voxel-deep volume,
         # which is the likely way to arrive here. Named explicitly because there is no
-        # out-of-plane information in it to fit -- `align_stalign_image` is the 2D path.
+        # out-of-plane information in it to fit -- `stalign_align_image` is the 2D path.
         raise ValueError(
             f"Expected `ref` to be a volume with at least two samples along `z`, found depth "
             f"{source_image.shape[1]}. A single plane carries no out-of-plane information; use "
-            f"`align_stalign_image` to register two 2D images."
+            f"`stalign_align_image` to register two 2D images."
         )
 
     # The reference is the moving image: it is the volume that gets warped onto the
@@ -681,7 +681,7 @@ def fit_stalign_obs(
 ) -> Stalign2DResult:
     """Fit a deformation mapping the ``query`` cloud onto the ``ref`` cloud.
 
-    Internal: :func:`~squidpy.experimental.tl.align_stalign_obs` is the container-aware
+    Internal: :func:`~squidpy.experimental.tl.stalign_align_obs` is the container-aware
     entry point and carries the user-facing documentation.
 
     Parameters
@@ -759,7 +759,7 @@ def fit_stalign_image(
 ) -> Stalign2DResult:
     """Fit a deformation mapping the ``query`` image onto the ``ref`` image.
 
-    Internal: :func:`~squidpy.experimental.tl.align_stalign_image` is the container-aware
+    Internal: :func:`~squidpy.experimental.tl.stalign_align_image` is the container-aware
     entry point and carries the user-facing documentation.
 
     Parameters

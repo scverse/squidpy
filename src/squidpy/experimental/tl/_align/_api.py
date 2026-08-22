@@ -53,9 +53,9 @@ if TYPE_CHECKING:
 
 __all__ = [
     "align_landmarks",
-    "align_stalign_image",
-    "align_stalign_obs",
-    "align_stalign_volume",
+    "stalign_align_image",
+    "stalign_align_obs",
+    "stalign_align_volume",
     "stalign_apply_transform",
     "stalign_apply_warp",
     "stalign_from_uns",
@@ -178,7 +178,7 @@ def _query_of(
     return data_ref
 
 
-def align_stalign_obs(
+def stalign_align_obs(
     data_ref: AnnData | SpatialData,
     data_query: AnnData | SpatialData | None = None,
     *,
@@ -241,7 +241,7 @@ def align_stalign_obs(
     )
 
 
-def align_stalign_image(
+def stalign_align_image(
     sdata_ref: SpatialData,
     sdata_query: SpatialData | None = None,
     *,
@@ -381,7 +381,7 @@ def _assert_table_coords_share_frame(
             )
 
 
-def align_stalign_volume(
+def stalign_align_volume(
     sdata_ref: SpatialData,
     sdata_query: SpatialData | None = None,
     *,
@@ -486,7 +486,7 @@ def stalign_apply_transform(
     Parameters
     ----------
     result
-        A fit from any of the ``align_stalign_*`` functions.
+        A fit from any of the ``stalign_align_*`` functions.
     data
         The container to write into -- the query side the fit was given.
     key_added
@@ -552,7 +552,7 @@ def stalign_to_uns(
     Parameters
     ----------
     result
-        A fit from any of the ``align_stalign_*`` functions.
+        A fit from any of the ``stalign_align_*`` functions.
     data
         The container to store it on.
     key
@@ -626,7 +626,7 @@ def stalign_apply_warp(
     Parameters
     ----------
     result
-        A rank-2 fit, from :func:`~squidpy.experimental.tl.align_stalign_image`.
+        A rank-2 fit, from :func:`~squidpy.experimental.tl.stalign_align_image`.
     sdata_ref, sdata_query
         The containers holding the reference and query images, as the fit was given them.
         The reference is what places the output element, so it is needed here too. Leave
@@ -692,7 +692,7 @@ def align_landmarks(
 
         Both may instead be the ``(N, 2)`` landmark arrays themselves, matched by row order --
         the same form ``landmarks_ref`` / ``landmarks_query`` take on
-        :func:`~squidpy.experimental.tl.align_stalign_obs`. Landmarks are correspondences
+        :func:`~squidpy.experimental.tl.stalign_align_obs`. Landmarks are correspondences
         *between* two samples rather than observations *of* one, so they do not always have a
         container to live in: thirteen of them cannot sit in the ``obsm`` of a sample with
         eighty thousand cells. Given arrays, this returns the affine, and every argument that

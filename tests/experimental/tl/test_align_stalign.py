@@ -16,10 +16,10 @@ from tests.experimental.conftest import ALIGN_PTS, TINY_SOLVER, make_adata
 pytest.importorskip("jax")
 
 from squidpy.experimental.tl import (  # noqa: E402
-    align_stalign_image,
-    align_stalign_obs,
-    align_stalign_volume,
     stalign_affine_xyz,
+    stalign_align_image,
+    stalign_align_obs,
+    stalign_align_volume,
     stalign_apply_transform,
     stalign_apply_warp,
     stalign_deformation_grid,
@@ -41,7 +41,7 @@ def _sdata_image(array: np.ndarray, key: str, **kwargs: object) -> SpatialData:
 def test_obs_fit_returns_a_result_and_applies_to_a_copy() -> None:
     ref, query = make_adata(ALIGN_PTS), make_adata(ALIGN_PTS + 0.4)
 
-    result = align_stalign_obs(ref, query, **TINY_SOLVER)
+    result = stalign_align_obs(ref, query, **TINY_SOLVER)
     assert result["aligned_points"].shape == ALIGN_PTS.shape
 
     handed_back = stalign_apply_transform(result, query, inplace=False)
@@ -67,7 +67,7 @@ def test_image_fit_reads_both_element_layouts(scale_factors: list[int] | None) -
     sdata_ref = _sdata_image(image, "img", **kwargs)
     sdata_query = _sdata_image(np.roll(image, 1, axis=1), "img", **kwargs)
 
-    result = align_stalign_image(sdata_ref, sdata_query, image_key="img", **IMAGE_SOLVER)
+    result = stalign_align_image(sdata_ref, sdata_query, image_key="img", **IMAGE_SOLVER)
     assert result["ref_axes"][0].shape == (32,)
 
     handed_back = stalign_apply_warp(result, sdata_ref, sdata_query, image_key="img", inplace=False)
@@ -93,7 +93,7 @@ def test_image_fit_reads_units_and_placement_off_the_elements() -> None:
     sdata_ref = _sdata_image(image, "img", transformations={"global": placement})
     sdata_query = _sdata_image(np.roll(image, 1, axis=1), "img", transformations={"global": placement})
 
-    result = align_stalign_image(sdata_ref, sdata_query, image_key="img", a=8.0, nt=1, niter=2, epV=1.0)
+    result = stalign_align_image(sdata_ref, sdata_query, image_key="img", a=8.0, nt=1, niter=2, epV=1.0)
 
     assert float(result["ref_axes"][0][1] - result["ref_axes"][0][0]) == 2.0, "the element's scale is the unit"
     assert float(result["ref_axes"][0][0]) == 100.0, "the element's translation is the origin"
@@ -112,7 +112,7 @@ def test_slice_fit_places_a_section_in_a_volume() -> None:
     sdata_ref = _sdata_image(volume, "volume")
     sdata_query = _sdata_image(volume[:, 3], "section")
 
-    result = align_stalign_volume(
+    result = stalign_align_volume(
         sdata_ref, sdata_query, image_key=("volume", "section"), a=3.0, nt=1, niter=2, epV=1.0
     )
 
@@ -124,8 +124,8 @@ def test_a_2d_reference_is_rejected_with_a_pointer_to_the_2d_path() -> None:
     section = np.random.default_rng(0).random((1, 12, 12))
     sdata = _sdata_image(section, "section")
 
-    with pytest.raises(ValueError, match=r"align_stalign_image"):
-        align_stalign_volume(sdata, sdata, image_key=("section", "section"), **IMAGE_SOLVER)
+    with pytest.raises(ValueError, match=r"stalign_align_image"):
+        stalign_align_volume(sdata, sdata, image_key=("section", "section"), **IMAGE_SOLVER)
 
 
 def _sdata_section_with_table(shapes_scale: float | None) -> SpatialData:
@@ -163,12 +163,12 @@ def test_writing_coords_from_a_different_frame_is_refused() -> None:
 
     # the fit itself is indifferent to the frame; only applying it to `obsm` is not
     skewed = _sdata_section_with_table(10.0)
-    fit = align_stalign_volume(sdata_ref, skewed, **kwargs)
+    fit = stalign_align_volume(sdata_ref, skewed, **kwargs)
     with pytest.raises(ValueError, match=r"non-identity transformation into 'global'"):
         stalign_apply_transform(fit, skewed, **applied)
 
     identity = _sdata_section_with_table(None)
-    out = stalign_apply_transform(align_stalign_volume(sdata_ref, identity, **kwargs), identity, **applied)
+    out = stalign_apply_transform(stalign_align_volume(sdata_ref, identity, **kwargs), identity, **applied)
     assert out is None, "`inplace` defaults to True"
     assert identity.tables["t"].obsm["ref_xyz"].shape == (3, 3)
 
@@ -230,13 +230,13 @@ def test_one_sided_landmarks_are_refused(missing: str) -> None:
         fit_stalign_image(ref, query, **given, a=4.0, nt=1, niter=1, epV=1.0)
 
 
-def test_align_stalign_image_forwards_landmarks() -> None:
+def test_stalign_align_image_forwards_landmarks() -> None:
     ref, query = _pair()
     sdata_ref, sdata_query = _sdata_image(ref, "img"), _sdata_image(query, "img")
     solver = {"image_key": "img", **IMAGE_SOLVER}
 
-    plain = align_stalign_image(sdata_ref, sdata_query, **solver)
-    with_landmarks = align_stalign_image(
+    plain = stalign_align_image(sdata_ref, sdata_query, **solver)
+    with_landmarks = stalign_align_image(
         sdata_ref, sdata_query, landmarks_ref=_LM_REF, landmarks_query=_LM_QUERY, **solver
     )
 
@@ -257,7 +257,7 @@ def test_a_stored_fit_survives_a_zarr_round_trip_and_still_transforms(tmp_path) 
     import anndata as ad
 
     volume = np.random.default_rng(0).random((1, 5, 12, 9))
-    fit = align_stalign_volume(
+    fit = stalign_align_volume(
         _sdata_image(volume, "volume"),
         _sdata_image(volume[:, 2], "section"),
         image_key=("volume", "section"),
@@ -306,7 +306,7 @@ def test_volume_deformation_grid_is_the_transform_the_objective_uses() -> None:
     from squidpy.experimental.tl._align._stalign_impl._core import jax_dtype, transform_grid_row_col
 
     volume = np.random.default_rng(0).random((1, 5, 12, 12))
-    result = align_stalign_volume(
+    result = stalign_align_volume(
         _sdata_image(volume, "volume"),
         _sdata_image(volume[:, 2], "section"),
         image_key=("volume", "section"),
@@ -329,7 +329,7 @@ def test_volume_deformation_grid_is_the_transform_the_objective_uses() -> None:
 
 def test_volume_deformation_grid_rejects_a_bad_direction() -> None:
     volume = np.random.default_rng(0).random((1, 5, 12, 12))
-    result = align_stalign_volume(
+    result = stalign_align_volume(
         _sdata_image(volume, "volume"),
         _sdata_image(volume[:, 2], "section"),
         image_key=("volume", "section"),

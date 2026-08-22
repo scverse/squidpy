@@ -144,18 +144,9 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
     gr.neighbors.GridBuilder
 ```
 
-The ``align_*`` functions in {mod}`squidpy.experimental.tl` accept their solver
-tuning as flat keyword arguments, listed below, and return the fitted map when
-``key_added`` is left unset.
-
-```{eval-rst}
-.. currentmodule:: squidpy
-.. autosummary::
-    :toctree: api
-
-    experimental.tl.Stalign2DResult
-    experimental.tl.Stalign3DResult
-```
+The ``stalign_align_*`` functions in {mod}`squidpy.experimental.tl` accept their solver
+tuning as flat keyword arguments, listed below, and return the fitted map itself. The
+``stalign_*`` functions take that fit and either read it or write it into a container.
 
 ```{eval-rst}
 .. currentmodule:: squidpy
@@ -166,6 +157,8 @@ tuning as flat keyword arguments, listed below, and return the fitted map when
     experimental.tl.StalignImageSolverKwargs
     experimental.tl.StalignObsSolverKwargs
     experimental.tl.StalignVolumeSolverKwargs
+    experimental.tl.Stalign2DResult
+    experimental.tl.Stalign3DResult
 ```
 
 ## Experimental
@@ -181,9 +174,9 @@ tuning as flat keyword arguments, listed below, and return the fitted map when
     experimental.im.sample_volume
     experimental.tl.calculate_tiling_qc
     experimental.tl.TilingQCParams
-    experimental.tl.align_stalign_obs
-    experimental.tl.align_stalign_image
-    experimental.tl.align_stalign_volume
+    experimental.tl.stalign_align_obs
+    experimental.tl.stalign_align_image
+    experimental.tl.stalign_align_volume
     experimental.tl.stalign_apply_transform
     experimental.tl.stalign_apply_warp
     experimental.tl.stalign_to_uns
@@ -192,8 +185,6 @@ tuning as flat keyword arguments, listed below, and return the fitted map when
     experimental.tl.stalign_warp_image
     experimental.tl.stalign_deformation_grid
     experimental.tl.stalign_affine_xyz
-    experimental.tl.Stalign2DResult
-    experimental.tl.Stalign3DResult
     experimental.tl.align_landmarks
     experimental.tl.assign_stitch_groups
     experimental.tl.StitchParams
