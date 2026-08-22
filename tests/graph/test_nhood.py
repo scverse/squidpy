@@ -66,7 +66,6 @@ class TestNhoodEnrichment:
         np.testing.assert_array_equal(res3.counts, res2.counts)
 
     def test_n_jobs_invariance(self, adata: AnnData):
-        """The number of workers must not change the result (one seed is spawned per permutation)."""
         spatial_neighbors_grid(adata)
 
         kw = {"cluster_key": _CK, "rng": 42, "n_perms": 20, "copy": True}
@@ -183,7 +182,6 @@ def test_interaction_matrix_nan_values(adata_intmat: AnnData):
 class TestNhoodEntropy:
     @staticmethod
     def _grid(labels: list[str]) -> AnnData:
-        "A square grid of observations labelled row-major, with 8-neighbour connectivity."
         side = int(round(len(labels) ** 0.5))
         assert side * side == len(labels)
         coords = np.array([(x, y) for y in range(side) for x in range(side)], dtype=float)
@@ -193,21 +191,22 @@ class TestNhoodEntropy:
         return adata
 
     def test_homogeneous_neighborhood_scores_zero(self):
-        "Neighbours that are all one type carry no diversity, whatever the graph looks like."
         adata = self._grid(["a"] * 36)
         np.testing.assert_allclose(nhood_entropy(adata, "ct", copy=True), 0.0)
+        assert "ct_nhood_entropy" not in adata.obs
 
     def test_segregated_scores_below_scattered(self):
-        "The same labels in contiguous domains must read as more spatially coherent than when shuffled."
         labels = ["a"] * 50 + ["b"] * 50
         segregated = nhood_entropy(self._grid(labels), "ct", copy=True)
         scattered = nhood_entropy(self._grid(list(np.random.default_rng(0).permutation(labels))), "ct", copy=True)
         assert segregated.mean() < scattered.mean()
-        # log(n categories) is the ceiling, reached only by a perfectly even neighbourhood
-        assert scattered.max() <= np.log(2) + 1e-12
+
+        # vertical stripes: an interior cell sees 2 of its own type and 6 of the other
+        stripes = nhood_entropy(self._grid(["a", "b"] * 18), "ct", copy=True).to_numpy().reshape(6, 6)
+        h = -0.25 * np.log(0.25) - 0.75 * np.log(0.75)
+        np.testing.assert_allclose(stripes[1:-1, 1:-1], h)
 
     def test_isolated_observation_is_zero_not_nan(self):
-        "An observation without neighbours divides 0 by 0; no neighbours means no diversity."
         adata = self._grid(["a", "b"] * 18)
         conn = adata.obsp["spatial_connectivities"].tolil()
         conn[0, :] = 0

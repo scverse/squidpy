@@ -438,10 +438,9 @@ def _interaction_matrix(
 def _nhood_profile(labels: pd.Series, adj: csr_matrix, *, normalize: bool = True) -> pd.DataFrame:
     """Frequency of every ``labels`` category in each observation's neighborhood.
 
-    This is ``adj @ onehot(labels)``: row ``i`` sums the edge weights from ``i`` to the
-    members of each category. Observations whose label is unassigned (``NaN``) are counted
-    in nobody's neighborhood, and with ``normalize`` an observation without neighbors gets
-    an all-zero row rather than ``NaN``.
+    This is ``adj @ onehot(labels)``. Observations whose label is unassigned (``NaN``) are
+    counted in nobody's neighborhood, and with ``normalize`` an observation without neighbors
+    gets an all-zero row rather than ``NaN``.
     """
     labels = labels.astype("category")
     codes = labels.cat.codes.to_numpy()
@@ -468,18 +467,16 @@ def nhood_entropy(
     """
     Compute the Shannon entropy of each observation's neighborhood composition.
 
-    High entropy marks observations whose spatial neighbors are a mix of many ``cluster_key``
-    categories, low entropy marks observations sitting inside a homogeneous domain. Averaged
-    over all observations it summarises how spatially coherent a clustering is, which makes it
-    a way to compare competing clusterings -- e.g. across a smoothing-parameter sweep.
+    High entropy marks a mixed neighborhood, low entropy a homogeneous domain; the mean over
+    all observations summarises how spatially coherent a clustering is.
 
     Parameters
     ----------
     %(adata)s
+    %(table_key)s
     %(cluster_key)s
     %(conn_key)s
     %(copy)s
-    %(table_key)s
 
     Returns
     -------
@@ -489,8 +486,8 @@ def nhood_entropy(
 
     Notes
     -----
-    The neighborhood is whatever ``connectivity_key`` holds, so keep it fixed when sweeping a
-    clustering parameter -- otherwise the measuring stick moves with the thing being measured.
+    The neighborhood is whatever ``connectivity_key`` holds; keep it fixed when sweeping a
+    clustering parameter.
     """
     adata = extract_adata_if_sdata(adata, table_key=table_key)
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
@@ -499,7 +496,7 @@ def nhood_entropy(
 
     start = logg.info(f"Calculating neighborhood entropy of `{cluster_key}`")
     profile = _nhood_profile(adata.obs[cluster_key], adata.obsp[connectivity_key])
-    # observations without neighbors give 0/0 in `entropy`; no neighbors means no diversity
+    # observations without neighbors give 0/0 in `entropy`
     ent = pd.Series(np.nan_to_num(entropy(profile.to_numpy(), axis=1)), index=adata.obs_names)
 
     if copy:
