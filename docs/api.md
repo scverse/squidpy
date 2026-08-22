@@ -44,7 +44,6 @@ import squidpy as sq
     gr.cluster_auto_k
     gr.cluster_stability
     gr.ClusterAutoKResult
-    gr.ClusterAutoKUns
 ```
 
 ## Image

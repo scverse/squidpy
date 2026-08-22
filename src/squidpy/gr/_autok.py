@@ -137,30 +137,31 @@ def _stability_frame(n_clusters: Sequence[int], interior: Sequence[int], stabili
     )
 
 
-class ClusterAutoKUns(TypedDict):
-    """The part of a sweep result that can be stored in :attr:`anndata.AnnData.uns`.
+class ClusterAutoKResult(TypedDict):
+    """A sweep result.
 
-    Every field survives an ``h5ad`` round trip with its type intact. Lists would not --
-    they come back as arrays -- which is why the fitted and scored K values are read off
-    ``table`` rather than repeated as fields.
+    Every field except ``labels`` survives an ``h5ad`` round trip with its type intact, and
+    :func:`to_uns` returns exactly those. Lists would not -- they come back as arrays -- which
+    is why the fitted and scored K values are read off ``table`` rather than repeated as fields.
 
     Attributes
     ----------
     table
         Per-K diagnostics indexed by K: ``stability_mean``, ``stability_std`` and ``nll``.
         Every fitted K has a row, but the ``+-1`` halo is never scored, so its stability is
-        ``NaN``. ``table.index[table["stability_mean"].notna()]`` gives the K values that
-        were scored, which is what plots should use as their x-axis.
+        ``NaN``.
     stability
         Raw similarity values, of shape ``(n_scored_k, n_comparisons)``. Row ``i`` belongs to
-        the ``i``-th scored K. Exposed unaggregated so that distributions can be plotted and
-        numerical parity with other implementations can be asserted.
+        the ``i``-th scored K.
     best_k
-        The scored K with the highest mean stability. The reason the sweep exists.
+        The scored K with the highest mean stability.
     n_runs
         Number of runs actually performed, which is below ``max_runs`` if the sweep converged.
     converged
         Whether the sweep stopped early because the stability curve had settled.
+    labels
+        Labeling of the best fit (lowest ``nll``) per K, for every fitted K. Dropped by
+        :func:`to_uns`: :mod:`anndata` cannot write a dict with non-string keys.
     """
 
     table: pd.DataFrame
@@ -168,32 +169,12 @@ class ClusterAutoKUns(TypedDict):
     best_k: int
     n_runs: int
     converged: bool
-
-
-class ClusterAutoKResult(ClusterAutoKUns):
-    """A sweep result: everything in :class:`ClusterAutoKUns`, plus the fits themselves.
-
-    Attributes
-    ----------
-    labels
-        Labeling of the best fit (lowest ``nll``) per K, for every fitted K.
-
-        Labels belong in :attr:`~anndata.AnnData.obs` -- that is where masking,
-        ``min_niche_size`` and the per-library merge apply to them, and where plotting expects
-        them -- so ``store_labels`` writes them there. This field is what you get when nothing
-        was written: the sweep costs up to ``max_runs x len(K)`` fits, too expensive to discard.
-
-        It is also the one field :func:`to_uns` drops. Partly because :mod:`anndata` cannot
-        write a dict with non-string keys, but mainly because a copy in ``uns`` would be the
-        raw sweep labeling, free to disagree with the post-processed ``obs`` columns.
-    """
-
     labels: dict[int, np.ndarray]
 
 
-def to_uns(result: ClusterAutoKResult) -> ClusterAutoKUns:
+def to_uns(result: ClusterAutoKResult) -> dict[str, Any]:
     """The storable part of *result*, for :attr:`anndata.AnnData.uns`."""
-    return {key: result[key] for key in ClusterAutoKUns.__annotations__}  # type: ignore[typeddict-item,misc]
+    return {key: value for key, value in result.items() if key != "labels"}
 
 
 def _fit_once(X: Any, k: int, random_state: int, model_params: Mapping[str, Any]) -> tuple[np.ndarray, float]:
