@@ -143,32 +143,27 @@ class ClusterAutoKResult(TypedDict):
     Every field except ``labels`` survives an ``h5ad`` round trip with its type intact, and
     :func:`to_uns` returns exactly those. Lists would not -- they come back as arrays -- which
     is why the fitted and scored K values are read off ``table`` rather than repeated as fields.
-
-    Attributes
-    ----------
-    table
-        Per-K diagnostics indexed by K: ``stability_mean``, ``stability_std`` and ``nll``.
-        Every fitted K has a row, but the ``+-1`` halo is never scored, so its stability is
-        ``NaN``.
-    stability
-        Raw similarity values, of shape ``(n_scored_k, n_comparisons)``. Row ``i`` belongs to
-        the ``i``-th scored K.
-    best_k
-        The scored K with the highest mean stability.
-    n_runs
-        Number of runs actually performed, which is below ``max_runs`` if the sweep converged.
-    converged
-        Whether the sweep stopped early because the stability curve had settled.
-    labels
-        Labeling of the best fit (lowest ``nll``) per K, for every fitted K. Dropped by
-        :func:`to_uns`: :mod:`anndata` cannot write a dict with non-string keys.
     """
 
+    #: Per-K diagnostics indexed by K: ``stability_mean``, ``stability_std`` and ``nll``. Every
+    #: fitted K has a row, but the ``+-1`` halo is never scored, so its stability is ``NaN``.
     table: pd.DataFrame
+
+    #: Raw similarity values, of shape ``(n_scored_k, n_comparisons)``. Row ``i`` belongs to
+    #: the ``i``-th scored K.
     stability: np.ndarray
+
+    #: The scored K with the highest mean stability.
     best_k: int
+
+    #: Number of runs actually performed, below ``max_runs`` if the sweep converged.
     n_runs: int
+
+    #: Whether the sweep stopped early because the stability curve had settled.
     converged: bool
+
+    #: Labeling of the best fit (lowest ``nll``) per K, for every fitted K. Dropped by
+    #: :func:`to_uns`: :mod:`anndata` cannot write a dict with non-string keys.
     labels: dict[int, np.ndarray]
 
 
