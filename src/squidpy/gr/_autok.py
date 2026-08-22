@@ -141,12 +141,13 @@ class ClusterAutoKResult(TypedDict):
     """A sweep result.
 
     Every field except ``labels`` survives an ``h5ad`` round trip with its type intact, and
-    :func:`to_uns` returns exactly those. Lists would not -- they come back as arrays -- which
+    ``to_uns`` returns exactly those. Lists would not -- they come back as arrays -- which
     is why the fitted and scored K values are read off ``table`` rather than repeated as fields.
     """
 
-    #: Per-K diagnostics indexed by K: ``stability_mean``, ``stability_std`` and ``nll``. Every
-    #: fitted K has a row, but the ``+-1`` halo is never scored, so its stability is ``NaN``.
+    #: Per-K diagnostics indexed by K, with the columns ``stability_mean``, ``stability_std``
+    #: and ``nll``. Every fitted K has a row, but the ``+-1`` halo is never scored, so its
+    #: stability is ``NaN``.
     table: pd.DataFrame
 
     #: Raw similarity values, of shape ``(n_scored_k, n_comparisons)``. Row ``i`` belongs to
@@ -162,8 +163,8 @@ class ClusterAutoKResult(TypedDict):
     #: Whether the sweep stopped early because the stability curve had settled.
     converged: bool
 
-    #: Labeling of the best fit (lowest ``nll``) per K, for every fitted K. Dropped by
-    #: :func:`to_uns`: :mod:`anndata` cannot write a dict with non-string keys.
+    #: Labeling of the best fit (lowest ``nll``) per K, for every fitted K, dropped by
+    #: ``to_uns``, because :mod:`anndata` cannot write a dict with non-string keys.
     labels: dict[int, np.ndarray]
 
 
@@ -225,7 +226,7 @@ def sweep_auto_k(
 
     Returns
     -------
-    The sweep result; see :class:`ClusterAutoKResult`.
+    The sweep result; see ``ClusterAutoKResult``.
     """
     if max_runs <= 1:
         raise ValueError(f"stability needs at least 2 runs to compare, got max_runs={max_runs}")
