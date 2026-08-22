@@ -86,7 +86,7 @@ def cluster_auto_k(
 
         - :attr:`anndata.AnnData.obs` ``['{key_added}']`` - the labeling at the selected K,
           plus one ``['{key_added}_k{K}']`` per fitted K if ``keep_all_labels``.
-        - :attr:`anndata.AnnData.uns` ``['{key_added}']`` - a :class:`~squidpy.gr.ClusterAutoKResult`
+        - :attr:`anndata.AnnData.uns` ``['{key_added}']`` - a ``ClusterAutoKResult``
           with the selected ``best_k``, the per-K diagnostics ``table`` and the full
           ``stability`` matrix.
 
