@@ -34,7 +34,7 @@ def cluster_auto_k(
     seed: int | None = 42,
     keep_all_labels: bool = False,
     key_added: str = "cluster_auto_k",
-    inplace: bool = True,
+    copy: bool = False,
     table_key: str | None = None,
 ) -> AnnData | None:
     """Select the number of clusters (K) of a Gaussian mixture by clustering stability.
@@ -75,13 +75,13 @@ def cluster_auto_k(
     key_added
         Name of the labeling added to ``adata.obs``, and of the diagnostics added to
         ``adata.uns``.
-    %(niche_inplace)s
+    %(copy)s
     %(table_key)s
 
     Returns
     -------
-    If ``inplace = True``, modifies ``adata`` in place and returns ``None``. Otherwise, returns
-    a copy of ``adata`` with the same additions. Either way it gains the following keys:
+    If ``copy = True``, returns a copy of ``adata`` with the additions below; otherwise ``adata``
+    is modified in place and ``None`` is returned. Either way it gains the following keys:
 
         - :attr:`anndata.AnnData.obs` ``['{key_added}']`` - the labeling at the selected K,
           plus one ``['{key_added}_k{K}']`` per fitted K if ``keep_all_labels``.
@@ -98,9 +98,9 @@ def cluster_auto_k(
     previous runs in memory, since every run is compared against all of them.
     """
     assert_isinstance(data, (AnnData, SpatialData), name="data")
-    assert_isinstance(inplace, bool, name="inplace")
+    assert_isinstance(copy, bool, name="copy")
     orig_adata = extract_adata_if_sdata(data, table_key=table_key)
-    adata = orig_adata if inplace else orig_adata.copy()
+    adata = orig_adata.copy() if copy else orig_adata
 
     if use_rep is not None:
         assert_isinstance(use_rep, str, name="use_rep")
@@ -145,7 +145,7 @@ def cluster_auto_k(
         _save_data(adata, attr="obs", key=column, data=labels[column], prefix=column == key_added)
     _save_data(adata, attr="uns", key=key_added, data=to_uns(result))
 
-    return None if inplace else adata
+    return adata if copy else None
 
 
 @d.dedent
@@ -155,7 +155,7 @@ def cluster_stability(
     *,
     score_fn: Callable[[Any, Any], float] = fowlkes_mallows_score,
     key_added: str = "cluster_stability",
-    inplace: bool = True,
+    copy: bool = False,
     table_key: str | None = None,
 ) -> AnnData | None:
     """Score existing clusterings by how stably each number of clusters reproduces across runs.
@@ -178,22 +178,22 @@ def cluster_stability(
         :func:`~sklearn.metrics.adjusted_rand_score`.
     key_added
         Key in ``adata.uns`` under which the diagnostics are stored.
-    %(niche_inplace)s
+    %(copy)s
     %(table_key)s
 
     Returns
     -------
-    If ``inplace = True``, modifies ``adata`` in place and returns ``None``. Otherwise, returns
-    a copy of ``adata`` with the same addition. Either way it gains the following key:
+    If ``copy = True``, returns a copy of ``adata`` with the additions below; otherwise ``adata``
+    is modified in place and ``None`` is returned. Either way it gains the following key:
 
         - :attr:`anndata.AnnData.uns` ``['{key_added}']`` - per-K stability indexed by K, with
           ``NaN`` on the two halo rows that are never scored. The most stable K is
           ``df["stability_mean"].idxmax()``.
     """
     assert_isinstance(data, (AnnData, SpatialData), name="data")
-    assert_isinstance(inplace, bool, name="inplace")
+    assert_isinstance(copy, bool, name="copy")
     orig_adata = extract_adata_if_sdata(data, table_key=table_key)
-    adata = orig_adata if inplace else orig_adata.copy()
+    adata = orig_adata.copy() if copy else orig_adata
 
     for columns in cluster_keys.values():
         for column in columns:
@@ -206,4 +206,4 @@ def cluster_stability(
 
     _save_data(adata, attr="uns", key=key_added, data=df)
 
-    return None if inplace else adata
+    return adata if copy else None

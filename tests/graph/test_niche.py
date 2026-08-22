@@ -105,12 +105,12 @@ def test_niche_cellcharter_seed_reproducible(dummy_adata2: AnnData):
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
     kwargs = {"distance": 2, "aggregation": "mean"}
 
-    first = calculate_niche_cellcharter(dummy_adata2, seed=0, inplace=False, **kwargs)
-    second = calculate_niche_cellcharter(dummy_adata2, seed=0, inplace=False, **kwargs)
+    first = calculate_niche_cellcharter(dummy_adata2, seed=0, copy=True, **kwargs)
+    second = calculate_niche_cellcharter(dummy_adata2, seed=0, copy=True, **kwargs)
     assert (first.obs["cellcharter_niche"] == second.obs["cellcharter_niche"]).all()
 
     # not a guarantee about the labels themselves, only that the seed is actually wired through
-    other = calculate_niche_cellcharter(dummy_adata2, seed=1, inplace=False, **kwargs)
+    other = calculate_niche_cellcharter(dummy_adata2, seed=1, copy=True, **kwargs)
     assert list(other.obs["cellcharter_niche"]) != list(first.obs["cellcharter_niche"])
 
 
@@ -127,8 +127,8 @@ def test_niche_cellcharter_library_seeds_are_independent(dummy_adata2: AnnData, 
     dummy_adata2.obs["batch"] = ["batch1"] * 5 + ["batch2"] * 5
     kwargs = {"distance": 2, "aggregation": "mean", "library_key": "batch", "n_components": 2}
 
-    first = calculate_niche_cellcharter(dummy_adata2, seed=0, inplace=False, **kwargs)
-    second = calculate_niche_cellcharter(dummy_adata2, seed=0, inplace=False, **kwargs)
+    first = calculate_niche_cellcharter(dummy_adata2, seed=0, copy=True, **kwargs)
+    second = calculate_niche_cellcharter(dummy_adata2, seed=0, copy=True, **kwargs)
     assert (first.obs["cellcharter_niche"] == second.obs["cellcharter_niche"]).all()
 
     # the clusterer is built once and reused for every library, so record what each fit
@@ -141,7 +141,7 @@ def test_niche_cellcharter_library_seeds_are_independent(dummy_adata2: AnnData, 
         return original(*args, **kwargs)
 
     monkeypatch.setattr(_niche, "GaussianMixture", spy)
-    calculate_niche_cellcharter(dummy_adata2, seed=0, inplace=False, **kwargs)
+    calculate_niche_cellcharter(dummy_adata2, seed=0, copy=True, **kwargs)
 
     assert len(seen) == 2, "expected one mixture fit per library"
     assert seen[0] != seen[1], "libraries were fitted with the same seed"
@@ -150,7 +150,7 @@ def test_niche_cellcharter_library_seeds_are_independent(dummy_adata2: AnnData, 
 def test_niche_cellcharter_seeds_the_pca(dummy_adata2: AnnData, monkeypatch):
     "PCA is part of the embedding, so `seed` must reach it too, not only the mixture fits."
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
-    kwargs = {"distance": 2, "aggregation": "mean", "inplace": False}
+    kwargs = {"distance": 2, "aggregation": "mean", "copy": True}
 
     seen: list[int] = []
     original = _niche.sc.tl.pca
@@ -169,7 +169,7 @@ def test_niche_cellcharter_seeds_the_pca(dummy_adata2: AnnData, monkeypatch):
 
 def test_niche_neighborhood_seeds_the_knn_graph(dummy_adata2: AnnData, monkeypatch):
     "`sc.pp.neighbors` is approximate above ~4096 obs, so `seed` has to control it as well."
-    kwargs = {"groups": "celltype", "n_neighbors": 3, "resolutions": 1.0, "inplace": False}
+    kwargs = {"groups": "celltype", "n_neighbors": 3, "resolutions": 1.0, "copy": True}
 
     seen: list[int] = []
     original = _niche.sc.pp.neighbors
@@ -227,7 +227,7 @@ def test_niche_cellcharter_accepts_a_dense_x(dummy_adata2: AnnData, aggregation:
     dense = dummy_adata2.copy()
     sparse = dummy_adata2.copy()
     sparse.X = csr_matrix(sparse.X)
-    kwargs = {"distance": 2, "aggregation": aggregation, "n_components": 2, "seed": 0, "inplace": False}
+    kwargs = {"distance": 2, "aggregation": aggregation, "n_components": 2, "seed": 0, "copy": True}
 
     from_dense = calculate_niche_cellcharter(dense, **kwargs)
     from_sparse = calculate_niche_cellcharter(sparse, **kwargs)
@@ -240,7 +240,7 @@ def test_niche_cellcharter_accepts_a_dense_x(dummy_adata2: AnnData, aggregation:
 def test_niche_cellcharter_n_clusters_none_keeps_a_single_fit(dummy_adata2: AnnData):
     "`n_clusters=None` must behave exactly like today: one fit at `n_components`, no diagnostics."
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
-    kwargs = {"distance": 2, "aggregation": "mean", "n_components": 4, "seed": 0, "inplace": False}
+    kwargs = {"distance": 2, "aggregation": "mean", "n_components": 4, "seed": 0, "copy": True}
 
     default = calculate_niche_cellcharter(dummy_adata2, **kwargs)
     explicit = calculate_niche_cellcharter(dummy_adata2, n_clusters=4, **kwargs)

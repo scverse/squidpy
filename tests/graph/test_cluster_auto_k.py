@@ -223,9 +223,9 @@ def test_cluster_auto_k_on_adata():
     assert adata.obs["cluster_auto_k"].dtype == "category"
 
 
-def test_cluster_auto_k_not_inplace_returns_a_copy_and_leaves_the_input_alone():
+def test_cluster_auto_k_copy_returns_a_copy_and_leaves_the_input_alone():
     adata = AnnData(make_blobs())
-    out = cluster_auto_k(adata, (2, 4), max_runs=3, seed=0, inplace=False)
+    out = cluster_auto_k(adata, (2, 4), max_runs=3, seed=0, copy=True)
 
     assert list(out.obs.columns) == ["cluster_auto_k"]
     assert "cluster_auto_k" in out.uns
@@ -277,8 +277,8 @@ def test_cluster_auto_k_honours_key_added():
 
 def test_cluster_auto_k_is_reproducible_from_the_seed():
     adata = AnnData(make_blobs())
-    first = cluster_auto_k(adata, (2, 4), max_runs=3, seed=0, inplace=False)
-    second = cluster_auto_k(adata, (2, 4), max_runs=3, seed=0, inplace=False)
+    first = cluster_auto_k(adata, (2, 4), max_runs=3, seed=0, copy=True)
+    second = cluster_auto_k(adata, (2, 4), max_runs=3, seed=0, copy=True)
     pd.testing.assert_series_equal(first.obs["cluster_auto_k"], second.obs["cluster_auto_k"])
 
 
@@ -350,7 +350,7 @@ def test_cluster_stability_scores_obs_columns():
     "The AnnData entry point scores labelings already in `obs`, so any clusterer can be fed to it."
     adata, keys = _adata_with_runs([2, 3, 4], n_runs=3)
 
-    df = cluster_stability(adata, keys, inplace=False).uns["cluster_stability"]
+    df = cluster_stability(adata, keys, copy=True).uns["cluster_stability"]
     assert list(df.index) == [2, 3, 4]
     # only the interior K is scored, the bounds are a halo that is compared against but never selectable
     assert df["stability_mean"].isna().tolist() == [True, False, True]
@@ -360,7 +360,7 @@ def test_cluster_stability_scores_obs_columns():
 
 def test_cluster_stability_writes_to_uns():
     adata, keys = _adata_with_runs([2, 3, 4], n_runs=2)
-    expected = cluster_stability(adata, keys, inplace=False).uns["cluster_stability"]
+    expected = cluster_stability(adata, keys, copy=True).uns["cluster_stability"]
 
     assert cluster_stability(adata, keys, key_added="my_stability") is None
     pd.testing.assert_frame_equal(adata.uns["my_stability"], expected)
@@ -414,7 +414,7 @@ def test_cellcharter_forwards_model_params():
     import squidpy as sq
 
     sq.gr.spatial_neighbors_knn(adata, n_neighs=4)
-    kwargs = {"distance": 1, "n_clusters": 3, "seed": 0, "inplace": False}
+    kwargs = {"distance": 1, "n_clusters": 3, "seed": 0, "copy": True}
 
     with _pytest.raises(ValueError, match=r"ill-defined empirical covariance"):
         calculate_niche_cellcharter(adata, model_params={"reg_covar": 0.0}, **kwargs)
