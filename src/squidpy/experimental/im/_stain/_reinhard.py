@@ -139,6 +139,35 @@ def fit_reinhard(
     return StainReference(method="reinhard", mu=mu, sigma=sigma)
 
 
+def fit_reinhard_pooled(
+    das: list[xr.DataArray],
+    masks: list[np.ndarray],
+    params: ReinhardParams,
+    image_keys: list[str],
+) -> StainReference:
+    """Fit Reinhard stats from the pooled tissue Lab pixels of several slides.
+
+    Gathers each slide's tissue Lab pixels (naming the slide on empty tissue) and
+    concatenates them into one set, then takes ``mu``/``sigma`` over the pool -
+    matching :func:`_masked_channel_stats` (population std, ddof=0, tissue only).
+    """
+    cols: list[np.ndarray] = []
+    for da, m, k in zip(das, masks, image_keys, strict=True):
+        lab = rgb_to_lab_ruderman(da)
+        masked = lab.where(mask) if (mask := _reinhard_mask(lab, params, m)) is not None else lab
+        pix = np.asarray(masked.transpose("c", "y", "x").data).reshape(3, -1)
+        pix = pix[:, np.all(np.isfinite(pix), axis=0)]
+        if pix.shape[1] == 0:
+            raise ValueError(f"Foreground mask leaves zero tissue pixels for image {k!r}.")
+        cols.append(pix)
+    pooled = np.concatenate(cols, axis=1)
+    return StainReference(
+        method="reinhard",
+        mu=np.asarray(pooled.mean(axis=1), dtype=np.float64),
+        sigma=np.asarray(pooled.std(axis=1, ddof=0), dtype=np.float64),
+    )
+
+
 def apply_reinhard(
     image_rgb: xr.DataArray,
     reference: StainReference,

@@ -223,6 +223,48 @@ def fit_decomposition(
 ) -> StainReference:
     """Fit a decomposition :class:`StainReference` (stain matrix + max concentrations)."""
     od = _tissue_od(image_rgb, white_point, params.beta, tissue_mask=tissue_mask, image_key=image_key)
+    return _reference_from_od(
+        od, method, params, white_point, image_key=image_key, reference=reference, max_angle_deg=max_angle_deg
+    )
+
+
+def fit_decomposition_pooled(
+    das: list[xr.DataArray],
+    masks: list[np.ndarray],
+    image_keys: list[str],
+    method: StainMethod,
+    params: Any,
+    white_point: np.ndarray,
+    *,
+    reference: dict[str, np.ndarray] = RUIFROK_HE,
+    max_angle_deg: float = 45.0,
+) -> StainReference:
+    """Fit a decomposition reference from the pooled tissue OD of several slides.
+
+    Each slide's tissue OD is gathered (naming the slide on empty tissue) and
+    stacked into one ``(SUM_N, 3)`` array; the single-image fit tail then runs on
+    the pooled OD. Pooling one slide is identical to :func:`fit_decomposition`.
+    """
+    ods = [
+        _tissue_od(da, white_point, params.beta, tissue_mask=m, image_key=k)
+        for da, m, k in zip(das, masks, image_keys, strict=True)
+    ]
+    return _reference_from_od(
+        np.vstack(ods), method, params, white_point, image_key=None, reference=reference, max_angle_deg=max_angle_deg
+    )
+
+
+def _reference_from_od(
+    od: np.ndarray,
+    method: StainMethod,
+    params: Any,
+    white_point: np.ndarray,
+    *,
+    image_key: str | None,
+    reference: dict[str, np.ndarray],
+    max_angle_deg: float,
+) -> StainReference:
+    """Shared fit tail: stain matrix (gated) + max concentrations -> StainReference."""
     matrix = _stain_matrix(od, method, params, image_key=image_key, reference=reference, max_angle_deg=max_angle_deg)
     return StainReference(
         method=method,
