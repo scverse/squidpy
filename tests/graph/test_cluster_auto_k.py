@@ -22,13 +22,11 @@ from squidpy.gr._autok import cluster_stability as _cluster_stability
 
 
 def scored(result: ClusterAutoKResult) -> list[int]:
-    "The K values the sweep actually scored, i.e. everything but the unscored halo."
     table = result["table"]
     return table.index[table["stability_mean"].notna()].tolist()
 
 
 def make_blobs(n_per_blob: int = 30, n_features: int = 5, seed: int = 0) -> np.ndarray:
-    "Three well-separated blobs, so that stability is not pure noise."
     rng = np.random.default_rng(seed)
     return np.vstack([rng.normal(centre, 1.0, (n_per_blob, n_features)) for centre in (0.0, 8.0, -8.0)])
 
@@ -37,7 +35,6 @@ def make_blobs(n_per_blob: int = 30, n_features: int = 5, seed: int = 0) -> np.n
 
 
 def test_expand_n_clusters_adds_halo_to_a_tuple():
-    "A (min, max) request must also fit min-1 and max+1, else the bounds are unselectable."
     assert expand_n_clusters((2, 10)) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 
 
@@ -46,7 +43,6 @@ def test_expand_n_clusters_clamps_the_halo_at_one():
 
 
 def test_expand_n_clusters_takes_a_sequence_literally():
-    "An explicit sequence gets no halo, so its first and last entries can never be selected."
     assert expand_n_clusters([2, 3, 4, 5]) == [2, 3, 4, 5]
     assert expand_n_clusters([2, 5, 9]) == [2, 5, 9]
 
@@ -70,46 +66,38 @@ def test_expand_n_clusters_rejects_bad_requests(n_clusters, match):
 
 
 def test_mirror_stability_keeps_only_interior_k():
-    "Rows must line up with n_clusters[1:-1]: the halo is fitted but never scored."
     blocks = [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]  # 4 K values -> 3 adjacent pairs
     mirrored = mirror_stability(blocks)
-    assert mirrored.shape == (2, 4)  # 2 interior K, 2 comparisons x 2 directions
-
-
-def test_mirror_stability_gives_each_k_both_directions():
-    "Row i must combine the (K, K+1) comparisons with the (K-1, K) ones."
-    mirrored = mirror_stability([[0.1, 0.2]])  # 3 K values -> pairs (k0,k1), (k1,k2)
-    assert mirrored.tolist() == [[0.2, 0.1]]
+    assert mirrored.tolist() == [[0.2, 0.5, 0.1, 0.4], [0.3, 0.6, 0.2, 0.5]]
 
 
 # the sweep
 
 
 def test_sweep_requires_more_than_one_run():
-    "A single run leaves stability undefined, so it must raise rather than return something."
     with pytest.raises(ValueError, match=r"at least 2 runs"):
         sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=1)
 
 
 def test_sweep_is_reproducible_from_the_seed():
     X, ks = make_blobs(), [1, 2, 3, 4]
-    first = sweep_auto_k(X, ks, max_runs=3, rng=np.random.default_rng(0))
-    second = sweep_auto_k(X, ks, max_runs=3, rng=np.random.default_rng(0))
+    first = sweep_auto_k(X, ks, max_runs=3, seed=0)
+    second = sweep_auto_k(X, ks, max_runs=3, seed=0)
     assert first["best_k"] == second["best_k"]
     assert np.array_equal(first["stability"], second["stability"])
     assert_frame_equal(first["table"], second["table"])
 
 
 def test_sweep_handles_non_contiguous_k_values():
-    "Regression: comparing adjacent list entries, not `k + 1`, which breaks on gaps."
-    result = sweep_auto_k(make_blobs(), [2, 5, 9], max_runs=2, rng=np.random.default_rng(0))
+    # regression: adjacent entries, not k+1
+    result = sweep_auto_k(make_blobs(), [2, 5, 9], max_runs=2, seed=0)
     assert list(result["table"].index) == [2, 5, 9]
     assert scored(result) == [5]
     assert result["best_k"] == 5
 
 
 def test_sweep_scores_only_interior_but_fits_the_halo():
-    result = sweep_auto_k(make_blobs(), [1, 2, 3, 4, 5], max_runs=2, rng=np.random.default_rng(0))
+    result = sweep_auto_k(make_blobs(), [1, 2, 3, 4, 5], max_runs=2, seed=0)
     assert scored(result) == [2, 3, 4]
     assert result["stability"].shape[0] == 3
     assert result["best_k"] in scored(result)
@@ -118,14 +106,13 @@ def test_sweep_scores_only_interior_but_fits_the_halo():
     assert sorted(result["labels"]) == [1, 2, 3, 4, 5]
 
 
-def test_sweep_stops_early_when_the_stability_curve_settles():
-    "A tolerance that always holds must stop early; one that never holds must use up `max_runs`."
+def test_sweep_convergence():
     X, ks = make_blobs(), [1, 2, 3, 4]
-    converged = sweep_auto_k(X, ks, max_runs=10, convergence_tol=np.inf, rng=np.random.default_rng(0))
+    converged = sweep_auto_k(X, ks, max_runs=10, convergence_tol=np.inf, seed=0)
     assert converged["converged"]
     assert converged["n_runs"] < 10
 
-    exhausted = sweep_auto_k(X, ks, max_runs=3, convergence_tol=0.0, rng=np.random.default_rng(0))
+    exhausted = sweep_auto_k(X, ks, max_runs=3, convergence_tol=0.0, seed=0)
     assert not exhausted["converged"]
     assert exhausted["n_runs"] == 3
 
@@ -137,14 +124,13 @@ def test_sweep_rejects_params_it_controls_itself():
 
 
 def test_sweep_does_not_mutate_the_callers_model_params():
-    "Upstream pops `random_state` out of the caller's dict; we must not."
+    # upstream pops `random_state` out of the caller's dict; we must not
     model_params = {"max_iter": 10}
-    sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, model_params=model_params, rng=np.random.default_rng(0))
+    sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, model_params=model_params, seed=0)
     assert model_params == {"max_iter": 10}
 
 
 def test_sweep_init_params_is_pinned_but_overridable(monkeypatch):
-    "best_k depends on run-to-run variability and therefore on the init strategy."
     from squidpy.gr import _autok
 
     seen: list[str] = []
@@ -156,21 +142,39 @@ def test_sweep_init_params_is_pinned_but_overridable(monkeypatch):
 
     monkeypatch.setattr(_autok, "GaussianMixture", spy)
 
-    sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, rng=np.random.default_rng(0))
+    sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, seed=0)
     assert set(seen) == {DEFAULT_INIT_PARAMS}
 
     seen.clear()
-    sweep_auto_k(
-        make_blobs(), [1, 2, 3], max_runs=2, model_params={"init_params": "kmeans"}, rng=np.random.default_rng(0)
-    )
+    sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, model_params={"init_params": "kmeans"}, seed=0)
     assert set(seen) == {"kmeans"}
+
+
+def test_sweep_reg_covar_hint():
+    # only two distinct points, so with the regularisation switched off every component
+    # lands on a singular covariance
+    X = np.repeat(np.array([[0.0, 0.0], [1.0, 1.0]]), 15, axis=0)
+    with pytest.raises(ValueError, match=r"model_params=\{'reg_covar'"):
+        sweep_auto_k(X, [2, 3, 4], max_runs=2, model_params={"reg_covar": 0.0}, seed=0)
+
+
+def test_sweep_reg_covar_hint_not_for_other_errors():
+    X = np.zeros((2, 2))  # fewer samples than components
+    with pytest.raises(ValueError, match=r"the mixture fit at K=\d+ failed") as excinfo:
+        sweep_auto_k(X, [2, 3, 4], max_runs=2, seed=0)
+    assert "reg_covar" not in str(excinfo.value)
+
+
+def test_sweep_auto_k_keeps_labels_narrow():
+    result = sweep_auto_k(make_blobs(), [2, 3, 4], max_runs=2, seed=0)
+    assert {labels.dtype for labels in result["labels"].values()} == {np.dtype(np.uint32)}
 
 
 # the per-K table
 
 
-def test_table_covers_every_k_and_leaves_the_halo_unscored():
-    result = sweep_auto_k(make_blobs(), [1, 2, 3, 4, 5], max_runs=2, rng=np.random.default_rng(0))
+def test_table_halo_unscored():
+    result = sweep_auto_k(make_blobs(), [1, 2, 3, 4, 5], max_runs=2, seed=0)
     frame = result["table"]
 
     assert list(frame.index) == [1, 2, 3, 4, 5]
@@ -186,13 +190,12 @@ def test_table_covers_every_k_and_leaves_the_halo_unscored():
 
 
 def test_best_k_is_the_most_stable_scored_k():
-    result = sweep_auto_k(make_blobs(), [1, 2, 3, 4, 5], max_runs=3, rng=np.random.default_rng(0))
+    result = sweep_auto_k(make_blobs(), [1, 2, 3, 4, 5], max_runs=3, seed=0)
     assert result["best_k"] == scored(result)[int(np.argmax(result["stability"].mean(axis=1)))]
 
 
 def test_to_uns_carries_only_what_survives_h5ad(tmp_path):
-    "The payload must reload with its types intact, which lists and K-keyed dicts do not."
-    result = sweep_auto_k(make_blobs(), [1, 2, 3, 4, 5], max_runs=2, rng=np.random.default_rng(0))
+    result = sweep_auto_k(make_blobs(), [1, 2, 3, 4, 5], max_runs=2, seed=0)
     adata = AnnData(np.zeros((result["stability"].shape[0], 1), dtype=np.float32))
     adata.uns["autok"] = to_uns(result)
 
@@ -218,12 +221,11 @@ def test_cluster_auto_k_on_adata():
     diagnostics = adata.uns["cluster_auto_k"]
     assert list(diagnostics["table"].index) == [1, 2, 3, 4, 5]
     assert diagnostics["best_k"] in scored(diagnostics)
-    # only the selected K, since `keep_all_labels` was not asked for
     assert list(adata.obs.columns) == ["cluster_auto_k"]
     assert adata.obs["cluster_auto_k"].dtype == "category"
 
 
-def test_cluster_auto_k_copy_returns_a_copy_and_leaves_the_input_alone():
+def test_cluster_auto_k_copy():
     adata = AnnData(make_blobs())
     out = cluster_auto_k(adata, (2, 4), max_runs=3, seed=0, copy=True)
 
@@ -247,21 +249,18 @@ def test_cluster_auto_k_rejects_a_missing_representation():
 
 
 def test_cluster_auto_k_rejects_sparse_input():
-    "GaussianMixture cannot consume sparse input, so say so instead of failing inside sklearn."
     adata = AnnData(csr_matrix(make_blobs()))
     with pytest.raises(TypeError, match=r"does not support sparse input"):
         cluster_auto_k(adata, (2, 4), max_runs=2, seed=0)
 
 
 def test_cluster_auto_k_keep_all_labels_adds_every_fitted_k():
-    "The sweep fits every K anyway, so a runner-up must be inspectable without refitting."
     adata = AnnData(make_blobs())
     cluster_auto_k(adata, n_clusters=(2, 3), max_runs=2, seed=0, keep_all_labels=True)
 
     fitted = list(adata.uns["cluster_auto_k"]["table"].index)
     assert list(adata.obs.columns) == ["cluster_auto_k", *(f"cluster_auto_k_k{k}" for k in fitted)]
 
-    # the bare column is the selected K, not a separate fit
     best_k = adata.uns["cluster_auto_k"]["best_k"]
     pd.testing.assert_series_equal(
         adata.obs["cluster_auto_k"], adata.obs[f"cluster_auto_k_k{best_k}"], check_names=False
@@ -286,13 +285,11 @@ def test_cluster_auto_k_is_reproducible_from_the_seed():
 
 
 def _runs(ks: list[int], n_runs: int, seed: int = 0) -> list[dict[int, np.ndarray]]:
-    "One dict of labelings per run, as `sweep_auto_k` accumulates them internally."
     rng = np.random.default_rng(seed)
     return [{k: rng.integers(0, k, 40) for k in ks} for _ in range(n_runs)]
 
 
 def test_cluster_stability_pairs_runs_like_the_sweep():
-    "The batch entry point must compare the same run pairs, in the same direction, as `sweep_auto_k` does."
     ks = [2, 3, 4, 5]
     runs = _runs(ks, n_runs=4)
     pairs = list(zip(ks[:-1], ks[1:], strict=True))
@@ -303,7 +300,7 @@ def test_cluster_stability_pairs_runs_like_the_sweep():
 
     _, stability = _cluster_stability({k: [run[k] for run in runs] for k in ks})
     assert stability.shape == (len(ks) - 2, 2 * len(expected))
-    # column order is arbitrary, the multiset of comparisons per interior K is not
+    # column order is arbitrary
     np.testing.assert_allclose(np.sort(mirror_stability(expected), axis=1), np.sort(stability, axis=1))
 
 
@@ -347,7 +344,6 @@ def _adata_with_runs(ks: list[int], n_runs: int) -> tuple[AnnData, dict[int, lis
 
 
 def test_cluster_stability_scores_obs_columns():
-    "The AnnData entry point scores labelings already in `obs`, so any clusterer can be fed to it."
     adata, keys = _adata_with_runs([2, 3, 4], n_runs=3)
 
     df = cluster_stability(adata, keys, copy=True).uns["cluster_stability"]
@@ -361,6 +357,7 @@ def test_cluster_stability_scores_obs_columns():
 def test_cluster_stability_writes_to_uns():
     adata, keys = _adata_with_runs([2, 3, 4], n_runs=2)
     expected = cluster_stability(adata, keys, copy=True).uns["cluster_stability"]
+    assert "cluster_stability" not in adata.uns
 
     assert cluster_stability(adata, keys, key_added="my_stability") is None
     pd.testing.assert_frame_equal(adata.uns["my_stability"], expected)
@@ -373,49 +370,69 @@ def test_cluster_stability_rejects_a_missing_column():
         cluster_stability(adata, keys)
 
 
-def test_sweep_auto_k_points_at_reg_covar_when_a_component_collapses():
-    "sklearn's raw message does not say what to do about it; ours must name the escape hatch."
-    # only two distinct points, so with the regularisation switched off every component
-    # lands on a singular covariance
-    X = np.repeat(np.array([[0.0, 0.0], [1.0, 1.0]]), 15, axis=0)
-    with pytest.raises(ValueError, match=r"model_params=\{'reg_covar'"):
-        sweep_auto_k(X, [2, 3, 4], max_runs=2, model_params={"reg_covar": 0.0}, rng=np.random.default_rng(0))
-
-
 def test_cluster_stability_rejects_empty_cluster_keys():
-    "An empty mapping must raise the usual ValueError, not a bare StopIteration from the log line."
     adata = AnnData(np.zeros((10, 2), dtype=np.float32))
     with pytest.raises(ValueError, match=r"at least 3 K values"):
         cluster_stability(adata, {})
 
 
-def test_sweep_auto_k_does_not_blame_reg_covar_for_unrelated_failures():
-    "The regularisation hint only fits singular covariances; other sklearn errors must pass through clean."
-    X = np.zeros((2, 2))  # fewer samples than components
-    with pytest.raises(ValueError, match=r"the mixture fit at K=\d+ failed") as excinfo:
-        sweep_auto_k(X, [2, 3, 4], max_runs=2, rng=np.random.default_rng(0))
-    assert "reg_covar" not in str(excinfo.value)
+# parity with the reference implementation
 
 
-def test_sweep_auto_k_keeps_labels_narrow():
-    "Every run's labeling is held for the whole sweep, so the dtype is the memory bottleneck."
-    result = sweep_auto_k(make_blobs(), [2, 3, 4], max_runs=2, rng=np.random.default_rng(0))
-    assert {labels.dtype for labels in result["labels"].values()} == {np.dtype(np.uint32)}
+def _cc_expand(n_clusters: tuple[int, int]) -> list[int]:
+    # cellcharter 0.3.7, ClusterAutoK.__init__
+    return list(range(*(max(1, n_clusters[0] - 1), n_clusters[1] + 2)))
 
 
-def test_cellcharter_forwards_model_params():
-    "The regularisation the sweep's error message names has to be reachable from the niche API."
-    import pytest as _pytest
+def _cc_mirror(stability: list[float], n_clusters: list[int]) -> np.ndarray:
+    # cellcharter 0.3.7, ClusterAutoK._mirror_stability
+    chunks = [stability[i : i + len(n_clusters) - 1] for i in range(0, len(stability), len(n_clusters) - 1)]
+    transposed = list(map(list, zip(*chunks, strict=True)))
+    return np.array([transposed[i] + transposed[i - 1] for i in range(1, len(transposed))])
 
-    from squidpy.gr import calculate_niche_cellcharter
 
-    adata = AnnData(np.repeat(np.array([[0.0, 0.0], [1.0, 1.0]]), 15, axis=0).astype(np.float32))
-    adata.obsm["spatial"] = np.random.default_rng(0).random((30, 2)) * 10
-    import squidpy as sq
+def _cc_best_k(stability: np.ndarray, n_clusters: list[int]) -> int:
+    # cellcharter 0.3.7, ClusterAutoK.best_k
+    means = np.array([np.mean(stability[k]) for k in range(len(n_clusters[1:-1]))])
+    return n_clusters[int(np.argmax(means)) + 1]
 
-    sq.gr.spatial_neighbors_knn(adata, n_neighs=4)
-    kwargs = {"distance": 1, "n_clusters": 3, "seed": 0, "copy": True}
 
-    with _pytest.raises(ValueError, match=r"ill-defined empirical covariance"):
-        calculate_niche_cellcharter(adata, model_params={"reg_covar": 0.0}, **kwargs)
-    assert calculate_niche_cellcharter(adata, model_params={"reg_covar": 1e-2}, **kwargs) is not None
+@pytest.mark.parametrize("n_clusters", [(2, 10), (2, 4), (3, 7), (1, 5)])
+def test_expand_n_clusters_matches_cellcharter(n_clusters):
+    assert expand_n_clusters(n_clusters) == _cc_expand(n_clusters)
+
+
+@pytest.mark.parametrize(("n_ks", "n_blocks"), [(5, 3), (6, 1), (4, 6), (11, 10)])
+def test_mirror_stability_matches_cellcharter(n_ks, n_blocks):
+    blocks = np.random.default_rng(0).random((n_blocks, n_ks - 1)).tolist()
+    flat = [v for block in blocks for v in block]
+    np.testing.assert_allclose(mirror_stability(blocks), _cc_mirror(flat, list(range(n_ks))))
+
+
+def test_best_k_matches_cellcharter():
+    ks = list(range(1, 12))
+    blocks = np.random.default_rng(1).random((10, len(ks) - 1)).tolist()
+    ours = pd.Series(mirror_stability(blocks).mean(axis=1), index=ks[1:-1]).idxmax()
+    flat = [v for block in blocks for v in block]
+    assert int(ours) == _cc_best_k(_cc_mirror(flat, ks), ks)
+
+
+def test_sweep_pins_its_stability_curve():
+    # guards mirror_stability/_score_block/the seeding against silent drift. these are the
+    # values the criterion produces, not the ground truth: three well-separated blobs score
+    # K=2 above K=3, which is a property of comparing K against K+1, not of this port.
+    result = sweep_auto_k(make_blobs(), list(range(1, 7)), max_runs=5, seed=0)
+    assert result["best_k"] == 2
+    np.testing.assert_allclose(
+        result["table"]["stability_mean"].to_numpy(),
+        [np.nan, 0.720930, 0.715650, 0.669296, 0.661156, np.nan],
+        rtol=1e-5,
+    )
+
+
+def test_seed_is_keyed_by_run_and_k_not_by_position():
+    X = make_blobs()
+    short = sweep_auto_k(X, [1, 2, 3, 4, 5], max_runs=3, seed=42)
+    long = sweep_auto_k(X, [1, 2, 3, 4, 5, 6], max_runs=3, seed=42)
+    for k in short["labels"]:
+        np.testing.assert_array_equal(short["labels"][k], long["labels"][k])

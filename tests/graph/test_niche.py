@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import numpy as np
 import pytest
 from anndata import AnnData, read_h5ad
 from pandas import Categorical, Series
@@ -28,7 +29,6 @@ GROUPS = "celltype_mapped_refined"
 
 
 def _assert_all_assigned(adata: AnnData, column: str) -> Series:
-    """Every observation receives a niche label under ``column``."""
     assert column in adata.obs.columns
     niches = adata.obs[column]
     assert len(niches) == adata.n_obs
@@ -37,7 +37,6 @@ def _assert_all_assigned(adata: AnnData, column: str) -> Series:
 
 
 def test_niche_calc_nhood_dummy_adata(dummy_adata2: AnnData):
-    "Check whether niche calculation using neighborhood profile approach works as intended for dummy_adata2."
     rerun = dummy_adata2.copy()
     calculate_niche(dummy_adata2, flavor="neighborhood", groups="celltype", n_neighbors=3, resolutions=1.0, seed=0)
     niches = _assert_all_assigned(dummy_adata2, "nhood_niche_res=1.0")
@@ -48,7 +47,6 @@ def test_niche_calc_nhood_dummy_adata(dummy_adata2: AnnData):
 
 
 def test_niche_calc_utag_dummy_adata(dummy_adata2: AnnData):
-    "Check whether niche calculation using utag approach works as intended for dummy_adata2."
     rerun = dummy_adata2.copy()
     calculate_niche(dummy_adata2, flavor="utag", n_neighbors=3, resolutions=1.0, seed=0)
     niches = _assert_all_assigned(dummy_adata2, "utag_niche_res=1.0")
@@ -59,8 +57,6 @@ def test_niche_calc_utag_dummy_adata(dummy_adata2: AnnData):
 
 
 def test_niche_calc_cellcharter_dummy_adata(dummy_adata2: AnnData):
-    "Check whether niche calculation using cellcharter approach works as intended for dummy_adata2."
-
     # since cellcharter throws an error if the object's expression matrix is not sparse, first ensure that is the case
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
 
@@ -79,7 +75,6 @@ def test_niche_calc_cellcharter_dummy_adata(dummy_adata2: AnnData):
 
 
 def test_niche_calc_spatialleiden_dummy_adata(dummy_adata2: AnnData):
-    "Check whether niche calculation using spatialleiden approach works as intended for dummy_adata2."
     pytest.importorskip("spatialleiden")
 
     # need the latent_connectivities_key, meaning have to run the graph construction
@@ -101,7 +96,6 @@ def test_niche_calc_spatialleiden_dummy_adata(dummy_adata2: AnnData):
 
 
 def test_niche_cellcharter_seed_reproducible(dummy_adata2: AnnData):
-    "The same `seed` must give the same niches, a different one must be free to differ."
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
     kwargs = {"distance": 2, "aggregation": "mean"}
 
@@ -115,14 +109,12 @@ def test_niche_cellcharter_seed_reproducible(dummy_adata2: AnnData):
 
 
 def test_niche_cellcharter_seed_none_runs(dummy_adata2: AnnData):
-    "`seed=None` (the default) must work: it means 'draw from OS entropy', not 'missing argument'."
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
-    calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean")
+    calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean", seed=None)
     assert "cellcharter_niche" in dummy_adata2.obs.columns
 
 
 def test_niche_cellcharter_library_seeds_are_independent(dummy_adata2: AnnData, monkeypatch):
-    "Each library must be fitted with its own seed, while the whole run stays reproducible."
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
     dummy_adata2.obs["batch"] = ["batch1"] * 5 + ["batch2"] * 5
     kwargs = {"distance": 2, "aggregation": "mean", "library_key": "batch", "n_components": 2}
@@ -131,8 +123,7 @@ def test_niche_cellcharter_library_seeds_are_independent(dummy_adata2: AnnData, 
     second = calculate_niche_cellcharter(dummy_adata2, seed=0, copy=True, **kwargs)
     assert (first.obs["cellcharter_niche"] == second.obs["cellcharter_niche"]).all()
 
-    # the clusterer is built once and reused for every library, so record what each fit
-    # is actually seeded with
+    # clusterer is reused across libraries; record each fit's seed
     seen: list[int] = []
     original = _niche.GaussianMixture
 
@@ -148,7 +139,6 @@ def test_niche_cellcharter_library_seeds_are_independent(dummy_adata2: AnnData, 
 
 
 def test_niche_cellcharter_seeds_the_pca(dummy_adata2: AnnData, monkeypatch):
-    "PCA is part of the embedding, so `seed` must reach it too, not only the mixture fits."
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
     kwargs = {"distance": 2, "aggregation": "mean", "copy": True}
 
@@ -168,7 +158,6 @@ def test_niche_cellcharter_seeds_the_pca(dummy_adata2: AnnData, monkeypatch):
 
 
 def test_niche_neighborhood_seeds_the_knn_graph(dummy_adata2: AnnData, monkeypatch):
-    "`sc.pp.neighbors` is approximate above ~4096 obs, so `seed` has to control it as well."
     kwargs = {"groups": "celltype", "n_neighbors": 3, "resolutions": 1.0, "copy": True}
 
     seen: list[int] = []
@@ -187,7 +176,6 @@ def test_niche_neighborhood_seeds_the_knn_graph(dummy_adata2: AnnData, monkeypat
 
 
 def test_niche_leiden_resolution_seeds_are_independent(dummy_adata2: AnnData, monkeypatch):
-    "Each resolution is its own clustering run, so each must be seeded independently."
     seen: list[int] = []
     original = _niche.sc.tl.leiden
 
@@ -203,7 +191,6 @@ def test_niche_leiden_resolution_seeds_are_independent(dummy_adata2: AnnData, mo
 
 
 def test_niche_leiden_library_seeds_are_independent(dummy_adata2: AnnData, monkeypatch):
-    "The clusterer is reused across libraries, so it must not replay the same seeds for each one."
     dummy_adata2.obs["batch"] = ["batch1"] * 5 + ["batch2"] * 5
     seen: list[int] = []
     original = _niche.sc.tl.leiden
@@ -223,7 +210,6 @@ def test_niche_leiden_library_seeds_are_independent(dummy_adata2: AnnData, monke
 
 @pytest.mark.parametrize("aggregation", ["mean", "variance"])
 def test_niche_cellcharter_accepts_a_dense_x(dummy_adata2: AnnData, aggregation: str):
-    "A dense `adata.X` used to reach `scipy.sparse.hstack`/`.toarray()` with nothing sparse to work on."
     dense = dummy_adata2.copy()
     sparse = dummy_adata2.copy()
     sparse.X = csr_matrix(sparse.X)
@@ -234,11 +220,21 @@ def test_niche_cellcharter_accepts_a_dense_x(dummy_adata2: AnnData, aggregation:
     assert (from_dense.obs["cellcharter_niche"] == from_sparse.obs["cellcharter_niche"]).all()
 
 
+def test_cellcharter_forwards_model_params():
+    adata = AnnData(np.repeat(np.array([[0.0, 0.0], [1.0, 1.0]]), 15, axis=0).astype(np.float32))
+    adata.obsm["spatial"] = np.random.default_rng(0).random((30, 2)) * 10
+    spatial_neighbors_knn(adata, n_neighs=4)
+    kwargs = {"distance": 1, "n_clusters": 3, "seed": 0, "copy": True}
+
+    with pytest.raises(ValueError, match=r"ill-defined empirical covariance"):
+        calculate_niche_cellcharter(adata, model_params={"reg_covar": 0.0}, **kwargs)
+    assert calculate_niche_cellcharter(adata, model_params={"reg_covar": 1e-2}, **kwargs) is not None
+
+
 # selecting the number of clusters by stability
 
 
 def test_niche_cellcharter_n_clusters_none_keeps_a_single_fit(dummy_adata2: AnnData):
-    "`n_clusters=None` must behave exactly like today: one fit at `n_components`, no diagnostics."
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
     kwargs = {"distance": 2, "aggregation": "mean", "n_components": 4, "seed": 0, "copy": True}
 
@@ -253,7 +249,6 @@ def test_niche_cellcharter_auto_k_stores_per_k_diagnostics(dummy_adata2: AnnData
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
     calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean", seed=0, n_clusters=(2, 3), max_runs=2)
 
-    # the niche column stays independent of the selected K
     assert "cellcharter_niche" in dummy_adata2.obs.columns
 
     diagnostics = dummy_adata2.uns["cellcharter_niche_autok"]
@@ -263,7 +258,6 @@ def test_niche_cellcharter_auto_k_stores_per_k_diagnostics(dummy_adata2: AnnData
     assert list(table.index) == [1, 2, 3, 4], "a (min, max) request gains a +-1 halo"
     assert table.loc[[1, 4], "stability_mean"].isna().all(), "the halo is fitted but not scored"
 
-    # the scored K values are exactly the interior ones, readable off the table
     interior = table.index[table["stability_mean"].notna()].tolist()
     assert interior == [2, 3]
     assert diagnostics["stability"].shape[0] == len(interior)
@@ -272,7 +266,6 @@ def test_niche_cellcharter_auto_k_stores_per_k_diagnostics(dummy_adata2: AnnData
 
 
 def test_niche_cellcharter_auto_k_store_labels(dummy_adata2: AnnData):
-    "`store_labels` must emit one obs column per fitted K, usable as a `color=` key."
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
     calculate_niche_cellcharter(
         dummy_adata2, distance=2, aggregation="mean", seed=0, n_clusters=(2, 3), max_runs=2, store_labels=True
@@ -281,11 +274,10 @@ def test_niche_cellcharter_auto_k_store_labels(dummy_adata2: AnnData):
     for k in dummy_adata2.uns["cellcharter_niche_autok"]["table"].index:
         column = f"cellcharter_niche_k{k}"
         assert column in dummy_adata2.obs.columns
-        assert dummy_adata2.obs[column].nunique() <= k
+        assert dummy_adata2.obs[column].nunique() == k
 
 
 def test_niche_cellcharter_auto_k_labels_go_through_postprocessing(dummy_adata2: AnnData):
-    "Per-K columns are returned from `cluster()`, so `min_niche_size` must apply to them too."
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
     calculate_niche_cellcharter(
         dummy_adata2,
@@ -303,7 +295,6 @@ def test_niche_cellcharter_auto_k_labels_go_through_postprocessing(dummy_adata2:
 
 
 def test_niche_cellcharter_auto_k_is_keyed_by_library(dummy_adata2: AnnData):
-    "Each library sweeps independently, so the diagnostics must be stored per library id."
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
     dummy_adata2.obs["batch"] = ["batch1"] * 5 + ["batch2"] * 5
 
@@ -324,13 +315,11 @@ def test_niche_cellcharter_auto_k_is_keyed_by_library(dummy_adata2: AnnData):
         table = per_library["table"]
         assert per_library["best_k"] in table.index[table["stability_mean"].notna()]
 
-    # the per-library merge carries obs columns, including the per-K ones, with a lib prefix
     assert dummy_adata2.obs["cellcharter_niche"].str.startswith("lib=").all()
     assert dummy_adata2.obs["cellcharter_niche_k2"].str.startswith("lib=").all()
 
 
 def test_niche_cellcharter_auto_k_diagnostics_roundtrip_h5ad(dummy_adata2: AnnData, tmp_path):
-    "The diagnostics land in `uns`, so they have to survive being written out."
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
     calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean", seed=0, n_clusters=(2, 3), max_runs=2)
 
@@ -350,8 +339,6 @@ def test_niche_cellcharter_auto_k_diagnostics_roundtrip_h5ad(dummy_adata2: AnnDa
 
 
 def test_niche_calc_library_key_dummy_adata(dummy_adata2: AnnData):
-    "Check whether niche calculation when library_key is supplied works as intended for dummy_adata2."
-
     # add library_key information in dummy_adata
     dummy_adata2.obs["batch"] = ["batch1"] * 5 + ["batch2"] * 5
 
@@ -366,7 +353,6 @@ def test_niche_calc_library_key_dummy_adata(dummy_adata2: AnnData):
 
 
 def test_niche_calc_spatialleiden_library_key_dummy_adata(dummy_adata2: AnnData):
-    "Check whether niche calculation for spatialleiden works as intended for dummy_adata2 when library_key is supplied."
     pytest.importorskip("spatialleiden")
 
     # need the latent_connectivities_key, meaning have to run the graph construction
@@ -392,7 +378,6 @@ def test_niche_calc_spatialleiden_library_key_dummy_adata(dummy_adata2: AnnData)
 
 
 def test_niche_calc_nhood_multipostprocessor_dummy_adata(dummy_adata2: AnnData):
-    "Check whether niche calculation using neighborhood profile approach works as intended for dummy_adata2, when using both, mask and min_niche_size postprocessors"
     mask = Series(
         [False, False, True, True, True, True, True, True, True, True],
         index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
@@ -415,8 +400,6 @@ def test_niche_calc_nhood_multipostprocessor_dummy_adata(dummy_adata2: AnnData):
 
 
 def test_niche_calc_nhood_dummy_sdata(dummy_adata2: AnnData):
-    "Check whether niche calculation works as intended for the spatialdata version of dummy_adata2."
-
     # make adata into sdata object
     adata_for_sdata = TableModel.parse(dummy_adata2)
     sdata = SpatialData(
@@ -434,7 +417,6 @@ def test_niche_calc_nhood_dummy_sdata(dummy_adata2: AnnData):
 
 
 def test_niche_calc_nhood(adata_seqfish: AnnData):
-    """Check whether niche calculation using neighborhood profile approach works as intended."""
     spatial_neighbors_knn(adata_seqfish, n_neighs=N_NEIGHBORS)
     calculate_niche(
         adata_seqfish,
@@ -455,7 +437,6 @@ def test_niche_calc_nhood(adata_seqfish: AnnData):
 
 
 def test_niche_calc_utag(adata_seqfish: AnnData):
-    """Check whether niche calculation using UTAG approach works as intended."""
     spatial_neighbors_knn(adata_seqfish, n_neighs=N_NEIGHBORS)
     calculate_niche(adata_seqfish, flavor="utag", n_neighbors=N_NEIGHBORS, resolutions=[0.1, 1.0])
 
@@ -467,7 +448,6 @@ def test_niche_calc_utag(adata_seqfish: AnnData):
 
 
 def test_niche_copy_semantics(dummy_adata2: AnnData):
-    "copy=True returns an annotated copy and leaves the input untouched; copy=False mutates and returns None."
     key = "nhood_niche_res=1.0"
     kwargs = {"groups": "celltype", "n_neighbors": 3, "resolutions": 1.0}
 

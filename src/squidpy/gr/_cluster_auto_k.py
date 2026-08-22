@@ -100,18 +100,20 @@ def cluster_auto_k(
     assert_isinstance(data, (AnnData, SpatialData), name="data")
     assert_isinstance(copy, bool, name="copy")
     orig_adata = extract_adata_if_sdata(data, table_key=table_key)
-    adata = orig_adata.copy() if copy else orig_adata
 
     if use_rep is not None:
         assert_isinstance(use_rep, str, name="use_rep")
-        assert_key_in_adata(adata, use_rep, attr="obsm")
+        assert_key_in_adata(orig_adata, use_rep, attr="obsm")
 
     assert_isinstance(max_runs, int, name="max_runs")
     assert_isinstance(convergence_tol, (float, int), name="convergence_tol")
     if seed is not None:
-        assert_isinstance(seed, int, name="seed")
+        assert_isinstance(seed, (int, np.integer), name="seed")
 
+    adata = orig_adata.copy() if copy else orig_adata
     X = adata.obsm[use_rep] if use_rep is not None else adata.X
+    if X is None:
+        raise ValueError("'adata.X' is None. Pass a representation via 'use_rep'.")
     if issparse(X):
         raise TypeError(
             "'GaussianMixture' does not support sparse input. Pass a dense representation via "
@@ -130,12 +132,10 @@ def cluster_auto_k(
         max_runs=max_runs,
         convergence_tol=convergence_tol,
         model_params=model_params,
-        rng=np.random.default_rng(seed),
+        seed=seed,
     )
     logg.info(f"Selected K={result['best_k']} after {result['n_runs']} runs")
 
-    # the selected K is the answer, so it gets the bare `key_added`; the rest are suffixed,
-    # which keeps the primary column name predictable for downstream code
     labels = pd.DataFrame({key_added: pd.Categorical(result["labels"][result["best_k"]])}, index=adata.obs_names)
     if keep_all_labels:
         for k, labeling in result["labels"].items():
@@ -160,10 +160,8 @@ def cluster_stability(
 ) -> AnnData | None:
     """Score existing clusterings by how stably each number of clusters reproduces across runs.
 
-    Where :func:`~squidpy.gr.cluster_auto_k` fits the mixtures itself, this reads labelings that
-    are already in ``adata.obs``, so they may come from any clusterer as long as every K was run
-    repeatedly. Each K is scored by how similar its labeling is to the labeling of the adjacent K
-    across runs; see :func:`~squidpy.gr.cluster_auto_k` for the reasoning.
+    Reads labelings already in ``adata.obs``, so any clusterer will do; see
+    :func:`~squidpy.gr.cluster_auto_k`.
 
     Parameters
     ----------
@@ -171,8 +169,7 @@ def cluster_stability(
     cluster_keys
         Mapping of a number of clusters to the ``adata.obs`` columns holding that K's labelings,
         one column per run. Every K needs the same number of runs and at least two of them, and
-        at least 3 K values are needed since stability is only defined on interior K. The lowest
-        and highest K are therefore a halo: compared against, but never selectable.
+        at least 3 K values, since stability is only defined on interior K.
     score_fn
         Similarity of two labelings. Any ``(labels_true, labels_pred) -> float`` works, e.g.
         :func:`~sklearn.metrics.adjusted_rand_score`.
@@ -193,11 +190,12 @@ def cluster_stability(
     assert_isinstance(data, (AnnData, SpatialData), name="data")
     assert_isinstance(copy, bool, name="copy")
     orig_adata = extract_adata_if_sdata(data, table_key=table_key)
-    adata = orig_adata.copy() if copy else orig_adata
 
     for columns in cluster_keys.values():
         for column in columns:
-            assert_key_in_adata(adata, column, attr="obs")
+            assert_key_in_adata(orig_adata, column, attr="obs")
+
+    adata = orig_adata.copy() if copy else orig_adata
 
     labels = {int(k): [adata.obs[c].to_numpy() for c in columns] for k, columns in cluster_keys.items()}
     interior, stability = _cluster_stability(labels, score_fn=score_fn)

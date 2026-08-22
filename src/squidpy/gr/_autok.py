@@ -1,13 +1,8 @@
 """Stability-based selection of the number of clusters (K) for a Gaussian mixture.
 
-Reimplements the K-selection procedure of CellCharter's ``ClusterAutoK``
-(https://github.com/CSOgroup/cellcharter), which fits every candidate K repeatedly and
-scores each K by how stably its labeling reproduces across runs.
+Reimplements CellCharter's ``ClusterAutoK`` (https://github.com/CSOgroup/cellcharter).
 
-This module deliberately imports nothing from :mod:`squidpy`, so that downstream projects
-(e.g. ``rapids_singlecell``, which vendors squidpy helpers by copying them) can take it as a
-single file. Keep it that way: anything needing :class:`~anndata.AnnData`, squidpy's docstring
-machinery or its validators belongs in :mod:`squidpy.gr._cluster_auto_k` instead.
+Anything needing :class:`~anndata.AnnData` belongs in :mod:`squidpy.gr._cluster_auto_k`.
 """
 
 from __future__ import annotations
@@ -21,16 +16,6 @@ import pandas as pd
 from sklearn.metrics import fowlkes_mallows_score, mean_absolute_percentage_error
 from sklearn.mixture import GaussianMixture
 
-__all__ = [
-    "ClusterAutoKResult",
-    "ClusterAutoKUns",
-    "to_uns",
-    "cluster_stability",
-    "expand_n_clusters",
-    "mirror_stability",
-    "sweep_auto_k",
-]
-
 # `best_k` is a function of run-to-run variability, and therefore of the initialization.
 # Pinned so that the selected K does not silently change with a scikit-learn default.
 DEFAULT_INIT_PARAMS = "random_from_data"
@@ -41,10 +26,9 @@ def expand_n_clusters(n_clusters: tuple[int, int] | Sequence[int]) -> list[int]:
 
     A ``(min, max)`` tuple is expanded to ``range(max(1, min - 1), max + 2)``: stability is
     only defined on interior K values (see :func:`mirror_stability`), so the bounds need a
-    +-1 halo to be selectable themselves.
+    +-1 halo. ``min=1`` is clamped, so K=1 stays halo and is never selectable.
 
-    Any other sequence is taken literally and gets **no** halo, so its first and last entries
-    can never be selected -- ``[2, ..., 10]`` can only yield a best K in ``3..9``.
+    Any other sequence is taken literally and gets no halo.
     """
     if isinstance(n_clusters, tuple):
         if len(n_clusters) != 2:
@@ -52,6 +36,8 @@ def expand_n_clusters(n_clusters: tuple[int, int] | Sequence[int]) -> list[int]:
         low, high = n_clusters
         if low > high:
             raise ValueError(f"'n_clusters' must be (min, max) with min <= max, got {n_clusters!r}")
+        if low < 1:
+            raise ValueError(f"'n_clusters' must be (min, max) with min >= 1, got {n_clusters!r}")
         candidates = list(range(max(1, low - 1), high + 2))
     else:
         candidates = list(n_clusters)
@@ -62,8 +48,7 @@ def expand_n_clusters(n_clusters: tuple[int, int] | Sequence[int]) -> list[int]:
         raise ValueError(f"'n_clusters' must not contain duplicates, got {candidates!r}")
     if len(candidates) < 3:
         raise ValueError(
-            f"stability is only defined on interior K values, so at least 3 K values are needed, got {candidates!r}. "
-            "Pass a (min, max) tuple to get the required +-1 halo added automatically."
+            f"stability is only defined on interior K values, so at least 3 K values are needed, got {candidates!r}."
         )
     return candidates
 
@@ -238,7 +223,7 @@ def sweep_auto_k(
     max_runs: int = 10,
     convergence_tol: float = 1e-2,
     model_params: Mapping[str, Any] | None = None,
-    rng: np.random.Generator | None = None,
+    seed: int | None = None,
 ) -> ClusterAutoKResult:
     """Fit every K repeatedly and score each K by the stability of its labeling.
 
@@ -258,8 +243,9 @@ def sweep_auto_k(
         Extra keyword arguments for :class:`~sklearn.mixture.GaussianMixture`. The caller's
         mapping is never modified. ``n_components`` and ``random_state`` are controlled by
         this function and are rejected.
-    rng
-        Generator seeding every individual fit.
+    seed
+        Base seed. Each fit is seeded from ``(seed, run, K)``, so a fit's seed does not
+        depend on its position in ``n_clusters`` and adding a K leaves the others untouched.
 
     Returns
     -------
@@ -277,8 +263,8 @@ def sweep_auto_k(
             )
     model_params.setdefault("init_params", DEFAULT_INIT_PARAMS)
 
-    if rng is None:
-        rng = np.random.default_rng()
+    if seed is None:
+        seed = int(np.random.SeedSequence().generate_state(1)[0])
 
     ks = list(n_clusters)
     # adjacent pairs rather than `k + 1` arithmetic, so non-contiguous K lists work
@@ -291,11 +277,13 @@ def sweep_auto_k(
     previous_curve: np.ndarray | None = None
     converged = False
 
-    for _ in range(max_runs):
+    for run in range(max_runs):
         run_labels: dict[int, np.ndarray] = {}
         for k in ks:
-            # a fresh draw per fit, so runs differ while the whole sweep stays reproducible
-            labels, nll = _fit_once(X, k, int(rng.integers(np.iinfo(np.int32).max)), model_params)
+            # keyed by (run, K) rather than drawn in sequence, so appending a candidate K
+            # does not re-seed every other K's fits
+            random_state = int(np.random.SeedSequence([seed, run, k]).generate_state(1)[0])
+            labels, nll = _fit_once(X, k, random_state, model_params)
             run_labels[k] = labels
             if k not in best_nll or nll < best_nll[k]:
                 best_nll[k], best_labels[k] = nll, labels
