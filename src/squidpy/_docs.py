@@ -237,16 +237,22 @@ _niche_min_niche_size = """\
 min_niche_size
     Minimum number of observations required for a niche. Niches with fewer observations
     are relabeled ``'not_a_niche'``."""
-_niche_inplace = """\
-inplace
-    If `True`, modify the table in place and return `None`.
-    If `False`, return a modified copy and leave the input unchanged."""
 # the postprocessing + output params every user-facing niche function shares, in signature order
 _niche_common_params = f"""\
 {_niche_min_niche_size}
 {_niche_mask}
 {_library_key}
-{_niche_inplace}"""
+{_copy}"""
+_niche_leiden_params = """\
+flavor
+    Leiden backend passed to :func:`scanpy.tl.leiden`. Defaults to ``'igraph'``
+    (the ``'leidenalg'`` backend is deprecated in scanpy).
+n_iterations
+    Number of Leiden iterations. ``-1`` iterates until convergence.
+seed
+    Random seed for the neighbor graph and the Leiden clustering, for reproducible niche
+    labels. Each resolution is seeded independently from it, so adding a resolution does
+    not shift the others."""
 
 # static plotting docs
 _plotting_kwargs_static = """\
@@ -502,8 +508,8 @@ d = DocstringProcessor(
     niche_spatial_conn_key=_niche_spatial_conn_key,
     niche_mask=_niche_mask,
     niche_min_niche_size=_niche_min_niche_size,
-    niche_inplace=_niche_inplace,
     niche_common_params=_niche_common_params,
+    niche_leiden_params=_niche_leiden_params,
     sdata_params=_sdata_params,
     graph_common_params=_graph_common_params,
     n_jobs_libraries=_n_jobs_libraries,

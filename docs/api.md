@@ -28,6 +28,7 @@ import squidpy as sq
     gr.mask_graph
     gr.nhood_enrichment
     gr.NhoodEnrichmentResult
+    gr.nhood_entropy
     gr.co_occurrence
     gr.centrality_scores
     gr.interaction_matrix
@@ -40,6 +41,14 @@ import squidpy as sq
     gr.calculate_niche_utag
     gr.calculate_niche_cellcharter
     gr.calculate_niche_spatialleiden
+    gr.cluster_auto_k
+    gr.cluster_stability
+
+.. autosummary::
+    :toctree: api
+    :template: autosummary/typed_dict.rst
+
+    gr.ClusterAutoKResult
 ```
 
 ## Image

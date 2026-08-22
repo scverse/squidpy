@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import warnings
 from abc import ABC, abstractmethod
+from collections.abc import Mapping, Sequence
 from typing import Any, Literal
 
 import anndata as ad
@@ -10,7 +11,7 @@ import pandas as pd
 import scanpy as sc
 import scipy.sparse as sps
 from anndata import AnnData
-from scipy.sparse import coo_matrix, hstack, issparse, lil_matrix, spdiags
+from scipy.sparse import issparse, spdiags
 from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import normalize
 from spatialdata import SpatialData, sanitize_table
@@ -18,8 +19,10 @@ from spatialdata._logging import logger as logg
 
 from squidpy._constants._constants import NicheDefinitions
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA
+from squidpy._utils import NDArrayA, rng_to_random_state, spawn_generators
 from squidpy._validators import assert_isinstance, assert_key_in_adata, assert_one_of
+from squidpy.gr._autok import DEFAULT_INIT_PARAMS, expand_n_clusters, sweep_auto_k, to_uns
+from squidpy.gr._nhood import _nhood_profile
 from squidpy.gr._utils import extract_adata_if_sdata
 
 __all__ = [
@@ -48,7 +51,6 @@ def calculate_niche(
     n_hop_weights: list[float] | None = None,
     aggregation: str | None = None,
     n_components: int | None = None,
-    random_state: int = 42,
     spatial_connectivities_key: str = "spatial_connectivities",
     latent_connectivities_key: str = "connectivities",
     layer_ratio: float = 1.0,
@@ -58,6 +60,7 @@ def calculate_niche(
     inplace: bool = True,
     *,
     table_key: str | None = None,
+    seed: int | None = 42,
 ) -> AnnData | None:
     """
     Calculate niches (spatial clusters) based on a user-defined method in 'flavor'.
@@ -131,8 +134,8 @@ def calculate_niche(
     n_components
         Number of components to use for GMM.
         Required if flavor == `{fla.CELLCHARTER.s!r}`.
-    random_state
-        Random state to use for GMM or SpatialLeiden.
+    seed
+        Random seed for reproducibility. If `None`, results are not reproducible.
         Optional if flavor == `{fla.CELLCHARTER.s!r}` or flavor == `{fla.SPATIALLEIDEN.s!r}`.
     spatial_connectivities_key
         Key in `adata.obsp` where spatial connectivities are stored.
@@ -190,7 +193,7 @@ def calculate_niche(
         n_hop_weights,
         aggregation,
         n_components,
-        random_state,
+        seed,
         spatial_connectivities_key,
         latent_connectivities_key,
         layer_ratio,
@@ -216,9 +219,11 @@ def calculate_niche(
             n_hop_weights,
             min_niche_size,
             mask,
-            library_key,
-            inplace,
-            table_key,
+            library_key=library_key,
+            copy=not inplace,
+            table_key=table_key,
+            n_iterations=n_iterations,
+            seed=seed,
         )
 
     elif flavor == "utag":
@@ -229,9 +234,11 @@ def calculate_niche(
             spatial_connectivities_key,
             min_niche_size,
             mask,
-            library_key,
-            inplace,
-            table_key,
+            library_key=library_key,
+            copy=not inplace,
+            table_key=table_key,
+            n_iterations=n_iterations,
+            seed=seed,
         )
 
     elif flavor == "cellcharter":
@@ -239,15 +246,15 @@ def calculate_niche(
             data,
             distance,
             aggregation,
-            random_state,
+            seed,
             spatial_connectivities_key,
             n_components,
             use_rep,
             min_niche_size,
             mask,
-            library_key,
-            inplace,
-            table_key,
+            library_key=library_key,
+            copy=not inplace,
+            table_key=table_key,
         )
 
     elif flavor == "spatialleiden":
@@ -259,12 +266,12 @@ def calculate_niche(
             layer_ratio,
             n_iterations,
             use_weights,
-            random_state,
+            seed,
             min_niche_size,
             mask,
             prefix=None,
             library_key=library_key,
-            inplace=inplace,
+            copy=not inplace,
             table_key=table_key,
         )
 
@@ -285,8 +292,12 @@ def calculate_niche_neighborhood(
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     library_key: str | None = None,
-    inplace: bool = True,
+    copy: bool = False,
     table_key: str | None = None,
+    *,
+    flavor: Literal["igraph", "leidenalg"] = "igraph",
+    n_iterations: int = -1,
+    seed: int | None = 42,
 ) -> AnnData | None:
     """Compute niche neighborhoods using a neighborhood profile embedding and Leiden clustering.
 
@@ -315,11 +326,12 @@ def calculate_niche_neighborhood(
         Weights for combining neighborhood profiles across hops.
     %(niche_common_params)s
     %(table_key)s
+    %(niche_leiden_params)s
 
     Returns
     -------
-    If ``inplace = True``, modifies ``adata`` in place and returns ``None``.
-    Otherwise, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+    If ``copy = True``, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+    Otherwise, modifies ``adata`` in place and returns ``None``.
 
     """
 
@@ -334,7 +346,14 @@ def calculate_niche_neighborhood(
     )
 
     # Create instance of _LeidenClusterer using provided inputs
-    clusterer = _LeidenClusterer(n_neighbors, resolutions, "nhood_niche")
+    clusterer = _LeidenClusterer(
+        n_neighbors,
+        resolutions,
+        "nhood_niche",
+        flavor=flavor,
+        n_iterations=n_iterations,
+        rng=np.random.default_rng(seed),
+    )
 
     return _calculate_niche_custom(
         data,
@@ -343,7 +362,7 @@ def calculate_niche_neighborhood(
         min_niche_size=min_niche_size,
         mask=mask,
         library_key=library_key,
-        inplace=inplace,
+        copy=copy,
         table_key=table_key,
     )
 
@@ -357,8 +376,12 @@ def calculate_niche_utag(
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     library_key: str | None = None,
-    inplace: bool = True,
+    copy: bool = False,
     table_key: str | None = None,
+    *,
+    flavor: Literal["igraph", "leidenalg"] = "igraph",
+    n_iterations: int = -1,
+    seed: int | None = 42,
 ) -> AnnData | None:
     """Compute niche assignments using a UTAG-style neighborhood embedding.
 
@@ -375,17 +398,28 @@ def calculate_niche_utag(
     %(niche_spatial_conn_key)s
     %(niche_common_params)s
     %(table_key)s
+    %(niche_leiden_params)s
 
     Returns
     -------
-    If ``inplace = True``, modifies ``adata`` in place and returns ``None``.
-    Otherwise, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+    If ``copy = True``, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+    Otherwise, modifies ``adata`` in place and returns ``None``.
 
     """
 
-    embedder = _UtagEmbedder(spatial_connectivities_key)
+    # independent streams so changing one stage does not shift the other's draws
+    embedder_rng, clusterer_rng = spawn_generators(seed, 2)
 
-    clusterer = _LeidenClusterer(n_neighbors, resolutions, "utag_niche")
+    embedder = _UtagEmbedder(spatial_connectivities_key, rng=embedder_rng)
+
+    clusterer = _LeidenClusterer(
+        n_neighbors,
+        resolutions,
+        "utag_niche",
+        flavor=flavor,
+        n_iterations=n_iterations,
+        rng=clusterer_rng,
+    )
 
     return _calculate_niche_custom(
         data,
@@ -394,7 +428,7 @@ def calculate_niche_utag(
         min_niche_size=min_niche_size,
         mask=mask,
         library_key=library_key,
-        inplace=inplace,
+        copy=copy,
         table_key=table_key,
     )
 
@@ -404,20 +438,27 @@ def calculate_niche_cellcharter(
     data: AnnData | SpatialData,
     distance: int = 3,
     aggregation: str = "mean",
-    random_state: int = 42,
+    seed: int | None = 42,
     spatial_connectivities_key: str = "spatial_connectivities",
     n_components: int = 10,
     use_rep: str | None = None,
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     library_key: str | None = None,
-    inplace: bool = True,
+    copy: bool = False,
     table_key: str | None = None,
+    *,
+    n_clusters: int | tuple[int, int] | Sequence[int] | None = None,
+    max_runs: int = 10,
+    convergence_tol: float = 1e-2,
+    store_labels: bool = False,
+    model_params: Mapping[str, Any] | None = None,
 ) -> AnnData | None:
     """Compute niche assignments using a CellCharter-style aggregation embedding.
 
     Features are aggregated across multi-hop spatial neighborhoods, then clustered
-    with a Gaussian mixture model.
+    with a Gaussian mixture model. The number of mixture components can either be fixed
+    or selected by the stability sweep of :func:`~squidpy.gr.cluster_auto_k`.
 
     Parameters
     ----------
@@ -427,8 +468,9 @@ def calculate_niche_cellcharter(
     aggregation
         Aggregation mode used for neighborhood features, typically ``"mean"`` or
         ``"variance"``.
-    random_state
-        Random seed used by the Gaussian mixture clustering step.
+    %(seed)s
+        Seeds the Gaussian mixture clustering step. When stratifying by ``library_key``,
+        every library is fitted with an independent seed derived from this one.
     %(niche_spatial_conn_key)s
     n_components
         Number of embedding components to retain when ``use_rep`` is provided,
@@ -438,17 +480,63 @@ def calculate_niche_cellcharter(
         instead of deriving a spatially aggregated embedding.
     %(niche_common_params)s
     %(table_key)s
+    n_clusters
+        Number of mixture components. ``None`` falls back to ``n_components``, an ``int``
+        fits that number directly, and a ``(min, max)`` tuple or a sequence of candidates
+        selects the most stable K by fitting each candidate ``max_runs`` times, see
+        ``expand_n_clusters``.
+    max_runs
+        Maximum number of repetitions per candidate K. Only used when ``n_clusters``
+        requests a sweep.
+    convergence_tol
+        Stop the sweep early once the mean absolute percentage error between the mean
+        stability curves of consecutive runs falls below this value.
+    store_labels
+        Also keep the labeling of every fitted K as ``cellcharter_niche_k{K}`` columns in
+        ``adata.obs``, for comparing resolutions.
+    model_params
+        Extra keyword arguments for :class:`~sklearn.mixture.GaussianMixture`, e.g.
+        ``{'reg_covar': 1e-4}`` when a component collapses. The mapping is never modified.
+        ``n_components`` and ``random_state`` are controlled by ``n_clusters`` and ``seed``.
 
     Returns
     -------
-    If ``inplace = True``, modifies ``adata`` in place and returns ``None``.
-    Otherwise, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+    If ``copy = True``, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+    Otherwise, modifies ``adata`` in place and returns ``None``.
 
+    When ``n_clusters`` requests a sweep, per-K diagnostics are stored in
+    ``adata.uns["cellcharter_niche_autok"]`` (keyed by library id when ``library_key`` is
+    given, since each library selects its own K). The niche column is always
+    ``cellcharter_niche``, independent of the selected K.
     """
 
-    embedder = _CellcharterEmbedder(distance, aggregation, spatial_connectivities_key, n_components, use_rep)
+    # independent streams so changing one stage does not shift the other's draws
+    embedder_rng, rng = spawn_generators(seed, 2)
 
-    clusterer = _GMMClusterer(n_components, random_state, base_colname="cellcharter_niche")
+    embedder = _CellcharterEmbedder(
+        distance, aggregation, spatial_connectivities_key, n_components, use_rep, rng=embedder_rng
+    )
+
+    clusterer: _NicheClusterer
+    if n_clusters is None or isinstance(n_clusters, int):
+        # `n_components` doubles as rep width above; `n_clusters` takes over the mixture count
+        clusterer = _GMMClusterer(
+            n_components if n_clusters is None else n_clusters,
+            rng,
+            base_colname="cellcharter_niche",
+            model_params=model_params,
+        )
+    else:
+        clusterer = _AutoKGMMClusterer(
+            n_clusters,
+            rng,
+            max_runs=max_runs,
+            convergence_tol=convergence_tol,
+            store_labels=store_labels,
+            base_colname="cellcharter_niche",
+            uns_key="cellcharter_niche_autok",
+            model_params=model_params,
+        )
 
     return _calculate_niche_custom(
         data,
@@ -457,7 +545,7 @@ def calculate_niche_cellcharter(
         min_niche_size=min_niche_size,
         mask=mask,
         library_key=library_key,
-        inplace=inplace,
+        copy=copy,
         table_key=table_key,
     )
 
@@ -471,12 +559,12 @@ def calculate_niche_spatialleiden(
     layer_ratio: float = 1.0,
     n_iterations: int = -1,
     use_weights: bool | tuple[bool, bool] = True,
-    random_state: int = 42,
+    seed: int | None = 42,
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     prefix: str | None = None,
     library_key: str | None = None,
-    inplace: bool = True,
+    copy: bool = False,
     table_key: str | None = None,
 ) -> AnnData | None:
     """Compute niche assignments using the SpatialLeiden algorithm.
@@ -501,8 +589,9 @@ def calculate_niche_spatialleiden(
         Number of optimization iterations used by SpatialLeiden.
     use_weights
         Whether to use edge weights during clustering.
-    random_state
-        Random seed passed to the SpatialLeiden routine.
+    %(seed)s
+        Each resolution — and each library when stratifying by ``library_key`` — is
+        clustered with an independent seed derived from this one.
     %(niche_min_niche_size)s
     %(niche_mask)s
     prefix
@@ -510,13 +599,13 @@ def calculate_niche_spatialleiden(
         When stratifying by ``library_key``, a library-specific prefix is added
         automatically (something like "lib=").
     %(library_key)s
-    %(niche_inplace)s
+    %(copy)s
     %(table_key)s
 
     Returns
     -------
-    If ``inplace = True``, modifies ``adata`` in place and returns ``None``.
-    Otherwise, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+    If ``copy = True``, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+    Otherwise, modifies ``adata`` in place and returns ``None``.
 
     Notes
     -----
@@ -533,10 +622,7 @@ def calculate_niche_spatialleiden(
     # obtain adata if data was of sdata type
     orig_adata = extract_adata_if_sdata(data, table_key=table_key)
 
-    if inplace:
-        adata = orig_adata
-    else:
-        adata = orig_adata.copy()
+    adata = orig_adata.copy() if copy else orig_adata
 
     if library_key is not None:
         # first assert that library_key was there in adata.obs, and then, stratify the object according to that library_key and
@@ -544,8 +630,12 @@ def calculate_niche_spatialleiden(
         assert_key_in_adata(adata, library_key, attr="obs")
         logg.info(f"Stratifying by library_key '{library_key}'")
 
+        # indexed by `itr` so skipped empty libraries don't shift the others' seeds
+        library_ids = adata.obs[library_key].unique()
+        library_rngs = spawn_generators(seed, len(library_ids))
+
         # go through each library_id and process the corresponding adata subset
-        for itr, lib_id in enumerate(adata.obs[library_key].unique()):
+        for itr, lib_id in enumerate(library_ids):
             logg.info(f"Processing library '{lib_id}'")
 
             lib_indices = adata.obs[adata.obs[library_key] == lib_id].index
@@ -565,12 +655,12 @@ def calculate_niche_spatialleiden(
                 layer_ratio,
                 n_iterations,
                 use_weights,
-                random_state,
+                rng_to_random_state(library_rngs[itr]),
                 min_niche_size,
                 mask,
                 prefix=f"lib={lib_id}_",
                 library_key=None,
-                inplace=True,  # to save memory
+                copy=False,  # to save memory
                 table_key=table_key,
             )
 
@@ -590,7 +680,9 @@ def calculate_niche_spatialleiden(
         if not isinstance(resolutions, list):
             resolutions = [resolutions]
 
-        for res in resolutions:
+        resolution_rngs = spawn_generators(seed, len(resolutions))
+
+        for res, res_rng in zip(resolutions, resolution_rngs, strict=True):
             sl.spatialleiden(
                 adata,
                 resolution=res,
@@ -599,7 +691,7 @@ def calculate_niche_spatialleiden(
                 layer_ratio=layer_ratio,
                 latent_neighbors_key=latent_connectivities_key,
                 spatial_neighbors_key=spatial_connectivities_key,
-                random_state=random_state,
+                random_state=rng_to_random_state(res_rng),
                 directed=False,
                 key_added=f"spatialleiden_res={res}",
             )
@@ -614,10 +706,7 @@ def calculate_niche_spatialleiden(
     if isinstance(data, SpatialData):
         sanitize_table(adata)
 
-    if inplace:
-        return None
-    else:
-        return adata
+    return adata if copy else None
 
 
 @d.dedent
@@ -628,7 +717,7 @@ def _calculate_niche_custom(
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     library_key: str | None = None,
-    inplace: bool = True,
+    copy: bool = False,
     table_key: str | None = None,
 ) -> AnnData | None:
     """Compute niche assignments using user-defined embedding, clustering, and postprocessing.
@@ -648,13 +737,16 @@ def _calculate_niche_custom(
 
     Returns
     -------
-    If ``inplace = True``, modifies ``adata`` in place and returns ``None``.
-    Otherwise, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+    If ``copy = True``, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+    Otherwise, modifies ``adata`` in place and returns ``None``.
 
     Notes
     -----
     If ``library_key`` is provided, the computation is performed independently
     for each library and results are merged back into ``adata``.
+
+    Any diagnostics returned by the clusterer are written to ``adata.uns`` under the keys it
+    provides. See :meth:`_NicheClusterer.cluster`.
 
     See Also
     --------
@@ -669,14 +761,13 @@ def _calculate_niche_custom(
     # obtain adata if data was of sdata type
     orig_adata = extract_adata_if_sdata(data, table_key=table_key)
 
-    if inplace:
-        adata = orig_adata
-    else:
-        adata = orig_adata.copy()
+    adata = orig_adata.copy() if copy else orig_adata
 
     if library_key is not None:
         assert_key_in_adata(adata, library_key, attr="obs")
         logg.info(f"Stratifying by library_key '{library_key}'")
+
+        diagnostics_per_library: dict[str, dict[str, Any]] = {}
 
         # go through each library_id and process the corresponding adata subset
         for itr, lib_id in enumerate(adata.obs[library_key].unique()):
@@ -690,9 +781,11 @@ def _calculate_niche_custom(
 
             lib_adata = adata[lib_indices].copy()
 
-            _run_niche_pipeline(
+            diagnostics = _run_niche_pipeline(
                 lib_adata, embedder, clusterer, mask=mask, min_niche_size=min_niche_size, prefix=f"lib={lib_id}_"
             )
+            if diagnostics is not None:
+                diagnostics_per_library[str(lib_id)] = diagnostics
 
             # from itr==1 onwards, adata will hold the columns that are being added hence,
             # added_columns will be empty. Hence only obtain added_columns when itr==0
@@ -705,18 +798,25 @@ def _calculate_niche_custom(
                     adata.obs[col] = "not_a_niche"
                 adata.obs.loc[lib_indices, col] = list(lib_adata.obs[col].astype("str"))
 
+        # per-library `uns` is discarded by the merge, so write once here
+        for uns_key in {key for per_library in diagnostics_per_library.values() for key in per_library}:
+            adata.uns[uns_key] = {
+                lib_id: per_library[uns_key]
+                for lib_id, per_library in diagnostics_per_library.items()
+                if uns_key in per_library
+            }
+
     else:
-        _run_niche_pipeline(adata, embedder, clusterer, mask=mask, min_niche_size=min_niche_size)
+        diagnostics = _run_niche_pipeline(adata, embedder, clusterer, mask=mask, min_niche_size=min_niche_size)
+        if diagnostics is not None:
+            adata.uns.update(diagnostics)
 
     # For SpatialData, the column names shouldn't have = sign. Hence, run sanitize_table.
     # TODO: In future, change the naming standard of any niche columns added to not have '=' to be compatible with spatialdata naming
     if isinstance(data, SpatialData):
         sanitize_table(adata)
 
-    if inplace:
-        return None
-    else:
-        return adata
+    return adata if copy else None
 
 
 def _run_niche_pipeline(
@@ -726,11 +826,12 @@ def _run_niche_pipeline(
     mask: pd.Series | None,
     min_niche_size: int | None,
     prefix: str | None = None,
-) -> None:
-    """Embed, cluster, and postprocess ``adata`` in place."""
+) -> dict[str, Any] | None:
+    """Embed, cluster, postprocess in place; returns clusterer diagnostics as {uns_key: payload}."""
     embedding = embedder.get_embedding(adata)
-    result_columns = clusterer.cluster(adata, embedding)
+    result_columns, diagnostics = clusterer.cluster(adata, embedding)
     _postprocess_niche_results(adata, result_columns, mask, min_niche_size, prefix)
+    return diagnostics
 
 
 def _validate_niche_args(
@@ -748,7 +849,7 @@ def _validate_niche_args(
     n_hop_weights: list[float] | None,
     aggregation: str | None,
     n_components: int | None,
-    random_state: int,
+    seed: int | None,
     spatial_connectivities_key: str,
     latent_connectivities_key: str,
     layer_ratio: float,
@@ -817,21 +918,21 @@ def _validate_niche_args(
                 "abs_nhood",
                 "distance",
                 "n_hop_weights",
+                "seed",
+                "n_iterations",
             ],
             "unused": [
                 "aggregation",
                 "n_components",
-                "random_state",
                 "latent_connectivities_key",
                 "layer_ratio",
-                "n_iterations",
                 "use_weights",
                 "use_rep",
             ],
         },
         "utag": {
             "required": ["n_neighbors", "resolutions", "spatial_connectivities_key"],
-            "optional": [],
+            "optional": ["seed", "n_iterations"],
             "unused": [
                 "groups",
                 "min_niche_size",
@@ -841,17 +942,16 @@ def _validate_niche_args(
                 "n_hop_weights",
                 "aggregation",
                 "n_components",
-                "random_state",
                 "latent_connectivities_key",
                 "layer_ratio",
-                "n_iterations",
                 "use_weights",
                 "use_rep",
             ],
         },
         "cellcharter": {
-            "required": ["distance", "aggregation", "random_state", "spatial_connectivities_key"],
-            "optional": ["n_components", "use_rep"],
+            "required": ["distance", "aggregation", "spatial_connectivities_key"],
+            # `seed` is optional: `None` is a valid value meaning "draw from OS entropy"
+            "optional": ["n_components", "use_rep", "seed"],
             "unused": [
                 "groups",
                 "min_niche_size",
@@ -873,7 +973,7 @@ def _validate_niche_args(
                 "layer_ratio",
                 "n_iterations",
                 "use_weights",
-                "random_state",
+                "seed",
             ],
             "unused": ["groups", "min_niche_size", "scale", "abs_nhood", "n_neighbors", "n_hop_weights", "use_rep"],
         },
@@ -897,7 +997,7 @@ def _validate_niche_args(
             "n_hop_weights": n_hop_weights,
             "aggregation": aggregation,
             "n_components": n_components,
-            "random_state": random_state,
+            "seed": seed,
             "use_rep": use_rep,
         },
         flavor_param_specs[flavor],
@@ -927,7 +1027,8 @@ def _validate_niche_args(
         if n_components < 1:
             raise ValueError(f"'n_components' must be at least 1, got {n_components}")
 
-        assert_isinstance(random_state, int, name="random_state")
+        if seed is not None:
+            assert_isinstance(seed, int, name="seed")
 
         if use_rep is not None:
             assert_isinstance(use_rep, str, name="use_rep")
@@ -951,7 +1052,8 @@ def _validate_niche_args(
             )
         ):
             raise TypeError(f"'use_weights' must be a bool or a tuple of two bools, got {use_weights!r}")
-        assert_isinstance(random_state, int, name="random_state")
+        if seed is not None:
+            assert_isinstance(seed, int, name="seed")
 
         if resolutions is None:
             resolutions = [1.0]
@@ -981,8 +1083,6 @@ def _check_unnecessary_args(flavor: str, param_dict: dict[str, Any], param_specs
         if param_name == "scale" and param_value is True:
             continue
         if param_name == "abs_nhood" and param_value is False:
-            continue
-        if param_name == "random_state" and param_value == 42:
             continue
 
         if param_value is not None:
@@ -1038,14 +1138,19 @@ def _normalize(adj: sps.spmatrix) -> sps.spmatrix:
     return spdiags(deg_inv, 0, len(deg_inv), len(deg_inv)) * adj
 
 
+def _densify(matrix: Any) -> NDArrayA:
+    """Dense view of *matrix*, which may already be dense."""
+    return matrix.toarray() if issparse(matrix) else np.asarray(matrix)
+
+
 def _aggregate(adata: AnnData, normalized_adjacency_matrix: sps.spmatrix, aggregation: str = "mean") -> Any:
     """aggregate count and adjacency matrix either by mean or variance"""
     # TODO: add support for other aggregation methods
     if aggregation == "mean":
         aggregated_matrix = normalized_adjacency_matrix @ adata.X
     elif aggregation == "variance":
-        mean_matrix = (normalized_adjacency_matrix @ adata.X).toarray()
-        X_to_arr = adata.X.toarray()
+        mean_matrix = _densify(normalized_adjacency_matrix @ adata.X)
+        X_to_arr = _densify(adata.X)
         mean_squared_matrix = normalized_adjacency_matrix @ (X_to_arr * X_to_arr)
         aggregated_matrix = mean_squared_matrix - mean_matrix * mean_matrix
     else:
@@ -1114,70 +1219,14 @@ class _NhoodProfileEmbedder(_NicheEmbedder):
         self.abs_nhood = abs_nhood
         self.n_hop_weights = n_hop_weights
 
-    def _calculate_neighborhood_profile(
-        self,
-        adata: AnnData,
-        matrix: coo_matrix,
-    ) -> pd.DataFrame:
-        """
-        Returns an obs x category matrix where each column is the absolute/relative frequency of a category in the neighborhood
-        """
-
-        # ensure that adata.obs[group] is of categorical type, as that makes it explicit, which cols of the returned profile_df
-        # correspond to which categories in group
-        if adata.obs[self.groups].dtype.name != "category":
-            warnings.warn(
-                "Since adata.obs[groups] does not already have categorical dtype, converting it into categorical type.",
-                stacklevel=2,
-            )
-            adata.obs[self.groups] = adata.obs[self.groups].astype("category")
-
-        # ensure matrix is in csc format for efficient column slicing
-        if matrix.format != "csc":
-            matrix = matrix.tocsc()
-
-        # get cell categories in order
-        categories_order = adata.obs[self.groups].cat.categories
-        n_categories = len(categories_order)
-
-        # map category to column index
-        category_to_idx = {ct: i for i, ct in enumerate(categories_order)}
-
-        # pre allocate sparse LIL matrix for efficient assignment (n_cells x n_categories)
-        profile_sparse = lil_matrix((matrix.shape[0], n_categories), dtype=np.float64)
-
-        # for each category, sum over cells of that category
-        for ct in categories_order:
-            ct_mask = adata.obs[self.groups] == ct  # boolean mask for cells of this category
-            col_indices = np.where(ct_mask)[0]  # indices of those cells
-            if len(col_indices) > 0:
-                col_slice = matrix[:, col_indices]  # sparse submatrix
-                profile_sparse[:, category_to_idx[ct]] = col_slice.sum(axis=1).A1
-
-        # convert to dataframe (csr for final storage, dense for pandas)
-        profile_df = pd.DataFrame(
-            profile_sparse.tocsr().todense(), index=adata.obs[self.groups].index, columns=categories_order
-        )
-
-        # now according to parameter abs_nhood, make raw counts into proportions or not
-        if not self.abs_nhood:
-            total_neighs = profile_df.sum(axis=1)
-            profile_df = profile_df.div(total_neighs, axis=0)
-            # this may lead to some values being nan, as some cells might have had no neighbors. Make those values as 0
-            profile_df = profile_df.fillna(0.0)
-
-        return profile_df
-
     def get_embedding(self, adata: AnnData) -> NDArrayA:
         """
         adapted from https://github.com/immunitastx/monkeybread/blob/main/src/monkeybread/calc/_neighborhood_profile.py
         """
 
-        # get obs x neighbor matrix from sparse matrix
-        matrix = adata.obsp[self.spatial_connectivities_key].tocoo()
-
-        # get obs x category matrix where each column is the absolute/relative frequency of a category in the neighborhood
-        nhood_profile = self._calculate_neighborhood_profile(adata, matrix)
+        nhood_profile = _nhood_profile(
+            adata.obs[self.groups], adata.obsp[self.spatial_connectivities_key], normalize=not self.abs_nhood
+        )
 
         # Additionally use n-hop neighbors if distance > 1. This sums up the (weighted) neighborhood profiles of all n-hop neighbors.
         if self.distance > 1:
@@ -1202,10 +1251,11 @@ class _NhoodProfileEmbedder(_NicheEmbedder):
                 logg.debug(f"Calculating {n_hop + 1}-hop neighbors")
                 # Multiply adjacency matrix by itself to get n+1 hop adjacency
                 n_hop_adjacency_matrix = n_hop_adjacency_matrix @ adata.obsp[self.spatial_connectivities_key]
-                matrix = n_hop_adjacency_matrix.tocoo()
 
                 # Calculate and add weighted profile
-                hop_profile = self._calculate_neighborhood_profile(adata, matrix)
+                hop_profile = _nhood_profile(
+                    adata.obs[self.groups], n_hop_adjacency_matrix, normalize=not self.abs_nhood
+                )
                 weighted_profile += weights[n_hop] * hop_profile
 
             if not self.abs_nhood:
@@ -1247,8 +1297,10 @@ class _UtagEmbedder(_NicheEmbedder):
     def __init__(
         self,
         spatial_connectivities_key: str,
+        rng: np.random.Generator | None = None,
     ):
         self.spatial_connectivities_key = spatial_connectivities_key
+        self.rng = rng if rng is not None else np.random.default_rng()
 
     def get_embedding(self, adata: AnnData) -> NDArrayA:
         """
@@ -1259,7 +1311,8 @@ class _UtagEmbedder(_NicheEmbedder):
         adjacency_matrix = adata.obsp[self.spatial_connectivities_key]
         new_feature_matrix = normalize(adjacency_matrix, norm="l1", axis=1) @ adata.X
         adata_utag = ad.AnnData(X=new_feature_matrix)
-        sc.tl.pca(adata_utag)  # note: unlike with flavor 'neighborhood' dim reduction is performed here
+        # note: unlike flavor 'neighborhood', dim reduction happens here
+        sc.tl.pca(adata_utag, random_state=rng_to_random_state(self.rng))
         return adata_utag.obsm["X_pca"]
 
 
@@ -1302,12 +1355,14 @@ class _CellcharterEmbedder(_NicheEmbedder):
         spatial_connectivities_key: str,
         n_components: int,
         use_rep: str | None,
+        rng: np.random.Generator | None = None,
     ):
         self.distance = distance
         self.aggregation = aggregation
         self.spatial_connectivities_key = spatial_connectivities_key
         self.n_components = n_components
         self.use_rep = use_rep
+        self.rng = rng if rng is not None else np.random.default_rng()
 
     # this will hold an if block checking if use_rep is not None. If not None, then it will simply
     # return that representation from adata
@@ -1351,11 +1406,13 @@ class _CellcharterEmbedder(_NicheEmbedder):
                     aggregated_matrix = _aggregate(adata, adj_hop_norm, self.aggregation)
                     aggregated_matrices.append(aggregated_matrix)
 
-            concatenated_matrix = hstack(aggregated_matrices)  # Stack all matrices horizontally
-            arr = concatenated_matrix.toarray()  # Densify
+            # `scipy.sparse.hstack` needs at least one sparse block and otherwise raises
+            # "blocks must be 2-D", which is what a dense `adata.X` produced. Everything is
+            # densified here anyway, so stacking densely costs nothing and works either way.
+            arr = np.hstack([_densify(m) for m in aggregated_matrices])
 
             arr_ad = ad.AnnData(X=arr)
-            sc.tl.pca(arr_ad)
+            sc.tl.pca(arr_ad, random_state=rng_to_random_state(self.rng))
             embedding = arr_ad.obsm["X_pca"]
 
         return embedding
@@ -1374,8 +1431,17 @@ class _NicheClusterer(ABC):
     """
 
     @abstractmethod
-    def cluster(self, adata: AnnData, embedding: NDArrayA) -> list[str]:
-        """Adds column/s in adata.obs with the clustering done. Returns the names of the columns just added."""
+    def cluster(self, adata: AnnData, embedding: NDArrayA) -> tuple[list[str], dict[str, Any] | None]:
+        """Add column/s in ``adata.obs`` with the clustering done.
+
+        Returns
+        -------
+        The names of the columns just added, and any diagnostics to store in ``adata.uns``
+        as a ``{uns_key: payload}`` mapping (``None`` when there are none).
+
+        Returned rather than written directly: under ``library_key`` the per-library ``uns``
+        is discarded by the merge, so the caller collects them and writes once.
+        """
 
 
 @d.dedent
@@ -1404,38 +1470,60 @@ class _LeidenClusterer(_NicheClusterer):
         n_neighbors: int,
         resolutions: float | list[float],
         base_colname: str = "niche_leiden",
+        *,
+        flavor: Literal["igraph", "leidenalg"] = "igraph",
+        n_iterations: int = -1,
+        rng: np.random.Generator | None = None,
     ):
         self.n_neighbors = n_neighbors
         self.resolutions = resolutions if isinstance(resolutions, list) else [resolutions]
         self.base_colname = base_colname
+        self.flavor = flavor
+        self.n_iterations = n_iterations
+        self.rng = rng if rng is not None else np.random.default_rng()
 
-    def cluster(self, adata: AnnData, embedding: NDArrayA) -> list:
+    def cluster(self, adata: AnnData, embedding: NDArrayA) -> tuple[list[str], dict[str, Any] | None]:
         # first create an adata object using the embedding provided
         adata_embedding = ad.AnnData(X=embedding, obs=pd.DataFrame(index=adata.obs.index))
 
         # required for leiden clustering (note: no dim reduction performed in original implementation)
-        sc.pp.neighbors(adata_embedding, n_neighbors=self.n_neighbors, use_rep="X")
+        # the graph is approximate above ~4096 observations (pynndescent), so it needs a seed
+        # of its own -- drawn before the per-resolution ones, which all share this graph
+        sc.pp.neighbors(
+            adata_embedding, n_neighbors=self.n_neighbors, use_rep="X", random_state=rng_to_random_state(self.rng)
+        )
 
         # For each resolution, apply leiden on neighborhood profile. Each cluster label equals to a niche label
         niche_keys = []
-        for res in self.resolutions:
+        # seeded from `self.rng`, not a fixed seed, so reuse across libraries differs
+        resolution_rngs = spawn_generators(rng_to_random_state(self.rng), len(self.resolutions))
+
+        for res, res_rng in zip(self.resolutions, resolution_rngs, strict=True):
             niche_key = f"{self.base_colname}_res={res}"
             niche_keys.append(niche_key)
 
             if niche_key in adata.obs.columns:
                 logg.info(f"Overwriting existing column '{niche_key}'")
 
-            sc.tl.leiden(
-                adata_embedding,
-                resolution=res,
-                key_added=niche_key,
-            )
+            # Default to the igraph backend so niche labels are reproducible across
+            # versions; leidenalg is deprecated in scanpy and unstable on small graphs.
+            # See scverse/squidpy#1260.
+            leiden_kwargs: dict[str, Any] = {
+                "flavor": self.flavor,
+                "n_iterations": self.n_iterations,
+                "random_state": rng_to_random_state(res_rng),
+            }
+            # scanpy's igraph backend only supports undirected graphs and errors if
+            # ``directed`` is left at the leidenalg default of True, so pin it to False.
+            if self.flavor == "igraph":
+                leiden_kwargs["directed"] = False
+            sc.tl.leiden(adata_embedding, resolution=res, key_added=niche_key, **leiden_kwargs)
 
             adata.obs[niche_key] = list(
                 adata_embedding.obs[niche_key]
             )  # since constrain all embedders to return embedding with numrows==numcells and in same order, this should be fine
 
-        return niche_keys
+        return niche_keys, None
 
 
 @d.dedent
@@ -1446,35 +1534,34 @@ class _GMMClusterer(_NicheClusterer):
     ----------
     n_components
         Number of mixture components.
-    random_state
-        Random seed used by the Gaussian mixture model.
+    rng
+        Generator supplying the seed of every mixture fit.
     base_colname
         Name of the output column added to ``adata.obs``.
-
-    Notes
-    -----
-    Cluster assignments are stored as categorical niche labels in ``adata.obs``.
     """
 
     def __init__(
         self,
         n_components: int,
-        random_state: int,
+        rng: np.random.Generator,
         base_colname: str = "niche_gmm",
+        model_params: Mapping[str, Any] | None = None,
     ):
         self.n_components = n_components
-        self.random_state = random_state
+        self.rng = rng
         self.base_colname = base_colname
+        self.model_params = dict(model_params or {})
 
-    def cluster(self, adata: AnnData, embedding: NDArrayA) -> list:
+    def cluster(self, adata: AnnData, embedding: NDArrayA) -> tuple[list[str], dict[str, Any] | None]:
         """Returns niche labels generated by GMM clustering.
         Compared to cellcharter this approach is simplified by using sklearn's GaussianMixture model without stability analysis.
+        See :class:`_AutoKGMMClusterer` for the stability-based selection of the number of components.
         """
         # cluster concatenated matrix with GMM, each cluster label equals to a niche label
         gmm = GaussianMixture(
             n_components=self.n_components,
-            random_state=self.random_state,
-            init_params="random_from_data",
+            random_state=rng_to_random_state(self.rng),
+            **{"init_params": DEFAULT_INIT_PARAMS, **self.model_params},
         )
         gmm.fit(embedding)
         niches = gmm.predict(embedding)
@@ -1483,7 +1570,85 @@ class _GMMClusterer(_NicheClusterer):
             logg.info(f"Overwriting existing column '{self.base_colname}'")
 
         adata.obs[self.base_colname] = pd.Categorical(niches)
-        return [self.base_colname]
+        return [self.base_colname], None
+
+
+@d.dedent
+class _AutoKGMMClusterer(_NicheClusterer):
+    """Cluster embeddings with a Gaussian mixture, choosing the number of components by stability.
+
+    Every candidate K is fitted ``max_runs`` times and scored by how stably its labeling
+    reproduces across runs; the labels of the most stable K become the niche assignment.
+
+    Parameters
+    ----------
+    n_clusters
+        Candidate numbers of clusters. A ``(min, max)`` tuple gains a ``+-1`` halo, see
+        ``expand_n_clusters``.
+    rng
+        Generator seeding every individual fit.
+    max_runs
+        Maximum number of repetitions per K.
+    convergence_tol
+        Stop early once the mean stability curve settles, see ``sweep_auto_k``.
+    store_labels
+        Also keep the labeling of every fitted K, as ``{base_colname}_k{K}`` columns.
+    base_colname
+        Name of the output column added to ``adata.obs``.
+    uns_key
+        Key in ``adata.uns`` under which the per-K diagnostics are returned.
+    """
+
+    def __init__(
+        self,
+        n_clusters: tuple[int, int] | Sequence[int],
+        rng: np.random.Generator,
+        max_runs: int = 10,
+        convergence_tol: float = 1e-2,
+        store_labels: bool = False,
+        base_colname: str = "niche_gmm",
+        uns_key: str = "niche_gmm_autok",
+        model_params: Mapping[str, Any] | None = None,
+    ):
+        self.n_clusters = expand_n_clusters(n_clusters)
+        self.rng = rng
+        self.max_runs = max_runs
+        self.convergence_tol = convergence_tol
+        self.store_labels = store_labels
+        self.base_colname = base_colname
+        self.uns_key = uns_key
+        self.model_params = model_params
+
+    def cluster(self, adata: AnnData, embedding: NDArrayA) -> tuple[list[str], dict[str, Any] | None]:
+        """Returns the niche labels of the most stable number of clusters, plus the per-K diagnostics."""
+        logg.info(
+            f"Selecting the number of clusters over K={self.n_clusters} with up to {self.max_runs} runs each "
+            f"({len(self.n_clusters) * self.max_runs} mixture fits at most)"
+        )
+        result = sweep_auto_k(
+            embedding,
+            self.n_clusters,
+            max_runs=self.max_runs,
+            convergence_tol=self.convergence_tol,
+            model_params=self.model_params,
+            seed=rng_to_random_state(self.rng),
+        )
+        logg.info(f"Selected K={result['best_k']} after {result['n_runs']} runs")
+
+        if self.base_colname in adata.obs.columns:
+            logg.info(f"Overwriting existing column '{self.base_colname}'")
+
+        adata.obs[self.base_colname] = pd.Categorical(result["labels"][result["best_k"]])
+        result_columns = [self.base_colname]
+
+        if self.store_labels:
+            # obs, not obsm, so masking/min_niche_size/lib-prefixing apply
+            for k in self.n_clusters:
+                colname = f"{self.base_colname}_k{k}"
+                adata.obs[colname] = pd.Categorical(result["labels"][k])
+                result_columns.append(colname)
+
+        return result_columns, {self.uns_key: to_uns(result)}
 
 
 ############
