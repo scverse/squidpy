@@ -237,8 +237,10 @@ def parallelize(
     return wrapper
 
 
-type SeedLike = int | np.integer | Sequence[int] | np.random.SeedSequence
-type RNGLike = np.random.Generator | np.random.BitGenerator
+# plain assignments, not PEP-695 `type` statements: those stay opaque to sphinx and would
+# render as the bare alias names on the `*Params.rng` attribute pages
+SeedLike = int | np.integer | Sequence[int] | np.random.SeedSequence
+RNGLike = np.random.Generator | np.random.BitGenerator
 
 
 def rng_to_random_state(rng: np.random.Generator) -> int:
