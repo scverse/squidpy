@@ -404,7 +404,7 @@ def calculate_niche_cellcharter(
     data: AnnData | SpatialData,
     distance: int = 3,
     aggregation: str = "mean",
-    seed: int | None = 42,
+    seed: int | None = None,
     spatial_connectivities_key: str = "spatial_connectivities",
     n_components: int = 10,
     use_rep: str | None = None,
@@ -472,7 +472,7 @@ def calculate_niche_spatialleiden(
     layer_ratio: float = 1.0,
     n_iterations: int = -1,
     use_weights: bool | tuple[bool, bool] = True,
-    seed: int | None = 42,
+    seed: int | None = None,
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     prefix: str | None = None,
@@ -990,8 +990,7 @@ def _check_unnecessary_args(flavor: str, param_dict: dict[str, Any], param_specs
     for param_name in param_specs["unused"]:
         param_value = param_dict.get(param_name)
 
-        # Special handling for boolean parameters with default values
-        # (`seed` needs none: its default is `None`, which is skipped below)
+        # Special handling for parameters whose default is not None
         if param_name == "scale" and param_value is True:
             continue
         if param_name == "abs_nhood" and param_value is False:

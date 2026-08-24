@@ -68,8 +68,8 @@ class VahadaneParams:
     n_iter: int = 200
     """Maximum NMF iterations."""
 
-    seed: int | None = 0
-    """Seed for NMF initialisation tie-breaking; fixed for reproducible fits."""
+    seed: int | None = None
+    """Seed for NMF initialisation tie-breaking; `None` draws from OS entropy."""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "beta", float(self.beta))

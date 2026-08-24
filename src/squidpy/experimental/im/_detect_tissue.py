@@ -85,7 +85,7 @@ class WekaParams:
     rf_estimators: int = 100
     rf_max_depth: int | None = 10
     rf_max_samples: float = 0.05
-    seed: int | None = 0
+    seed: int | None = None
 
     # Second-stage refinement with a simple classifier
     refine_with_classifier: bool = True
@@ -772,7 +772,7 @@ def _refine_with_background_classifier(
     prior_mask: np.ndarray,
     n_samples_per_class: int,
     bg_prob_threshold: float,
-    seed: int | None = 0,
+    seed: int | None = None,
 ) -> np.ndarray:
     """
     Refine a prior tissue mask using a simple classifier on multiscale features.
