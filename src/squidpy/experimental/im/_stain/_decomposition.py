@@ -68,7 +68,7 @@ class VahadaneParams:
     n_iter: int = 200
     """Maximum NMF iterations."""
 
-    random_state: int | None = 0
+    seed: int | None = 0
     """Seed for NMF initialisation tie-breaking; fixed for reproducible fits."""
 
     def __post_init__(self) -> None:
@@ -168,7 +168,7 @@ def _vahadane_stain_matrix(od: np.ndarray, params: VahadaneParams) -> np.ndarray
     nmf = NMF(
         n_components=2,
         init="nndsvda",
-        random_state=params.random_state,
+        random_state=params.seed,
         alpha_W=params.lambda1,
         l1_ratio=1.0,
         max_iter=params.n_iter,
