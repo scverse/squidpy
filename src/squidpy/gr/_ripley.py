@@ -16,7 +16,7 @@ from spatialdata import SpatialData
 from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, spawn_generators
+from squidpy._utils import NDArrayA, RNGLike, SeedLike, deprecated_rng_param
 from squidpy.gr._utils import _assert_categorical_obs, _assert_spatial_basis, _save_data, extract_adata_if_sdata
 
 __all__ = ["ripley"]
@@ -24,6 +24,7 @@ __all__ = ["ripley"]
 
 @d.dedent
 @inject_docs(key=Key.obsm.spatial, rp=RipleyStat)
+@deprecated_rng_param
 def ripley(
     adata: AnnData | SpatialData,
     cluster_key: str,
@@ -35,7 +36,7 @@ def ripley(
     n_observations: int = 1000,
     max_dist: float | None = None,
     n_steps: int = 50,
-    seed: int | None = None,
+    rng: SeedLike | RNGLike | None = None,
     copy: bool = False,
     *,
     table_key: str | None = None,
@@ -44,6 +45,8 @@ def ripley(
     Calculate various Ripley's statistics for point processes.
 
     %(seed_versionchanged)s
+
+    %(rng_versionchanged)s
 
     According to the `'mode'` argument, it calculates one of the following Ripley's statistics:
     `{rp.F.s!r}`, `{rp.G.s!r}` or `{rp.L.s!r}` statistics.
@@ -96,7 +99,7 @@ def ripley(
         Maximum distances for the support. If `None`, `max_dist=`:math:`\sqrt{{area \over 2}}`.
     n_steps
         Number of steps for the support.
-    %(seed)s
+    %(rng)s
     %(copy)s
 
     Returns
@@ -135,7 +138,7 @@ def ripley(
     start = logg.info(
         f"Calculating Ripley's {mode} statistic for `{le.classes_.shape[0]}` clusters and `{n_simulations}` simulations"
     )
-    obs_rng, *sim_rngs = spawn_generators(seed, n_simulations + 1)
+    obs_rng, *sim_rngs = np.random.default_rng(rng).spawn(n_simulations + 1)
 
     for i in np.arange(np.max(cluster_idx) + 1):
         coord_c = coordinates[cluster_idx == i, :]

@@ -22,7 +22,14 @@ from spatialdata._logging import logger
 from spatialdata.models import Labels2DModel
 from spatialdata.transformations import get_transformation
 
-from squidpy._utils import _ensure_dim_order, _get_scale_factors, _yx_from_shape
+from squidpy._utils import (
+    RNGLike,
+    SeedLike,
+    _ensure_dim_order,
+    _get_scale_factors,
+    _yx_from_shape,
+    rng_to_random_state,
+)
 
 from ._utils import flatten_channels, get_element_data
 
@@ -85,7 +92,7 @@ class WekaParams:
     rf_estimators: int = 100
     rf_max_depth: int | None = 10
     rf_max_samples: float = 0.05
-    seed: int | None = None
+    rng: SeedLike | RNGLike | None = None
 
     # Second-stage refinement with a simple classifier
     refine_with_classifier: bool = True
@@ -742,12 +749,16 @@ def _segment_weka(
         training_labels_flat[idx] = 2
         training_labels = training_labels_flat.reshape(H, W)
 
+    # one generator for the whole segmentation, so the forest and the refinement step
+    # are seeded independently instead of sharing a single seed
+    rng = np.random.default_rng(weka_params.rng)
+
     clf = RandomForestClassifier(
         n_estimators=weka_params.rf_estimators,
         n_jobs=-1,
         max_depth=weka_params.rf_max_depth,
         max_samples=weka_params.rf_max_samples,
-        random_state=weka_params.seed,
+        random_state=rng_to_random_state(rng),
     )
     clf = future.fit_segmenter(training_labels, feats, clf)
     result = future.predict_segmenter(feats, clf)
@@ -761,7 +772,7 @@ def _segment_weka(
             prior_mask=prior_mask,
             n_samples_per_class=weka_params.refine_n_samples_per_class,
             bg_prob_threshold=weka_params.refine_bg_prob_threshold,
-            seed=weka_params.seed,
+            rng=rng,
         )
 
     return prior_mask
@@ -772,7 +783,7 @@ def _refine_with_background_classifier(
     prior_mask: np.ndarray,
     n_samples_per_class: int,
     bg_prob_threshold: float,
-    seed: int | None = None,
+    rng: np.random.Generator,
 ) -> np.ndarray:
     """
     Refine a prior tissue mask using a simple classifier on multiscale features.
@@ -795,8 +806,8 @@ def _refine_with_background_classifier(
     bg_prob_threshold
         Background probability threshold above which an inside-mask pixel
         is reclassified as background.
-    seed
-        Seed for subsampling; use None for non-deterministic.
+    rng
+        Generator used to subsample the training pixels.
 
     Returns
     -------
@@ -814,8 +825,6 @@ def _refine_with_background_classifier(
     if idx_tissue.size == 0 or idx_bg.size == 0:
         # Nothing to refine
         return prior_mask
-
-    rng = np.random.default_rng(seed)
 
     # Subsample for training
     n_tissue = min(n_samples_per_class, idx_tissue.size)

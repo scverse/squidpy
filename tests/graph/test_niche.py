@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import numpy as np
 from anndata import AnnData
 from pandas import Categorical, Series
 from scanpy.pp import neighbors
@@ -45,7 +46,7 @@ def test_niche_calc_cellcharter_dummy_adata(dummy_adata2: AnnData):
     # since cellcharter throws an error if the object's expression matrix is not sparse, first ensure that is the case
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
 
-    calculate_niche(dummy_adata2, flavor="cellcharter", distance=2, aggregation="mean", seed=0)
+    calculate_niche(dummy_adata2, flavor="cellcharter", distance=2, aggregation="mean", rng=np.random.default_rng(0))
 
     assert "cellcharter_niche" in dummy_adata2.obs.columns
 
@@ -69,7 +70,7 @@ def test_niche_calc_spatialleiden_dummy_adata(dummy_adata2: AnnData):
         latent_connectivities_key="connectivities",
         spatial_connectivities_key="spatial_connectivities",
         resolutions=1.0,
-        seed=0,
+        rng=np.random.default_rng(0),
     )
 
     assert "spatialleiden_res=1.0" in dummy_adata2.obs.columns
@@ -82,25 +83,25 @@ def test_niche_calc_spatialleiden_dummy_adata(dummy_adata2: AnnData):
     assert (expected_niches == dummy_adata2.obs["spatialleiden_res=1.0"]).all()
 
 
-# seed handling
+# rng handling
 
 
-def test_niche_cellcharter_seed_reproducible(dummy_adata2: AnnData):
-    "The same `seed` must give the same niches, a different one must be free to differ."
+def test_niche_cellcharter_rng_reproducible(dummy_adata2: AnnData):
+    "The same `rng` must give the same niches, a different one must be free to differ."
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
     kwargs = {"distance": 2, "aggregation": "mean"}
 
-    first = calculate_niche_cellcharter(dummy_adata2, seed=0, inplace=False, **kwargs)
-    second = calculate_niche_cellcharter(dummy_adata2, seed=0, inplace=False, **kwargs)
+    first = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), inplace=False, **kwargs)
+    second = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), inplace=False, **kwargs)
     assert (first.obs["cellcharter_niche"] == second.obs["cellcharter_niche"]).all()
 
     # not a guarantee about the labels themselves, only that the seed is actually wired through
-    other = calculate_niche_cellcharter(dummy_adata2, seed=1, inplace=False, **kwargs)
+    other = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(1), inplace=False, **kwargs)
     assert list(other.obs["cellcharter_niche"]) != list(first.obs["cellcharter_niche"])
 
 
-def test_niche_cellcharter_seed_none_runs(dummy_adata2: AnnData):
-    "`seed=None` (the default) must work: it means 'draw from OS entropy', not 'missing argument'."
+def test_niche_cellcharter_rng_none_runs(dummy_adata2: AnnData):
+    "`rng=None` (the default) must work: it means 'draw from OS entropy', not 'missing argument'."
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
     calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean")
     assert "cellcharter_niche" in dummy_adata2.obs.columns
@@ -112,8 +113,8 @@ def test_niche_cellcharter_library_seeds_are_independent(dummy_adata2: AnnData, 
     dummy_adata2.obs["batch"] = ["batch1"] * 5 + ["batch2"] * 5
     kwargs = {"distance": 2, "aggregation": "mean", "library_key": "batch", "n_components": 2}
 
-    first = calculate_niche_cellcharter(dummy_adata2, seed=0, inplace=False, **kwargs)
-    second = calculate_niche_cellcharter(dummy_adata2, seed=0, inplace=False, **kwargs)
+    first = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), inplace=False, **kwargs)
+    second = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), inplace=False, **kwargs)
     assert (first.obs["cellcharter_niche"] == second.obs["cellcharter_niche"]).all()
 
     # the clusterer is built once and reused for every library, so record what each fit
@@ -126,7 +127,7 @@ def test_niche_cellcharter_library_seeds_are_independent(dummy_adata2: AnnData, 
         return original(*args, **kwargs)
 
     monkeypatch.setattr(_niche, "GaussianMixture", spy)
-    calculate_niche_cellcharter(dummy_adata2, seed=0, inplace=False, **kwargs)
+    calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), inplace=False, **kwargs)
 
     assert len(seen) == 2, "expected one mixture fit per library"
     assert seen[0] != seen[1], "libraries were fitted with the same seed"
@@ -206,7 +207,7 @@ def test_niche_calc_spatialleiden_library_key_dummy_adata(dummy_adata2: AnnData)
         spatial_connectivities_key="spatial_connectivities",
         resolutions=1.0,
         library_key="batch",
-        seed=0,
+        rng=np.random.default_rng(0),
     )
 
     assert "spatialleiden_res=1.0" in dummy_adata2.obs.columns

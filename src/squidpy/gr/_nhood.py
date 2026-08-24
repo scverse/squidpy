@@ -23,11 +23,13 @@ from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
 from squidpy._utils import (
     NDArrayA,
+    RNGLike,
+    SeedLike,
     Signal,
     SigQueue,
+    deprecated_rng_param,
     get_n_processes,
     parallelize,
-    spawn_generators,
 )
 from squidpy._validators import assert_positive
 from squidpy.gr._utils import (
@@ -143,6 +145,7 @@ def _create_function(n_cls: int, parallel: bool = False) -> Callable[[NDArrayA, 
 
 @d.get_sections(base="nhood_ench", sections=["Parameters"])
 @d.dedent
+@deprecated_rng_param
 def nhood_enrichment(
     adata: AnnData | SpatialData,
     cluster_key: str,
@@ -150,7 +153,7 @@ def nhood_enrichment(
     connectivity_key: str | None = None,
     n_perms: int = 1000,
     numba_parallel: bool = False,
-    seed: int | None = None,
+    rng: SeedLike | RNGLike | None = None,
     copy: bool = False,
     n_jobs: int | None = None,
     backend: str = "loky",
@@ -163,6 +166,8 @@ def nhood_enrichment(
 
     %(seed_versionchanged)s
 
+    %(rng_versionchanged)s
+
     Parameters
     ----------
     %(adata)s
@@ -172,7 +177,7 @@ def nhood_enrichment(
     %(conn_key)s
     %(n_perms)s
     %(numba_parallel)s
-    %(seed)s
+    %(rng)s
     %(copy)s
     %(parallelize)s
 
@@ -210,7 +215,7 @@ def nhood_enrichment(
 
     n_jobs = get_n_processes(n_jobs)
     start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` core(s)")
-    generators = spawn_generators(seed, n_perms)
+    generators = np.random.default_rng(rng).spawn(n_perms)
 
     perms = parallelize(
         _nhood_enrichment_helper,

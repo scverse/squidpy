@@ -5,8 +5,10 @@ import pandas as pd
 import pytest
 import spatialdata as sd
 from anndata import AnnData
+from pandas.testing import assert_frame_equal
 
 from squidpy._constants._pkg_constants import Key
+from squidpy.gr import spatial_autocorr
 from squidpy.gr._utils import _shuffle_group, extract_adata_if_sdata
 
 
@@ -87,3 +89,26 @@ class TestUtils:
         out = _shuffle_group(cluster_annotations, libraries, rng)
         for c in libraries.cat.categories:
             assert set(out[libraries == c]) == set(cluster_annotations[libraries == c])
+
+
+class TestRngParam:
+    """SPEC-7 ``rng``: accepts generators as well as seeds, and the old names still work."""
+
+    def test_seed_and_generator_agree(self, dummy_adata: AnnData):
+        kw = {"mode": "moran", "copy": True, "n_perms": 20, "n_jobs": 1}
+        from_seed = spatial_autocorr(dummy_adata, rng=7, **kw)
+        from_gen = spatial_autocorr(dummy_adata, rng=np.random.default_rng(7), **kw)
+        assert_frame_equal(from_seed, from_gen)
+
+    def test_deprecated_seed_is_forwarded(self, dummy_adata: AnnData):
+        kw = {"mode": "moran", "copy": True, "n_perms": 20, "n_jobs": 1}
+        expected = spatial_autocorr(dummy_adata, rng=42, **kw)
+
+        with pytest.warns(FutureWarning, match=r"`seed`.*deprecated in favor of `rng`.*default_rng\(42\)"):
+            got = spatial_autocorr(dummy_adata, seed=42, **kw)
+
+        assert_frame_equal(expected, got)
+
+    def test_seed_and_rng_together_is_an_error(self, dummy_adata: AnnData):
+        with pytest.raises(TypeError, match="both `seed` and `rng`"):
+            spatial_autocorr(dummy_adata, mode="moran", copy=True, seed=1, rng=2)

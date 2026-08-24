@@ -18,7 +18,7 @@ from spatialdata._logging import logger as logg
 
 from squidpy._constants._constants import NicheDefinitions
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, rng_to_random_state, spawn_generators
+from squidpy._utils import NDArrayA, RNGLike, SeedLike, deprecated_rng_param, rng_to_random_state
 from squidpy._validators import assert_isinstance, assert_key_in_adata, assert_one_of
 from squidpy.gr._utils import extract_adata_if_sdata
 
@@ -33,6 +33,7 @@ __all__ = [
 
 @d.dedent
 @inject_docs(fla=NicheDefinitions)
+@deprecated_rng_param
 def calculate_niche(
     data: AnnData | SpatialData,
     flavor: Literal["neighborhood", "utag", "cellcharter", "spatialleiden"],
@@ -57,7 +58,7 @@ def calculate_niche(
     inplace: bool = True,
     *,
     table_key: str | None = None,
-    seed: int | None = 42,
+    rng: SeedLike | RNGLike | None = None,
 ) -> AnnData | None:
     """
     Calculate niches (spatial clusters) based on a user-defined method in 'flavor'.
@@ -131,8 +132,7 @@ def calculate_niche(
     n_components
         Number of components to use for GMM.
         Required if flavor == `{fla.CELLCHARTER.s!r}`.
-    seed
-        Random seed for reproducibility. If `None`, results are not reproducible.
+    %(rng)s
         Optional if flavor == `{fla.CELLCHARTER.s!r}` or flavor == `{fla.SPATIALLEIDEN.s!r}`.
     spatial_connectivities_key
         Key in `adata.obsp` where spatial connectivities are stored.
@@ -190,7 +190,7 @@ def calculate_niche(
         n_hop_weights,
         aggregation,
         n_components,
-        seed,
+        rng,
         spatial_connectivities_key,
         latent_connectivities_key,
         layer_ratio,
@@ -239,7 +239,7 @@ def calculate_niche(
             data,
             distance,
             aggregation,
-            seed,
+            rng,
             spatial_connectivities_key,
             n_components,
             use_rep,
@@ -259,7 +259,7 @@ def calculate_niche(
             layer_ratio,
             n_iterations,
             use_weights,
-            seed,
+            rng,
             min_niche_size,
             mask,
             prefix=None,
@@ -404,7 +404,7 @@ def calculate_niche_cellcharter(
     data: AnnData | SpatialData,
     distance: int = 3,
     aggregation: str = "mean",
-    seed: int | None = None,
+    rng: SeedLike | RNGLike | None = None,
     spatial_connectivities_key: str = "spatial_connectivities",
     n_components: int = 10,
     use_rep: str | None = None,
@@ -427,9 +427,9 @@ def calculate_niche_cellcharter(
     aggregation
         Aggregation mode used for neighborhood features, typically ``"mean"`` or
         ``"variance"``.
-    %(seed)s
+    %(rng)s
         Seeds the Gaussian mixture clustering step. When stratifying by ``library_key``,
-        every library is fitted with an independent seed derived from this one.
+        every library is fitted with an independent generator derived from it.
     %(niche_spatial_conn_key)s
     n_components
         Number of embedding components to retain when ``use_rep`` is provided,
@@ -449,7 +449,7 @@ def calculate_niche_cellcharter(
 
     embedder = _CellcharterEmbedder(distance, aggregation, spatial_connectivities_key, n_components, use_rep)
 
-    clusterer = _GMMClusterer(n_components, np.random.default_rng(seed), base_colname="cellcharter_niche")
+    clusterer = _GMMClusterer(n_components, np.random.default_rng(rng), base_colname="cellcharter_niche")
 
     return _calculate_niche_custom(
         data,
@@ -472,7 +472,7 @@ def calculate_niche_spatialleiden(
     layer_ratio: float = 1.0,
     n_iterations: int = -1,
     use_weights: bool | tuple[bool, bool] = True,
-    seed: int | None = None,
+    rng: SeedLike | RNGLike | None = None,
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     prefix: str | None = None,
@@ -502,9 +502,9 @@ def calculate_niche_spatialleiden(
         Number of optimization iterations used by SpatialLeiden.
     use_weights
         Whether to use edge weights during clustering.
-    %(seed)s
+    %(rng)s
         Each resolution — and each library when stratifying by ``library_key`` — is
-        clustered with an independent seed derived from this one.
+        clustered with an independent generator derived from it.
     %(niche_min_niche_size)s
     %(niche_mask)s
     prefix
@@ -540,6 +540,9 @@ def calculate_niche_spatialleiden(
     else:
         adata = orig_adata.copy()
 
+    # normalise once here; everything below this point works with generators only
+    generator = np.random.default_rng(rng)
+
     if library_key is not None:
         # first assert that library_key was there in adata.obs, and then, stratify the object according to that library_key and
         # then re-call calculate_niche_spatialleiden for each subpart, with library_key = None and prefix with appropriate information like "lib="
@@ -547,9 +550,9 @@ def calculate_niche_spatialleiden(
         logg.info(f"Stratifying by library_key '{library_key}'")
 
         # each library is an independent clustering problem, so it gets its own generator
-        # (indexed by `itr` so that skipped empty libraries don't shift the others' seeds)
+        # (indexed by `itr` so that skipped empty libraries don't shift the others)
         library_ids = adata.obs[library_key].unique()
-        library_rngs = spawn_generators(seed, len(library_ids))
+        library_rngs = generator.spawn(len(library_ids))
 
         # go through each library_id and process the corresponding adata subset
         for itr, lib_id in enumerate(library_ids):
@@ -572,7 +575,7 @@ def calculate_niche_spatialleiden(
                 layer_ratio,
                 n_iterations,
                 use_weights,
-                rng_to_random_state(library_rngs[itr]),
+                library_rngs[itr],
                 min_niche_size,
                 mask,
                 prefix=f"lib={lib_id}_",
@@ -598,7 +601,7 @@ def calculate_niche_spatialleiden(
             resolutions = [resolutions]
 
         # every resolution is a separate clustering run, so seed each one independently
-        resolution_rngs = spawn_generators(seed, len(resolutions))
+        resolution_rngs = generator.spawn(len(resolutions))
 
         for res, res_rng in zip(resolutions, resolution_rngs, strict=True):
             sl.spatialleiden(
@@ -758,7 +761,9 @@ def _validate_niche_args(
     n_hop_weights: list[float] | None,
     aggregation: str | None,
     n_components: int | None,
-    seed: int | None,
+    # the one internal that sees a raw `rng`: it reports on what the caller passed, and
+    # `None` must stay `None` here so the "unused for this flavor" check can spot it
+    rng: SeedLike | RNGLike | None,
     spatial_connectivities_key: str,
     latent_connectivities_key: str,
     layer_ratio: float,
@@ -831,7 +836,7 @@ def _validate_niche_args(
             "unused": [
                 "aggregation",
                 "n_components",
-                "seed",
+                "rng",
                 "latent_connectivities_key",
                 "layer_ratio",
                 "n_iterations",
@@ -851,7 +856,7 @@ def _validate_niche_args(
                 "n_hop_weights",
                 "aggregation",
                 "n_components",
-                "seed",
+                "rng",
                 "latent_connectivities_key",
                 "layer_ratio",
                 "n_iterations",
@@ -861,8 +866,8 @@ def _validate_niche_args(
         },
         "cellcharter": {
             "required": ["distance", "aggregation", "spatial_connectivities_key"],
-            # `seed` is optional: `None` is a valid value meaning "draw from OS entropy"
-            "optional": ["n_components", "use_rep", "seed"],
+            # `rng` is optional: `None` is a valid value meaning "draw from OS entropy"
+            "optional": ["n_components", "use_rep", "rng"],
             "unused": [
                 "groups",
                 "min_niche_size",
@@ -884,7 +889,7 @@ def _validate_niche_args(
                 "layer_ratio",
                 "n_iterations",
                 "use_weights",
-                "seed",
+                "rng",
             ],
             "unused": ["groups", "min_niche_size", "scale", "abs_nhood", "n_neighbors", "n_hop_weights", "use_rep"],
         },
@@ -908,7 +913,7 @@ def _validate_niche_args(
             "n_hop_weights": n_hop_weights,
             "aggregation": aggregation,
             "n_components": n_components,
-            "seed": seed,
+            "rng": rng,
             "use_rep": use_rep,
         },
         flavor_param_specs[flavor],
@@ -938,9 +943,6 @@ def _validate_niche_args(
         if n_components < 1:
             raise ValueError(f"'n_components' must be at least 1, got {n_components}")
 
-        if seed is not None:
-            assert_isinstance(seed, int, name="seed")
-
         if use_rep is not None:
             assert_isinstance(use_rep, str, name="use_rep")
 
@@ -963,8 +965,6 @@ def _validate_niche_args(
             )
         ):
             raise TypeError(f"'use_weights' must be a bool or a tuple of two bools, got {use_weights!r}")
-        if seed is not None:
-            assert_isinstance(seed, int, name="seed")
 
         if resolutions is None:
             resolutions = [1.0]
@@ -994,8 +994,6 @@ def _check_unnecessary_args(flavor: str, param_dict: dict[str, Any], param_specs
         if param_name == "scale" and param_value is True:
             continue
         if param_name == "abs_nhood" and param_value is False:
-            continue
-        if param_name == "seed" and param_value == 42:
             continue
 
         if param_value is not None:

@@ -24,12 +24,14 @@ from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
 from squidpy._utils import (
     NDArrayA,
+    RNGLike,
+    SeedLike,
     Signal,
     SigQueue,
     deprecated_params,
+    deprecated_rng_param,
     get_n_processes,
     parallelize,
-    spawn_generators,
 )
 from squidpy._validators import assert_key_in_adata, assert_positive
 from squidpy.gr._utils import (
@@ -53,6 +55,7 @@ bl = nt.boolean
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn(), sp=SpatialAutocorr)
+@deprecated_rng_param
 def spatial_autocorr(
     adata: AnnData | SpatialData,
     connectivity_key: str = Key.obsp.spatial_conn(),
@@ -64,7 +67,7 @@ def spatial_autocorr(
     corr_method: str | None = "fdr_bh",
     attr: Literal["obs", "X", "obsm"] = "X",
     layer: str | None = None,
-    seed: int | None = None,
+    rng: SeedLike | RNGLike | None = None,
     use_raw: bool = False,
     copy: bool = False,
     n_jobs: int | None = None,
@@ -86,6 +89,8 @@ def spatial_autocorr(
         See `#1183 <https://github.com/scverse/squidpy/issues/1183>`_.
 
     %(seed_versionchanged)s
+
+    %(rng_versionchanged)s
 
     Parameters
     ----------
@@ -124,7 +129,7 @@ def spatial_autocorr(
         Layer in :attr:`anndata.AnnData.layers` to use. If `None`, use :attr:`anndata.AnnData.X`.
     attr
         Which attribute of :class:`~anndata.AnnData` to access. See ``genes`` parameter for more information.
-    %(seed)s
+    %(rng)s
     %(copy)s
     %(parallelize)s
 
@@ -220,7 +225,7 @@ def spatial_autocorr(
     if n_perms is not None:
         assert_positive(n_perms, name="n_perms")
         perms = list(np.arange(n_perms))
-        generators = spawn_generators(seed, n_perms)
+        generators = np.random.default_rng(rng).spawn(n_perms)
 
         score_perms = parallelize(
             _score_helper,
