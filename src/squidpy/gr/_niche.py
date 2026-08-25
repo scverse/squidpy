@@ -1474,7 +1474,7 @@ class _GMMClusterer(_NicheClusterer):
     def __init__(
         self,
         n_components: int,
-        rng: np.random.rng,
+        rng: np.random.Generator,
         base_colname: str = "niche_gmm",
     ):
         self.n_components = n_components
