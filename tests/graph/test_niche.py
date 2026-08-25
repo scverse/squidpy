@@ -97,12 +97,12 @@ def test_niche_cellcharter_rng_reproducible(dummy_adata2: AnnData):
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
     kwargs = {"distance": 2, "aggregation": "mean"}
 
-    first = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), inplace=False, **kwargs)
-    second = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), inplace=False, **kwargs)
+    first = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), copy=True, **kwargs)
+    second = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), copy=True, **kwargs)
     assert (first.obs["cellcharter_niche"] == second.obs["cellcharter_niche"]).all()
 
     # not a guarantee about the labels themselves, only that the seed is actually wired through
-    other = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(1), inplace=False, **kwargs)
+    other = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(1), copy=True, **kwargs)
     assert list(other.obs["cellcharter_niche"]) != list(first.obs["cellcharter_niche"])
 
 
@@ -119,8 +119,8 @@ def test_niche_cellcharter_library_seeds_are_independent(dummy_adata2: AnnData, 
     dummy_adata2.obs["batch"] = ["batch1"] * 5 + ["batch2"] * 5
     kwargs = {"distance": 2, "aggregation": "mean", "library_key": "batch", "n_components": 2}
 
-    first = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), inplace=False, **kwargs)
-    second = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), inplace=False, **kwargs)
+    first = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), copy=True, **kwargs)
+    second = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), copy=True, **kwargs)
     assert (first.obs["cellcharter_niche"] == second.obs["cellcharter_niche"]).all()
 
     # the clusterer is built once and reused for every library, so record what each fit
@@ -133,7 +133,7 @@ def test_niche_cellcharter_library_seeds_are_independent(dummy_adata2: AnnData, 
         return original(*args, **kwargs)
 
     monkeypatch.setattr(_niche, "GaussianMixture", spy)
-    calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), inplace=False, **kwargs)
+    calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), copy=True, **kwargs)
 
     assert len(seen) == 2, "expected one mixture fit per library"
     assert seen[0] != seen[1], "libraries were fitted with the same seed"
