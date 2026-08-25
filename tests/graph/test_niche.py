@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import numpy as np
 import pytest
 from anndata import AnnData
 from pandas import Series
@@ -8,7 +9,7 @@ from scipy.sparse import csr_matrix
 from spatialdata import SpatialData
 from spatialdata.models import TableModel
 
-from squidpy.gr import calculate_niche, spatial_neighbors_knn
+from squidpy.gr import _niche, calculate_niche, calculate_niche_cellcharter, spatial_neighbors_knn
 
 N_NEIGHBORS = 20
 GROUPS = "celltype_mapped_refined"
@@ -32,24 +33,22 @@ def _assert_all_assigned(adata: AnnData, column: str) -> Series:
 def test_niche_calc_nhood_dummy_adata(dummy_adata2: AnnData):
     "Check whether niche calculation using neighborhood profile approach works as intended for dummy_adata2."
     rerun = dummy_adata2.copy()
-    calculate_niche(
-        dummy_adata2, flavor="neighborhood", groups="celltype", n_neighbors=3, resolutions=1.0, random_state=0
-    )
+    calculate_niche(dummy_adata2, flavor="neighborhood", groups="celltype", n_neighbors=3, resolutions=1.0, rng=0)
     niches = _assert_all_assigned(dummy_adata2, "nhood_niche_res=1.0")
 
-    # a fixed random_state gives reproducible niches
-    calculate_niche(rerun, flavor="neighborhood", groups="celltype", n_neighbors=3, resolutions=1.0, random_state=0)
+    # a fixed rng gives reproducible niches
+    calculate_niche(rerun, flavor="neighborhood", groups="celltype", n_neighbors=3, resolutions=1.0, rng=0)
     assert (niches.to_numpy() == rerun.obs["nhood_niche_res=1.0"].to_numpy()).all()
 
 
 def test_niche_calc_utag_dummy_adata(dummy_adata2: AnnData):
     "Check whether niche calculation using utag approach works as intended for dummy_adata2."
     rerun = dummy_adata2.copy()
-    calculate_niche(dummy_adata2, flavor="utag", n_neighbors=3, resolutions=1.0, random_state=0)
+    calculate_niche(dummy_adata2, flavor="utag", n_neighbors=3, resolutions=1.0, rng=0)
     niches = _assert_all_assigned(dummy_adata2, "utag_niche_res=1.0")
 
-    # a fixed random_state gives reproducible niches
-    calculate_niche(rerun, flavor="utag", n_neighbors=3, resolutions=1.0, random_state=0)
+    # a fixed rng gives reproducible niches
+    calculate_niche(rerun, flavor="utag", n_neighbors=3, resolutions=1.0, rng=0)
     assert (niches.to_numpy() == rerun.obs["utag_niche_res=1.0"].to_numpy()).all()
 
 
@@ -59,7 +58,7 @@ def test_niche_calc_cellcharter_dummy_adata(dummy_adata2: AnnData):
     # since cellcharter throws an error if the object's expression matrix is not sparse, first ensure that is the case
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
 
-    calculate_niche(dummy_adata2, flavor="cellcharter", distance=2, aggregation="mean", random_state=0)
+    calculate_niche(dummy_adata2, flavor="cellcharter", distance=2, aggregation="mean", rng=np.random.default_rng(0))
 
     _assert_all_assigned(dummy_adata2, "cellcharter_niche")
 
@@ -77,9 +76,60 @@ def test_niche_calc_spatialleiden_dummy_adata(dummy_adata2: AnnData):
         latent_connectivities_key="connectivities",
         spatial_connectivities_key="spatial_connectivities",
         resolutions=1.0,
+        rng=np.random.default_rng(0),
     )
 
     _assert_all_assigned(dummy_adata2, "spatialleiden_res=1.0")
+
+
+# rng handling
+
+
+def test_niche_cellcharter_rng_reproducible(dummy_adata2: AnnData):
+    "The same `rng` must give the same niches, a different one must be free to differ."
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    kwargs = {"distance": 2, "aggregation": "mean"}
+
+    first = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), inplace=False, **kwargs)
+    second = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), inplace=False, **kwargs)
+    assert (first.obs["cellcharter_niche"] == second.obs["cellcharter_niche"]).all()
+
+    # not a guarantee about the labels themselves, only that the seed is actually wired through
+    other = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(1), inplace=False, **kwargs)
+    assert list(other.obs["cellcharter_niche"]) != list(first.obs["cellcharter_niche"])
+
+
+def test_niche_cellcharter_rng_none_runs(dummy_adata2: AnnData):
+    "`rng=None` (the default) must work: it means 'draw from OS entropy', not 'missing argument'."
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean")
+    assert "cellcharter_niche" in dummy_adata2.obs.columns
+
+
+def test_niche_cellcharter_library_seeds_are_independent(dummy_adata2: AnnData, monkeypatch):
+    "Each library must be fitted with its own seed, while the whole run stays reproducible."
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    dummy_adata2.obs["batch"] = ["batch1"] * 5 + ["batch2"] * 5
+    kwargs = {"distance": 2, "aggregation": "mean", "library_key": "batch", "n_components": 2}
+
+    first = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), inplace=False, **kwargs)
+    second = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), inplace=False, **kwargs)
+    assert (first.obs["cellcharter_niche"] == second.obs["cellcharter_niche"]).all()
+
+    # the clusterer is built once and reused for every library, so record what each fit
+    # is actually seeded with
+    seen: list[int] = []
+    original = _niche.GaussianMixture
+
+    def spy(*args, **kwargs):
+        seen.append(kwargs["random_state"])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(_niche, "GaussianMixture", spy)
+    calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), inplace=False, **kwargs)
+
+    assert len(seen) == 2, "expected one mixture fit per library"
+    assert seen[0] != seen[1], "libraries were fitted with the same seed"
 
 
 # more special test cases
@@ -118,6 +168,7 @@ def test_niche_calc_spatialleiden_library_key_dummy_adata(dummy_adata2: AnnData)
         spatial_connectivities_key="spatial_connectivities",
         resolutions=1.0,
         library_key="batch",
+        rng=np.random.default_rng(0),
     )
 
     niches = _assert_all_assigned(dummy_adata2, "spatialleiden_res=1.0")

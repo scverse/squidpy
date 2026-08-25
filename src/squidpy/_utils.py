@@ -237,8 +237,15 @@ def parallelize(
     return wrapper
 
 
-def spawn_generators(seed: int | None, n: int) -> list[np.random.Generator]:
-    return [np.random.default_rng(s) for s in np.random.SeedSequence(seed).spawn(n)]
+# plain assignments, not PEP-695 `type` statements: those stay opaque to sphinx and would
+# render as the bare alias names on the `*Params.rng` attribute pages
+SeedLike = int | np.integer | Sequence[int] | np.random.SeedSequence
+RNGLike = np.random.Generator | np.random.BitGenerator
+
+
+def legacy_random(rng: np.random.Generator) -> int:
+    """Draw an int seed for third-party APIs that only accept ``random_state``."""
+    return int(rng.integers(np.iinfo(np.int32).max))
 
 
 @contextmanager
@@ -371,6 +378,28 @@ def verbosity(level: int) -> Generator[None, None, None]:
         yield
     finally:
         sc.settings.verbosity = verbosity
+
+
+def deprecated_randomness_param(func: Callable[..., Any]) -> Callable[..., Any]:
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        for old in ("seed", "random_state"):
+            if old not in kwargs:
+                continue
+            if "rng" in kwargs:
+                raise TypeError(f"`{func.__name__}()` got both `{old}` and `rng`; pass only `rng`.")
+            value = kwargs.pop(old)
+            warnings.warn(
+                f"Parameter `{old}` of `{func.__name__}()` is deprecated in favor of `rng` and will be "
+                f"removed in squidpy v1.9.0. It is now seeding a generator, i.e. `{old}={value!r}` "
+                f"is used as `numpy.random.default_rng({value!r})`, which may change the result.",
+                FutureWarning,
+                stacklevel=2,
+            )
+            kwargs["rng"] = value
+        return func(*args, **kwargs)
+
+    return wrapper
 
 
 def deprecated_params(
