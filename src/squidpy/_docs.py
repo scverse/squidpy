@@ -46,16 +46,25 @@ _numba_parallel = """\
 numba_parallel
     Whether to use :func:`numba.prange` or not. If `None`, it is determined automatically.
     For small datasets or small number of interactions, it's recommended to set this to `False`."""
-_seed = """\
-seed
-    Random seed for reproducibility."""
+_rng = """\
+rng
+    Pseudorandom number generator state, following
+    `SPEC 7 <https://scientific-python.org/specs/spec-0007/>`_. When `None`, a new
+    :class:`numpy.random.Generator` is created using entropy from the operating system.
+    Types other than :class:`numpy.random.Generator` are passed to
+    :func:`numpy.random.default_rng` to instantiate a generator."""
 _seed_versionchanged = """\
 .. versionchanged:: 1.8.4
     Every permutation now uses an independent :class:`numpy.random.Generator` spawned from a
     :class:`numpy.random.SeedSequence`. Consequently the permutation-based results no
-    longer depend on ``n_jobs`` / ``backend``, but results obtained with a given ``seed``
+    longer depend on ``n_jobs`` / ``backend``, but results obtained with a given seed
     differ from those produced by squidpy < 1.8.4. See `#1232 <https://github.com/scverse/squidpy/issues/1232>`_ and
     `#1233 <https://github.com/scverse/squidpy/issues/1233>`_."""
+_rng_versionchanged = """\
+.. versionchanged:: 1.8.4
+    ``seed`` / ``random_state`` were renamed to ``rng``, which also accepts a
+    :class:`numpy.random.Generator` (`SPEC 7 <https://scientific-python.org/specs/spec-0007/>`_).
+    The old names still work but emit a :class:`FutureWarning`."""
 _n_perms = """\
 n_perms
     Number of permutations for the permutation test."""
@@ -459,8 +468,9 @@ d = DocstringProcessor(
     copy=_copy,
     copy_cont=_copy_cont,
     numba_parallel=_numba_parallel,
-    seed=_seed,
+    rng=_rng,
     seed_versionchanged=_seed_versionchanged,
+    rng_versionchanged=_rng_versionchanged,
     n_perms=_n_perms,
     img_layer=_img_layer,
     feature_name=_feature_name,

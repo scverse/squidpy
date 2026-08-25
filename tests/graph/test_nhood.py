@@ -42,9 +42,15 @@ class TestNhoodEnrichment:
     def test_reproducibility(self, adata: AnnData, n_jobs: int):
         spatial_neighbors_grid(adata)
 
-        res1 = nhood_enrichment(adata, cluster_key=_CK, seed=42, n_jobs=n_jobs, n_perms=20, copy=True)
-        res2 = nhood_enrichment(adata, cluster_key=_CK, seed=42, n_jobs=n_jobs, n_perms=20, copy=True)
-        res3 = nhood_enrichment(adata, cluster_key=_CK, seed=43, n_jobs=n_jobs, n_perms=20, copy=True)
+        res1 = nhood_enrichment(
+            adata, cluster_key=_CK, rng=np.random.default_rng(42), n_jobs=n_jobs, n_perms=20, copy=True
+        )
+        res2 = nhood_enrichment(
+            adata, cluster_key=_CK, rng=np.random.default_rng(42), n_jobs=n_jobs, n_perms=20, copy=True
+        )
+        res3 = nhood_enrichment(
+            adata, cluster_key=_CK, rng=np.random.default_rng(43), n_jobs=n_jobs, n_perms=20, copy=True
+        )
 
         assert len(res1) == len(res2)
         assert len(res2) == len(res3)
@@ -62,7 +68,7 @@ class TestNhoodEnrichment:
         """The number of workers must not change the result (one seed is spawned per permutation)."""
         spatial_neighbors_grid(adata)
 
-        kw = {"cluster_key": _CK, "seed": 42, "n_perms": 20, "copy": True}
+        kw = {"cluster_key": _CK, "rng": 42, "n_perms": 20, "copy": True}
         res_serial = nhood_enrichment(adata, n_jobs=1, **kw)
         res_parallel = nhood_enrichment(adata, n_jobs=2, **kw)
 
