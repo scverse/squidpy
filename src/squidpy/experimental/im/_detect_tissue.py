@@ -28,7 +28,7 @@ from squidpy._utils import (
     _ensure_dim_order,
     _get_scale_factors,
     _yx_from_shape,
-    rng_to_random_state,
+    legacy_random,
 )
 
 from ._utils import flatten_channels, get_element_data
@@ -758,7 +758,7 @@ def _segment_weka(
         n_jobs=-1,
         max_depth=weka_params.rf_max_depth,
         max_samples=weka_params.rf_max_samples,
-        random_state=rng_to_random_state(rng),
+        random_state=legacy_random(rng),
     )
     clf = future.fit_segmenter(training_labels, feats, clf)
     result = future.predict_segmenter(feats, clf)

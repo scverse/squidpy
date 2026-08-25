@@ -18,7 +18,7 @@ from spatialdata._logging import logger as logg
 
 from squidpy._constants._constants import NicheDefinitions
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, RNGLike, SeedLike, deprecated_rng_param, rng_to_random_state
+from squidpy._utils import NDArrayA, RNGLike, SeedLike, deprecated_randomness_param, legacy_random
 from squidpy._validators import assert_isinstance, assert_key_in_adata, assert_one_of
 from squidpy.gr._utils import extract_adata_if_sdata
 
@@ -33,7 +33,7 @@ __all__ = [
 
 @d.dedent
 @inject_docs(fla=NicheDefinitions)
-@deprecated_rng_param
+@deprecated_randomness_param
 def calculate_niche(
     data: AnnData | SpatialData,
     flavor: Literal["neighborhood", "utag", "cellcharter", "spatialleiden"],
@@ -612,7 +612,7 @@ def calculate_niche_spatialleiden(
                 layer_ratio=layer_ratio,
                 latent_neighbors_key=latent_connectivities_key,
                 spatial_neighbors_key=spatial_connectivities_key,
-                random_state=rng_to_random_state(res_rng),
+                random_state=legacy_random(res_rng),
                 directed=False,
                 key_added=f"spatialleiden_res={res}",
             )
@@ -1488,7 +1488,7 @@ class _GMMClusterer(_NicheClusterer):
         # cluster concatenated matrix with GMM, each cluster label equals to a niche label
         gmm = GaussianMixture(
             n_components=self.n_components,
-            random_state=rng_to_random_state(self.rng),
+            random_state=legacy_random(self.rng),
             init_params="random_from_data",
         )
         gmm.fit(embedding)

@@ -380,7 +380,7 @@ def verbosity(level: int) -> Generator[None, None, None]:
         sc.settings.verbosity = verbosity
 
 
-def deprecated_rng_param(func: Callable[..., Any]) -> Callable[..., Any]:
+def deprecated_randomness_param(func: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         for old in ("seed", "random_state"):

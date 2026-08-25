@@ -27,7 +27,7 @@ from squidpy._utils import (
     RNGLike,
     SeedLike,
     deprecated_params,
-    deprecated_rng_param,
+    deprecated_randomness_param,
     get_n_numba_threads,
     numba_threads,
 )
@@ -236,7 +236,7 @@ class PermutationTestABC(ABC):
     @d.dedent
     @inject_docs(src=SOURCE, tgt=TARGET, fa=CorrAxis)
     @deprecated_params({"numba_parallel": "1.10.0", "backend": "1.10.0"})
-    @deprecated_rng_param
+    @deprecated_randomness_param
     def test(
         self,
         cluster_key: str,
@@ -554,7 +554,7 @@ class PermutationTest(PermutationTestABC):
 
 @d.dedent
 @deprecated_params({"numba_parallel": "1.10.0", "backend": "1.10.0"})
-@deprecated_rng_param
+@deprecated_randomness_param
 def ligrec(
     adata: AnnData | SpatialData,
     cluster_key: str,

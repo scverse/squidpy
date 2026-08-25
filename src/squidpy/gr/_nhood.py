@@ -27,7 +27,7 @@ from squidpy._utils import (
     SeedLike,
     Signal,
     SigQueue,
-    deprecated_rng_param,
+    deprecated_randomness_param,
     get_n_processes,
     parallelize,
 )
@@ -145,7 +145,7 @@ def _create_function(n_cls: int, parallel: bool = False) -> Callable[[NDArrayA, 
 
 @d.get_sections(base="nhood_ench", sections=["Parameters"])
 @d.dedent
-@deprecated_rng_param
+@deprecated_randomness_param
 def nhood_enrichment(
     adata: AnnData | SpatialData,
     cluster_key: str,

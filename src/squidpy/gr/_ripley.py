@@ -16,7 +16,7 @@ from spatialdata import SpatialData
 from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, RNGLike, SeedLike, deprecated_rng_param
+from squidpy._utils import NDArrayA, RNGLike, SeedLike, deprecated_randomness_param
 from squidpy.gr._utils import _assert_categorical_obs, _assert_spatial_basis, _save_data, extract_adata_if_sdata
 
 __all__ = ["ripley"]
@@ -24,7 +24,7 @@ __all__ = ["ripley"]
 
 @d.dedent
 @inject_docs(key=Key.obsm.spatial, rp=RipleyStat)
-@deprecated_rng_param
+@deprecated_randomness_param
 def ripley(
     adata: AnnData | SpatialData,
     cluster_key: str,

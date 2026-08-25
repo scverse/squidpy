@@ -29,7 +29,7 @@ from squidpy._utils import (
     Signal,
     SigQueue,
     deprecated_params,
-    deprecated_rng_param,
+    deprecated_randomness_param,
     get_n_processes,
     parallelize,
 )
@@ -55,7 +55,7 @@ bl = nt.boolean
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn(), sp=SpatialAutocorr)
-@deprecated_rng_param
+@deprecated_randomness_param
 def spatial_autocorr(
     adata: AnnData | SpatialData,
     connectivity_key: str = Key.obsp.spatial_conn(),

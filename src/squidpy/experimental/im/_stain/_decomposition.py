@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 import xarray as xr
 
-from squidpy._utils import RNGLike, SeedLike, rng_to_random_state
+from squidpy._utils import RNGLike, SeedLike, legacy_random
 from squidpy.experimental.im._stain._constants import RUIFROK_HE
 from squidpy.experimental.im._stain._conversion import (
     _apply_along_channel,
@@ -169,7 +169,7 @@ def _vahadane_stain_matrix(od: np.ndarray, params: VahadaneParams) -> np.ndarray
     nmf = NMF(
         n_components=2,
         init="nndsvda",
-        random_state=rng_to_random_state(np.random.default_rng(params.rng)),
+        random_state=legacy_random(np.random.default_rng(params.rng)),
         alpha_W=params.lambda1,
         l1_ratio=1.0,
         max_iter=params.n_iter,
