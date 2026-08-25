@@ -243,7 +243,7 @@ SeedLike = int | np.integer | Sequence[int] | np.random.SeedSequence
 RNGLike = np.random.Generator | np.random.BitGenerator
 
 
-def rng_to_random_state(rng: np.random.Generator) -> int:
+def legacy_random(rng: np.random.Generator) -> int:
     """Draw an int seed for third-party APIs that only accept ``random_state``."""
     return int(rng.integers(np.iinfo(np.int32).max))
 

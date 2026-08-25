@@ -339,7 +339,7 @@ def ligrec_result() -> Mapping[str, pd.DataFrame]:
         n_jobs=1,
         show_progress_bar=False,
         copy=True,
-        rng=np.random.default_rng(0),
+        rng=0,
     )
 
 
