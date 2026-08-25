@@ -157,7 +157,7 @@ class TestValidBehavior:
             interactions=interactions,
             n_perms=5,
             corr_axis="clusters",
-            seed=42,
+            rng=np.random.default_rng(42),
             n_jobs=1,
             show_progress_bar=False,
             copy=True,
@@ -170,7 +170,7 @@ class TestValidBehavior:
             corr_axis="interactions",
             n_jobs=1,
             show_progress_bar=False,
-            seed=42,
+            rng=np.random.default_rng(42),
             copy=True,
         )
 
@@ -252,7 +252,15 @@ class TestValidBehavior:
         if TYPE_CHECKING:
             assert isinstance(interactions, pd.DataFrame)
         interactions["metadata"] = "foo"
-        r = ligrec(adata, _CK, interactions=interactions, n_perms=5, seed=2, copy=True, show_progress_bar=False)
+        r = ligrec(
+            adata,
+            _CK,
+            interactions=interactions,
+            n_perms=5,
+            rng=np.random.default_rng(2),
+            copy=True,
+            show_progress_bar=False,
+        )
 
         assert r["means"].sparse.density <= 0.15
         assert r["pvalues"].sparse.density <= 0.95
@@ -272,7 +280,7 @@ class TestValidBehavior:
             n_perms=25,
             copy=True,
             show_progress_bar=False,
-            seed=42,
+            rng=np.random.default_rng(42),
             n_jobs=n_jobs,
         )
         r2 = ligrec(
@@ -282,7 +290,7 @@ class TestValidBehavior:
             n_perms=25,
             copy=True,
             show_progress_bar=False,
-            seed=42,
+            rng=np.random.default_rng(42),
             n_jobs=n_jobs,
         )
         r3 = ligrec(
@@ -292,7 +300,7 @@ class TestValidBehavior:
             n_perms=25,
             copy=True,
             show_progress_bar=False,
-            seed=43,
+            rng=np.random.default_rng(43),
             n_jobs=n_jobs,
         )
 
@@ -306,7 +314,7 @@ class TestValidBehavior:
 
     def test_n_jobs_invariance(self, adata: AnnData, interactions: Interactions_t):
         """The number of threads must not change the result (each permutation is seeded independently)."""
-        kw = {"interactions": interactions, "n_perms": 25, "copy": True, "show_progress_bar": False, "seed": 42}
+        kw = {"interactions": interactions, "n_perms": 25, "copy": True, "show_progress_bar": False, "rng": 42}
         res_serial = ligrec(adata, _CK, n_jobs=1, **kw)
         res_parallel = ligrec(adata, _CK, n_jobs=2, **kw)
 
@@ -316,7 +324,7 @@ class TestValidBehavior:
     @pytest.mark.parametrize("param", ["numba_parallel", "backend"])
     def test_deprecated_parallelization_params(self, adata: AnnData, interactions: Interactions_t, param: str):
         """The removed parallelization arguments warn instead of raising, on both entry points."""
-        kw = {"n_perms": 5, "copy": True, "show_progress_bar": False, "seed": 42}
+        kw = {"n_perms": 5, "copy": True, "show_progress_bar": False, "rng": 42}
 
         with pytest.warns(FutureWarning, match=rf"Parameter `{param}` of `ligrec\(\)` is deprecated"):
             ligrec(adata, _CK, interactions=interactions, **{param: True}, **kw)
@@ -334,7 +342,7 @@ class TestValidBehavior:
             copy=True,
             show_progress_bar=False,
             threshold=0.01,
-            seed=0,
+            rng=np.random.default_rng(0),
             n_perms=1,
             n_jobs=1,
         )
@@ -347,7 +355,14 @@ class TestValidBehavior:
         self, adata: AnnData, interactions: Interactions_t, ligrec_pvalues_reference: Mapping[str, pd.DataFrame]
     ):
         r = ligrec(
-            adata, _CK, interactions=interactions, n_perms=25, copy=True, show_progress_bar=False, seed=42, n_jobs=1
+            adata,
+            _CK,
+            interactions=interactions,
+            n_perms=25,
+            copy=True,
+            show_progress_bar=False,
+            rng=np.random.default_rng(42),
+            n_jobs=1,
         )
         np.testing.assert_array_equal(r["means"].index, ligrec_pvalues_reference["means"].index)
         np.testing.assert_array_equal(r["means"].columns, ligrec_pvalues_reference["means"].columns)
@@ -400,7 +415,7 @@ class TestValidBehavior:
             n_perms=1,
             copy=True,
             show_progress_bar=False,
-            seed=42,
+            rng=np.random.default_rng(42),
         )
 
         assert len(res["pvalues"]) == len(expected)

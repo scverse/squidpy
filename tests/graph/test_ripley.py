@@ -99,14 +99,14 @@ def test_ripley_results(
 
 
 @pytest.mark.parametrize("mode", [RipleyStat.F, RipleyStat.G, RipleyStat.L])
-def test_ripley_seed(adata_ripley: AnnData, mode: RipleyStat):
+def test_ripley_rng(adata_ripley: AnnData, mode: RipleyStat):
     """Same seed reproduces simulations, different seeds change them, and simulations are not all identical."""
     adata = adata_ripley
     kw = {"cluster_key": CLUSTER_KEY, "mode": mode.s, "n_simulations": 20, "copy": True}
 
-    res1 = ripley(adata, seed=42, **kw)
-    res2 = ripley(adata, seed=42, **kw)
-    res3 = ripley(adata, seed=43, **kw)
+    res1 = ripley(adata, rng=np.random.default_rng(42), **kw)
+    res2 = ripley(adata, rng=np.random.default_rng(42), **kw)
+    res3 = ripley(adata, rng=np.random.default_rng(43), **kw)
 
     sims1 = res1["sims_stat"].pivot(index="bins", columns="simulations", values="stats").to_numpy()
     sims2 = res2["sims_stat"].pivot(index="bins", columns="simulations", values="stats").to_numpy()

@@ -22,7 +22,15 @@ from spatialdata import SpatialData
 from squidpy._constants._constants import ComplexPolicy, CorrAxis
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, deprecated_params, get_n_numba_threads, numba_threads, spawn_generators
+from squidpy._utils import (
+    NDArrayA,
+    RNGLike,
+    SeedLike,
+    deprecated_params,
+    deprecated_randomness_param,
+    get_n_numba_threads,
+    numba_threads,
+)
 from squidpy._validators import assert_positive, check_tuple_needles
 from squidpy.gr._utils import (
     _assert_categorical_obs,
@@ -228,13 +236,14 @@ class PermutationTestABC(ABC):
     @d.dedent
     @inject_docs(src=SOURCE, tgt=TARGET, fa=CorrAxis)
     @deprecated_params({"numba_parallel": "1.10.0", "backend": "1.10.0"})
+    @deprecated_randomness_param
     def test(
         self,
         cluster_key: str,
         clusters: Cluster_t | None = None,
         n_perms: int = 1000,
         threshold: float = 0.01,
-        seed: int | None = None,
+        rng: SeedLike | RNGLike | None = None,
         corr_method: str | None = None,
         corr_axis: Literal["interactions", "clusters"] | CorrAxis = CorrAxis.INTERACTIONS.v,
         alpha: float = 0.05,
@@ -256,7 +265,7 @@ class PermutationTestABC(ABC):
         threshold
             Do not perform permutation test if any of the interacting components is being expressed
             in less than ``threshold`` percent of cells within a given cluster.
-        %(seed)s
+        %(rng)s
         %(corr_method)s
         corr_axis
             Axis over which to perform the FDR correction. Only used when ``corr_method != None``. Valid options are:
@@ -337,7 +346,7 @@ class PermutationTestABC(ABC):
             clusters_,
             threshold=threshold,
             n_perms=n_perms,
-            seed=seed,
+            rng=np.random.default_rng(rng),
             n_jobs=n_threads,
             show_progress_bar=show_progress_bar,
         )
@@ -545,6 +554,7 @@ class PermutationTest(PermutationTestABC):
 
 @d.dedent
 @deprecated_params({"numba_parallel": "1.10.0", "backend": "1.10.0"})
+@deprecated_randomness_param
 def ligrec(
     adata: AnnData | SpatialData,
     cluster_key: str,
@@ -559,7 +569,7 @@ def ligrec(
     gene_symbols: str | None = None,
     *,
     n_perms: int = 1000,
-    seed: int | None = None,
+    rng: SeedLike | RNGLike | None = None,
     clusters: Cluster_t | None = None,
     alpha: float = 0.05,
     n_jobs: int | None = None,
@@ -601,7 +611,7 @@ def ligrec(
                 clusters=clusters,
                 n_perms=n_perms,
                 threshold=threshold,
-                seed=seed,
+                rng=rng,
                 corr_method=corr_method,
                 corr_axis=corr_axis,
                 alpha=alpha,
@@ -678,9 +688,10 @@ def _analysis(
     data: pd.DataFrame,
     interactions: NDArrayA,
     interaction_clusters: NDArrayA,
+    *,
+    rng: np.random.Generator,
     threshold: float = 0.1,
     n_perms: int = 1000,
-    seed: int | None = None,
     n_jobs: int = 1,
     show_progress_bar: bool = True,
 ) -> TempResult:
@@ -698,7 +709,7 @@ def _analysis(
     threshold
         Percentage threshold for removing lowly expressed genes in clusters.
     %(n_perms)s
-    %(seed)s
+    %(rng)s
     n_jobs
         Number of numba threads to use. Each thread holds two `(n_interactions, n_interaction_clusters)`
         :class:`numpy.int64` arrays (its private reduction copy plus the per-permutation indicators),
@@ -749,7 +760,7 @@ def _analysis(
     res_means = np.where(nonzero, (m_rec + m_lig) / 2.0, 0.0)
 
     # one independent RNG per permutation; a numba typed list so the kernel can index it in prange
-    generators = List(spawn_generators(seed, n_perms))
+    generators = List(rng.spawn(n_perms))
 
     # the whole permutation loop runs in a single numba call; ``n_jobs`` sets its thread count and
     # the kernel updates ``progress`` (a numba_progress proxy) once per permutation
