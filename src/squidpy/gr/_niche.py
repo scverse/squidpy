@@ -429,7 +429,7 @@ def calculate_niche_cellcharter(
         ``"variance"``.
     %(rng)s
         Seeds the Gaussian mixture clustering step. When stratifying by ``library_key``,
-        every library is fitted with an independent generator derived from it.
+        every library is fitted with an independent rng derived from it.
     %(niche_spatial_conn_key)s
     n_components
         Number of embedding components to retain when ``use_rep`` is provided,
@@ -504,7 +504,7 @@ def calculate_niche_spatialleiden(
         Whether to use edge weights during clustering.
     %(rng)s
         Each resolution — and each library when stratifying by ``library_key`` — is
-        clustered with an independent generator derived from it.
+        clustered with an independent rng derived from it.
     %(niche_min_niche_size)s
     %(niche_mask)s
     prefix
@@ -540,8 +540,8 @@ def calculate_niche_spatialleiden(
     else:
         adata = orig_adata.copy()
 
-    # normalise once here; everything below this point works with generators only
-    generator = np.random.default_rng(rng)
+    # normalise once here; everything below this point works with rngs only
+    rng = np.random.default_rng(rng)
 
     if library_key is not None:
         # first assert that library_key was there in adata.obs, and then, stratify the object according to that library_key and
@@ -549,10 +549,10 @@ def calculate_niche_spatialleiden(
         assert_key_in_adata(adata, library_key, attr="obs")
         logg.info(f"Stratifying by library_key '{library_key}'")
 
-        # each library is an independent clustering problem, so it gets its own generator
+        # each library is an independent clustering problem, so it gets its own rng
         # (indexed by `itr` so that skipped empty libraries don't shift the others)
         library_ids = adata.obs[library_key].unique()
-        library_rngs = generator.spawn(len(library_ids))
+        library_rngs = rng.spawn(len(library_ids))
 
         # go through each library_id and process the corresponding adata subset
         for itr, lib_id in enumerate(library_ids):
@@ -601,7 +601,7 @@ def calculate_niche_spatialleiden(
             resolutions = [resolutions]
 
         # every resolution is a separate clustering run, so seed each one independently
-        resolution_rngs = generator.spawn(len(resolutions))
+        resolution_rngs = rng.spawn(len(resolutions))
 
         for res, res_rng in zip(resolutions, resolution_rngs, strict=True):
             sl.spatialleiden(
@@ -1458,7 +1458,7 @@ class _GMMClusterer(_NicheClusterer):
     n_components
         Number of mixture components.
     rng
-        Generator supplying the seed of every mixture fit.
+        rng supplying the seed of every mixture fit.
     base_colname
         Name of the output column added to ``adata.obs``.
 
@@ -1474,7 +1474,7 @@ class _GMMClusterer(_NicheClusterer):
     def __init__(
         self,
         n_components: int,
-        rng: np.random.Generator,
+        rng: np.random.rng,
         base_colname: str = "niche_gmm",
     ):
         self.n_components = n_components
