@@ -8,7 +8,7 @@ from scipy.sparse import csr_matrix
 from spatialdata import SpatialData
 from spatialdata.models import TableModel
 
-from squidpy.gr import calculate_niche, calculate_niche_cellcharter, calculate_niche_neighborhood, spatial_neighbors_knn
+from squidpy.gr import calculate_niche, calculate_niche_cellcharter, calculate_niche_neighborhood, spatial_neighbors_knn, _niche
 
 N_NEIGHBORS = 20
 GROUPS = "celltype_mapped_refined"
