@@ -9,7 +9,13 @@ from scipy.sparse import csr_matrix
 from spatialdata import SpatialData
 from spatialdata.models import TableModel
 
-from squidpy.gr import _niche, calculate_niche, calculate_niche_cellcharter, spatial_neighbors_knn
+from squidpy.gr import (
+    _niche,
+    calculate_niche,
+    calculate_niche_cellcharter,
+    calculate_niche_neighborhood,
+    spatial_neighbors_knn,
+)
 
 N_NEIGHBORS = 20
 GROUPS = "celltype_mapped_refined"
@@ -90,12 +96,12 @@ def test_niche_cellcharter_rng_reproducible(dummy_adata2: AnnData):
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
     kwargs = {"distance": 2, "aggregation": "mean"}
 
-    first = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), inplace=False, **kwargs)
-    second = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), inplace=False, **kwargs)
+    first = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), copy=True, **kwargs)
+    second = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), copy=True, **kwargs)
     assert (first.obs["cellcharter_niche"] == second.obs["cellcharter_niche"]).all()
 
     # not a guarantee about the labels themselves, only that the seed is actually wired through
-    other = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(1), inplace=False, **kwargs)
+    other = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(1), copy=True, **kwargs)
     assert list(other.obs["cellcharter_niche"]) != list(first.obs["cellcharter_niche"])
 
 
@@ -112,8 +118,8 @@ def test_niche_cellcharter_library_seeds_are_independent(dummy_adata2: AnnData, 
     dummy_adata2.obs["batch"] = ["batch1"] * 5 + ["batch2"] * 5
     kwargs = {"distance": 2, "aggregation": "mean", "library_key": "batch", "n_components": 2}
 
-    first = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), inplace=False, **kwargs)
-    second = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), inplace=False, **kwargs)
+    first = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), copy=True, **kwargs)
+    second = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), copy=True, **kwargs)
     assert (first.obs["cellcharter_niche"] == second.obs["cellcharter_niche"]).all()
 
     # the clusterer is built once and reused for every library, so record what each fit
@@ -126,7 +132,7 @@ def test_niche_cellcharter_library_seeds_are_independent(dummy_adata2: AnnData, 
         return original(*args, **kwargs)
 
     monkeypatch.setattr(_niche, "GaussianMixture", spy)
-    calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), inplace=False, **kwargs)
+    calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), copy=True, **kwargs)
 
     assert len(seen) == 2, "expected one mixture fit per library"
     assert seen[0] != seen[1], "libraries were fitted with the same seed"
@@ -250,3 +256,16 @@ def test_niche_calc_utag(adata_seqfish: AnnData):
 
     assert niches.isna().sum() == 0
     assert niches.nunique() > niches_low_res.nunique()
+
+
+def test_niche_copy_semantics(dummy_adata2: AnnData):
+    "copy=True returns an annotated copy and leaves the input untouched; copy=False mutates and returns None."
+    key = "nhood_niche_res=1.0"
+    kwargs = {"groups": "celltype", "n_neighbors": 3, "resolutions": 1.0}
+
+    out = calculate_niche_neighborhood(dummy_adata2, copy=True, **kwargs)
+    assert key in out.obs.columns
+    assert key not in dummy_adata2.obs.columns
+
+    assert calculate_niche_neighborhood(dummy_adata2, **kwargs) is None
+    assert (dummy_adata2.obs[key] == out.obs[key]).all()

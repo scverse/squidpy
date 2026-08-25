@@ -216,9 +216,9 @@ def calculate_niche(
             n_hop_weights,
             min_niche_size,
             mask,
-            library_key,
-            inplace,
-            table_key,
+            library_key=library_key,
+            copy=not inplace,
+            table_key=table_key,
             n_iterations=n_iterations,
             rng=rng,
         )
@@ -231,9 +231,9 @@ def calculate_niche(
             spatial_connectivities_key,
             min_niche_size,
             mask,
-            library_key,
-            inplace,
-            table_key,
+            library_key=library_key,
+            copy=not inplace,
+            table_key=table_key,
             n_iterations=n_iterations,
             rng=rng,
         )
@@ -249,9 +249,9 @@ def calculate_niche(
             use_rep,
             min_niche_size,
             mask,
-            library_key,
-            inplace,
-            table_key,
+            library_key=library_key,
+            copy=not inplace,
+            table_key=table_key,
         )
 
     elif flavor == "spatialleiden":
@@ -268,7 +268,7 @@ def calculate_niche(
             mask,
             prefix=None,
             library_key=library_key,
-            inplace=inplace,
+            copy=not inplace,
             table_key=table_key,
         )
 
@@ -289,7 +289,7 @@ def calculate_niche_neighborhood(
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     library_key: str | None = None,
-    inplace: bool = True,
+    copy: bool = False,
     table_key: str | None = None,
     *,
     flavor: Literal["igraph", "leidenalg"] = "igraph",
@@ -327,8 +327,8 @@ def calculate_niche_neighborhood(
 
     Returns
     -------
-    If ``inplace = True``, modifies ``adata`` in place and returns ``None``.
-    Otherwise, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+    If ``copy = True``, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+    Otherwise, modifies ``adata`` in place and returns ``None``.
 
     """
 
@@ -354,7 +354,7 @@ def calculate_niche_neighborhood(
         min_niche_size=min_niche_size,
         mask=mask,
         library_key=library_key,
-        inplace=inplace,
+        copy=copy,
         table_key=table_key,
     )
 
@@ -368,7 +368,7 @@ def calculate_niche_utag(
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     library_key: str | None = None,
-    inplace: bool = True,
+    copy: bool = False,
     table_key: str | None = None,
     *,
     flavor: Literal["igraph", "leidenalg"] = "igraph",
@@ -394,8 +394,8 @@ def calculate_niche_utag(
 
     Returns
     -------
-    If ``inplace = True``, modifies ``adata`` in place and returns ``None``.
-    Otherwise, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+    If ``copy = True``, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+    Otherwise, modifies ``adata`` in place and returns ``None``.
 
     """
 
@@ -412,7 +412,7 @@ def calculate_niche_utag(
         min_niche_size=min_niche_size,
         mask=mask,
         library_key=library_key,
-        inplace=inplace,
+        copy=copy,
         table_key=table_key,
     )
 
@@ -429,7 +429,7 @@ def calculate_niche_cellcharter(
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     library_key: str | None = None,
-    inplace: bool = True,
+    copy: bool = False,
     table_key: str | None = None,
 ) -> AnnData | None:
     """Compute niche assignments using a CellCharter-style aggregation embedding.
@@ -460,8 +460,8 @@ def calculate_niche_cellcharter(
 
     Returns
     -------
-    If ``inplace = True``, modifies ``adata`` in place and returns ``None``.
-    Otherwise, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+    If ``copy = True``, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+    Otherwise, modifies ``adata`` in place and returns ``None``.
 
     """
 
@@ -476,7 +476,7 @@ def calculate_niche_cellcharter(
         min_niche_size=min_niche_size,
         mask=mask,
         library_key=library_key,
-        inplace=inplace,
+        copy=copy,
         table_key=table_key,
     )
 
@@ -495,7 +495,7 @@ def calculate_niche_spatialleiden(
     mask: pd.Series | None = None,
     prefix: str | None = None,
     library_key: str | None = None,
-    inplace: bool = True,
+    copy: bool = False,
     table_key: str | None = None,
 ) -> AnnData | None:
     """Compute niche assignments using the SpatialLeiden algorithm.
@@ -530,13 +530,13 @@ def calculate_niche_spatialleiden(
         When stratifying by ``library_key``, a library-specific prefix is added
         automatically (something like "lib=").
     %(library_key)s
-    %(niche_inplace)s
+    %(copy)s
     %(table_key)s
 
     Returns
     -------
-    If ``inplace = True``, modifies ``adata`` in place and returns ``None``.
-    Otherwise, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+    If ``copy = True``, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+    Otherwise, modifies ``adata`` in place and returns ``None``.
 
     Notes
     -----
@@ -553,10 +553,7 @@ def calculate_niche_spatialleiden(
     # obtain adata if data was of sdata type
     orig_adata = extract_adata_if_sdata(data, table_key=table_key)
 
-    if inplace:
-        adata = orig_adata
-    else:
-        adata = orig_adata.copy()
+    adata = orig_adata.copy() if copy else orig_adata
 
     # normalise once here; everything below this point works with rngs only
     rng = np.random.default_rng(rng)
@@ -598,7 +595,7 @@ def calculate_niche_spatialleiden(
                 mask,
                 prefix=f"lib={lib_id}_",
                 library_key=None,
-                inplace=True,  # to save memory
+                copy=False,  # to save memory
                 table_key=table_key,
             )
 
@@ -645,10 +642,7 @@ def calculate_niche_spatialleiden(
     if isinstance(data, SpatialData):
         sanitize_table(adata)
 
-    if inplace:
-        return None
-    else:
-        return adata
+    return adata if copy else None
 
 
 @d.dedent
@@ -659,7 +653,7 @@ def _calculate_niche_custom(
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     library_key: str | None = None,
-    inplace: bool = True,
+    copy: bool = False,
     table_key: str | None = None,
 ) -> AnnData | None:
     """Compute niche assignments using user-defined embedding, clustering, and postprocessing.
@@ -679,8 +673,8 @@ def _calculate_niche_custom(
 
     Returns
     -------
-    If ``inplace = True``, modifies ``adata`` in place and returns ``None``.
-    Otherwise, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+    If ``copy = True``, returns a copy of ``adata`` with niche annotations added to ``.obs``.
+    Otherwise, modifies ``adata`` in place and returns ``None``.
 
     Notes
     -----
@@ -700,10 +694,7 @@ def _calculate_niche_custom(
     # obtain adata if data was of sdata type
     orig_adata = extract_adata_if_sdata(data, table_key=table_key)
 
-    if inplace:
-        adata = orig_adata
-    else:
-        adata = orig_adata.copy()
+    adata = orig_adata.copy() if copy else orig_adata
 
     if library_key is not None:
         assert_key_in_adata(adata, library_key, attr="obs")
@@ -744,10 +735,7 @@ def _calculate_niche_custom(
     if isinstance(data, SpatialData):
         sanitize_table(adata)
 
-    if inplace:
-        return None
-    else:
-        return adata
+    return adata if copy else None
 
 
 def _run_niche_pipeline(
