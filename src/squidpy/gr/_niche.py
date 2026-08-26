@@ -219,6 +219,8 @@ def calculate_niche(
             library_key=library_key,
             copy=not inplace,
             table_key=table_key,
+            n_iterations=n_iterations,
+            rng=rng,
         )
 
     elif flavor == "utag":
@@ -232,6 +234,8 @@ def calculate_niche(
             library_key=library_key,
             copy=not inplace,
             table_key=table_key,
+            n_iterations=n_iterations,
+            rng=rng,
         )
 
     elif flavor == "cellcharter":
@@ -287,6 +291,10 @@ def calculate_niche_neighborhood(
     library_key: str | None = None,
     copy: bool = False,
     table_key: str | None = None,
+    *,
+    flavor: Literal["igraph", "leidenalg"] = "igraph",
+    n_iterations: int = -1,
+    rng: SeedLike | RNGLike | None = None,
 ) -> AnnData | None:
     """Compute niche neighborhoods using a neighborhood profile embedding and Leiden clustering.
 
@@ -315,6 +323,7 @@ def calculate_niche_neighborhood(
         Weights for combining neighborhood profiles across hops.
     %(niche_common_params)s
     %(table_key)s
+    %(niche_leiden_params)s
 
     Returns
     -------
@@ -334,7 +343,9 @@ def calculate_niche_neighborhood(
     )
 
     # Create instance of _LeidenClusterer using provided inputs
-    clusterer = _LeidenClusterer(n_neighbors, resolutions, "nhood_niche")
+    clusterer = _LeidenClusterer(
+        n_neighbors, resolutions, "nhood_niche", flavor=flavor, n_iterations=n_iterations, rng=rng
+    )
 
     return _calculate_niche_custom(
         data,
@@ -359,6 +370,10 @@ def calculate_niche_utag(
     library_key: str | None = None,
     copy: bool = False,
     table_key: str | None = None,
+    *,
+    flavor: Literal["igraph", "leidenalg"] = "igraph",
+    n_iterations: int = -1,
+    rng: SeedLike | RNGLike | None = None,
 ) -> AnnData | None:
     """Compute niche assignments using a UTAG-style neighborhood embedding.
 
@@ -375,6 +390,7 @@ def calculate_niche_utag(
     %(niche_spatial_conn_key)s
     %(niche_common_params)s
     %(table_key)s
+    %(niche_leiden_params)s
 
     Returns
     -------
@@ -385,7 +401,9 @@ def calculate_niche_utag(
 
     embedder = _UtagEmbedder(spatial_connectivities_key)
 
-    clusterer = _LeidenClusterer(n_neighbors, resolutions, "utag_niche")
+    clusterer = _LeidenClusterer(
+        n_neighbors, resolutions, "utag_niche", flavor=flavor, n_iterations=n_iterations, rng=rng
+    )
 
     return _calculate_niche_custom(
         data,
@@ -820,21 +838,21 @@ def _validate_niche_args(
                 "abs_nhood",
                 "distance",
                 "n_hop_weights",
+                "rng",
+                "n_iterations",
             ],
             "unused": [
                 "aggregation",
                 "n_components",
-                "rng",
                 "latent_connectivities_key",
                 "layer_ratio",
-                "n_iterations",
                 "use_weights",
                 "use_rep",
             ],
         },
         "utag": {
             "required": ["n_neighbors", "resolutions", "spatial_connectivities_key"],
-            "optional": [],
+            "optional": ["rng", "n_iterations"],
             "unused": [
                 "groups",
                 "min_niche_size",
@@ -844,10 +862,8 @@ def _validate_niche_args(
                 "n_hop_weights",
                 "aggregation",
                 "n_components",
-                "rng",
                 "latent_connectivities_key",
                 "layer_ratio",
-                "n_iterations",
                 "use_weights",
                 "use_rep",
             ],
@@ -1391,6 +1407,7 @@ class _LeidenClusterer(_NicheClusterer):
     base_colname
         Base name for columns added to ``adata.obs``. Resolution is
         appended to this to unique identify columns for each resolution.
+    %(niche_leiden_params)s
 
     Notes
     -----
@@ -1403,10 +1420,17 @@ class _LeidenClusterer(_NicheClusterer):
         n_neighbors: int,
         resolutions: float | list[float],
         base_colname: str = "niche_leiden",
+        *,
+        flavor: Literal["igraph", "leidenalg"] = "igraph",
+        n_iterations: int = -1,
+        rng: SeedLike | RNGLike | None = None,
     ):
         self.n_neighbors = n_neighbors
         self.resolutions = resolutions if isinstance(resolutions, list) else [resolutions]
         self.base_colname = base_colname
+        self.flavor = flavor
+        self.n_iterations = n_iterations
+        self.rng = np.random.default_rng(rng)
 
     def cluster(self, adata: AnnData, embedding: NDArrayA) -> list:
         # first create an adata object using the embedding provided
@@ -1417,18 +1441,28 @@ class _LeidenClusterer(_NicheClusterer):
 
         # For each resolution, apply leiden on neighborhood profile. Each cluster label equals to a niche label
         niche_keys = []
-        for res in self.resolutions:
+        # every resolution is a separate clustering run, so seed each one independently
+        resolution_rngs = self.rng.spawn(len(self.resolutions))
+        for res, res_rng in zip(self.resolutions, resolution_rngs, strict=True):
             niche_key = f"{self.base_colname}_res={res}"
             niche_keys.append(niche_key)
 
             if niche_key in adata.obs.columns:
                 logg.info(f"Overwriting existing column '{niche_key}'")
 
-            sc.tl.leiden(
-                adata_embedding,
-                resolution=res,
-                key_added=niche_key,
-            )
+            # Default to the igraph backend so niche labels are reproducible across
+            # versions; leidenalg is deprecated in scanpy and unstable on small graphs.
+            # See scverse/squidpy#1260.
+            leiden_kwargs: dict[str, Any] = {
+                "flavor": self.flavor,
+                "n_iterations": self.n_iterations,
+                "random_state": legacy_random(res_rng),
+            }
+            # scanpy's igraph backend only supports undirected graphs and errors if
+            # ``directed`` is left at the leidenalg default of True, so pin it to False.
+            if self.flavor == "igraph":
+                leiden_kwargs["directed"] = False
+            sc.tl.leiden(adata_embedding, resolution=res, key_added=niche_key, **leiden_kwargs)
 
             adata.obs[niche_key] = list(
                 adata_embedding.obs[niche_key]
