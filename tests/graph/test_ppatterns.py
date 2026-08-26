@@ -20,8 +20,10 @@ def test_spatial_autocorr_seq_par(dummy_adata: AnnData, mode: str):
     """Check whether spatial autocorr results are the same for seq. and parallel computation."""
     spatial_autocorr(dummy_adata, mode=mode)
     dummy_adata.var["highly_variable"] = np.random.choice([True, False], size=dummy_adata.var_names.shape)
-    df = spatial_autocorr(dummy_adata, mode=mode, copy=True, n_jobs=1, seed=42, n_perms=50)
-    df_parallel = spatial_autocorr(dummy_adata, mode=mode, copy=True, n_jobs=2, seed=42, n_perms=50)
+    df = spatial_autocorr(dummy_adata, mode=mode, copy=True, n_jobs=1, rng=np.random.default_rng(42), n_perms=50)
+    df_parallel = spatial_autocorr(
+        dummy_adata, mode=mode, copy=True, n_jobs=2, rng=np.random.default_rng(42), n_perms=50
+    )
 
     idx_df = df.index.values
     idx_adata = dummy_adata[:, dummy_adata.var.highly_variable.values].var_names.values
@@ -61,8 +63,8 @@ def test_spatial_autocorr_reproducibility(dummy_adata: AnnData, n_jobs: int, mod
     spatial_autocorr(dummy_adata, mode=mode)
     dummy_adata.var["highly_variable"] = rng.choice([True, False], size=dummy_adata.var_names.shape)
     # seed will work only when multiprocessing/loky
-    df_1 = spatial_autocorr(dummy_adata, mode=mode, copy=True, n_jobs=n_jobs, seed=42, n_perms=50)
-    df_2 = spatial_autocorr(dummy_adata, mode=mode, copy=True, n_jobs=n_jobs, seed=42, n_perms=50)
+    df_1 = spatial_autocorr(dummy_adata, mode=mode, copy=True, n_jobs=n_jobs, rng=np.random.default_rng(42), n_perms=50)
+    df_2 = spatial_autocorr(dummy_adata, mode=mode, copy=True, n_jobs=n_jobs, rng=np.random.default_rng(42), n_perms=50)
 
     idx_df = df_1.index.values
     idx_adata = dummy_adata[:, dummy_adata.var["highly_variable"].values].var_names.values
@@ -95,7 +97,7 @@ def test_spatial_autocorr_reproducibility(dummy_adata: AnnData, n_jobs: int, mod
 @pytest.mark.parametrize("mode", ["moran", "geary"])
 def test_spatial_autocorr_n_jobs_invariance(dummy_adata: AnnData, mode: str):
     """The number of workers must not change the permutation-based results (seed spawned per permutation)."""
-    kw = {"mode": mode, "copy": True, "seed": 42, "n_perms": 50}
+    kw = {"mode": mode, "copy": True, "rng": 42, "n_perms": 50}
     df_serial = spatial_autocorr(dummy_adata, n_jobs=1, **kw)
     df_parallel = spatial_autocorr(dummy_adata, n_jobs=2, **kw)
 
@@ -118,7 +120,7 @@ def test_spatial_autocorr_var_norm_formula(dummy_adata: AnnData, mode: str):
     from squidpy.gr._ppatterns import _g_moments
 
     uns_key = MORAN_K if mode == "moran" else GEARY_C
-    spatial_autocorr(dummy_adata, mode=mode, transformation=True, n_perms=None, seed=0)
+    spatial_autocorr(dummy_adata, mode=mode, transformation=True, n_perms=None, rng=np.random.default_rng(0))
     var_norm = float(dummy_adata.uns[uns_key]["var_norm"].iloc[0])
 
     # Reconstruct the exact (row-standardised) weight matrix the routine used.
