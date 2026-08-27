@@ -14,10 +14,8 @@ from ._stain import (
     ReinhardParams,
     StainReference,
     VahadaneParams,
-    decompose_stains,
     estimate_white_point,
     fit_stain_reference,
-    normalize_stains,
 )
 
 __all__ = [
@@ -29,8 +27,6 @@ __all__ = [
     "VahadaneParams",
     "WekaParams",
     "calculate_image_features",
-    "normalize_stains",
-    "decompose_stains",
     "detect_tissue",
     "estimate_white_point",
     "fit_stain_reference",
