@@ -672,7 +672,8 @@ def align_landmarks(
     method
         ``"similarity"`` (default) fits 4 degrees of freedom (rotation + uniform scale
         + translation); ``"affine"`` fits all 6 (adding non-uniform scale and shear).
-        The more constrained fit cannot shear a sample that should not be sheared.
+        The more constrained fit cannot shear a sample that should not be sheared, and a
+        line determines it -- ``"affine"`` needs landmarks that are not collinear.
     table_key
         For SpatialData input, read the landmarks from this table's ``obsm`` instead
         of a shapes element. A single key applies to both sides; a ``(ref, query)``

@@ -88,6 +88,26 @@ def test_table_key_reads_landmarks_from_a_table() -> None:
     np.testing.assert_allclose(_apply(result, _QUERY), _REF, atol=1e-6)
 
 
+def test_affine_refuses_collinear_landmarks() -> None:
+    """The trap: a 6-DOF fit on a line is *exact* on the landmarks and arbitrary off them.
+
+    There is no residual to reveal it, so nothing but a rank check catches it. `similarity`
+    has 4 DOF, which a line determines, so it is allowed and must stay allowed.
+    """
+    line = np.array([[0.0, 0.0], [1.0, 1.0], [2.0, 2.0], [3.0, 3.0]])
+    shifted = line + np.array([3.0, 4.0])
+
+    with pytest.raises(ValueError, match=r"`affine` needs `ref` landmarks spanning a plane"):
+        align_landmarks(line, shifted, method="affine")
+    with pytest.raises(ValueError, match=r"`affine` needs `query` landmarks spanning a plane"):
+        align_landmarks(_REF, line, method="affine")
+
+    # a line determines a similarity: exact off the line too, not merely on it
+    matrix = align_landmarks(line, shifted, method="similarity")
+    off_line = np.array([[0.0, 5.0], [-2.0, 3.0]])
+    np.testing.assert_allclose(_apply(matrix, off_line + np.array([3.0, 4.0])), off_line, atol=1e-8)
+
+
 def test_unknown_method_lists_available() -> None:
     ref, query = _adata(_REF), _adata(_QUERY)
     with pytest.raises(ValueError, match="Unknown `method='nope'`.*affine, similarity"):

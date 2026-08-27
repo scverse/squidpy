@@ -30,6 +30,16 @@ def _fit(ref: np.ndarray, query: np.ndarray, *, method: Literal["similarity", "a
     else:
         from skimage.transform import estimate_transform
 
+        # A 6-DOF affine is underdetermined by landmarks that span a line: the fit is exact
+        # *on* them and arbitrary off them, so there is no residual to reveal it. `similarity`
+        # has 4 DOF and a line determines it, hence the check only here.
+        for name, points in (("ref", ref), ("query", query)):
+            if np.linalg.matrix_rank(points - points.mean(axis=0), tol=1e-8) < 2:
+                raise ValueError(
+                    f"`affine` needs `{name}` landmarks spanning a plane, but they lie on a line "
+                    f"(or a single point). Use `method='similarity'`, which a line determines, or "
+                    f"pick landmarks that are not collinear."
+                )
         matrix = np.asarray(estimate_transform("affine", src=query, dst=ref).params)
 
     if matrix.shape != (3, 3):
@@ -66,7 +76,8 @@ def fit_affine(ref: np.ndarray, query: np.ndarray) -> NDArrayA:
     Parameters
     ----------
     ref, query
-        Pre-paired ``(N, 2)`` ``(x, y)`` landmark arrays (``N >= 3``).
+        Pre-paired ``(N, 2)`` ``(x, y)`` landmark arrays (``N >= 3``), not collinear --
+        a line leaves the 6 degrees of freedom underdetermined.
 
     Returns
     -------
