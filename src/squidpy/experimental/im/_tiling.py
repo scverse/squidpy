@@ -24,6 +24,7 @@ from spatialdata._logging import logger as logg
 from tqdm.auto import tqdm
 
 from squidpy._utils import get_n_processes, thread_map
+from squidpy._validators import assert_non_negative, assert_positive
 
 
 def yx_size(da: xr.DataArray) -> tuple[int, int]:
@@ -258,12 +259,10 @@ def build_tile_specs(
     label.  Empty tiles (no cells) are omitted.
     """
     height, width = grid_shape
-    if tile_size <= 0:
-        raise ValueError(f"tile_size must be positive, got {tile_size}")
+    assert_positive(tile_size, name="tile_size")
 
     margin = _auto_margin(cell_info) if overlap_margin == "auto" else int(overlap_margin)
-    if margin < 0:
-        raise ValueError(f"overlap_margin must be non-negative, got {margin}")
+    assert_non_negative(margin, name="overlap_margin")
 
     cell_to_tile: dict[int, tuple[int, int]] = {}
     for lid, cell in cell_info.items():

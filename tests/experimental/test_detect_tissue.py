@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 import spatialdata_plot as sdp
 
 import squidpy as sq
@@ -124,3 +125,24 @@ class TestDetectTissue(PlotTester, metaclass=PlotTesterMeta):
         )
 
         sdata_hne.pl.render_labels("hne_tissue").pl.show()
+
+
+class TestBackgroundPriorKeywords:
+    """The `BackgroundDetectionParams` keys are keyword arguments of `detect_tissue`."""
+
+    def test_explicit_corner_overrides_broadcast(self) -> None:
+        # `corners_are_background` broadcasts to all four corners; a corner passed
+        # explicitly wins over it (the old `or` dropped the broadcast entirely)
+        from squidpy.experimental.im._detect_tissue import _BACKGROUND_DEFAULTS, BackgroundDetectionParams
+        from squidpy.experimental.utils._params import resolve_params
+
+        corner_priors = BackgroundDetectionParams(
+            ymin_xmin_is_bg=False, ymax_xmin_is_bg=False, ymin_xmax_is_bg=False, ymax_xmax_is_bg=False
+        )
+        bgp = resolve_params({**corner_priors, "ymin_xmin_is_bg": True}, defaults=_BACKGROUND_DEFAULTS)
+        assert bgp["ymin_xmin_is_bg"] is True
+        assert bgp["ymax_xmax_is_bg"] is False  # the broadcast still applies to the rest
+
+    def test_unknown_keyword_raises(self, sdata_hne) -> None:
+        with pytest.raises(ValueError, match="Unknown `background_detection_params` field"):
+            sq.experimental.im.detect_tissue(sdata_hne, image_key="hne", inplace=False, corner_size_pctt=0.02)
