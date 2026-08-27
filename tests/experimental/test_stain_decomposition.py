@@ -8,6 +8,8 @@ import xarray as xr
 from squidpy.experimental.im._stain._constants import RUIFROK_HE
 from squidpy.experimental.im._stain._conversion import sda_to_rgb
 from squidpy.experimental.im._stain._decomposition import (
+    _MACENKO_DEFAULTS,
+    _VAHADANE_DEFAULTS,
     MacenkoParams,
     VahadaneParams,
     _resolve_macenko_params,
@@ -116,17 +118,29 @@ class TestDegenerate:
 
 class TestResolvers:
     def test_macenko_mapping_and_unknown(self) -> None:
-        assert _resolve_macenko_params({"alpha": 2.0}).alpha == 2.0
+        assert _resolve_macenko_params({"alpha": 2.0})["alpha"] == 2.0
         with pytest.raises(ValueError, match="Unknown"):
             _resolve_macenko_params({"nope": 1})
 
-    def test_vahadane_instance_and_badtype(self) -> None:
-        p = VahadaneParams(lambda1=0.2)
-        assert _resolve_vahadane_params(p) is p
-        with pytest.raises(TypeError, match="VahadaneParams"):
+    def test_vahadane_partial_and_badtype(self) -> None:
+        # `total=False`: a partial mapping is filled from the defaults
+        p = _resolve_vahadane_params(VahadaneParams(lambda1=0.2))
+        assert p["lambda1"] == 0.2
+        assert p["n_iter"] == 200
+        with pytest.raises(TypeError, match="must be a Mapping"):
             _resolve_vahadane_params(5)
+
+    def test_none_returns_defaults(self) -> None:
+        assert _resolve_macenko_params(None) == _MACENKO_DEFAULTS
+        assert _resolve_vahadane_params(None) == _VAHADANE_DEFAULTS
 
     @pytest.mark.parametrize("bad", [0.0, 50.0, -1.0])
     def test_macenko_alpha_bounds(self, bad: float) -> None:
+        # validation moved from `__post_init__` to the resolve boundary
         with pytest.raises(ValueError, match="alpha"):
-            MacenkoParams(alpha=bad)
+            _resolve_macenko_params({"alpha": bad})
+
+    @pytest.mark.parametrize(("key", "bad"), [("beta", -1.0), ("lambda1", -1.0), ("n_iter", 0)])
+    def test_vahadane_bounds(self, key: str, bad: float) -> None:
+        with pytest.raises(ValueError, match=key):
+            _resolve_vahadane_params({key: bad})
