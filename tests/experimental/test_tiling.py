@@ -275,7 +275,7 @@ class TestBuildTileSpecsEdgeCases:
         # Pass a non-empty cell_info so the test exercises the tile_size guard
         # rather than an empty-dict short-circuit if validation order ever shifts.
         ci = {1: CellInfo(label=1, centroid_y=50, centroid_x=50, bbox_h=4, bbox_w=4)}
-        with pytest.raises(ValueError, match="tile_size must be positive"):
+        with pytest.raises(ValueError, match="`tile_size` to be positive"):
             build_tile_specs((100, 100), ci, tile_size=0)
 
     def test_tile_size_larger_than_image(self):

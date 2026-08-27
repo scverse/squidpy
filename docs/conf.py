@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from functools import cache
 from importlib.metadata import metadata
 
 from sphinx.application import Sphinx
@@ -93,6 +94,9 @@ suppress_warnings = ["download.not_readable", "git.too_shallow"]
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
+# Keep documented objects (every params key, every attribute) out of the left nav:
+# it should list pages and sections, not one entry per key.
+toc_object_entries = False
 autosummary_generate = True
 autodoc_member_order = "groupwise"
 autodoc_typehints = "signature"
@@ -169,7 +173,57 @@ html_theme_options = {"navigation_depth": 4, "logo_only": True}
 html_show_sphinx = False
 
 
+# Each params key carries its default in the `Annotated` metadata of its
+# declaration (`squidpy.experimental.utils._params.Default`). Read it from there --
+# one source of truth, no defaults restated in docstrings where they could drift.
+
+
+@cache
+def _params_defaults() -> dict[str, dict[str, object]]:
+    """Read every params key's ``Default`` -- and then hide it from autodoc.
+
+    Autodoc renders `Annotated` metadata verbatim (`Annotated[float, Default(1.0)]`),
+    so once the defaults are in hand each annotation is replaced by its bare type.
+    `_append_default` puts the default back where it belongs, in the description.
+    """
+    from typing import get_type_hints
+
+    from squidpy.experimental import types
+    from squidpy.experimental.utils._params import defaults_of
+
+    defaults = {}
+    # only the `*Params` types carry per-key defaults; the result types do not
+    for name in (n for n in types.__all__ if n.endswith("Params")):
+        cls = getattr(types, name)
+        defaults[name] = dict(defaults_of(cls))
+        cls.__annotations__ = {
+            key: hint.__origin__ if hasattr(hint, "__metadata__") else hint
+            for key, hint in get_type_hints(cls, include_extras=True).items()
+        }
+    return defaults
+
+
+def _append_default(app, what, name, obj, options, lines) -> None:  # type: ignore[no-untyped-def]
+    """Append ``Default: <repr>`` to each documented params key."""
+    cls_path, _, key = name.rpartition(".")
+    if what != "attribute" or not cls_path:
+        return
+    defaults = _params_defaults().get(cls_path.rpartition(".")[2], {})
+    if key in defaults:
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines.append(f"Default: ``{defaults[key]!r}``")
+
+
+def _skip_dict_api(app, what, name, obj, skip, options) -> bool | None:  # type: ignore[no-untyped-def]
+    """Hide the mapping API a params TypedDict inherits from :class:`dict`."""
+    return True if getattr(obj, "__qualname__", "").startswith("dict.") else None
+
+
 def setup(app: Sphinx) -> None:
+    app.connect("builder-inited", lambda _app: _params_defaults())
+    app.connect("autodoc-process-docstring", _append_default)
+    app.connect("autodoc-skip-member", _skip_dict_api)
     app.add_css_file("css/custom.css")
     app.add_css_file("css/sphinx_gallery.css")
     app.add_css_file("css/nbsphinx.css")

@@ -153,9 +153,7 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
 
     experimental.im.calculate_image_features
     experimental.tl.calculate_tiling_qc
-    experimental.tl.TilingQCParams
     experimental.tl.assign_stitch_groups
-    experimental.tl.StitchParams
     experimental.tl.make_stitched_labels
     experimental.pl.tiling_qc
     experimental.im.fit_stain_reference
@@ -163,7 +161,11 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
     experimental.im.decompose_stains
     experimental.im.estimate_white_point
     experimental.im.StainReference
-    experimental.im.ReinhardParams
-    experimental.im.MacenkoParams
-    experimental.im.VahadaneParams
+```
+
+### Types
+
+```{eval-rst}
+.. automodule:: squidpy.experimental.types
+    :members:
 ```
