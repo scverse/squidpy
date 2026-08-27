@@ -119,13 +119,13 @@ def test_rejects_non_finite() -> None:
         )
 
 
-def test_equality_is_array_aware_and_hashable() -> None:
-    # distinct-but-equal references compare equal (array-aware __eq__), and
-    # references remain hashable (identity) despite the numpy-array fields.
+def test_comparison_and_hashing_raise() -> None:
+    # A reference holds numpy arrays, so field-wise `==` and `hash` cannot work.
+    # Deliberately left to the dataclass defaults so both fail loudly rather than
+    # silently answering by identity; nothing in the codebase compares references.
     a = StainReference(method="reinhard", mu=np.array([1.0, 2.0, 3.0]), sigma=np.ones(3))
     b = StainReference(method="reinhard", mu=np.array([1.0, 2.0, 3.0]), sigma=np.ones(3))
-    c = StainReference(method="reinhard", mu=np.array([9.0, 2.0, 3.0]), sigma=np.ones(3))
-    assert a == b
-    assert a != c
-    assert len({a, b, c}) == 3  # identity-hashed, no TypeError
-    assert a != "not a reference"
+    with pytest.raises(ValueError, match="truth value of an array"):
+        a == b  # noqa: B015
+    with pytest.raises(TypeError, match="unhashable type"):
+        hash(a)
