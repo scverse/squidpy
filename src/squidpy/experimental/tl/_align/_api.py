@@ -96,7 +96,7 @@ def _resolve_table(container: AnnData | SpatialData, table_key: str | None, *, s
     return container.tables[table_key]
 
 
-def _read_coords(adata: AnnData, key: str, *, side: str, name: str) -> np.ndarray:
+def _read_coords_2d(adata: AnnData, key: str, *, side: str, name: str) -> np.ndarray:
     """Read a validated ``(N, 2)`` coordinate array from ``obsm``."""
     if key not in adata.obsm:
         raise KeyError(f"`{name}={key!r}`: no `obsm[{key!r}]` on the {side}. Available: {sorted(adata.obsm)}.")
@@ -145,7 +145,7 @@ def _write_coords(
 ) -> np.ndarray | None:
     """Transform ``obsm[spatial_key]`` and write it to ``obsm[key_added]`` on the query."""
     adata = _resolve_table(container, table_key, side="query")
-    coords = _read_coords(adata, spatial_key, side="query", name=spatial_key_name)
+    coords = _read_coords_2d(adata, spatial_key, side="query", name=spatial_key_name)
     transformed = np.asarray(transform(coords))
     if not inplace:
         return transformed
@@ -228,8 +228,8 @@ def stalign_align_obs(
     query_adata = _resolve_table(query_container, query_table, side="query")
 
     return fit_stalign_obs(
-        ref=_read_coords(ref_adata, ref_spatial, side="reference", name="spatial_key"),
-        query=_read_coords(query_adata, query_spatial, side="query", name="spatial_key"),
+        ref=_read_coords_2d(ref_adata, ref_spatial, side="reference", name="spatial_key"),
+        query=_read_coords_2d(query_adata, query_spatial, side="query", name="spatial_key"),
         landmarks_ref=landmarks_ref,
         landmarks_query=landmarks_query,
         **solver_kwargs,
@@ -640,9 +640,9 @@ def align_landmarks(
     data_query: AnnData | SpatialData | npt.ArrayLike | None = None,
     *,
     landmark_key: str | tuple[str, str] | None = None,
-    fit: Literal["similarity", "affine"] = "similarity",
+    method: Literal["similarity", "affine"] = "similarity",
     table_key: str | tuple[str | None, str | None] | None = None,
-    spatial_key: str | None = None,
+    spatial_key: str = "spatial",
     key_added: str | None = None,
     target_coordinate_system: str | None = None,
 ) -> npt.NDArray[np.float64] | None:
@@ -669,7 +669,7 @@ def align_landmarks(
         this is an ``obsm`` key; on a SpatialData without ``table_key`` it names a
         shapes element, the layout napari-spatialdata writes when landmarks are picked
         interactively.
-    fit
+    method
         ``"similarity"`` (default) fits 4 degrees of freedom (rotation + uniform scale
         + translation); ``"affine"`` fits all 6 (adding non-uniform scale and shear).
         The more constrained fit cannot shear a sample that should not be sheared.
@@ -678,12 +678,13 @@ def align_landmarks(
         of a shapes element. A single key applies to both sides; a ``(ref, query)``
         pair addresses each side separately.
     spatial_key
-        ``obsm`` key of the query array to transform when ``key_added`` is given. The
-        landmarks are correspondences rather than the data, so what moves has to be
-        named explicitly.
+        ``obsm`` key of the query array to transform, ``"spatial"`` by default. The
+        landmarks are correspondences rather than the data, so this names what actually
+        moves. Read only when ``key_added`` is given.
     key_added
         ``obsm`` key on the query to write the transformed ``spatial_key`` coordinates
-        to. Mutually exclusive with ``target_coordinate_system``.
+        to. Given it, the affine is applied and written instead of returned; mutually
+        exclusive with ``target_coordinate_system``.
     target_coordinate_system
         Register the fitted affine as a SpatialData transformation into this
         coordinate system instead of materialising anything: every element registered
@@ -698,16 +699,14 @@ def align_landmarks(
     :class:`~spatialdata.transformations.Affine`; otherwise ``None``, having written into
     the query container itself. Copy it first if the original must survive.
     """
-    if fit not in {"similarity", "affine"}:
-        raise ValueError(f"Unknown `fit={fit!r}`. Expected one of affine, similarity.")
-    fit_fn = fit_similarity if fit == "similarity" else fit_affine
+    if method not in {"similarity", "affine"}:
+        raise ValueError(f"Unknown `method={method!r}`. Expected one of affine, similarity.")
+    fit_fn = fit_similarity if method == "similarity" else fit_affine
     if key_added is not None and target_coordinate_system is not None:
         raise ValueError(
             "`key_added` and `target_coordinate_system` are mutually exclusive: the first materialises "
             "transformed coordinates, the second registers the fit as a transformation."
         )
-    if spatial_key is not None and key_added is None:
-        raise ValueError("`spatial_key` says what `key_added` transforms, so it needs `key_added` to be set.")
 
     if not isinstance(data_ref, AnnData | SpatialData):
         # The landmarks themselves, not containers holding them. There is no key to address
@@ -722,7 +721,6 @@ def align_landmarks(
         for name, value in (
             ("landmark_key", landmark_key),
             ("table_key", table_key),
-            ("spatial_key", spatial_key),
             ("key_added", key_added),
             ("target_coordinate_system", target_coordinate_system),
         ):
@@ -766,13 +764,6 @@ def align_landmarks(
     matrix = fit_fn(ref_lm, query_lm)
     if key_added is None:
         return matrix
-    if spatial_key is None:
-        raise ValueError(
-            "`key_added` needs `spatial_key` when aligning by landmarks: the landmarks are "
-            "correspondences, so they do not say which array to transform. Pass e.g. "
-            '`spatial_key="spatial"`, or use `target_coordinate_system=...` on a SpatialData to '
-            "move every element in the query's coordinate system at once."
-        )
     return _write_coords(
         query_container,
         query_table,
@@ -793,7 +784,7 @@ def _read_landmarks(
     """Read ``(N, 2)`` ``(x, y)`` landmarks from an ``obsm`` key or a shapes element."""
     if isinstance(container, AnnData) or table_key is not None:
         adata = _resolve_table(container, table_key, side=side)
-        return _read_coords(adata, landmark_key, side=side, name="landmark_key")
+        return _read_coords_2d(adata, landmark_key, side=side, name="landmark_key")
     if not isinstance(container, SpatialData):
         raise TypeError(f"Expected the {side} to be an AnnData or SpatialData, got {type(container).__name__}.")
     if landmark_key not in container.shapes:

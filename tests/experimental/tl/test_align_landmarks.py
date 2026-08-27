@@ -45,10 +45,10 @@ def _apply(matrix: np.ndarray, points: np.ndarray) -> np.ndarray:
     return points @ matrix[:2, :2].T + matrix[:2, 2]
 
 
-@pytest.mark.parametrize("fit", ["similarity", "affine"])
-def test_returns_the_homogeneous_affine(fit: str) -> None:
+@pytest.mark.parametrize("method", ["similarity", "affine"])
+def test_returns_the_homogeneous_affine(method: str) -> None:
     ref, query = _adata(_REF), _adata(_QUERY)
-    matrix = align_landmarks(ref, query, landmark_key="landmarks", fit=fit)
+    matrix = align_landmarks(ref, query, landmark_key="landmarks", method=method)
 
     assert isinstance(matrix, np.ndarray)
     assert matrix.shape == (3, 3)
@@ -65,7 +65,7 @@ def test_fit_defaults_to_similarity() -> None:
     ref, query = _adata(_REF), _adata(stretched)
 
     default = align_landmarks(ref, query, landmark_key="landmarks")
-    affine = align_landmarks(ref, query, landmark_key="landmarks", fit="affine")
+    affine = align_landmarks(ref, query, landmark_key="landmarks", method="affine")
 
     assert np.abs(_apply(default, stretched) - _REF).max() > 0.1, "the default must be the constrained fit"
     np.testing.assert_allclose(_apply(affine, stretched), _REF, atol=1e-6)
@@ -75,7 +75,7 @@ def test_landmarks_need_not_live_in_a_shapes_element() -> None:
     """An ``obsm`` key works too -- requiring a SpatialData just to hold four points
     would tax AnnData users for nothing."""
     ref, query = _adata(_REF), _adata(_QUERY)
-    result = align_landmarks(ref, query, landmark_key="landmarks", fit="affine")
+    result = align_landmarks(ref, query, landmark_key="landmarks", method="affine")
     np.testing.assert_allclose(_apply(result, _QUERY), _REF, atol=1e-6)
 
 
@@ -84,14 +84,14 @@ def test_table_key_reads_landmarks_from_a_table() -> None:
     from spatialdata.models import TableModel
 
     sdata = sd.SpatialData(tables={"r": TableModel.parse(_adata(_REF)), "q": TableModel.parse(_adata(_QUERY))})
-    result = align_landmarks(sdata, landmark_key="landmarks", table_key=("r", "q"), fit="affine")
+    result = align_landmarks(sdata, landmark_key="landmarks", table_key=("r", "q"), method="affine")
     np.testing.assert_allclose(_apply(result, _QUERY), _REF, atol=1e-6)
 
 
-def test_unknown_fit_lists_available() -> None:
+def test_unknown_method_lists_available() -> None:
     ref, query = _adata(_REF), _adata(_QUERY)
-    with pytest.raises(ValueError, match="Unknown `fit='nope'`.*affine, similarity"):
-        align_landmarks(ref, query, landmark_key="landmarks", fit="nope")
+    with pytest.raises(ValueError, match="Unknown `method='nope'`.*affine, similarity"):
+        align_landmarks(ref, query, landmark_key="landmarks", method="nope")
 
 
 # --- writing coordinates ----------------------------------------------------------------
@@ -100,7 +100,7 @@ def test_unknown_fit_lists_available() -> None:
 def test_spatial_key_selects_what_moves() -> None:
     ref, query = _adata(_REF), _adata(_QUERY)
     out = align_landmarks(
-        ref, query, landmark_key="landmarks", fit="affine", spatial_key="spatial", key_added="aligned"
+        ref, query, landmark_key="landmarks", method="affine", spatial_key="spatial", key_added="aligned"
     )
 
     assert out is None
@@ -108,23 +108,27 @@ def test_spatial_key_selects_what_moves() -> None:
     np.testing.assert_allclose(query.obsm["spatial"], _QUERY)
 
 
-def test_spatial_key_is_required_for_key_added() -> None:
-    """The landmarks are correspondences, so they cannot also say which array to transform."""
+def test_key_added_alone_transforms_the_conventional_spatial_key() -> None:
+    """`spatial_key` defaults like every other one in squidpy; `key_added` is the write switch."""
     ref, query = _adata(_REF), _adata(_QUERY)
-    with pytest.raises(ValueError, match="`key_added` needs `spatial_key`"):
-        align_landmarks(ref, query, landmark_key="landmarks", fit="affine", key_added="aligned")
+    assert align_landmarks(ref, query, landmark_key="landmarks", key_added="aligned") is None
+    # query landmarks == query spatial here, so the fit maps them onto the reference
+    np.testing.assert_allclose(query.obsm["aligned"], _REF, atol=1e-6)
 
 
-def test_spatial_key_without_key_added_is_rejected() -> None:
+def test_spatial_key_is_only_read_when_key_added_asks_for_a_write() -> None:
+    """It names a source, so on its own there is nothing to do -- and nothing to fail on."""
     ref, query = _adata(_REF), _adata(_QUERY)
-    with pytest.raises(ValueError, match="needs `key_added` to be set"):
-        align_landmarks(ref, query, landmark_key="landmarks", spatial_key="spatial")
+    before = dict(query.obsm)
+    matrix = align_landmarks(ref, query, landmark_key="landmarks", spatial_key="no_such_key")
+    assert isinstance(matrix, np.ndarray)
+    assert sorted(query.obsm) == sorted(before)
 
 
 def test_neither_write_target_returns_the_fit() -> None:
     """Nothing to write is the fit-only call, not an error: the matrix is the result."""
     ref, query = _adata(_REF), _adata(_QUERY)
-    matrix = align_landmarks(ref, query, landmark_key="landmarks", fit="affine")
+    matrix = align_landmarks(ref, query, landmark_key="landmarks", method="affine")
 
     assert matrix.shape == (3, 3)
     assert not any(key.startswith("aligned") for key in query.obsm), "nothing may be written"
@@ -132,7 +136,7 @@ def test_neither_write_target_returns_the_fit() -> None:
 
 def test_key_added_writes_into_the_query_itself() -> None:
     ref, query = _adata(_REF), _adata(_QUERY)
-    args = {"landmark_key": "landmarks", "fit": "affine", "spatial_key": "spatial", "key_added": "aligned"}
+    args = {"landmark_key": "landmarks", "method": "affine", "spatial_key": "spatial", "key_added": "aligned"}
 
     assert align_landmarks(ref, query, **args) is None
     np.testing.assert_allclose(query.obsm["aligned"], _REF, atol=1e-6)
@@ -151,7 +155,9 @@ def test_registers_a_transformation_on_the_coordinate_system() -> None:
         shapes={"lm_ref": _shapes(_REF, "ref_cs"), "lm_query": _shapes(_QUERY, "query_cs")},
         points={"pts": PointsModel.parse(_QUERY, transformations={"query_cs": Identity()})},
     )
-    out = align_landmarks(sdata, landmark_key=("lm_ref", "lm_query"), fit="affine", target_coordinate_system="ref_cs")
+    out = align_landmarks(
+        sdata, landmark_key=("lm_ref", "lm_query"), method="affine", target_coordinate_system="ref_cs"
+    )
 
     assert out is None
     assert "ref_cs" in get_transformation(sdata.points["pts"], get_all=True)
@@ -173,7 +179,7 @@ def test_registration_composes_with_an_existing_transform() -> None:
         shapes={"lm_ref": _shapes(_REF, "ref_cs"), "lm_query": _shapes(_QUERY + offset, "query_cs")},
         points={"pts": PointsModel.parse(_QUERY, transformations={"query_cs": Translation(offset, axes=("x", "y"))})},
     )
-    align_landmarks(sdata, landmark_key=("lm_ref", "lm_query"), fit="affine", target_coordinate_system="ref_cs")
+    align_landmarks(sdata, landmark_key=("lm_ref", "lm_query"), method="affine", target_coordinate_system="ref_cs")
 
     matrix = get_transformation(sdata.points["pts"], to_coordinate_system="ref_cs").to_affine_matrix(
         input_axes=("x", "y"), output_axes=("x", "y")
@@ -286,13 +292,13 @@ def test_missing_shapes_element_lists_what_is_available() -> None:
 def test_too_few_landmarks() -> None:
     ref, query = _adata(_REF[:2]), _adata(_QUERY[:2])
     with pytest.raises(ValueError, match="at least 3 landmark pairs"):
-        align_landmarks(ref, query, landmark_key="landmarks", fit="affine")
+        align_landmarks(ref, query, landmark_key="landmarks", method="affine")
 
 
 def test_length_mismatch() -> None:
     ref, query = _adata(_REF), _adata(_QUERY[:3])
     with pytest.raises(ValueError, match="same shape"):
-        align_landmarks(ref, query, landmark_key="landmarks", fit="affine")
+        align_landmarks(ref, query, landmark_key="landmarks", method="affine")
 
 
 def test_non_finite_landmarks_rejected() -> None:
@@ -300,7 +306,7 @@ def test_non_finite_landmarks_rejected() -> None:
     bad[0, 0] = np.nan
     ref, query = _adata(_REF), _adata(bad)
     with pytest.raises(ValueError, match="finite"):
-        align_landmarks(ref, query, landmark_key="landmarks", fit="affine")
+        align_landmarks(ref, query, landmark_key="landmarks", method="affine")
 
 
 def test_align_landmarks_accepts_arrays():
@@ -309,7 +315,7 @@ def test_align_landmarks_accepts_arrays():
     expected = np.array([[2.0, 0.0, 7.0], [0.0, 2.0, -3.0], [0.0, 0.0, 1.0]])
     ref = query @ expected[:2, :2].T + expected[:2, 2]
 
-    matrix = align_landmarks(ref, query, fit="affine")
+    matrix = align_landmarks(ref, query, method="affine")
     np.testing.assert_allclose(matrix, expected, atol=1e-9)
     # Same answer either way in: the array path is a shortcut, not a second algorithm.
     np.testing.assert_allclose(
@@ -317,7 +323,7 @@ def test_align_landmarks_accepts_arrays():
             AnnData(X=np.zeros((len(ref), 1)), obsm={"lm": ref}),
             AnnData(X=np.zeros((len(query), 1)), obsm={"lm": query}),
             landmark_key="lm",
-            fit="affine",
+            method="affine",
         ),
         matrix,
     )
