@@ -179,8 +179,7 @@ tuning as flat keyword arguments, listed below, and return the fitted map itself
     experimental.tl.stalign_align_volume
     experimental.tl.stalign_apply_transform
     experimental.tl.stalign_apply_warp
-    experimental.tl.stalign_to_uns
-    experimental.tl.stalign_from_uns
+    experimental.tl.stalign_store_fit
     experimental.tl.stalign_transform_points
     experimental.tl.stalign_warp_image
     experimental.tl.stalign_deformation_grid

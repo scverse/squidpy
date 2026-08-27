@@ -8,8 +8,10 @@ Fitting and writing are separate calls for STalign. A diffeomorphism has no Spat
 representation, so the fit cannot live in a container: it is the return value, and
 :func:`stalign_apply_transform` and :func:`stalign_apply_warp` take one and write. Keeping
 it also keeps what only a fit can do -- warp an image, evaluate the dense deformation, map
-points the fit never saw. :func:`align_landmarks` fits and writes in one call, which its
-result being an affine, and so representable, makes honest.
+points the fit never saw. :func:`stalign_store_fit` puts one in ``uns`` when it is worth
+keeping, and the ``stalign_apply_*`` functions accept that key in place of the fit.
+:func:`align_landmarks` fits and writes in one call, which its result being an affine, and
+so representable, makes honest.
 
 The ``stalign_apply_*`` functions take ``inplace``, with the meaning scanpy gives it:
 ``inplace=False`` hands back what would have been written instead of writing it. A
@@ -31,7 +33,7 @@ import numpy as np
 from anndata import AnnData
 from spatialdata import SpatialData
 
-from ._io import writeback_affine_sdata
+from ._io import fit_from_uns, fit_to_uns, writeback_affine_sdata
 from ._landmark import apply_affine, fit_affine, fit_similarity
 from ._stalign import (
     StalignImageSolverKwargs,
@@ -58,15 +60,8 @@ __all__ = [
     "stalign_align_volume",
     "stalign_apply_transform",
     "stalign_apply_warp",
-    "stalign_from_uns",
-    "stalign_to_uns",
+    "stalign_store_fit",
 ]
-
-#: Fit keys holding one array per axis. Stored as a mapping rather than the in-memory tuple:
-#: :mod:`anndata` has no writer for a tuple, and a list of the axes only survives when they
-#: happen to be the same length -- a non-square raster fails on write.
-_AXIS_KEYS = frozenset({"velocity_grid", "ref_axes", "query_axes"})
-_SCALAR_KEYS = frozenset({"rank", "n_iter"})
 
 
 def _resolve_pair(value: str | tuple[str | None, str | None], *, name: str) -> tuple[str | None, str | None]:
@@ -466,7 +461,7 @@ def stalign_align_volume(
 
 
 def stalign_apply_transform(
-    result: StalignResult,
+    fit_result: StalignResult | str,
     data: AnnData | SpatialData,
     *,
     key_added: str = "spatial_aligned",
@@ -479,14 +474,15 @@ def stalign_apply_transform(
 
     The container-level counterpart of
     :func:`~squidpy.experimental.tl.stalign_transform_points`: read ``obsm[spatial_key]``,
-    map it through ``result``, store it under ``obsm[key_added]``. A rank-2 fit writes
+    map it through ``fit_result``, store it under ``obsm[key_added]``. A rank-2 fit writes
     ``(N, 2)`` coordinates in the reference frame; a rank-3 fit writes ``(N, 3)``
     ``(x, y, z)`` positions in the reference volume.
 
     Parameters
     ----------
-    result
-        A fit from any of the ``stalign_align_*`` functions.
+    fit_result
+        A fit from any of the ``stalign_align_*`` functions, or the ``uns`` key of one
+        stored by :func:`~squidpy.experimental.tl.stalign_store_fit`.
     data
         The container to write into -- the query side the fit was given.
     key_added
@@ -497,7 +493,7 @@ def stalign_apply_transform(
     table_key
         For a :class:`~spatialdata.SpatialData`, which table holds them.
     coordinate_system
-        The coordinate system the fit's units came from. Consulted only when ``result`` was
+        The coordinate system the fit's units came from. Consulted only when ``fit_result`` was
         fitted on image elements, whose transformations supplied those units; a
         point-cloud fit's units are the coordinates' own and nothing can disagree.
     inplace
@@ -511,7 +507,9 @@ def stalign_apply_transform(
     ``None``, or the ``(N, 2)`` / ``(N, 3)`` transformed coordinates when
     ``inplace=False``.
     """
-    if isinstance(data, SpatialData) and "query_axes" in result:
+    if isinstance(fit_result, str):
+        fit_result = fit_from_uns(_resolve_table(data, table_key, side="query"), fit_result)
+    if isinstance(data, SpatialData) and "query_axes" in fit_result:
         # A fit carrying raster axes took its units from an image element's transformation,
         # so the coordinates it is applied to have to sit in that same frame.
         _assert_table_coords_share_frame(
@@ -525,17 +523,17 @@ def stalign_apply_transform(
         table_key,
         spatial_key,
         key_added,
-        transform=functools.partial(stalign_transform_points, result),
+        transform=functools.partial(stalign_transform_points, fit_result),
         spatial_key_name="spatial_key",
         inplace=inplace,
     )
 
 
-def stalign_to_uns(
-    result: StalignResult,
+def stalign_store_fit(
+    fit_result: StalignResult,
     data: AnnData | SpatialData,
-    key: str = "stalign",
     *,
+    key: str = "stalign",
     table_key: str | None = None,
 ) -> None:
     """Store a fit in a table's ``uns``, in a form that survives a write.
@@ -545,13 +543,13 @@ def stalign_to_uns(
     element are both products of the fit rather than the fit itself. ``uns`` is the only
     place either container has for it.
 
-    Not automatic on :func:`~squidpy.experimental.tl.stalign_apply_transform`, because a
-    rank-3 velocity field runs to hundreds of megabytes -- two orders of magnitude more than
-    the coordinates it is being stored beside. Call this when the fit is worth keeping.
+    Not automatic on the ``stalign_align_*`` functions, because a rank-3 velocity field runs
+    to hundreds of megabytes. Call this when the fit is worth keeping; the
+    ``stalign_apply_*`` functions then take ``key`` in place of the fit.
 
     Parameters
     ----------
-    result
+    fit_result
         A fit from any of the ``stalign_align_*`` functions.
     data
         The container to store it on.
@@ -559,60 +557,18 @@ def stalign_to_uns(
         ``uns`` key to write to, ``"stalign"`` by default.
     table_key
         For a :class:`~spatialdata.SpatialData`, which table's ``uns`` to use.
-
-    See Also
-    --------
-    :func:`~squidpy.experimental.tl.stalign_from_uns` reads one back.
     """
-    adata = _resolve_table(data, table_key, side="query")
-    stored: dict[str, object] = {}
-    for name, value in result.items():
-        if name in _AXIS_KEYS:
-            stored[name] = {str(axis): np.asarray(a) for axis, a in enumerate(value)}
-        elif name in _SCALAR_KEYS:
-            stored[name] = int(value)
-        else:
-            stored[name] = np.asarray(value)
-    adata.uns[key] = stored
-
-
-def stalign_from_uns(
-    data: AnnData | SpatialData,
-    key: str = "stalign",
-    *,
-    table_key: str | None = None,
-) -> StalignResult:
-    """Read back a fit stored by :func:`~squidpy.experimental.tl.stalign_to_uns`.
-
-    Returns numpy arrays rather than JAX ones, so reading a fit needs no JAX; the
-    ``stalign_*`` functions convert on use.
-    """
-    adata = _resolve_table(data, table_key, side="query")
-    if key not in adata.uns:
-        raise KeyError(f"`key={key!r}`: no `uns[{key!r}]`. Available: {sorted(adata.uns)}.")
-    stored = adata.uns[key]
-    if "rank" not in stored:
-        raise ValueError(
-            f"`uns[{key!r}]` carries no `rank`, so it is not a stored STalign fit. Found keys: {sorted(stored)}."
-        )
-    result: dict[str, object] = {}
-    for name, value in stored.items():
-        if name in _AXIS_KEYS:
-            result[name] = tuple(np.asarray(value[str(axis)]) for axis in range(len(value)))
-        elif name in _SCALAR_KEYS:
-            result[name] = int(value)
-        else:
-            result[name] = np.asarray(value)
-    return result  # type: ignore[return-value]
+    fit_to_uns(fit_result, _resolve_table(data, table_key, side="query"), key)
 
 
 def stalign_apply_warp(
-    result: Stalign2DResult,
+    fit_result: Stalign2DResult | str,
     sdata_ref: SpatialData,
     sdata_query: SpatialData | None = None,
     *,
     image_key: str | tuple[str, str],
     key_added: str | None = None,
+    table_key: str | None = None,
     inplace: bool = True,
 ) -> np.ndarray | None:
     """Materialise a fit's warped query image as a new element on the query.
@@ -625,8 +581,9 @@ def stalign_apply_warp(
 
     Parameters
     ----------
-    result
-        A rank-2 fit, from :func:`~squidpy.experimental.tl.stalign_align_image`.
+    fit_result
+        A rank-2 fit from :func:`~squidpy.experimental.tl.stalign_align_image`, or the
+        ``uns`` key of one stored by :func:`~squidpy.experimental.tl.stalign_store_fit`.
     sdata_ref, sdata_query
         The containers holding the reference and query images, as the fit was given them.
         The reference is what places the output element, so it is needed here too. Leave
@@ -637,6 +594,8 @@ def stalign_apply_warp(
         Image element name on the query to write the warped image under. ``None``
         (default) uses the query element's own name with an ``_aligned`` suffix -- a
         conventional key, not a request to skip the write, which is ``inplace=False``.
+    table_key
+        Which table's ``uns`` to read ``fit_result`` from, when it is a key.
     inplace
         ``True`` (default) writes the element and returns ``None``. ``False`` leaves
         ``sdata_query`` untouched and returns the warped ``(c, y, x)`` array.
@@ -652,10 +611,17 @@ def stalign_apply_warp(
     query_container = _query_of(
         sdata_ref, sdata_query, ref_address=(ref_image,), query_address=(query_image,), key_name="image_key"
     )
+    if isinstance(fit_result, str):
+        stored = fit_from_uns(_resolve_table(query_container, table_key, side="query"), fit_result)
+        if stored["rank"] != 2:
+            raise ValueError(
+                f"`stalign_apply_warp` needs a rank-2 fit, `uns[{fit_result!r}]` holds rank {stored['rank']}."
+            )
+        fit_result = stored
     query_array = _read_image(query_container, query_image, side="query")
     added = f"{query_image}_aligned" if key_added is None else key_added
     # `np.asarray` because `stalign_warp_image` returns a JAX array, which the parser rejects.
-    warped = np.asarray(stalign_warp_image(result, query_array))
+    warped = np.asarray(stalign_warp_image(fit_result, query_array))
     if not inplace:
         return warped
     # A forward warp resamples the query onto the *reference's* grid, so the new element

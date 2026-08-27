@@ -300,10 +300,10 @@ def _direction(
     return value
 
 
-def stalign_affine_xyz(result: StalignResult) -> JaxArray:
+def stalign_affine_xyz(fit_result: StalignResult) -> JaxArray:
     """The affine part of a fit, in public ``(x, y)`` or ``(x, y, z)`` order.
 
-    ``result["affine"]`` is in the solver's row-column order; this is the same matrix in the
+    ``fit_result["affine"]`` is in the solver's row-column order; this is the same matrix in the
     order the public API speaks, registerable as a SpatialData
     :class:`~spatialdata.transformations.Affine` -- with differing input and output axes at
     rank 3, where a flat section maps into a volume. The velocity field is not expressible
@@ -312,12 +312,12 @@ def stalign_affine_xyz(result: StalignResult) -> JaxArray:
     """
     from ._stalign_impl._core import reverse_axes
 
-    swap = reverse_axes(result["rank"])
-    return swap @ result["affine"] @ swap
+    swap = reverse_axes(fit_result["rank"])
+    return swap @ fit_result["affine"] @ swap
 
 
 def stalign_deformation_grid(
-    result: StalignResult,
+    fit_result: StalignResult,
     *,
     direction: Literal["forward", "backward"] | None = None,
     query_axes: Sequence[npt.ArrayLike] | None = None,
@@ -340,7 +340,7 @@ def stalign_deformation_grid(
 
     Parameters
     ----------
-    result
+    fit_result
         A fit from any of the ``stalign_align_*`` functions.
     direction
         ``None`` (default) takes the direction the fit's rank makes natural: ``"forward"``
@@ -359,10 +359,10 @@ def stalign_deformation_grid(
     from ._stalign_impl._core import jax_dtype, transform_grid_row_col
 
     axes: Sequence[npt.ArrayLike]
-    if result["rank"] == 3:
+    if fit_result["rank"] == 3:
         resolved = _direction(direction, default="backward")
-        volume_axes = tuple(result["ref_axes"] if ref_axes is None else ref_axes)
-        section_axes = tuple(result["query_axes"] if query_axes is None else query_axes)
+        volume_axes = tuple(fit_result["ref_axes"] if ref_axes is None else ref_axes)
+        section_axes = tuple(fit_result["query_axes"] if query_axes is None else query_axes)
         if len(volume_axes) != 3 or len(section_axes) != 2:
             raise ValueError(
                 f"Expected 3 reference axes and 2 query axes, found {len(volume_axes)} and {len(section_axes)}."
@@ -373,23 +373,23 @@ def stalign_deformation_grid(
         axes = volume_axes if resolved == "forward" else lifted
     else:
         resolved = _direction(direction, default="forward")
-        source_axes = query_axes if query_axes is not None else result.get("query_axes")
-        target_axes = ref_axes if ref_axes is not None else result.get("ref_axes")
+        source_axes = query_axes if query_axes is not None else fit_result.get("query_axes")
+        target_axes = ref_axes if ref_axes is not None else fit_result.get("ref_axes")
         if source_axes is None or target_axes is None:
             raise ValueError(
-                "This result was fitted on point clouds and carries no raster axes. "
+                "This fit was made on point clouds and carries no raster axes. "
                 "Pass both `query_axes=` and `ref_axes=`, or fit with "
                 "`stalign_align_image`."
             )
         # Forward evaluates the query grid in the reference frame; backward the reverse.
         axes = source_axes if resolved == "forward" else target_axes
     return transform_grid_row_col(
-        axes, result["velocity_grid"], result["velocity"], result["affine"], direction=resolved
+        axes, fit_result["velocity_grid"], fit_result["velocity"], fit_result["affine"], direction=resolved
     )
 
 
 def stalign_warp_image(
-    result: Stalign2DResult,
+    fit_result: Stalign2DResult,
     image: npt.ArrayLike,
     *,
     direction: Literal["forward", "backward"] = "forward",
@@ -408,7 +408,7 @@ def stalign_warp_image(
     from ._stalign_impl._core import interp
     from ._stalign_impl._helpers import as_chw
 
-    if result["rank"] != 2:
+    if fit_result["rank"] != 2:
         raise ValueError(
             "`stalign_warp_image` is a rank-2 operation. At rank 3 the reference is a volume "
             "and the section is a plane through it, so there is no image to resample; use "
@@ -416,10 +416,10 @@ def stalign_warp_image(
         )
     arr = as_chw(image, name="image")
     resolved = _direction(direction, default="forward")
-    source_axes = query_axes if query_axes is not None else result.get("query_axes")
-    target_axes = ref_axes if ref_axes is not None else result.get("ref_axes")
+    source_axes = query_axes if query_axes is not None else fit_result.get("query_axes")
+    target_axes = ref_axes if ref_axes is not None else fit_result.get("ref_axes")
     grid = stalign_deformation_grid(
-        result,
+        fit_result,
         direction="backward" if resolved == "forward" else "forward",
         query_axes=source_axes,
         ref_axes=target_axes,
@@ -431,7 +431,7 @@ def stalign_warp_image(
 
 
 def stalign_transform_points(
-    result: StalignResult,
+    fit_result: StalignResult,
     points: npt.ArrayLike,
     *,
     direction: Literal["forward", "backward"] | None = None,
@@ -455,7 +455,7 @@ def stalign_transform_points(
     if pts.ndim != 2 or pts.shape[1] != 2:
         raise ValueError(f"Expected an (N, 2) `(x, y)` array, found shape {pts.shape}.")
 
-    if result["rank"] == 3:
+    if fit_result["rank"] == 3:
         if direction is not None:
             raise ValueError(
                 "`direction` does not apply at rank 3: the section is the fixed image and it "
@@ -467,14 +467,14 @@ def stalign_transform_points(
         # *backward* direction -- the same map the objective samples the volume through.
         lifted = jnp.stack((jnp.zeros(pts.shape[0], dtype=pts.dtype), pts[:, 1], pts[:, 0]), axis=1)
         transformed = transform_points_row_col(
-            result["velocity_grid"], result["velocity"], result["affine"], lifted, direction="backward"
+            fit_result["velocity_grid"], fit_result["velocity"], fit_result["affine"], lifted, direction="backward"
         )
         return transformed[:, ::-1]
 
     transformed_rc = transform_points_row_col(
-        result["velocity_grid"],
-        result["velocity"],
-        result["affine"],
+        fit_result["velocity_grid"],
+        fit_result["velocity"],
+        fit_result["affine"],
         pts[:, ::-1],
         direction=_direction(direction, default="forward"),
     )
@@ -591,7 +591,7 @@ def fit_stalign_volume(
             dtype=dtype,
         )
 
-    result = lddmm(
+    fit_result = lddmm(
         source_grid,
         source_image,
         target_grid,
@@ -602,16 +602,16 @@ def fit_stalign_volume(
     )
     return Stalign3DResult(
         rank=3,
-        affine=result["A"],
-        velocity=result["v"],
-        velocity_grid=result["xv"],
+        affine=fit_result["A"],
+        velocity=fit_result["v"],
+        velocity_grid=fit_result["xv"],
         ref_axes=source_grid,
         query_axes=section_grid,
-        match_weights=result["WM"],
-        artifact_weights=result["WA"],
-        background_weights=result["WB"],
-        energies=result["energies"],
-        n_iter=int(result["n_iter"]),
+        match_weights=fit_result["WM"],
+        artifact_weights=fit_result["WA"],
+        background_weights=fit_result["WB"],
+        energies=fit_result["energies"],
+        n_iter=int(fit_result["n_iter"]),
     )
 
 
@@ -716,7 +716,7 @@ def fit_stalign_obs(
     source_grid, source_image = rasterize_cloud(source_rc, **raster)
     target_grid, target_image = rasterize_cloud(target_rc, **raster)
 
-    result = lddmm(
+    fit_result = lddmm(
         source_grid,
         source_image,
         target_grid,
@@ -727,18 +727,20 @@ def fit_stalign_obs(
         points_target=tgt_lm,
         **{key: value for key, value in opts.items() if key not in _CONSUMED_KEYS},
     )
-    aligned_rc = transform_points_row_col(result["xv"], result["v"], result["A"], source_rc, direction="forward")
+    aligned_rc = transform_points_row_col(
+        fit_result["xv"], fit_result["v"], fit_result["A"], source_rc, direction="forward"
+    )
     return Stalign2DResult(
         rank=2,
-        affine=result["A"],
-        velocity=result["v"],
-        velocity_grid=result["xv"],
+        affine=fit_result["A"],
+        velocity=fit_result["v"],
+        velocity_grid=fit_result["xv"],
         aligned_points=aligned_rc[:, ::-1],
-        match_weights=result["WM"],
-        artifact_weights=result["WA"],
-        background_weights=result["WB"],
-        energies=result["energies"],
-        n_iter=int(result["n_iter"]),
+        match_weights=fit_result["WM"],
+        artifact_weights=fit_result["WA"],
+        background_weights=fit_result["WB"],
+        energies=fit_result["energies"],
+        n_iter=int(fit_result["n_iter"]),
         # No raster axes: the grids here are the internal density rasters at `dx`
         # resolution, not a frame any real image lives on. Offering `stalign_warp_image`
         # off them would quietly resample the caller's image onto a coarse, unrelated grid.
@@ -802,7 +804,7 @@ def fit_stalign_image(
     source_grid = resolve_axes(query_axes, query_scale, source_image.shape[1:], "query_axes")
     target_grid = resolve_axes(ref_axes, ref_scale, target_image.shape[1:], "ref_axes")
 
-    result = lddmm(
+    fit_result = lddmm(
         source_grid,
         source_image,
         target_grid,
@@ -815,14 +817,14 @@ def fit_stalign_image(
     )
     return Stalign2DResult(
         rank=2,
-        affine=result["A"],
-        velocity=result["v"],
-        velocity_grid=result["xv"],
+        affine=fit_result["A"],
+        velocity=fit_result["v"],
+        velocity_grid=fit_result["xv"],
         query_axes=source_grid,
         ref_axes=target_grid,
-        match_weights=result["WM"],
-        artifact_weights=result["WA"],
-        background_weights=result["WB"],
-        energies=result["energies"],
-        n_iter=int(result["n_iter"]),
+        match_weights=fit_result["WM"],
+        artifact_weights=fit_result["WA"],
+        background_weights=fit_result["WB"],
+        energies=fit_result["energies"],
+        n_iter=int(fit_result["n_iter"]),
     )

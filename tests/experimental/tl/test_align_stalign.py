@@ -23,10 +23,10 @@ from squidpy.experimental.tl import (  # noqa: E402
     stalign_apply_transform,
     stalign_apply_warp,
     stalign_deformation_grid,
-    stalign_from_uns,
-    stalign_to_uns,
+    stalign_store_fit,
     stalign_transform_points,
 )
+from squidpy.experimental.tl._align._io import fit_from_uns  # noqa: E402
 
 IMAGE_SOLVER = {"a": 4.0, "nt": 1, "niter": 2, "epV": 1.0}
 VOLUME_SOLVER = {"a": 3.0, "nt": 1, "niter": 2, "epV": 1.0}
@@ -264,17 +264,23 @@ def test_a_stored_fit_survives_a_zarr_round_trip_and_still_transforms(tmp_path) 
         **VOLUME_SOLVER,
     )
     adata = make_adata(ALIGN_PTS)
-    assert stalign_to_uns(fit, adata) is None
+    assert stalign_store_fit(fit, adata) is None
 
     path = tmp_path / "a.zarr"
     adata.write_zarr(path)
-    restored = stalign_from_uns(ad.read_zarr(path))
+    reloaded = ad.read_zarr(path)
+
+    # applying by key is the read path; it has to agree with the in-memory fit
+    stalign_apply_transform(fit, adata, key_added="direct")
+    stalign_apply_transform("stalign", reloaded, key_added="by_key")
+    restored = fit_from_uns(reloaded, "stalign")
 
     assert restored["rank"] == 3
     assert len(restored["velocity_grid"]) == 3
     assert [a.shape for a in restored["ref_axes"]] == [a.shape for a in fit["ref_axes"]]
     # the ragged pair is what a list would have destroyed
     assert restored["query_axes"][0].shape != restored["query_axes"][1].shape
+    np.testing.assert_allclose(reloaded.obsm["by_key"], adata.obsm["direct"], rtol=0, atol=1e-6)
     np.testing.assert_allclose(
         np.asarray(stalign_transform_points(restored, ALIGN_PTS)),
         np.asarray(stalign_transform_points(fit, ALIGN_PTS)),
@@ -287,9 +293,24 @@ def test_reading_a_key_that_is_not_a_fit_says_so() -> None:
     adata = make_adata(ALIGN_PTS)
     adata.uns["junk"] = {"affine": np.eye(3)}
     with pytest.raises(ValueError, match=r"carries no `rank`"):
-        stalign_from_uns(adata, "junk")
+        fit_from_uns(adata, "junk")
     with pytest.raises(KeyError, match=r"no `uns\['missing'\]`"):
-        stalign_from_uns(adata, "missing")
+        fit_from_uns(adata, "missing")
+    # the same message has to reach a caller who passed the key to an apply function
+    with pytest.raises(KeyError, match=r"no `uns\['missing'\]`"):
+        stalign_apply_transform("missing", adata)
+
+
+def test_warping_by_key_rejects_a_rank_3_fit() -> None:
+    volume = np.random.default_rng(0).random((1, 5, 8, 8))
+    sdata = _sdata_image(volume, "volume")
+    sdata.images["section"] = _sdata_image(volume[:, 2], "section").images["section"]
+    fit = stalign_align_volume(sdata, image_key=("volume", "section"), **VOLUME_SOLVER)
+    sdata.tables["table"] = make_adata(ALIGN_PTS)
+    stalign_store_fit(fit, sdata, table_key="table")
+
+    with pytest.raises(ValueError, match=r"needs a rank-2 fit"):
+        stalign_apply_warp("stalign", sdata, image_key=("volume", "section"), table_key="table")
 
 
 # --- deformation_grid at rank 3 -------------------------------------------------------
