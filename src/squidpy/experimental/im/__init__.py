@@ -7,18 +7,14 @@ from ._qc_image import qc_image
 from ._qc_metrics import QCMetric
 from ._stain import (
     StainReference,
-    decompose_stains,
     estimate_white_point,
     fit_stain_reference,
-    normalize_stains,
 )
 
 __all__ = [
     "QCMetric",
     "StainReference",
     "calculate_image_features",
-    "normalize_stains",
-    "decompose_stains",
     "detect_tissue",
     "estimate_white_point",
     "fit_stain_reference",
