@@ -22,7 +22,7 @@ from numpy.typing import DTypeLike
 from spatialdata.models import Image2DModel
 from spatialdata.transformations import get_transformation
 
-from squidpy._utils import _get_scale_factors
+from squidpy._utils import _get_scale_factors, _unique_order_preserving
 from squidpy.experimental.im._stain._constants import RUIFROK_HE
 from squidpy.experimental.im._stain._conversion import _check_channel_dim, cast_to_image_dtype
 from squidpy.experimental.im._stain._decomposition import (
@@ -33,7 +33,6 @@ from squidpy.experimental.im._stain._decomposition import (
     apply_decomposition,
     decompose_to_concentrations,
     fit_decomposition,
-    fit_decomposition_pooled,
 )
 from squidpy.experimental.im._stain._reference import StainMethod, StainReference
 from squidpy.experimental.im._stain._reinhard import (
@@ -41,7 +40,6 @@ from squidpy.experimental.im._stain._reinhard import (
     _resolve_reinhard_params,
     apply_reinhard,
     fit_reinhard,
-    fit_reinhard_pooled,
 )
 from squidpy.experimental.im._stain._white_point import (
     default_white_point,
@@ -278,94 +276,45 @@ def fit_stain_reference(
     """
     if method not in _VALID_METHODS:
         raise ValueError(f"Unknown method {method!r}; expected one of {list(_VALID_METHODS)}.")
-    if not isinstance(image_key, str):
-        return _fit_pooled(
-            sdata,
-            list(image_key),
-            tissue_mask_key,
-            method=method,
-            scale=scale,
-            method_params=method_params,
-            white_point=white_point,
-            max_angle_deg=max_angle_deg,
-            canonical_reference=canonical_reference,
-        )
-    if tissue_mask_key is not None and not isinstance(tissue_mask_key, str):
-        raise ValueError("a single `image_key` takes a single `tissue_mask_key` (str) or None.")
-    da = _resolve_image(sdata, image_key, scale, prefer="coarsest")
-    validate_rgb_range(da)
-    params = _resolve_method_params(method, method_params)
-    tissue_mask = _resolve_tissue_bool_mask(sdata, image_key, da, tissue_mask_key)
-    if method == "reinhard":
-        return fit_reinhard(da, params, tissue_mask=tissue_mask)
-    bg = default_white_point(da) if white_point is None else np.asarray(white_point, np.float64)
-    reference = RUIFROK_HE if canonical_reference is None else dict(canonical_reference)
-    return fit_decomposition(
-        da,
-        method,
-        params,
-        bg,
-        tissue_mask=tissue_mask,
-        image_key=image_key,
-        reference=reference,
-        max_angle_deg=max_angle_deg,
-    )
-
-
-def _fit_pooled(
-    sdata: sd.SpatialData,
-    image_keys: list[str],
-    tissue_mask_key: str | list[str] | None,
-    *,
-    method: StainMethod,
-    scale: str | Literal["auto"],
-    method_params: MethodParams,
-    white_point: np.ndarray | None,
-    max_angle_deg: float,
-    canonical_reference: Mapping[str, np.ndarray] | None,
-) -> StainReference:
-    """Fit one reference by pooling the tissue pixels of several same-dtype images.
-
-    Each image is resolved + validated and masked by its own `tissue_mask_key`
-    (order-matched) or the `{key}_tissue` convention; decomposition pools tissue
-    OD, Reinhard pools tissue Lab pixels. Images must share a dtype so the white
-    point is well-defined. A blank slide raises (named); no silent skip.
-    """
-    if not image_keys:
-        raise ValueError("`image_key` list is empty; pass at least one image key.")
-    if len(set(image_keys)) != len(image_keys):
-        raise ValueError("`image_key` list has duplicate keys.")
+    # Normalise to lists: a single image is a pool of one, so both cases share one path.
+    keys = [image_key] if isinstance(image_key, str) else list(image_key)
+    if not keys:
+        raise ValueError("`image_key` is empty; pass at least one image key.")
+    unique_keys, _ = _unique_order_preserving(keys)
+    if len(unique_keys) != len(keys):
+        raise ValueError("`image_key` has duplicate keys.")
     if tissue_mask_key is None:
-        mask_keys: list[str | None] = [None] * len(image_keys)
-    elif isinstance(tissue_mask_key, str):
-        raise ValueError(
-            "for multiple images, pass a list of `tissue_mask_key` (order-matched to `image_key`), "
-            "or None to use the `{image_key}_tissue` convention."
-        )
-    elif len(tissue_mask_key) != len(image_keys):
-        raise ValueError(
-            f"`tissue_mask_key` length ({len(tissue_mask_key)}) must match `image_key` ({len(image_keys)})."
-        )
+        mask_keys: list[str | None] = [None] * len(keys)
     else:
-        mask_keys = list(tissue_mask_key)
+        mask_keys = [tissue_mask_key] if isinstance(tissue_mask_key, str) else list(tissue_mask_key)
+    if len(mask_keys) != len(keys):
+        raise ValueError(
+            f"`tissue_mask_key` has {len(mask_keys)} entries but `image_key` has {len(keys)}; "
+            "pass one mask key per image (order-matched) or None for the `{image_key}_tissue` convention."
+        )
 
     params = _resolve_method_params(method, method_params)
-    das = []
-    for k in image_keys:
-        da = _resolve_image(sdata, k, scale, prefer="coarsest")
+    das = [_resolve_image(sdata, k, scale, prefer="coarsest") for k in keys]
+    for da in das:
         validate_rgb_range(da)
-        das.append(da)
     dtypes = {str(da.dtype) for da in das}
     if len(dtypes) != 1:
         raise ValueError(f"pooled images must share a dtype; got {sorted(dtypes)}.")
-    masks = [_resolve_tissue_bool_mask(sdata, k, da, mk) for k, da, mk in zip(image_keys, das, mask_keys, strict=True)]
+    masks = [_resolve_tissue_bool_mask(sdata, k, da, mk) for k, da, mk in zip(keys, das, mask_keys, strict=True)]
 
     if method == "reinhard":
-        return fit_reinhard_pooled(das, masks, params, image_keys)
+        return fit_reinhard(das, params, tissue_mask=masks, image_key=keys)
     bg = default_white_point(das[0]) if white_point is None else np.asarray(white_point, np.float64)
     reference = RUIFROK_HE if canonical_reference is None else dict(canonical_reference)
-    return fit_decomposition_pooled(
-        das, masks, image_keys, method, params, bg, reference=reference, max_angle_deg=max_angle_deg
+    return fit_decomposition(
+        das,
+        method,
+        params,
+        bg,
+        tissue_mask=masks,
+        image_key=keys,
+        reference=reference,
+        max_angle_deg=max_angle_deg,
     )
 
 

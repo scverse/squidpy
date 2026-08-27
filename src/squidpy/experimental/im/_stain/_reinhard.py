@@ -7,7 +7,7 @@ thin ``sdata`` wrapper lives in :mod:`._normalize`.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, fields
 from typing import Any
 
@@ -122,45 +122,49 @@ def _reinhard_mask(lab: xr.DataArray, params: ReinhardParams, tissue_mask: np.nd
     return None
 
 
-def fit_reinhard(
-    image_rgb: xr.DataArray, params: ReinhardParams, *, tissue_mask: np.ndarray | None = None
-) -> StainReference:
-    """Fit Reinhard channel statistics on a reference image.
-
-    Converts to Ruderman Lab, computes per-channel ``mu``/``sigma`` over
-    tissue pixels, and packs them into a ``StainReference(method="reinhard")``.
-    ``tissue_mask`` (a ``(y, x)`` boolean aligned to ``image_rgb``) selects the
-    tissue pixels when given; otherwise the ``mask_background`` /
-    ``luminosity_threshold`` params drive the mask.
-    """
+def _tissue_lab_pixels(
+    image_rgb: xr.DataArray, params: ReinhardParams, tissue_mask: np.ndarray | None, *, image_key: str | None
+) -> np.ndarray:
+    """Materialise the tissue pixels of one image as a ``(3, N)`` Lab array."""
     _check_channel_dim(image_rgb)
     lab = rgb_to_lab_ruderman(image_rgb)
-    mu, sigma = _masked_channel_stats(lab, _reinhard_mask(lab, params, tissue_mask))
-    return StainReference(method="reinhard", mu=mu, sigma=sigma)
+    mask = _reinhard_mask(lab, params, tissue_mask)
+    masked = lab.where(mask) if mask is not None else lab
+    pix = np.asarray(masked.transpose("c", "y", "x").data).reshape(3, -1)
+    pix = pix[:, np.all(np.isfinite(pix), axis=0)]
+    if pix.shape[1] == 0:
+        where = f" for image {image_key!r}" if image_key is not None else ""
+        raise ValueError(
+            f"Foreground mask leaves zero tissue pixels{where}; "
+            "the luminosity_threshold may be too low or the image may be blank."
+        )
+    return pix
 
 
-def fit_reinhard_pooled(
-    das: list[xr.DataArray],
-    masks: list[np.ndarray],
+def fit_reinhard(
+    image_rgb: xr.DataArray | Sequence[xr.DataArray],
     params: ReinhardParams,
-    image_keys: list[str],
+    *,
+    tissue_mask: np.ndarray | Sequence[np.ndarray | None] | None = None,
+    image_key: str | Sequence[str | None] | None = None,
 ) -> StainReference:
-    """Fit Reinhard stats from the pooled tissue Lab pixels of several slides.
+    """Fit Reinhard channel statistics on one or more reference images.
 
-    Gathers each slide's tissue Lab pixels (naming the slide on empty tissue) and
-    concatenates them into one set, then takes ``mu``/``sigma`` over the pool -
-    matching :func:`_masked_channel_stats` (population std, ddof=0, tissue only).
+    Converts to Ruderman Lab, pools the tissue pixels of all images, computes
+    per-channel ``mu``/``sigma`` (population std) over the pool, and packs them
+    into a ``StainReference(method="reinhard")``. A single image is a pool of one.
+    ``tissue_mask`` (``(y, x)`` booleans aligned to each image) selects the tissue
+    pixels when given; otherwise the ``mask_background`` / ``luminosity_threshold``
+    params drive the mask. ``image_key`` only names the image in error messages.
     """
-    cols: list[np.ndarray] = []
-    for da, m, k in zip(das, masks, image_keys, strict=True):
-        lab = rgb_to_lab_ruderman(da)
-        masked = lab.where(mask) if (mask := _reinhard_mask(lab, params, m)) is not None else lab
-        pix = np.asarray(masked.transpose("c", "y", "x").data).reshape(3, -1)
-        pix = pix[:, np.all(np.isfinite(pix), axis=0)]
-        if pix.shape[1] == 0:
-            raise ValueError(f"Foreground mask leaves zero tissue pixels for image {k!r}.")
-        cols.append(pix)
-    pooled = np.concatenate(cols, axis=1)
+    das = [image_rgb] if isinstance(image_rgb, xr.DataArray) else list(image_rgb)
+    masks = (
+        [tissue_mask] * len(das) if tissue_mask is None or isinstance(tissue_mask, np.ndarray) else list(tissue_mask)
+    )
+    keys = [image_key] * len(das) if image_key is None or isinstance(image_key, str) else list(image_key)
+    pooled = np.concatenate(
+        [_tissue_lab_pixels(da, params, m, image_key=k) for da, m, k in zip(das, masks, keys, strict=True)], axis=1
+    )
     return StainReference(
         method="reinhard",
         mu=np.asarray(pooled.mean(axis=1), dtype=np.float64),

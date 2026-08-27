@@ -7,7 +7,7 @@ transform is a single per-pixel matmul and stays lazy.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, fields
 from typing import Any
 
@@ -212,61 +212,35 @@ def _max_concentrations(concentrations: np.ndarray) -> np.ndarray:
 
 
 def fit_decomposition(
-    image_rgb: xr.DataArray,
+    image_rgb: xr.DataArray | Sequence[xr.DataArray],
     method: StainMethod,
     params: Any,
     white_point: np.ndarray,
     *,
-    tissue_mask: np.ndarray | None = None,
-    image_key: str | None = None,
+    tissue_mask: np.ndarray | Sequence[np.ndarray | None] | None = None,
+    image_key: str | Sequence[str | None] | None = None,
     reference: dict[str, np.ndarray] = RUIFROK_HE,
     max_angle_deg: float = 45.0,
 ) -> StainReference:
-    """Fit a decomposition :class:`StainReference` (stain matrix + max concentrations)."""
-    od = _tissue_od(image_rgb, white_point, params.beta, tissue_mask=tissue_mask, image_key=image_key)
-    return _reference_from_od(
-        od, method, params, white_point, image_key=image_key, reference=reference, max_angle_deg=max_angle_deg
-    )
+    """Fit a decomposition :class:`StainReference` (stain matrix + max concentrations).
 
-
-def fit_decomposition_pooled(
-    das: list[xr.DataArray],
-    masks: list[np.ndarray],
-    image_keys: list[str],
-    method: StainMethod,
-    params: Any,
-    white_point: np.ndarray,
-    *,
-    reference: dict[str, np.ndarray] = RUIFROK_HE,
-    max_angle_deg: float = 45.0,
-) -> StainReference:
-    """Fit a decomposition reference from the pooled tissue OD of several slides.
-
-    Each slide's tissue OD is gathered (naming the slide on empty tissue) and
-    stacked into one ``(SUM_N, 3)`` array; the single-image fit tail then runs on
-    the pooled OD. Pooling one slide is identical to :func:`fit_decomposition`.
+    Accepts one image or several: each image's tissue OD is gathered (naming the
+    image on empty tissue) and stacked into one ``(SUM_N, 3)`` array the fit runs
+    on. A single image is a pool of one.
     """
-    ods = [
-        _tissue_od(da, white_point, params.beta, tissue_mask=m, image_key=k)
-        for da, m, k in zip(das, masks, image_keys, strict=True)
-    ]
-    return _reference_from_od(
-        np.vstack(ods), method, params, white_point, image_key=None, reference=reference, max_angle_deg=max_angle_deg
+    das = [image_rgb] if isinstance(image_rgb, xr.DataArray) else list(image_rgb)
+    masks = (
+        [tissue_mask] * len(das) if tissue_mask is None or isinstance(tissue_mask, np.ndarray) else list(tissue_mask)
     )
-
-
-def _reference_from_od(
-    od: np.ndarray,
-    method: StainMethod,
-    params: Any,
-    white_point: np.ndarray,
-    *,
-    image_key: str | None,
-    reference: dict[str, np.ndarray],
-    max_angle_deg: float,
-) -> StainReference:
-    """Shared fit tail: stain matrix (gated) + max concentrations -> StainReference."""
-    matrix = _stain_matrix(od, method, params, image_key=image_key, reference=reference, max_angle_deg=max_angle_deg)
+    keys = [image_key] * len(das) if image_key is None or isinstance(image_key, str) else list(image_key)
+    od = np.vstack(
+        [
+            _tissue_od(da, white_point, params.beta, tissue_mask=m, image_key=k)
+            for da, m, k in zip(das, masks, keys, strict=True)
+        ]
+    )
+    key = keys[0] if len(keys) == 1 else None  # the gate names a single image, not a pool
+    matrix = _stain_matrix(od, method, params, image_key=key, reference=reference, max_angle_deg=max_angle_deg)
     return StainReference(
         method=method,
         stain_matrix=matrix,
