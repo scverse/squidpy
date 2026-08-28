@@ -6,7 +6,7 @@ from typing import Annotated, Any, TypedDict, Union, get_args, get_origin, get_t
 import pytest
 
 from squidpy.experimental import types
-from squidpy.experimental.utils._params import Default, defaults_of
+from squidpy.experimental.utils._params import Default, defaults_of, resolve_params
 
 #: Only the `*Params` types carry per-key defaults; the result types do not.
 PARAMS_TYPES = [name for name in types.__all__ if name.endswith("Params")]
@@ -60,3 +60,39 @@ class TestDefaultsOf:
 
         with pytest.raises(TypeError, match="Incomplete.b` is missing a `Default"):
             defaults_of(Incomplete)
+
+
+@pytest.mark.parametrize("name", PARAMS_TYPES)
+class TestResolveContract:
+    """`resolve_params` behaves the same for every params type.
+
+    The per-module test files cover what differs -- each validator's ranges,
+    coercions and `arg_name` -- and leave the shared contract to these.
+    """
+
+    @staticmethod
+    def _defaults(name: str) -> dict[str, Any]:
+        return dict(defaults_of(getattr(types, name)))
+
+    def test_none_returns_defaults(self, name: str) -> None:
+        assert resolve_params(None, defaults=self._defaults(name)) == self._defaults(name)
+
+    def test_partial_fills_the_rest(self, name: str) -> None:
+        defaults = self._defaults(name)
+        first, *rest = defaults
+        resolved = resolve_params({first: defaults[first]}, defaults=defaults)
+        assert set(resolved) == set(defaults)
+        assert all(resolved[key] == defaults[key] for key in rest)
+
+    def test_defaults_not_mutated(self, name: str) -> None:
+        defaults = self._defaults(name)
+        resolve_params({key: defaults[key] for key in defaults}, defaults=defaults)
+        assert defaults == self._defaults(name)
+
+    def test_unknown_key_raises(self, name: str) -> None:
+        with pytest.raises(ValueError, match="Unknown .* field"):
+            resolve_params({"definitely_not_a_key": 1}, defaults=self._defaults(name))
+
+    def test_non_mapping_raises(self, name: str) -> None:
+        with pytest.raises(TypeError, match="must be a Mapping or None"):
+            resolve_params(5, defaults=self._defaults(name))  # type: ignore[arg-type]
