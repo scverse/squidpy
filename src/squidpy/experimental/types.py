@@ -1,17 +1,4 @@
-"""Public ``*Params`` types for :mod:`squidpy.experimental`, and their defaults.
-
-Every tunable-parameter mapping the experimental API accepts lives here: eight
-:class:`~typing.TypedDict` declarations, each key carrying its default in its
-:data:`~typing.Annotated` metadata. They are declarations only -- the functions
-that consume them, and the validators that range-check them, stay next to the
-code they belong to.
-
-All are ``total=False``: callers pass a partial mapping, get static key and value
-checking at the call site, and ``resolve_params`` merges it over the defaults and
-validates the result at runtime. The ``_*_DEFAULTS`` mappings below are collected
-from the annotations by ``defaults_of``, so a key and its default cannot drift
-apart -- and a key declared without one fails at import.
-"""
+"""Public ``*Params`` types for :mod:`squidpy.experimental`, and their defaults."""
 
 from __future__ import annotations
 
