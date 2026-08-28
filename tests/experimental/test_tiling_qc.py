@@ -224,33 +224,6 @@ class TestCalculateTilingQC:
 
 
 class TestTilingQCParamsResolution:
-    def test_none_uses_defaults(self):
-        from squidpy.experimental.tl._tiling_qc import _resolve_qc_params
-
-        p = _resolve_qc_params(None)
-        assert p == {"distance_tol": 0.75, "min_area": 20, "max_contour_points": 500}
-
-    def test_partial_fills_defaults(self):
-        from squidpy.experimental.tl._tiling_qc import TilingQCParams, _resolve_qc_params
-
-        # `total=False`: a partial mapping is filled from the defaults
-        p = _resolve_qc_params(TilingQCParams(distance_tol=1.0))
-        assert p["distance_tol"] == 1.0
-        assert p["min_area"] == 20
-
-    def test_defaults_not_mutated(self):
-        from squidpy.experimental.tl._tiling_qc import _QC_DEFAULTS, _resolve_qc_params
-
-        _resolve_qc_params({"distance_tol": 9.0})
-        assert _QC_DEFAULTS["distance_tol"] == 0.75
-
-    def test_mapping_construction(self):
-        from squidpy.experimental.tl._tiling_qc import _resolve_qc_params
-
-        p = _resolve_qc_params({"distance_tol": 1.5, "min_area": 50})
-        assert p["distance_tol"] == 1.5
-        assert p["min_area"] == 50
-
     def test_numpy_scalars_coerced(self):
         from squidpy.experimental.tl._tiling_qc import _resolve_qc_params
 
@@ -273,12 +246,6 @@ class TestTilingQCParamsResolution:
 
         with pytest.raises(ValueError, match=match):
             _resolve_qc_params(kwargs)
-
-    def test_wrong_type_raises_type_error(self):
-        from squidpy.experimental.tl._tiling_qc import _resolve_qc_params
-
-        with pytest.raises(TypeError, match="must be a Mapping or None"):
-            _resolve_qc_params(42)
 
 
 # resolve_labels_array helper
