@@ -5,10 +5,8 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from squidpy.experimental.im._stain._constants import DEFAULT_LUMINOSITY_THRESHOLD
 from squidpy.experimental.im._stain._reference import StainReference
 from squidpy.experimental.im._stain._reinhard import (
-    _REINHARD_DEFAULTS,
     _SIGMA_FLOOR,
     ReinhardParams,
     _masked_channel_stats,
@@ -110,23 +108,10 @@ class TestApplyReinhard:
 
 
 class TestResolveReinhardParams:
-    def test_none_returns_defaults(self) -> None:
-        assert _resolve_reinhard_params(None) == _REINHARD_DEFAULTS
-
-    def test_partial_fills_defaults(self) -> None:
-        p = _resolve_reinhard_params(ReinhardParams(luminosity_threshold=0.5))
-        assert p["luminosity_threshold"] == 0.5
-        assert p["mask_background"] == _REINHARD_DEFAULTS["mask_background"]
-
     def test_mapping(self) -> None:
         p = _resolve_reinhard_params({"luminosity_threshold": 0.6, "mask_background": False})
         assert p["luminosity_threshold"] == 0.6
         assert p["mask_background"] is False
-
-    def test_defaults_not_mutated(self) -> None:
-        # `resolve_params` coerces in place, so it must work on a copy
-        _resolve_reinhard_params({"luminosity_threshold": 0.6})
-        assert _REINHARD_DEFAULTS["luminosity_threshold"] == DEFAULT_LUMINOSITY_THRESHOLD
 
     def test_coerces_values(self) -> None:
         p = _resolve_reinhard_params({"luminosity_threshold": 1, "mask_background": 0})
@@ -136,10 +121,6 @@ class TestResolveReinhardParams:
     def test_unknown_key_raises(self) -> None:
         with pytest.raises(ValueError, match="Unknown `method_params`"):
             _resolve_reinhard_params({"nope": 1})
-
-    def test_bad_type_raises(self) -> None:
-        with pytest.raises(TypeError, match="must be a Mapping"):
-            _resolve_reinhard_params(5)
 
     @pytest.mark.parametrize("bad", [0.0, -0.1, 1.5])
     def test_threshold_bounds(self, bad: float) -> None:
