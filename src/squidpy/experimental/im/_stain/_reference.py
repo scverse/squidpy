@@ -1,9 +1,7 @@
-"""Slim container for a fitted stain reference.
+"""The fitted stain reference and the operations that apply it.
 
-Holds either a 3x3 stain matrix (Macenko/Vahadane, ships in PR 3) or a
-pair of Ruderman Lab channel statistics (Reinhard, ships in PR 2). The
-dataclass is intentionally minimal in this PR; cohort fields, persistence,
-and provenance metadata land alongside their first consumers.
+Holds either a 3x3 stain matrix (Macenko/Vahadane) or a pair of Ruderman Lab channel
+statistics (Reinhard).
 """
 
 from __future__ import annotations
@@ -35,8 +33,11 @@ def _coerce_finite(arr: Any, *, shape: tuple[int, ...], name: str) -> np.ndarray
 
 
 @dataclass(frozen=True)
-class StainReference:
-    """Container for a fitted stain reference.
+class StainFit:
+    """A fitted stain reference.
+
+    Returned by :func:`~squidpy.experimental.im.fit_stain_reference`. Use :meth:`transform`
+    to normalize an image to it, or :meth:`decompose` to project one onto its stain matrix.
 
     Parameters
     ----------

@@ -13,7 +13,7 @@ from spatialdata.transformations import Scale, get_transformation, set_transform
 import squidpy as sq
 from squidpy.experimental.im import (
     ReinhardParams,
-    StainReference,
+    StainFit,
     fit_stain_reference,
 )
 from squidpy.experimental.im._utils import get_element_data
@@ -43,7 +43,7 @@ class TestFitStainReference:
     def test_end_to_end(self, rgb_values: np.ndarray) -> None:
         sdata = _make_sdata(rgb_values)
         ref = fit_stain_reference(sdata, "img", method="reinhard")
-        assert isinstance(ref, StainReference)
+        assert isinstance(ref, StainFit)
         assert ref.method == "reinhard"
 
     def test_missing_image_key_raises(self, rgb_values: np.ndarray) -> None:

@@ -9,7 +9,7 @@ from spatialdata.transformations import get_transformation
 
 import squidpy as sq
 from squidpy.experimental.im import (
-    StainReference,
+    StainFit,
     fit_stain_reference,
 )
 from squidpy.experimental.im._stain._constants import RUIFROK_HE
@@ -183,7 +183,7 @@ class TestDecompositionOnHnE:
         image_key = next(iter(sdata_hne.images))
         sq.experimental.im.detect_tissue(sdata_hne, image_key)
         ref = sq.experimental.im.fit_stain_reference(sdata_hne, image_key, method=method)
-        assert isinstance(ref, StainReference)
+        assert isinstance(ref, StainFit)
         assert ref.stain_matrix.shape == (3, 3)
         normalized = ref.transform(sdata_hne, image_key, inplace=False)
         assert normalized.sizes["c"] == 3
