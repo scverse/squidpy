@@ -472,7 +472,7 @@ def calculate_tiling_qc(
         of 10 leaves a little wiggle room for biological irregularity
         without wasting compute on distant cells.
     n_jobs
-        Number of threads for tile processing.  ``-1`` (default) uses
+        Number of threads for tile processing.  ``-1`` uses
         all available CPUs; ``0`` and values below ``-1`` raise.
         Ignored when an active
         ``dask.distributed.Client`` is in scope (the client's own

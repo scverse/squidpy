@@ -194,7 +194,7 @@ def estimate_white_point(
         Tissue-label element key (defaults to ``f"{image_key}_tissue"``); a
         tissue mask is required, as for :func:`fit_stain_reference`.
     scale
-        Scale level to sample on. ``"auto"`` (default) uses the coarsest level.
+        Scale level to sample on. ``"auto"`` uses the coarsest level.
         The sampled level is materialised to take the median, so keep this
         coarse - do not pass a fine level on a whole-slide image.
 
@@ -230,14 +230,14 @@ def fit_stain_reference(
     image_key
         Key of the RGB image in ``sdata.images`` to fit on.
     method
-        Fitting method: ``"macenko"`` (default) or ``"vahadane"`` (physical
+        Fitting method: ``"macenko"`` or ``"vahadane"`` (physical
         stain-matrix decomposition, usable by both :meth:`~squidpy.experimental.im.StainFit.transform` and
         :meth:`~squidpy.experimental.im.StainFit.decompose`), or ``"reinhard"`` (faster statistical colour
         transfer, no stain separation). Macenko is the default because its one
         documented weakness - artifact pixels contaminating the fit - is removed
         by the mandatory tissue mask.
     scale
-        Scale level to fit on. ``"auto"`` (default) uses the coarsest level,
+        Scale level to fit on. ``"auto"`` uses the coarsest level,
         which is cheap and sufficient for colour statistics.
     method_params
         A :class:`~squidpy.types.ReinhardParams`/:class:`~squidpy.types.MacenkoParams`/:class:`~squidpy.types.VahadaneParams`
