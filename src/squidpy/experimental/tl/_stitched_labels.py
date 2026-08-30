@@ -404,14 +404,9 @@ def make_stitched_labels(
 ) -> dict[str, object] | None:
     """Materialise a stitched labels element from an assign_stitch_groups result.
 
-    Reads the ``stitch_group_id`` mapping in the QC table, builds a lazy
-    int->int LUT, and registers a new labels element where each stitched
-    group shares a single ID.  The original labels element is **not**
-    modified.
-
-    Optionally also writes a companion AnnData (``write_table=True``) with one
-    row per unique ``stitch_group_id`` -- unstitched cells keep their row
-    unchanged, stitched groups (size 2-4) collapse via ``merge_strategy``.
+    Registers a new labels element where each stitched group shares one ID; the original
+    is left unmodified. With ``write_table=True`` a companion table is written too, one
+    row per ``stitch_group_id``, groups collapsed by ``merge_strategy``.
 
     Parameters
     ----------
@@ -470,11 +465,16 @@ def make_stitched_labels(
         used during scoring; raise it if pieces remain disconnected after
         joining.
     inplace
-        If ``True`` (default), write the new labels element (and table when
+        If ``True``, write the new labels element (and table when
         ``write_table=True``) into ``sdata``.  If ``False``, return the
         materialised objects in a dict ``{"labels": ..., "table": ...}``
         without mutating ``sdata``; ``"table"`` is ``None`` when
         ``write_table=False``.
+
+    Returns
+    -------
+    If ``inplace = False``, the materialised ``{"labels": ..., "table": ...}``.
+    Otherwise `None`, and the elements are written to ``sdata``.
     """
     if labels_key not in sdata.labels:
         raise ValueError(f"Labels key '{labels_key}' not found in sdata.labels.")

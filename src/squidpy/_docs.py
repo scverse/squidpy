@@ -450,7 +450,7 @@ _n_jobs_libraries = f"""\
 n_jobs
     Number of parallel jobs used to build the per-library graphs when ``library_key``
     is set. Each library's graph is computed independently, so this only has an effect
-    for multi-library data. ``1`` (default) builds the graphs sequentially and does not
+    for multi-library data. ``1`` builds the graphs sequentially and does not
     change behavior, and it has no effect when ``library_key`` is ``None``.
 {_n_jobs_thread_rules}
     Speedup is sub-linear (memory-bandwidth bound), so parallelism mainly pays off for many

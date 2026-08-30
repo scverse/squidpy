@@ -19,32 +19,28 @@ def qc_image(
     return_ax: bool = False,
     **kwargs: Any,
 ) -> np.ndarray | None:
-    """
-    Plot a summary view of QC metrics from qc_image results.
+    """Plot the QC metrics :func:`~squidpy.experimental.im.qc_image` computed.
 
-    Automatically scans adata.uns for calculated metrics and plots the values.
-    Creates a multi-panel plot: one panel per calculated metric.
-    Each panel shows: spatial view, KDE plot, and statistics.
+    One panel per metric, each showing a spatial view, a KDE plot and summary statistics.
 
     Parameters
     ----------
-    sdata : SpatialData
-        SpatialData object containing QC results.
-    image_key : str
-        Image key used in qc_image function.
-    metrics : str or list of str, optional
-        Specific metrics to plot. If None, plots all calculated metrics.
-    figsize : tuple, optional
-        Figure size (width, height). Auto-calculated if None.
-    return_ax : bool
-        Whether to return the axes array. Default is False.
+    sdata
+        SpatialData object holding the QC results.
+    image_key
+        Image key the metrics were computed for.
+    metrics
+        Metrics to plot. If `None`, plots every metric found.
+    figsize
+        Figure size as ``(width, height)``; derived from the panel count if `None`.
+    return_ax
+        Whether to return the axes array.
     **kwargs
-        Additional arguments passed to render_shapes().
+        Passed to ``spatialdata_plot``'s ``render_shapes``.
 
     Returns
     -------
-    axes : numpy.ndarray of matplotlib.axes.Axes or None
-        The axes array if return_ax=True, otherwise None.
+    The axes array if ``return_ax=True``, otherwise `None`.
     """
     table_key = f"qc_img_{image_key}"
     shapes_key = f"qc_img_{image_key}_grid"

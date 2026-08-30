@@ -102,6 +102,9 @@ autodoc_member_order = "groupwise"
 autodoc_typehints = "signature"
 # show each parameter's default next to its type, as scanpy does
 typehints_defaults = "braces"
+# a closed vocabulary this long is unreadable spelled out -- and `qc_image` spells it
+# twice, once bare and once inside a list; the alias name is the useful thing
+autodoc_type_aliases = {"QCMetric": "QCMetric"}
 autodoc_docstring_signature = True
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
@@ -257,7 +260,14 @@ def _stack_parameter_types(app, doctree, docname) -> None:  # type: ignore[no-un
         name = field.next_node(nodes.field_name)
         if name is None or not name.astext().startswith("Parameters"):
             continue
-        for item in field.findall(nodes.list_item):
+        # only the field's own entries -- a description may itself contain a bullet list,
+        # and its items are prose, not parameters
+        entries = field.next_node(nodes.bullet_list)
+        if entries is None:
+            continue
+        for item in entries.children:
+            if not isinstance(item, nodes.list_item):
+                continue
             para = item.next_node(nodes.paragraph)
             if para is None or not para.children:
                 continue
@@ -281,6 +291,7 @@ def _stack_parameter_types(app, doctree, docname) -> None:  # type: ignore[no-un
                 head[opening] = nodes.Text(" : ")
             if closing is not None:
                 del head[closing]
+
             # A long parameter runs to several blocks. Only the inline run belongs in the
             # description paragraph -- nesting a block inside it produces a `<p>` within a
             # `<p>` -- so blocks stay siblings, and every piece is classed as description.
@@ -291,6 +302,8 @@ def _stack_parameter_types(app, doctree, docname) -> None:  # type: ignore[no-un
             cut = next((i for i, node in enumerate(tail) if _is_block(node)), len(tail))
             inline, blocks = tail[:cut], tail[cut:]
             blocks += [child for child in item.children if child is not para]
+            if not head:  # nothing before the separator: not a `name (type) - desc` entry
+                continue
             term = nodes.paragraph("", "", *head, classes=["param-term"])
             body = nodes.paragraph("", "", *inline, classes=["param-desc"])
             for block in blocks:
