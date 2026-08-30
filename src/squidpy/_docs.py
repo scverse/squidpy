@@ -456,7 +456,7 @@ n_jobs
     Speedup is sub-linear (memory-bandwidth bound), so parallelism mainly pays off for many
     large libraries."""
 _spatial_neighbors_returns = """\
-If ``copy = True``, returns a :class:`~squidpy.gr.SpatialNeighborsResult` with the
+If ``copy = True``, returns a :class:`~squidpy.types.SpatialNeighborsResult` with the
 spatial connectivities and distances matrices.
 
 Otherwise, modifies the ``adata`` with the following keys:

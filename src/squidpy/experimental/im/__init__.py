@@ -23,14 +23,8 @@ from ._stain import (
 )
 
 __all__ = [
-    "BackgroundDetectionParams",
-    "FelzenszwalbParams",
-    "MacenkoParams",
     "QCMetric",
-    "ReinhardParams",
     "StainReference",
-    "VahadaneParams",
-    "WekaParams",
     "calculate_image_features",
     "normalize_stains",
     "decompose_stains",

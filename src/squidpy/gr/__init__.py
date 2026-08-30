@@ -34,8 +34,6 @@ from squidpy.gr.neighbors import GraphMatrixT
 
 __all__ = [
     "GraphMatrixT",
-    "SpatialNeighborsResult",
-    "NhoodEnrichmentResult",
     "neighbors",
     "mask_graph",
     "spatial_neighbors",

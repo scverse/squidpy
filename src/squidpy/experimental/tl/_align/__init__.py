@@ -18,21 +18,18 @@ from ._landmark import apply_affine
 from ._stalign import (
     StalignFit,
     StalignImageFit,
-    StalignImageSolverKwargs,
+    StalignImageParams,
     StalignObsFit,
-    StalignObsSolverKwargs,
+    StalignObsParams,
     StalignVolumeFit,
-    StalignVolumeSolverKwargs,
+    StalignVolumeParams,
 )
 
 __all__ = [
     "StalignFit",
     "StalignImageFit",
-    "StalignImageSolverKwargs",
     "StalignObsFit",
-    "StalignObsSolverKwargs",
     "StalignVolumeFit",
-    "StalignVolumeSolverKwargs",
     "align_landmarks",
     "apply_affine",
     "stalign_align_image",

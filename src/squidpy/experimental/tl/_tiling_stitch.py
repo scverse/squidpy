@@ -105,7 +105,7 @@ class StitchParams:
 
 
 def _resolve_stitch_params(stitch_params: StitchParams | Mapping[str, Any] | None) -> StitchParams:
-    """Normalise the ``stitch_params`` argument to a :class:`StitchParams` instance."""
+    """Normalise the ``stitch_params`` argument to a :class:`~squidpy.types.StitchParams` instance."""
     return resolve_params(stitch_params, StitchParams, label="stitch_params")
 
 
@@ -782,8 +782,8 @@ def assign_stitch_groups(
         Cap on group size; oversized groups (likely false merges) collapse
         to singletons.
     stitch_params
-        Advanced tuning knobs as a :class:`StitchParams` instance or a
-        ``Mapping`` of its field names to values.  See :class:`StitchParams`
+        Advanced tuning knobs as a :class:`~squidpy.types.StitchParams` instance or a
+        ``Mapping`` of its field names to values.  See :class:`~squidpy.types.StitchParams`
         for each field's meaning and default.  ``None`` (default) uses
         all defaults.
     inplace

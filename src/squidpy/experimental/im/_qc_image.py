@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Literal
+from typing import Literal, get_args
 
 import dask
 import dask.array as da
@@ -26,19 +26,19 @@ from squidpy.experimental.im._utils import (
 )
 
 _DEFAULT_HNE_METRICS: list[QCMetric] = [
-    QCMetric.TENENGRAD,
-    QCMetric.VAR_OF_LAPLACIAN,
-    QCMetric.ENTROPY,
-    QCMetric.BRIGHTNESS_MEAN,
-    QCMetric.HEMATOXYLIN_MEAN,
-    QCMetric.EOSIN_MEAN,
+    "tenengrad",
+    "var_of_laplacian",
+    "entropy",
+    "brightness_mean",
+    "hematoxylin_mean",
+    "eosin_mean",
 ]
 
 _DEFAULT_GENERIC_METRICS: list[QCMetric] = [
-    QCMetric.TENENGRAD,
-    QCMetric.VAR_OF_LAPLACIAN,
-    QCMetric.ENTROPY,
-    QCMetric.BRIGHTNESS_MEAN,
+    "tenengrad",
+    "var_of_laplacian",
+    "entropy",
+    "brightness_mean",
 ]
 
 
@@ -116,20 +116,24 @@ def qc_image(
 
     if metrics is None:
         metrics = list(_DEFAULT_HNE_METRICS if is_hne else _DEFAULT_GENERIC_METRICS)
-    elif isinstance(metrics, QCMetric):
+    elif isinstance(metrics, str):
         metrics = [metrics]
     else:
         metrics = list(metrics)
 
-    if not isinstance(metrics, list) or not all(isinstance(m, QCMetric) for m in metrics):
-        available = ", ".join(m.value for m in QCMetric)
-        raise TypeError(f"metrics must be QCMetric or list of QCMetric. Available: {available}")
+    # Validated against the Literal's members rather than by `isinstance`: the previous
+    # check rejected a plain string even though `StrEnum` made it equal to the member it
+    # named, so `metrics="tenengrad"` raised.
+    unknown = [m for m in metrics if m not in get_args(QCMetric)]
+    if unknown:
+        available = ", ".join(get_args(QCMetric))
+        raise ValueError(f"Unknown metrics {unknown}. Available: {available}")
 
     # Validate H&E constraint
     if not is_hne:
         hne_requested = _HNE_METRICS & set(metrics)
         if hne_requested:
-            names = ", ".join(m.value for m in hne_requested)
+            names = ", ".join(m for m in hne_requested)
             raise ValueError(
                 f"H&E-specific metrics ({names}) cannot be used when is_hne=False. "
                 f"Set is_hne=True or remove these metrics."
@@ -187,11 +191,11 @@ def qc_image(
     # Build all dask graphs lazily
     delayed_scores: dict[str, da.Array] = {}
     hed_metric_indices = {
-        QCMetric.HEMATOXYLIN_MEAN: 0,
-        QCMetric.HEMATOXYLIN_STD: 1,
-        QCMetric.EOSIN_MEAN: 2,
-        QCMetric.EOSIN_STD: 3,
-        QCMetric.HE_RATIO: 4,
+        "hematoxylin_mean": 0,
+        "hematoxylin_std": 1,
+        "eosin_mean": 2,
+        "eosin_std": 3,
+        "he_ratio": 4,
     }
     hed_scores: da.Array | None = None
 
@@ -206,20 +210,18 @@ def qc_image(
                     drop_axis=2,
                     new_axis=2,
                 )
-            delayed_scores[m.value] = hed_scores[..., hed_metric_indices[m]]
-            logger.info(f"- Calculating metric: '{m.value}'")
+            delayed_scores[m] = hed_scores[..., hed_metric_indices[m]]
+            logger.info(f"- Calculating metric: '{m}'")
             continue
 
         kind, metric_func = get_metric_info(m)
         source = prepared_inputs[kind]
 
         if kind == InputKind.RGB:
-            delayed_scores[m.value] = da.map_blocks(
-                metric_func, source, dtype=np.float32, chunks=out_chunks, drop_axis=2
-            )
+            delayed_scores[m] = da.map_blocks(metric_func, source, dtype=np.float32, chunks=out_chunks, drop_axis=2)
         else:
-            delayed_scores[m.value] = da.map_blocks(metric_func, source, dtype=np.float32, chunks=out_chunks)
-        logger.info(f"- Calculating metric: '{m.value}'")
+            delayed_scores[m] = da.map_blocks(metric_func, source, dtype=np.float32, chunks=out_chunks)
+        logger.info(f"- Calculating metric: '{m}'")
 
     # Single dask.compute() across all metric types
     if progress:
@@ -230,7 +232,7 @@ def qc_image(
     all_scores: dict[str, np.ndarray] = dict(zip(delayed_scores.keys(), results, strict=True))
 
     # Build AnnData
-    metric_names = [m.value for m in metrics]
+    metric_names = list(metrics)
     first = next(iter(all_scores.values()))
     cents, _ = tg.centroids_and_polygons()
     n_tiles = first.size

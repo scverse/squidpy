@@ -37,10 +37,10 @@ from ._landmark import apply_affine, fit_affine, fit_similarity
 from ._stalign import (
     StalignFit,
     StalignImageFit,
-    StalignImageSolverKwargs,
-    StalignObsSolverKwargs,
+    StalignImageParams,
+    StalignObsParams,
     StalignVolumeFit,
-    StalignVolumeSolverKwargs,
+    StalignVolumeParams,
     fit_stalign_image,
     fit_stalign_obs,
     fit_stalign_volume,
@@ -178,7 +178,7 @@ def stalign_align_obs(
     table_key: str | tuple[str | None, str | None] | None = None,
     landmarks_ref: npt.ArrayLike | None = None,
     landmarks_query: npt.ArrayLike | None = None,
-    **solver_kwargs: Unpack[StalignObsSolverKwargs],
+    **solver_kwargs: Unpack[StalignObsParams],
 ) -> StalignObsFit:
     """Align a query point cloud onto a reference with STalign (diffeomorphic LDDMM).
 
@@ -204,7 +204,7 @@ def stalign_align_obs(
         initialise the affine.
     solver_kwargs
         LDDMM solver tuning; see
-        :class:`~squidpy.experimental.tl.StalignObsSolverKwargs` for the accepted
+        :class:`~squidpy.types.StalignObsParams` for the accepted
         keys, their meaning, and their defaults.
 
     Returns
@@ -243,7 +243,7 @@ def stalign_align_image(
     query_coordinate_system: str = "global",
     landmarks_ref: npt.ArrayLike | None = None,
     landmarks_query: npt.ArrayLike | None = None,
-    **solver_kwargs: Unpack[StalignImageSolverKwargs],
+    **solver_kwargs: Unpack[StalignImageParams],
 ) -> StalignImageFit:
     """Align a query image onto a reference image with STalign (diffeomorphic LDDMM).
 
@@ -273,7 +273,7 @@ def stalign_align_image(
         ``initial_affine`` is given, in which case that wins and the matching term stays.
     solver_kwargs
         LDDMM solver tuning; see
-        :class:`~squidpy.experimental.tl.StalignImageSolverKwargs` for the accepted
+        :class:`~squidpy.types.StalignImageParams` for the accepted
         keys, their meaning, and their defaults. ``a``, ``epL``, ``epT`` and ``epV`` are
         lengths and step sizes in the units the elements carry, and their defaults are
         tuned for pixel-sized units -- an element scaled to microns needs them rescaled.
@@ -391,7 +391,7 @@ def stalign_align_volume(
     initial_rotation: float = 0.0,
     initial_scale: float = 1.0,
     initial_affine: npt.ArrayLike | None = None,
-    **solver_kwargs: Unpack[StalignVolumeSolverKwargs],
+    **solver_kwargs: Unpack[StalignVolumeParams],
 ) -> StalignVolumeFit:
     """Place a 2D section into a 3D reference volume with STalign (diffeomorphic LDDMM).
 
@@ -433,7 +433,7 @@ def stalign_align_volume(
         arguments above. The escape hatch when the initialisation needs to be exact.
     solver_kwargs
         LDDMM solver tuning; see
-        :class:`~squidpy.experimental.tl.StalignVolumeSolverKwargs`.
+        :class:`~squidpy.types.StalignVolumeParams`.
 
     Returns
     -------

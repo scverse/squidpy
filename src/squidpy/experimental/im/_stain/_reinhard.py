@@ -57,7 +57,7 @@ _REINHARD_FIELDS = frozenset(f.name for f in fields(ReinhardParams))
 
 
 def _resolve_reinhard_params(method_params: ReinhardParams | Mapping[str, Any] | None) -> ReinhardParams:
-    """Normalise the ``method_params`` argument to a :class:`ReinhardParams` instance."""
+    """Normalise the ``method_params`` argument to a :class:`~squidpy.types.ReinhardParams` instance."""
     if method_params is None:
         return _REINHARD_DEFAULTS
     if isinstance(method_params, ReinhardParams):

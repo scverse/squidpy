@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import enum
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, cast
+from typing import Any, Literal, cast, get_args
 
 import dask.array as da
 import numpy as np
@@ -33,11 +32,10 @@ from squidpy._utils import (
 
 from ._utils import flatten_channels, get_element_data
 
-
-class DetectTissueMethod(enum.Enum):
-    OTSU = enum.auto()
-    FELZENSZWALB = enum.auto()
-    WEKA = enum.auto()
+#: The segmentation methods :func:`detect_tissue` accepts. A ``Literal`` rather than an enum:
+#: the members carried no value of their own, every use was an equality test, and callers
+#: write the string anyway -- so an enum only added a name to import and to document.
+DetectTissueMethod = Literal["otsu", "felzenszwalb", "weka"]
 
 
 @dataclass(slots=True)
@@ -217,7 +215,7 @@ def detect_tissue(
     image_key: str,
     *,
     scale: str = "auto",
-    method: DetectTissueMethod | str = DetectTissueMethod.OTSU,
+    method: DetectTissueMethod = "otsu",
     method_params: FelzenszwalbParams | WekaParams | Mapping[str, Any] | None = None,
     channel_format: Literal["infer", "rgb", "rgba", "multichannel"] = "infer",
     background_detection_params: BackgroundDetectionParams | None = None,
@@ -246,13 +244,13 @@ def detect_tissue(
     method
         Tissue detection method. Valid options are:
 
-            - `DetectTissueMethod.OTSU` or `"otsu"` - Otsu thresholding with background detection.
-            - `DetectTissueMethod.FELZENSZWALB` or `"felzenszwalb"` - Felzenszwalb superpixel segmentation.
-            - `DetectTissueMethod.WEKA` or `"weka"` - Trainable segmentation with corner background priors and RGB multiscale features.
+            - `"otsu"` - Otsu thresholding with background detection.
+            - `"felzenszwalb"` - Felzenszwalb superpixel segmentation.
+            - `"weka"` - Trainable segmentation with corner background priors and RGB multiscale features.
     method_params
         Optional parameters specific to the selected method. For `"felzenszwalb"`, provide a
-        :class:`FelzenszwalbParams` instance or a mapping of its fields. For `"weka"`, provide a
-        :class:`WekaParams` instance or mapping. Passing values when ``method="otsu"`` is not supported.
+        :class:`~squidpy.types.FelzenszwalbParams` instance or a mapping of its fields. For `"weka"`, provide a
+        :class:`~squidpy.types.WekaParams` instance or mapping. Passing values when ``method="otsu"`` is not supported.
     border_margin_px
         Ignore a border when seeding and predicting tissue. Can be:
 
@@ -309,23 +307,19 @@ def detect_tissue(
     Processing is performed at an appropriate resolution and then upscaled to match
     the original image dimensions.
     """
-    # Normalize method
-    if isinstance(method, str):
-        try:
-            method = DetectTissueMethod[method.upper()]
-        except KeyError as e:
-            raise ValueError('method must be "otsu", "felzenszwalb", or "weka"') from e
+    if method not in get_args(DetectTissueMethod):
+        raise ValueError(f"method must be one of {get_args(DetectTissueMethod)}, found {method!r}")
 
     logger.info(f"Detecting tissue with method: {method}")
 
-    if method == DetectTissueMethod.WEKA and not corners_are_background:
+    if method == "weka" and not corners_are_background:
         raise ValueError("WEKA tissue detection requires corner background priors; set corners_are_background=True.")
 
-    if method == DetectTissueMethod.OTSU:
+    if method == "otsu":
         if method_params is not None:
             raise ValueError("`method_params` are not supported for OTSU tissue detection.")
         resolved_method_params = None
-    elif method == DetectTissueMethod.FELZENSZWALB:
+    elif method == "felzenszwalb":
         if method_params is None:
             resolved_method_params = FelzenszwalbParams()
         elif isinstance(method_params, FelzenszwalbParams):
@@ -337,7 +331,7 @@ def detect_tissue(
                 f"`method_params` for 'felzenszwalb' must be a FelzenszwalbParams or mapping, "
                 f"got {type(method_params).__name__}.",
             )
-    elif method == DetectTissueMethod.WEKA:
+    elif method == "weka":
         if method_params is None:
             resolved_method_params = WekaParams()
         elif isinstance(method_params, WekaParams):
@@ -370,7 +364,7 @@ def detect_tissue(
     src_w = int(img_src.sizes["x"])
     n_src_px = src_h * src_w
     base_margin_px = border_margin_px
-    if method == DetectTissueMethod.WEKA and _is_zero_margin(base_margin_px):
+    if method == "weka" and _is_zero_margin(base_margin_px):
         wp_local = cast(WekaParams, resolved_method_params)
         base_margin_px = getattr(wp_local, "border_margin_px", 0)
     target_shape = _get_target_upscale_shape(sdata, image_key)
@@ -381,7 +375,7 @@ def detect_tissue(
 
     # Channel flattening (greyscale) for threshold-based methods
     img_grey = None
-    if method != DetectTissueMethod.WEKA:
+    if method != "weka":
         img_grey_da: xr.DataArray = flatten_channels(img=img_src, channel_format=channel_format)
         if need_downscale:
             logger.info("Downscaling for faster computation.")
@@ -390,7 +384,7 @@ def detect_tissue(
             img_grey = img_grey_da.values  # may compute
 
     # Prepare color image for WEKA (keeps channels)
-    if method == DetectTissueMethod.WEKA:
+    if method == "weka":
         if need_downscale:
             logger.info("Downscaling for faster computation.")
             img_weka = _downscale_with_dask_multichannel(img_rgb=img_src, target_pixels=auto_max_pixels)
@@ -407,10 +401,10 @@ def detect_tissue(
     )
 
     # First-pass foreground
-    if method == DetectTissueMethod.OTSU:
+    if method == "otsu":
         img_fg_mask_bool = _segment_otsu(img_grey=img_grey, params=bgp)
         img_fg_mask_bool = _apply_border_margin(img_fg_mask_bool, normalized_margins)
-    elif method == DetectTissueMethod.WEKA:
+    elif method == "weka":
         wp = cast(WekaParams, resolved_method_params)
         img_fg_mask_bool = _segment_weka(
             img=img_weka,

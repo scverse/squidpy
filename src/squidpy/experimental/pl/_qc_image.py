@@ -66,7 +66,7 @@ def qc_image(
         metrics_list = metrics if isinstance(metrics, list) else [metrics]
         metrics_to_plot = []
         for metric in metrics_list:
-            metric_name = metric.value if isinstance(metric, QCMetric) else metric
+            metric_name = metric
             if metric_name not in calculated_metrics:
                 raise ValueError(f"Metric '{metric_name}' not found. Available: {calculated_metrics}")
             metrics_to_plot.append(metric_name)

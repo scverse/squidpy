@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from enum import StrEnum
+from typing import Literal
 
 import numpy as np
 
@@ -34,36 +35,42 @@ class InputKind(StrEnum):
     MASK = "mask"  # (ty, tx) binary float32
 
 
-class QCMetric(StrEnum):
+#: The metrics :func:`~squidpy.experimental.im.qc_image` can compute. A ``Literal`` rather
+#: than an enum: the members were already their own strings under ``StrEnum``, every use was
+#: as a dict key or an equality test, and callers write the string anyway. The enum only
+#: added a name to import -- and a validation that rejected the plain string it compared
+#: equal to.
+QCMetric = Literal[
     # Sharpness (grayscale input)
-    TENENGRAD = "tenengrad"
-    VAR_OF_LAPLACIAN = "var_of_laplacian"
-    VARIANCE = "variance"
-    FFT_HIGH_FREQ_ENERGY = "fft_high_freq_energy"
-    HAAR_WAVELET_ENERGY = "haar_wavelet_energy"
+    "tenengrad",
+    "var_of_laplacian",
+    "variance",
+    "fft_high_freq_energy",
+    "haar_wavelet_energy",
     # Intensity (grayscale input)
-    BRIGHTNESS_MEAN = "brightness_mean"
-    BRIGHTNESS_STD = "brightness_std"
-    ENTROPY = "entropy"
+    "brightness_mean",
+    "brightness_std",
+    "entropy",
     # Staining (RGB input, H&E only)
-    HEMATOXYLIN_MEAN = "hematoxylin_mean"
-    HEMATOXYLIN_STD = "hematoxylin_std"
-    EOSIN_MEAN = "eosin_mean"
-    EOSIN_STD = "eosin_std"
-    HE_RATIO = "he_ratio"
+    "hematoxylin_mean",
+    "hematoxylin_std",
+    "eosin_mean",
+    "eosin_std",
+    "he_ratio",
     # Artifacts (RGB input, H&E only)
-    FOLD_FRACTION = "fold_fraction"
+    "fold_fraction",
     # Tissue coverage (mask input)
-    TISSUE_FRACTION = "tissue_fraction"
+    "tissue_fraction",
+]
 
 
 _HNE_METRICS: set[QCMetric] = {
-    QCMetric.HEMATOXYLIN_MEAN,
-    QCMetric.HEMATOXYLIN_STD,
-    QCMetric.EOSIN_MEAN,
-    QCMetric.EOSIN_STD,
-    QCMetric.HE_RATIO,
-    QCMetric.FOLD_FRACTION,
+    "hematoxylin_mean",
+    "hematoxylin_std",
+    "eosin_mean",
+    "eosin_std",
+    "he_ratio",
+    "fold_fraction",
 }
 
 
@@ -71,25 +78,25 @@ _HNE_METRICS: set[QCMetric] = {
 
 _METRIC_REGISTRY: dict[QCMetric, tuple[InputKind, MetricFn]] = {
     # Sharpness (grayscale)
-    QCMetric.TENENGRAD: (InputKind.GRAYSCALE, tenengrad_mean),
-    QCMetric.VAR_OF_LAPLACIAN: (InputKind.GRAYSCALE, laplacian_variance),
-    QCMetric.VARIANCE: (InputKind.GRAYSCALE, pop_variance),
-    QCMetric.FFT_HIGH_FREQ_ENERGY: (InputKind.GRAYSCALE, fft_high_freq_energy),
-    QCMetric.HAAR_WAVELET_ENERGY: (InputKind.GRAYSCALE, haar_wavelet_energy),
+    "tenengrad": (InputKind.GRAYSCALE, tenengrad_mean),
+    "var_of_laplacian": (InputKind.GRAYSCALE, laplacian_variance),
+    "variance": (InputKind.GRAYSCALE, pop_variance),
+    "fft_high_freq_energy": (InputKind.GRAYSCALE, fft_high_freq_energy),
+    "haar_wavelet_energy": (InputKind.GRAYSCALE, haar_wavelet_energy),
     # Intensity (grayscale)
-    QCMetric.BRIGHTNESS_MEAN: (InputKind.GRAYSCALE, brightness_mean),
-    QCMetric.BRIGHTNESS_STD: (InputKind.GRAYSCALE, brightness_std),
-    QCMetric.ENTROPY: (InputKind.GRAYSCALE, entropy),
+    "brightness_mean": (InputKind.GRAYSCALE, brightness_mean),
+    "brightness_std": (InputKind.GRAYSCALE, brightness_std),
+    "entropy": (InputKind.GRAYSCALE, entropy),
     # Staining (RGB, H&E only)
-    QCMetric.HEMATOXYLIN_MEAN: (InputKind.RGB, hematoxylin_mean),
-    QCMetric.HEMATOXYLIN_STD: (InputKind.RGB, hematoxylin_std),
-    QCMetric.EOSIN_MEAN: (InputKind.RGB, eosin_mean),
-    QCMetric.EOSIN_STD: (InputKind.RGB, eosin_std),
-    QCMetric.HE_RATIO: (InputKind.RGB, he_ratio),
+    "hematoxylin_mean": (InputKind.RGB, hematoxylin_mean),
+    "hematoxylin_std": (InputKind.RGB, hematoxylin_std),
+    "eosin_mean": (InputKind.RGB, eosin_mean),
+    "eosin_std": (InputKind.RGB, eosin_std),
+    "he_ratio": (InputKind.RGB, he_ratio),
     # Artifacts (RGB, H&E only)
-    QCMetric.FOLD_FRACTION: (InputKind.RGB, fold_fraction),
+    "fold_fraction": (InputKind.RGB, fold_fraction),
     # Tissue coverage (mask)
-    QCMetric.TISSUE_FRACTION: (InputKind.MASK, tissue_fraction),
+    "tissue_fraction": (InputKind.MASK, tissue_fraction),
 }
 
 
