@@ -282,7 +282,7 @@ def spatial_neighbors(
 
     Returns
     -------
-    If ``copy = True``, returns a :class:`~squidpy.gr.SpatialNeighborsResult` with the spatial connectivities and distances matrices.
+    If ``copy = True``, returns a :class:`~squidpy.types.SpatialNeighborsResult` with the spatial connectivities and distances matrices.
 
     Otherwise, modifies the ``adata`` with the following keys:
 
