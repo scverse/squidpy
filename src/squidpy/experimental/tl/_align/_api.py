@@ -209,7 +209,8 @@ def stalign_align_obs(
 
     Returns
     -------
-    The fitted :class:`~squidpy.experimental.tl.StalignObsFit`.
+    The fit. Its ``aligned_points`` is ``query`` already mapped into the reference frame;
+    it carries no raster axes, the point path having no image frame to keep.
     """
     ref_spatial, query_spatial = _resolve_pair(spatial_key, name="spatial_key")
     ref_table, query_table = (None, None) if table_key is None else _resolve_pair(table_key, name="table_key")
@@ -279,7 +280,8 @@ def stalign_align_image(
 
     Returns
     -------
-    The fitted :class:`~squidpy.experimental.tl.StalignImageFit`.
+    The fit, carrying both images' physical axes, so warping and the dense deformation
+    need no axes from the caller.
     """
     ref_image, query_image = _resolve_pair(image_key, name="image_key")
     query_container = _query_of(
@@ -435,7 +437,8 @@ def stalign_align_volume(
 
     Returns
     -------
-    The fitted :class:`~squidpy.experimental.tl.StalignVolumeFit`.
+    The fit, carrying the reference volume's ``(z, y, x)`` axes and the section's ``(y, x)``.
+    Maps section points into the volume; there is no image to warp at rank 3.
     """
     ref_image, query_image = _resolve_pair(image_key, name="image_key")
     query_container = _query_of(

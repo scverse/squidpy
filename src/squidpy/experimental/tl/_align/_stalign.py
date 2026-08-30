@@ -235,15 +235,15 @@ class StalignFit:
     velocity: JaxArray
     #: The axes the velocity field lives on, row-column.
     velocity_grid: tuple[JaxArray, ...]
-    #: The mixture model's per-pixel match posterior.
+    #: Raster-shaped -- the mixture model's per-pixel match posterior.
     match_weights: JaxArray | None = None
-    #: The mixture model's per-pixel artifact posterior.
+    #: Raster-shaped -- the mixture model's per-pixel artifact posterior.
     artifact_weights: JaxArray | None = None
-    #: The mixture model's per-pixel background posterior.
+    #: Raster-shaped -- the mixture model's per-pixel background posterior.
     background_weights: JaxArray | None = None
-    #: The objective trace.
+    #: ``(niter,)`` -- the objective trace; slice it with :attr:`n_iter`.
     energies: JaxArray | None = None
-    #: The iteration the fit stopped at.
+    #: ``int`` -- the iteration the fit stopped at.
     n_iter: int | None = None
 
     #: Dimensionality of the reference frame the fit maps into.
@@ -374,7 +374,7 @@ class StalignObsFit(StalignFit):
     """
 
     velocity_grid: tuple[JaxArray, JaxArray]
-    #: The fitted query cloud already mapped into the reference frame.
+    #: ``(N, 2)`` ``(x, y)`` -- the fitted query cloud already mapped into the reference frame.
     aligned_points: JaxArray | None = None
 
     rank: ClassVar[Literal[2]] = 2
