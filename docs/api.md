@@ -170,6 +170,6 @@ it.
 .. automodule:: squidpy.types
     :members:
 
-.. autoclass:: squidpy.experimental.im.StainReference
+.. autoclass:: squidpy.experimental.im.StainFit
     :members:
 ```

@@ -29,7 +29,7 @@ from squidpy.experimental.im._stain._normalize import (
     estimate_white_point,
     fit_stain_reference,
 )
-from squidpy.experimental.im._stain._reference import StainMethod, StainReference
+from squidpy.experimental.im._stain._reference import StainFit, StainMethod
 from squidpy.experimental.im._stain._reinhard import (
     ReinhardParams,
     apply_reinhard,
@@ -54,7 +54,7 @@ __all__ = [
     "ReinhardParams",
     "StainFittingError",
     "StainMethod",
-    "StainReference",
+    "StainFit",
     "VahadaneParams",
     "absorbance_foreground_mask",
     "apply_decomposition",
