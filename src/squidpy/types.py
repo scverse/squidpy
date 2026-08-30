@@ -140,12 +140,7 @@ _WEKA_DEFAULTS: WekaParams = defaults_of(WekaParams)
 
 
 class ReinhardParams(TypedDict, total=False):
-    """Tuning knobs for Reinhard stain normalization.
-
-    Pass a mapping of these keys as ``method_params``; every key is optional and
-    falls back to the default shown with it. Values are coerced and range-checked
-    by ``validate_reinhard_params`` when resolved.
-    """
+    """Tuning knobs for Reinhard stain normalization."""
 
     luminosity_threshold: Annotated[float, Default(DEFAULT_LUMINOSITY_THRESHOLD)]
     """Normalised Ruderman Lab-L cutoff in ``(0, 1]``; pixels brighter than this are excluded from the fit."""
@@ -190,12 +185,7 @@ _VAHADANE_DEFAULTS: VahadaneParams = defaults_of(VahadaneParams)
 
 
 class TilingQCParams(TypedDict, total=False):
-    """Advanced tuning knobs for :func:`~squidpy.experimental.tl.calculate_tiling_qc`.
-
-    Pass a mapping of these keys as ``tiling_qc_params``; every key is optional
-    and falls back to the default shown with it. Values are coerced and
-    range-checked by ``validate_qc_params`` when resolved.
-    """
+    """Advanced tuning knobs for :func:`~squidpy.experimental.tl.calculate_tiling_qc`."""
 
     distance_tol: Annotated[float, Default(0.75)]
     """Maximum perpendicular distance (pixels) from the fitted line for a contour point to count as straight."""
@@ -213,11 +203,7 @@ _QC_DEFAULTS: TilingQCParams = defaults_of(TilingQCParams)
 class StitchParams(TypedDict, total=False):
     """Advanced tuning knobs for :func:`~squidpy.experimental.tl.assign_stitch_groups`.
 
-    Defaults work for typical 2D segmentation tiles produced by cellpose-like
-    pipelines. Pass a mapping of these keys as ``stitch_params``; every key is
-    optional and falls back to the default shown with it. Values are coerced and
-    range-checked by ``validate_stitch_params`` when resolved. These are advanced
-    knobs -- the defaults rarely need changing.
+    The defaults suit typical 2D segmentation tiles from cellpose-like pipelines.
     """
 
     distance_tol: Annotated[float, Default(0.75)]
