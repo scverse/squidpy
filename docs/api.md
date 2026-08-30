@@ -167,6 +167,6 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
 .. automodule:: squidpy.types
     :members:
 
-.. autoclass:: squidpy.experimental.im.StainReference
+.. autoclass:: squidpy.experimental.im.StainFit
     :members:
 ```
