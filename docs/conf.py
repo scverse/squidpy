@@ -188,7 +188,7 @@ def _params_defaults() -> dict[str, dict[str, object]]:
     """
     from typing import get_type_hints
 
-    from squidpy.experimental import types
+    from squidpy import types
     from squidpy.experimental.utils._params import defaults_of
 
     defaults = {}
