@@ -293,6 +293,7 @@ def _stack_parameter_types(app, doctree, docname) -> None:  # type: ignore[no-un
                 head[opening] = nodes.Text(" : ")
             if closing is not None:
                 del head[closing]
+
             # A long parameter runs to several blocks. Only the inline run belongs in the
             # description paragraph -- nesting a block inside it produces a `<p>` within a
             # `<p>` -- so blocks stay siblings, and every piece is classed as description.
