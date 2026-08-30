@@ -7,7 +7,7 @@ primitive (:mod:`._reinhard`, :mod:`._mask`, :mod:`._conversion`).
 
 Both entry points dispatch on the fitting ``method`` (``"reinhard"`` colour
 transfer, or ``"macenko"``/``"vahadane"`` absorbance decomposition); a third
-entry, :meth:`~squidpy.experimental.im.StainReference.decompose`, projects an image onto its stain matrix.
+entry, :meth:`~squidpy.experimental.im.StainFit.decompose`, projects an image onto its stain matrix.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ from squidpy.experimental.im._stain._decomposition import (
     decompose_to_concentrations,
     fit_decomposition,
 )
-from squidpy.experimental.im._stain._reference import StainMethod, StainReference
+from squidpy.experimental.im._stain._reference import StainFit, StainMethod
 from squidpy.experimental.im._stain._reinhard import (
     ReinhardParams,
     _resolve_reinhard_params,
@@ -201,7 +201,7 @@ def estimate_white_point(
     Returns
     -------
     Shape-``(3,)`` white point; pass it as ``white_point`` to
-    :func:`fit_stain_reference` / :meth:`~squidpy.experimental.im.StainReference.decompose`.
+    :func:`fit_stain_reference` / :meth:`~squidpy.experimental.im.StainFit.decompose`.
     """
     da = _resolve_image(sdata, image_key, scale, prefer="coarsest")
     validate_rgb_range(da)
@@ -220,7 +220,7 @@ def fit_stain_reference(
     tissue_mask_key: str | None = None,
     max_angle_deg: float = 45.0,
     canonical_reference: Mapping[str, np.ndarray] | None = None,
-) -> StainReference:
+) -> StainFit:
     """Fit a stain reference from an image in a :class:`~spatialdata.SpatialData` object.
 
     Parameters
@@ -231,8 +231,8 @@ def fit_stain_reference(
         Key of the RGB image in ``sdata.images`` to fit on.
     method
         Fitting method: ``"macenko"`` (default) or ``"vahadane"`` (physical
-        stain-matrix decomposition, usable by both :meth:`~squidpy.experimental.im.StainReference.transform` and
-        :meth:`~squidpy.experimental.im.StainReference.decompose`), or ``"reinhard"`` (faster statistical colour
+        stain-matrix decomposition, usable by both :meth:`~squidpy.experimental.im.StainFit.transform` and
+        :meth:`~squidpy.experimental.im.StainFit.decompose`), or ``"reinhard"`` (faster statistical colour
         transfer, no stain separation). Macenko is the default because its one
         documented weakness - artifact pixels contaminating the fit - is removed
         by the mandatory tissue mask.
@@ -268,7 +268,7 @@ def fit_stain_reference(
 
     Returns
     -------
-    The fitted :class:`~squidpy.experimental.im.StainReference`. Nothing is written to ``sdata``.
+    The fitted :class:`~squidpy.experimental.im.StainFit`. Nothing is written to ``sdata``.
     """
     if method not in _VALID_METHODS:
         raise ValueError(f"Unknown method {method!r}; expected one of {list(_VALID_METHODS)}.")
@@ -295,7 +295,7 @@ def fit_stain_reference(
 def _normalize_stains(
     sdata: sd.SpatialData,
     image_key: str,
-    reference: StainReference,
+    reference: StainFit,
     *,
     scale: str | Literal["auto"] = "auto",
     method_params: MethodParams = None,
@@ -305,7 +305,7 @@ def _normalize_stains(
     tissue_mask_key: str | None = None,
     preserve_background: bool = True,
 ) -> xr.DataArray | None:
-    """Implementation of :meth:`~squidpy.experimental.im.StainReference.transform`, which documents it."""
+    """Implementation of :meth:`~squidpy.experimental.im.StainFit.transform`, which documents it."""
     da = _resolve_image(sdata, image_key, scale, prefer="finest")
     target_key = image_key_added if image_key_added is not None else f"{image_key}_normalized"
     if inplace and target_key in sdata.images:
@@ -352,7 +352,7 @@ def _normalize_stains(
 def _decompose_stains(
     sdata: sd.SpatialData,
     image_key: str,
-    reference: StainReference,
+    reference: StainFit,
     *,
     scale: str | Literal["auto"] = "auto",
     image_key_added: str | None = None,
@@ -360,7 +360,7 @@ def _decompose_stains(
     output_dtype: DTypeLike = np.float16,
     include_residual: bool = True,
 ) -> dict[str, xr.DataArray] | None:
-    """Implementation of :meth:`~squidpy.experimental.im.StainReference.decompose`, which documents it."""
+    """Implementation of :meth:`~squidpy.experimental.im.StainFit.decompose`, which documents it."""
     da = _resolve_image(sdata, image_key, scale, prefer="finest")
     if reference.method not in _DECOMPOSITION_METHODS or reference.stain_matrix is None:
         raise ValueError("decompose requires a macenko/vahadane reference with a stain matrix.")

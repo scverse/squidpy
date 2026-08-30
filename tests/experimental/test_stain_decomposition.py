@@ -91,12 +91,12 @@ class TestApplyDecomposition:
         # Colour-basis transfer carries no maxC_ref/maxC_src term: two references
         # with the same stain matrix + white point but different max_concentrations
         # produce identical output. A canonical-Macenko intensity rescale would not.
-        from squidpy.experimental.im._stain._reference import StainReference
+        from squidpy.experimental.im._stain._reference import StainFit
 
         truth = _canonical(RUIFROK_HE["hematoxylin"], RUIFROK_HE["eosin"])
         img = _synthetic_he(truth, seed=2)
         ref1 = fit_decomposition(_synthetic_he(truth, seed=1), "macenko", MacenkoParams(), _WHITE)
-        ref2 = StainReference(
+        ref2 = StainFit(
             method="macenko",
             stain_matrix=ref1.stain_matrix,
             white_point=ref1.white_point,

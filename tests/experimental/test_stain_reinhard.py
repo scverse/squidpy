@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from squidpy.experimental.im._stain._reference import StainReference
+from squidpy.experimental.im._stain._reference import StainFit
 from squidpy.experimental.im._stain._reinhard import (
     _SIGMA_FLOOR,
     ReinhardParams,
@@ -129,6 +129,6 @@ class TestResolveReinhardParams:
             _resolve_reinhard_params({"luminosity_threshold": bad})
 
 
-def test_reference_is_stainreference(rgb_a: np.ndarray) -> None:
+def test_reference_is_stain_fit(rgb_a: np.ndarray) -> None:
     ref = fit_reinhard(_da(rgb_a, chunked=False), ReinhardParams())
-    assert isinstance(ref, StainReference)
+    assert isinstance(ref, StainFit)
