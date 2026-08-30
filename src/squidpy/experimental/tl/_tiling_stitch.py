@@ -37,9 +37,9 @@ from skimage.morphology import disk as morph_disk
 from spatialdata._logging import logger as logg
 
 from squidpy._validators import assert_in_range, assert_non_negative, assert_positive
-from squidpy.experimental.types import _STITCH_DEFAULTS, StitchParams
 from squidpy.experimental.utils._labels import iter_chunked_regionprops, resolve_labels_array
 from squidpy.experimental.utils._params import resolve_params
+from squidpy.types import _STITCH_DEFAULTS, StitchParams
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -68,7 +68,7 @@ def validate_stitch_params(params: dict[str, Any]) -> None:
 
 
 def _resolve_stitch_params(stitch_params: StitchParams | Mapping[str, Any] | None) -> StitchParams:
-    """Normalise the ``stitch_params`` argument to a validated :class:`~squidpy.experimental.types.StitchParams`."""
+    """Normalise the ``stitch_params`` argument to a validated :class:`~squidpy.types.StitchParams`."""
     return resolve_params(
         stitch_params, defaults=_STITCH_DEFAULTS, validate=validate_stitch_params, arg_name="stitch_params"
     )

@@ -166,6 +166,6 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
 ### Types
 
 ```{eval-rst}
-.. automodule:: squidpy.experimental.types
+.. automodule:: squidpy.types
     :members:
 ```

@@ -5,7 +5,7 @@ from typing import Annotated, Any, TypedDict, Union, get_args, get_origin, get_t
 
 import pytest
 
-from squidpy.experimental import types
+from squidpy import types
 from squidpy.experimental.utils._params import Default, defaults_of, resolve_params
 
 #: Only the `*Params` types carry per-key defaults; the result types do not.

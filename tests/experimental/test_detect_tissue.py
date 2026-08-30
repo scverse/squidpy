@@ -183,8 +183,8 @@ class TestWekaSeeding:
         # `refine_with_classifier=False` skips the second stage -- both branches that
         # the default-parameter tests never take.
         from squidpy.experimental.im._detect_tissue import _BACKGROUND_DEFAULTS, _segment_weka
-        from squidpy.experimental.types import _WEKA_DEFAULTS, WekaParams
         from squidpy.experimental.utils._params import resolve_params
+        from squidpy.types import _WEKA_DEFAULTS, WekaParams
 
         weka = resolve_params(
             WekaParams(rf_estimators=1, pseudo_min_pixels=5000, refine_with_classifier=False, rng=0),

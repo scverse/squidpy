@@ -27,7 +27,8 @@ from squidpy._utils import (
     _yx_from_shape,
     legacy_random,
 )
-from squidpy.experimental.types import (
+from squidpy.experimental.utils._params import resolve_params
+from squidpy.types import (
     _BACKGROUND_DEFAULTS,
     _FELZENSZWALB_DEFAULTS,
     _WEKA_DEFAULTS,
@@ -35,7 +36,6 @@ from squidpy.experimental.types import (
     FelzenszwalbParams,
     WekaParams,
 )
-from squidpy.experimental.utils._params import resolve_params
 
 from ._utils import flatten_channels, get_element_data
 
@@ -216,8 +216,8 @@ def detect_tissue(
             - `DetectTissueMethod.WEKA` or `"weka"` - Trainable segmentation with corner background priors and RGB multiscale features.
     method_params
         Optional parameters specific to the selected method. For `"felzenszwalb"`, provide a
-        :class:`~squidpy.experimental.types.FelzenszwalbParams` instance or a mapping of its fields. For `"weka"`, provide a
-        :class:`~squidpy.experimental.types.WekaParams` instance or mapping. Passing values when ``method="otsu"`` is not supported.
+        :class:`~squidpy.types.FelzenszwalbParams` instance or a mapping of its fields. For `"weka"`, provide a
+        :class:`~squidpy.types.WekaParams` instance or mapping. Passing values when ``method="otsu"`` is not supported.
     border_margin_px
         Ignore a border when seeding and predicting tissue. Can be:
 
