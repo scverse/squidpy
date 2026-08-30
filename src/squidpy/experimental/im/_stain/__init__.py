@@ -26,7 +26,7 @@ from squidpy.experimental.im._stain._normalize import (
     estimate_white_point,
     fit_stain_reference,
 )
-from squidpy.experimental.im._stain._reference import StainMethod, StainReference
+from squidpy.experimental.im._stain._reference import StainFit, StainMethod
 from squidpy.experimental.im._stain._reinhard import (
     apply_reinhard,
     fit_reinhard,
@@ -47,7 +47,7 @@ __all__ = [
     "SDA_SCALE",
     "StainFittingError",
     "StainMethod",
-    "StainReference",
+    "StainFit",
     "absorbance_foreground_mask",
     "apply_decomposition",
     "apply_reinhard",
