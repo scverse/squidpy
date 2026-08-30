@@ -119,13 +119,18 @@ def test_rejects_non_finite() -> None:
         )
 
 
-def test_comparison_and_hashing_raise() -> None:
-    # A reference holds numpy arrays, so field-wise `==` and `hash` cannot work.
-    # Deliberately left to the dataclass defaults so both fail loudly rather than
-    # silently answering by identity; nothing in the codebase compares references.
+def test_equality_is_array_aware_and_hashable() -> None:
+    """Two fits holding equal arrays compare equal, and a fit can key a dict.
+
+    The dataclass-generated `__eq__` cannot do this -- comparing array fields raises
+    "truth value of an array is ambiguous" -- so `eq=False` plus an explicit `__eq__` is
+    what makes `fit in fits` and `{fit: slide}` work.
+    """
     a = StainFit(method="reinhard", mu=np.array([1.0, 2.0, 3.0]), sigma=np.ones(3))
     b = StainFit(method="reinhard", mu=np.array([1.0, 2.0, 3.0]), sigma=np.ones(3))
-    with pytest.raises(ValueError, match="truth value of an array"):
-        a == b  # noqa: B015
-    with pytest.raises(TypeError, match="unhashable type"):
-        hash(a)
+    c = StainFit(method="reinhard", mu=np.array([9.0, 9.0, 9.0]), sigma=np.ones(3))
+    assert a == b
+    assert a != c
+    assert a in [c, b]
+    assert {a: "slide-1"}[a] == "slide-1"
+    assert len({a, b}) == 2, "hashing stays identity-based; array fields are unhashable"
