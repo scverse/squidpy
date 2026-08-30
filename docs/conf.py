@@ -102,6 +102,9 @@ autodoc_member_order = "groupwise"
 autodoc_typehints = "signature"
 # show each parameter's default next to its type, as scanpy does
 typehints_defaults = "braces"
+# a closed vocabulary this long is unreadable spelled out -- and `qc_image` spells it
+# twice, once bare and once inside a list; the alias name is the useful thing
+autodoc_type_aliases = {"QCMetric": "QCMetric"}
 autodoc_docstring_signature = True
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
@@ -281,6 +284,7 @@ def _stack_parameter_types(app, doctree, docname) -> None:  # type: ignore[no-un
                 head[opening] = nodes.Text(" : ")
             if closing is not None:
                 del head[closing]
+
             # A long parameter runs to several blocks. Only the inline run belongs in the
             # description paragraph -- nesting a block inside it produces a `<p>` within a
             # `<p>` -- so blocks stay siblings, and every piece is classed as description.
