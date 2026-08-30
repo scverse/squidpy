@@ -14,6 +14,7 @@ from ._api import (
     stalign_align_obs,
     stalign_align_volume,
 )
+from ._landmark import apply_affine
 from ._stalign import (
     StalignFit,
     StalignImageFit,
@@ -33,6 +34,7 @@ __all__ = [
     "StalignVolumeFit",
     "StalignVolumeSolverKwargs",
     "align_landmarks",
+    "apply_affine",
     "stalign_align_image",
     "stalign_align_obs",
     "stalign_align_volume",

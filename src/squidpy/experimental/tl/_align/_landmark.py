@@ -48,7 +48,13 @@ def _fit(ref: np.ndarray, query: np.ndarray, *, method: Literal["similarity", "a
 
 
 def apply_affine(matrix: np.ndarray, points: np.ndarray) -> NDArrayA:
-    """Apply a homogeneous ``(3, 3)`` ``(x, y)`` affine to an ``(N, 2)`` coordinate array."""
+    """Apply a homogeneous ``(3, 3)`` ``(x, y)`` affine to an ``(N, 2)`` coordinate array.
+
+    The counterpart of :meth:`~squidpy.experimental.tl.StalignFit.transform_points` for the
+    closed-form path: :func:`~squidpy.experimental.tl.align_landmarks` returns a matrix
+    rather than a fit, and this is what maps points through it, so a caller never has to
+    spell out ``points @ matrix[:2, :2].T + matrix[:2, 2]``.
+    """
     coords = np.asarray(points, dtype=float)
     if coords.ndim != 2 or coords.shape[1] != 2:
         raise ValueError(f"Expected an (N, 2) coordinate array, found shape {coords.shape}.")

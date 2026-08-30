@@ -180,6 +180,7 @@ tuning as flat keyword arguments, listed below, and return the fitted map itself
     experimental.tl.StalignImageFit
     experimental.tl.StalignVolumeFit
     experimental.tl.align_landmarks
+    experimental.tl.apply_affine
     experimental.tl.assign_stitch_groups
     experimental.tl.StitchParams
     experimental.tl.make_stitched_labels
