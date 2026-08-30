@@ -32,7 +32,7 @@ def _coerce_finite(arr: Any, *, shape: tuple[int, ...], name: str) -> np.ndarray
     return out
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class StainFit:
     """A fitted stain reference.
 
@@ -115,6 +115,23 @@ class StainFit:
                 raise ValueError("sigma must be strictly positive.")
             object.__setattr__(self, "mu", mu)
             object.__setattr__(self, "sigma", sigma)
+
+    def __eq__(self, other: object) -> bool:
+        # The numpy-array fields make the dataclass-generated __eq__ raise ("truth value of
+        # an array is ambiguous"), so compare explicitly: equal method plus element-wise
+        # equal arrays.
+        if not isinstance(other, StainFit):
+            return NotImplemented
+        if self.method != other.method:
+            return False
+        return all(
+            np.array_equal(getattr(self, name), getattr(other, name))
+            for name in ("stain_matrix", "mu", "sigma", "white_point", "max_concentrations")
+        )
+
+    # eq=False keeps the default identity-based __hash__ (the array fields are unhashable, so
+    # a value-based hash is impossible); fits remain usable as set members / dict keys.
+    __hash__ = object.__hash__
 
     def transform(
         self,
