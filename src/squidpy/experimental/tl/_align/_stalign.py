@@ -645,29 +645,27 @@ def fit_stalign_volume(
                 f"`initial_slice={initial_slice}` is outside the reference's first axis "
                 f"of length {source_image.shape[1]}."
             )
-        # TODO: this construction assumes the reference volume's in-plane axes are centred
-        # on the origin, which holds for `centred_axes` (the `*_scale` path) but never for
-        # `_element_axes` -- so the public `stalign_align_volume` starts the section at the
-        # volume's in-plane *corner*, half the extent away in y and x. `initial_scale` is
-        # wrong for the same reason: it scales `linear` without the translation
-        # compensating, moving the selected slice. The fix is
-        # `T = centre_section - linear @ centre_volume`. Deferred: it changes the numerics
-        # of every rank-3 fit, so it wants its own commit and a regression test asserting
-        # placement rather than shape.
         cos, sin = jnp.cos(initial_rotation), jnp.sin(initial_rotation)
         # Rotation about the out-of-plane axis, then a uniform scale, in `(z, y, x)`.
         linear = initial_scale * jnp.array(
             [[1.0, 0.0, 0.0], [0.0, cos, -sin], [0.0, sin, cos]],
             dtype=dtype,
         )
-        translation = jnp.asarray(
-            [
-                -source_grid[0][slice_index],
-                jnp.mean(target_grid[1]),
-                jnp.mean(target_grid[2]),
-            ],
+        # Send the volume's centre at `initial_slice` to the section's centre. Written as
+        # `centre_section - linear @ centre_volume` rather than by negating the volume's z
+        # and centring in-plane: the short form silently assumes the volume's own in-plane
+        # axes are centred on the origin, which `centred_axes` satisfies and `_element_axes`
+        # -- what every container-level fit uses -- does not, and it leaves `linear` out of
+        # the z term so `initial_scale` moves the slice it was asked to centre on.
+        centre_volume = jnp.asarray(
+            [source_grid[0][slice_index], jnp.mean(source_grid[1]), jnp.mean(source_grid[2])],
             dtype=dtype,
         )
+        centre_section = jnp.asarray(
+            [target_grid[0][0], jnp.mean(target_grid[1]), jnp.mean(target_grid[2])],
+            dtype=dtype,
+        )
+        translation = centre_section - linear @ centre_volume
 
     fit_result = lddmm(
         source_grid,

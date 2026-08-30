@@ -108,6 +108,43 @@ def test_slice_fit_places_a_section_in_a_volume() -> None:
     assert not hasattr(result, "warp_image")
 
 
+@pytest.mark.parametrize("scale", [1.0, 0.9], ids=["unit_scale", "scaled"])
+def test_slice_fit_initialises_on_the_volume_centre_not_its_corner(scale: float) -> None:
+    """The section's centre must start at the volume's centre on the chosen slice.
+
+    Asserted on placement rather than shape, because the bug this pins was invisible to a
+    shape check: the initial translation used to centre the section using the *section's*
+    in-plane means alone, which is only the volume's centre when the volume's own axes
+    happen to be centred on the origin. Container-level fits read their axes off the
+    element, where they start at its translation and never are -- so the section began half
+    the volume extent away, in the corner. `initial_scale` is covered too: it scales the
+    out-of-plane row, so leaving it out of the translation moved the selected slice.
+    """
+    depth, size = 6, 12
+    volume = np.random.default_rng(0).random((1, depth, size, size))
+    sdata = _sdata_image(volume, "volume")
+    sdata.images["section"] = _sdata_image(volume[:, 3], "section").images["section"]
+
+    # niter=0 fits nothing, so what comes back is purely the initial affine
+    fit = stalign_align_volume(
+        sdata,
+        image_key=("volume", "section"),
+        initial_slice=3,
+        initial_scale=scale,
+        a=3.0,
+        nt=1,
+        niter=0,
+        epV=1.0,
+    )
+
+    centre_xy = np.array([[(size - 1) / 2, (size - 1) / 2]])
+    placed = np.asarray(fit.transform_points(centre_xy))[0]
+    expected_xy = (size - 1) / 2
+    np.testing.assert_allclose(placed[:2], [expected_xy, expected_xy], atol=1e-6)
+    # and the slice it was asked to centre on, which `initial_scale` used to shift
+    np.testing.assert_allclose(placed[2], float(np.asarray(fit.ref_axes[0])[3]), atol=1e-6)
+
+
 def test_a_2d_reference_is_rejected_with_a_pointer_to_the_2d_path() -> None:
     section = np.random.default_rng(0).random((1, 12, 12))
     sdata = _sdata_image(section, "section")
