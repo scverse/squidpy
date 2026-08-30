@@ -51,9 +51,9 @@ from squidpy.experimental.im._tiling import (
     extract_labels_tile_lazy,
 )
 from squidpy.experimental.tl._tiling_stitch import _STITCH_COLUMNS, _STITCH_DEFAULTS, _STITCH_PARAM_KEYS
-from squidpy.experimental.types import _QC_DEFAULTS, TilingQCParams
 from squidpy.experimental.utils._labels import resolve_labels_array
 from squidpy.experimental.utils._params import resolve_params
+from squidpy.types import _QC_DEFAULTS, TilingQCParams
 
 __all__ = ["TilingQCParams", "calculate_tiling_qc"]
 
@@ -72,7 +72,7 @@ def validate_qc_params(params: dict[str, Any]) -> None:
 
 
 def _resolve_qc_params(qc_params: TilingQCParams | Mapping[str, Any] | None) -> TilingQCParams:
-    """Normalise the ``tiling_qc_params`` argument to a validated :class:`~squidpy.experimental.types.TilingQCParams`."""
+    """Normalise the ``tiling_qc_params`` argument to a validated :class:`~squidpy.types.TilingQCParams`."""
     return resolve_params(qc_params, defaults=_QC_DEFAULTS, validate=validate_qc_params, arg_name="tiling_qc_params")
 
 
