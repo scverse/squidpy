@@ -40,7 +40,7 @@ class TestQCImage(PlotTester, metaclass=PlotTesterMeta):
             sdata_hne,
             image_key="hne",
             tile_size=_FAST_TILE,
-            metrics=[sq.experimental.im.QCMetric.TENENGRAD],
+            metrics=["tenengrad"],
             progress=False,
         )
 
@@ -73,7 +73,7 @@ class TestQCImage(PlotTester, metaclass=PlotTesterMeta):
             sdata_hne,
             image_key="hne",
             tile_size=_FAST_TILE,
-            metrics=[sq.experimental.im.QCMetric.TENENGRAD],
+            metrics=["tenengrad"],
             progress=False,
         )
 
@@ -91,7 +91,7 @@ def test_qc_image_hne_metric_without_hne_flag(sdata_hne):
             image_key="hne",
             tile_size=_FAST_TILE,
             is_hne=False,
-            metrics=[sq.experimental.im.QCMetric.HEMATOXYLIN_MEAN],
+            metrics=["hematoxylin_mean"],
         )
 
 
@@ -144,7 +144,7 @@ def test_qc_image_rgb_metric(sdata_hne):
         image_key="hne",
         tile_size=_FAST_TILE,
         is_hne=True,
-        metrics=[sq.experimental.im.QCMetric.HEMATOXYLIN_MEAN],
+        metrics=["hematoxylin_mean"],
         detect_tissue=False,
         detect_outliers=False,
         progress=False,
@@ -159,7 +159,7 @@ def test_qc_image_outlier_detection_with_tissue(sdata_hne):
         sdata_hne,
         image_key="hne",
         tile_size=_FAST_TILE,
-        metrics=[sq.experimental.im.QCMetric.TENENGRAD],
+        metrics=["tenengrad"],
         detect_outliers=True,
         detect_tissue=True,
         progress=False,
@@ -180,7 +180,7 @@ def test_qc_image_outlier_detection_without_tissue(sdata_hne):
         sdata_hne,
         image_key="hne",
         tile_size=_FAST_TILE,
-        metrics=[sq.experimental.im.QCMetric.TENENGRAD],
+        metrics=["tenengrad"],
         detect_outliers=True,
         detect_tissue=False,
         progress=False,
@@ -201,7 +201,7 @@ def test_qc_image_compute_only(sdata_hne):
         sdata_hne,
         image_key="hne",
         tile_size=_FAST_TILE,
-        metrics=[sq.experimental.im.QCMetric.TENENGRAD, sq.experimental.im.QCMetric.BRIGHTNESS_MEAN],
+        metrics=["tenengrad", "brightness_mean"],
         detect_outliers=False,
         detect_tissue=False,
         progress=False,
