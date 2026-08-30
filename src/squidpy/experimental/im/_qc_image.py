@@ -72,8 +72,16 @@ def qc_image(
     scale
         Scale level to use for processing. Defaults to ``"scale0"``.
     metrics
-        QC metrics to compute. Can be a single metric or list of metrics.
-        If ``None``, uses sensible defaults based on ``is_hne``.
+        QC metric name, or a list of them. ``None`` uses sensible defaults based on
+        ``is_hne``. Accepted values, by what they measure:
+
+        - sharpness -- ``"tenengrad"``, ``"var_of_laplacian"``, ``"variance"``,
+          ``"fft_high_freq_energy"``, ``"haar_wavelet_energy"``
+        - intensity -- ``"brightness_mean"``, ``"brightness_std"``, ``"entropy"``
+        - staining, H&E only -- ``"hematoxylin_mean"``, ``"hematoxylin_std"``,
+          ``"eosin_mean"``, ``"eosin_std"``, ``"he_ratio"``
+        - artifacts, H&E only -- ``"fold_fraction"``
+        - tissue coverage -- ``"tissue_fraction"``
     tile_size
         Size of tiles for analysis. If ``"auto"``, automatically determines size.
     is_hne

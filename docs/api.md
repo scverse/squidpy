@@ -175,7 +175,6 @@ Laid out by submodule, the way the stable API is.
     :toctree: api
 
     im.qc_image
-    im.QCMetric
 ```
 
 #### Tissue detection
