@@ -174,7 +174,7 @@ class TestCalculateTilingQC:
 
     def test_invalid_nmads_raises(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
-        with pytest.raises(ValueError, match="nmads_cut must be positive"):
+        with pytest.raises(ValueError, match="`nmads_cut` to be positive"):
             sq.experimental.tl.calculate_tiling_qc(
                 sdata,
                 labels_key="labels",
@@ -182,7 +182,7 @@ class TestCalculateTilingQC:
                 inplace=False,
                 nmads_cut=0,
             )
-        with pytest.raises(ValueError, match="nmads_smoothed must be positive"):
+        with pytest.raises(ValueError, match="`nmads_smoothed` to be positive"):
             sq.experimental.tl.calculate_tiling_qc(
                 sdata,
                 labels_key="labels",
@@ -224,41 +224,19 @@ class TestCalculateTilingQC:
 
 
 class TestTilingQCParamsResolution:
-    def test_none_uses_defaults(self):
-        from squidpy.experimental.tl._tiling_qc import TilingQCParams, _resolve_qc_params
-
-        p = _resolve_qc_params(None)
-        assert isinstance(p, TilingQCParams)
-        assert p.distance_tol == 0.75
-        assert p.min_area == 20
-        assert p.max_contour_points == 500
-
-    def test_instance_passthrough(self):
-        from squidpy.experimental.tl._tiling_qc import TilingQCParams, _resolve_qc_params
-
-        inst = TilingQCParams(distance_tol=1.0)
-        assert _resolve_qc_params(inst) is inst
-
-    def test_mapping_construction(self):
-        from squidpy.experimental.tl._tiling_qc import _resolve_qc_params
-
-        p = _resolve_qc_params({"distance_tol": 1.5, "min_area": 50})
-        assert p.distance_tol == 1.5
-        assert p.min_area == 50
-
     def test_numpy_scalars_coerced(self):
         from squidpy.experimental.tl._tiling_qc import _resolve_qc_params
 
         p = _resolve_qc_params({"distance_tol": np.float32(0.8), "min_area": np.int64(30)})
-        assert type(p.distance_tol) is float
-        assert type(p.min_area) is int
+        assert type(p["distance_tol"]) is float
+        assert type(p["min_area"]) is int
 
     @pytest.mark.parametrize(
         ("kwargs", "match"),
         [
             ({"bogus": 1}, "Unknown `tiling_qc_params`"),
-            ({"distance_tol": -1.0}, "`distance_tol` must be >= 0"),
-            ({"min_area": 0}, "`min_area` must be >= 1"),
+            ({"distance_tol": -1.0}, "`distance_tol` to be non-negative"),
+            ({"min_area": 0}, "`min_area` to be positive"),
             ({"max_contour_points": 2}, "`max_contour_points` must be >= 3"),
         ],
         ids=["unknown_field", "negative_distance_tol", "zero_min_area", "tiny_max_contour_points"],
@@ -268,12 +246,6 @@ class TestTilingQCParamsResolution:
 
         with pytest.raises(ValueError, match=match):
             _resolve_qc_params(kwargs)
-
-    def test_wrong_type_raises_type_error(self):
-        from squidpy.experimental.tl._tiling_qc import _resolve_qc_params
-
-        with pytest.raises(TypeError, match="TilingQCParams, Mapping, or None"):
-            _resolve_qc_params(42)
 
 
 # resolve_labels_array helper
@@ -402,3 +374,21 @@ class TestTilingQCVisual(PlotTester, metaclass=PlotTesterMeta):
             labels_key="labels",
             score_col="smoothed_cut_score",
         )
+
+
+class TestTilingQCParamsKeywords:
+    """`calculate_tiling_qc` takes the `TilingQCParams` keys as keyword arguments."""
+
+    def test_key_passed_as_keyword(self, sdata_tile_boundary):
+        sdata, _ = sdata_tile_boundary
+        adata = sq.experimental.tl.calculate_tiling_qc(
+            sdata, labels_key="labels", tile_size=200, inplace=False, distance_tol=1.5
+        )
+        assert adata.uns["tiling_qc"]["tiling_qc_params"]["distance_tol"] == 1.5
+
+    def test_unknown_keyword_raises(self, sdata_tile_boundary):
+        sdata, _ = sdata_tile_boundary
+        with pytest.raises(ValueError, match="Unknown `tiling_qc_params` field"):
+            sq.experimental.tl.calculate_tiling_qc(
+                sdata, labels_key="labels", tile_size=200, inplace=False, distancetol=1.5
+            )
