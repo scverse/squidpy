@@ -126,3 +126,74 @@ code.docutils.literal.notranslate > span[class="pre"] {
 .rst-content .seealso .admonition-title {
     background: #7013e1d9 !important;
 }
+
+/* Parameter entries render as `name : type` with the description on the next line
+   (see `_stack_parameter_types` in conf.py). Indent the description under its term. */
+.rst-content dl.field-list p.param-term {
+    margin-bottom: 0;
+}
+.rst-content dl.field-list p.param-desc {
+    margin-left: 1.5em;
+    margin-top: 0;
+}
+
+/* Signature line: the name is what a reader scans for, so give it size and let the module
+   path recede; a little air between parameters keeps a long signature readable. */
+.rst-content dl.py > dt.sig .sig-name {
+    font-size: 1.15em;
+    font-weight: 700;
+}
+.rst-content dl.py > dt.sig .sig-prename {
+    font-weight: 400;
+    opacity: 0.65;
+}
+.rst-content dl.py > dt.sig .sig-param {
+    padding: 0 0.12em;
+}
+.rst-content dl.py > dt.sig .sig-paren {
+    padding: 0 0.08em;
+}
+
+/* The theme lays a field list out as a two-column grid, which pushes every parameter to
+   the right of the "Parameters" label. Stack them instead: the label flush left as a
+   heading, the entries indented beneath it. */
+html.writer-html5 .rst-content dl.field-list {
+    display: block;
+}
+html.writer-html5 .rst-content dl.field-list > dt {
+    display: block;
+    padding-left: 0;
+    margin-bottom: 0.6em;
+}
+html.writer-html5 .rst-content dl.field-list > dd {
+    margin-left: 1.5em;
+    padding-left: 0;
+}
+.rst-content dl.field-list > dd > ul {
+    list-style: none;
+    margin-left: 0;
+    padding-left: 0;
+}
+.rst-content dl.field-list > dd > ul > li {
+    list-style: none;
+    margin-left: 0;
+}
+
+/* "Parameters", "Returns", "Notes" and friends divide a docstring into sections, so give
+   them a section heading's treatment -- a rule and the palette's purple -- rather than
+   leaving them looking like one more inline label. */
+html.writer-html5 .rst-content dl.field-list > dt,
+.rst-content dl.py p.rubric {
+    color: #5b3fa8;
+    font-size: 0.8em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    border-bottom: 1px solid #ddd8ec;
+    padding-bottom: 0.35em;
+    margin-top: 1.8em;
+    margin-bottom: 0.9em;
+}
+html.writer-html5 .rst-content dl.field-list > dt .colon {
+    display: none;
+}
