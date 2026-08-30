@@ -222,9 +222,14 @@ def _check_direction(value: object) -> None:
 class StalignFit:
     """A fitted STalign diffeomorphism.
 
-    One concrete subclass per ``stalign_align_*`` entry point. What a fit can do follows
-    from what it was fitted from, so the frame-dependent operations live on the subclasses
-    that carry a frame rather than raising at runtime on the ones that do not.
+    The base of the three concrete fits --
+    :class:`~squidpy.experimental.tl.StalignObsFit`,
+    :class:`~squidpy.experimental.tl.StalignImageFit` and
+    :class:`~squidpy.experimental.tl.StalignVolumeFit`, one per ``stalign_align_*`` entry
+    point. What a fit can do follows from what it was fitted from, so the frame-dependent
+    operations live on the subclasses that carry a frame rather than raising at runtime on
+    the ones that do not. Public in its own right: :meth:`from_uns` is a classmethod on it,
+    and it is the type to annotate "any fit" with.
 
     """
 
@@ -368,6 +373,10 @@ class StalignFit:
 class StalignObsFit(StalignFit):
     """A fit from :func:`~squidpy.experimental.tl.stalign_align_obs`.
 
+    A :class:`~squidpy.experimental.tl.StalignFit`, so it carries
+    :meth:`~squidpy.experimental.tl.StalignFit.transform_points`,
+    :meth:`~squidpy.experimental.tl.StalignFit.transform` and the ``uns`` round-trip.
+
     Both clouds are rasterised into density images at ``dx`` and those are what the fit
     ran on -- not a frame any real image lives on, so no raster axes survive and there is
     no ``deformation_grid`` or ``warp_image`` to resample the wrong grid with.
@@ -384,6 +393,9 @@ class StalignObsFit(StalignFit):
 @dataclass(frozen=True, kw_only=True)
 class StalignImageFit(StalignFit):
     """A fit from :func:`~squidpy.experimental.tl.stalign_align_image`.
+
+    A :class:`~squidpy.experimental.tl.StalignFit`, plus the frame-dependent operations
+    that only a fit carrying real raster axes can offer.
 
     Both sides are real images, so both frames survive and the frame-dependent operations
     need no axes from the caller.
@@ -462,6 +474,8 @@ class StalignImageFit(StalignFit):
 @dataclass(frozen=True, kw_only=True)
 class StalignVolumeFit(StalignFit):
     """A fit from :func:`~squidpy.experimental.tl.stalign_align_volume`.
+
+    A :class:`~squidpy.experimental.tl.StalignFit` at rank 3.
 
     Places a flat section in a 3D reference. Pair :meth:`transform_points` with
     :func:`~squidpy.experimental.im.sample_volume` to read a reference volume at the mapped
