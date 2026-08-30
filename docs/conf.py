@@ -100,11 +100,15 @@ toc_object_entries = False
 autosummary_generate = True
 autodoc_member_order = "groupwise"
 autodoc_typehints = "signature"
+# show each parameter's default next to its type, as scanpy does
+typehints_defaults = "braces"
 autodoc_docstring_signature = True
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
-napoleon_use_rtype = True
+napoleon_use_rtype = False
+# fold the return type into the Returns section rather than giving it its own
+typehints_use_rtype = False
 napoleon_use_param = True
 todo_include_todos = False
 
@@ -184,7 +188,7 @@ def _params_defaults() -> dict[str, dict[str, object]]:
 
     Autodoc renders `Annotated` metadata verbatim (`Annotated[float, Default(1.0)]`),
     so once the defaults are in hand each annotation is replaced by its bare type.
-    `_append_default` puts the default back where it belongs, in the description.
+    `_stack_attribute_defaults` puts the default back, on the key's signature.
     """
     from typing import get_type_hints
 
@@ -203,16 +207,36 @@ def _params_defaults() -> dict[str, dict[str, object]]:
     return defaults
 
 
-def _append_default(app, what, name, obj, options, lines) -> None:  # type: ignore[no-untyped-def]
-    """Append ``Default: <repr>`` to each documented params key."""
+def _default_of(name: str) -> object:
+    """The declared default of a params key, or ``_NO_DEFAULT`` if it has none."""
     cls_path, _, key = name.rpartition(".")
-    if what != "attribute" or not cls_path:
-        return
+    if not cls_path:
+        return _NO_DEFAULT
     defaults = _params_defaults().get(cls_path.rpartition(".")[2], {})
-    if key in defaults:
-        if lines and lines[-1].strip():
-            lines.append("")
-        lines.append(f"Default: ``{defaults[key]!r}``")
+    return defaults.get(key, _NO_DEFAULT)
+
+
+_NO_DEFAULT = object()
+
+
+def _stack_attribute_defaults(app, doctree, docname) -> None:  # type: ignore[no-untyped-def]
+    """Show a params key's default on its signature, as a parameter's is shown.
+
+    A key and a parameter are the same thing to a caller, so they should read the same:
+    ``name : type (default: value)``. Autodoc gives an attribute no default of its own --
+    a `TypedDict` key holds no value -- so it is appended to the signature here.
+    """
+    from docutils import nodes
+    from sphinx import addnodes
+
+    for sig in doctree.findall(addnodes.desc_signature):
+        parent = sig.parent
+        if not isinstance(parent, addnodes.desc) or parent.get("objtype") != "attribute":
+            continue
+        default = _default_of("".join(sig.get("ids", [""])[:1]))
+        if default is _NO_DEFAULT:
+            continue
+        sig += addnodes.desc_annotation("", "", nodes.Text(f" (default: {default!r})"))
 
 
 def _skip_dict_api(app, what, name, obj, skip, options) -> bool | None:  # type: ignore[no-untyped-def]
@@ -220,10 +244,54 @@ def _skip_dict_api(app, what, name, obj, skip, options) -> bool | None:  # type:
     return True if getattr(obj, "__qualname__", "").startswith("dict.") else None
 
 
+def _stack_parameter_types(app, doctree, docname) -> None:  # type: ignore[no-untyped-def]
+    """Render a parameter as ``name : type`` with its description on the next line.
+
+    Sphinx's Python domain renders a typed field inline -- ``name (type) - description`` --
+    which puts the three things a reader scans for on one run-on line. Rewrite each entry
+    into two paragraphs so the name and its type read as a term and the prose sits under it.
+    """
+    from docutils import nodes
+
+    for field in doctree.findall(nodes.field):
+        name = field.next_node(nodes.field_name)
+        if name is None or not name.astext().startswith("Parameters"):
+            continue
+        for item in field.findall(nodes.list_item):
+            para = item.next_node(nodes.paragraph)
+            if para is None or not para.children:
+                continue
+            split = None
+            for i, child in enumerate(para.children):
+                if isinstance(child, nodes.Text) and "\u2013" in child:
+                    split = i
+                    break
+            if split is None:
+                continue
+            sep = para.children[split].astext()
+            head = para.children[:split]
+            # the separator text also carries the closing paren of the type
+            rest = sep.split("\u2013", 1)[1].lstrip()
+            tail = ([nodes.Text(rest)] if rest else []) + para.children[split + 1 :]
+            # `name (type)` -> `name : type`, leaving any inner parens (a default) alone
+            parens = [i for i, c in enumerate(head) if isinstance(c, nodes.Text) and c.astext().strip() in "()"]
+            opening = next((i for i in parens if head[i].astext().strip() == "("), None)
+            closing = next((i for i in reversed(parens) if head[i].astext().strip() == ")"), None)
+            if opening is not None:
+                head[opening] = nodes.Text(" : ")
+            if closing is not None:
+                del head[closing]
+            term = nodes.paragraph("", "", *head, classes=["param-term"])
+            body = nodes.paragraph("", "", *tail, classes=["param-desc"])
+            item.clear()
+            item += [term, body] if tail else [term]
+
+
 def setup(app: Sphinx) -> None:
     app.connect("builder-inited", lambda _app: _params_defaults())
-    app.connect("autodoc-process-docstring", _append_default)
     app.connect("autodoc-skip-member", _skip_dict_api)
+    app.connect("doctree-resolved", _stack_parameter_types)
+    app.connect("doctree-resolved", _stack_attribute_defaults)
     app.add_css_file("css/custom.css")
     app.add_css_file("css/sphinx_gallery.css")
     app.add_css_file("css/nbsphinx.css")
