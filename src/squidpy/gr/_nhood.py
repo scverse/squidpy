@@ -183,7 +183,7 @@ def nhood_enrichment(
 
     Returns
     -------
-    If ``copy = True``, returns a :class:`~squidpy.gr.NhoodEnrichmentResult` with the z-score and the enrichment count.
+    If ``copy = True``, returns a :class:`~squidpy.types.NhoodEnrichmentResult` with the z-score and the enrichment count.
 
     Otherwise, modifies the ``adata`` with the following keys:
 

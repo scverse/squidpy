@@ -1,4 +1,7 @@
-"""Public ``*Params`` types for :mod:`squidpy.experimental`, and their defaults."""
+"""Squidpy's public parameter bags and result tuples.
+
+A ``*Params`` is input a caller fills in; a ``*Result`` is what a function hands back.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +10,8 @@ from typing import Annotated, TypedDict
 
 from squidpy._utils import RNGLike, SeedLike
 from squidpy.experimental.utils._params import Default, defaults_of
+from squidpy.gr._build import SpatialNeighborsResult
+from squidpy.gr._nhood import NhoodEnrichmentResult
 
 #: Pixels whose Ruderman Lab-L luminosity (normalised to ``[0, 1]``) exceeds this are
 #: treated as near-white background and excluded when fitting stain statistics.
@@ -21,6 +26,7 @@ DEFAULT_LUMINOSITY_THRESHOLD: float = 0.8
 _OD_BETA: float = 0.15
 
 __all__ = [
+    # Parameters
     "BackgroundDetectionParams",
     "FelzenszwalbParams",
     "WekaParams",
@@ -29,6 +35,9 @@ __all__ = [
     "VahadaneParams",
     "TilingQCParams",
     "StitchParams",
+    # Results
+    "NhoodEnrichmentResult",
+    "SpatialNeighborsResult",
 ]
 
 
