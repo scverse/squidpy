@@ -550,11 +550,8 @@ def align_landmarks(
 
         Both may instead be the ``(N, 2)`` landmark arrays themselves, matched by row order --
         the same form ``landmarks_ref`` / ``landmarks_query`` take on
-        :func:`~squidpy.experimental.tl.stalign_align_obs`. Landmarks are correspondences
-        *between* two samples rather than observations *of* one, so they do not always have a
-        container to live in: thirteen of them cannot sit in the ``obsm`` of a sample with
-        eighty thousand cells. Given arrays, this returns the affine, and every argument that
-        addresses a container must be left unset.
+        :func:`~squidpy.experimental.tl.stalign_align_obs`. Given arrays, this returns the
+        affine, and every argument that addresses a container must be left unset.
     landmark_key
         Where the ``(N, 2)`` landmark correspondences live (matched by row order), or a
         ``(ref, query)`` pair. Required for container input, rejected for arrays. On an AnnData -- or a SpatialData with ``table_key`` --
