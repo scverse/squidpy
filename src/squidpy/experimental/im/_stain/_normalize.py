@@ -240,7 +240,7 @@ def fit_stain_reference(
         Scale level to fit on. ``"auto"`` (default) uses the coarsest level,
         which is cheap and sufficient for colour statistics.
     method_params
-        A :class:`~squidpy.experimental.types.ReinhardParams`/:class:`~squidpy.experimental.types.MacenkoParams`/:class:`~squidpy.experimental.types.VahadaneParams`
+        A :class:`~squidpy.types.ReinhardParams`/:class:`~squidpy.types.MacenkoParams`/:class:`~squidpy.types.VahadaneParams`
         instance, a mapping of its fields, or ``None`` for defaults. Must match
         ``method``.
     white_point

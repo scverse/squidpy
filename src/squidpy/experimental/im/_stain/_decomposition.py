@@ -32,13 +32,13 @@ from squidpy.experimental.im._stain._validation import (
     reorder_to_canonical,
     validate_stain_matrix,
 )
-from squidpy.experimental.types import (
+from squidpy.experimental.utils._params import resolve_params
+from squidpy.types import (
     _MACENKO_DEFAULTS,
     _VAHADANE_DEFAULTS,
     MacenkoParams,
     VahadaneParams,
 )
-from squidpy.experimental.utils._params import resolve_params
 
 _MAXC_PERCENTILE = 99.0
 _MAXC_FLOOR = 1e-6

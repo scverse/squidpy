@@ -163,9 +163,13 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
     experimental.im.StainReference
 ```
 
-### Types
+## Types
+
+The public parameter bags. Every key is optional and falls back to the default shown with
+it. They tune :mod:`squidpy.experimental` functions, but the module is top level because
+what it holds is not itself experimental.
 
 ```{eval-rst}
-.. automodule:: squidpy.experimental.types
+.. automodule:: squidpy.types
     :members:
 ```
