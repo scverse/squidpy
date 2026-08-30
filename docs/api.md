@@ -10,7 +10,7 @@ Import Squidpy as:
 import squidpy as sq
 ```
 
-## Graph
+## Graph `gr`
 ```{eval-rst}
 .. module:: squidpy.gr
 .. currentmodule:: squidpy
@@ -23,11 +23,8 @@ import squidpy as sq
     gr.spatial_neighbors_radius
     gr.spatial_neighbors_delaunay
     gr.spatial_neighbors_grid
-    gr.GraphMatrixT
-    gr.SpatialNeighborsResult
     gr.mask_graph
     gr.nhood_enrichment
-    gr.NhoodEnrichmentResult
     gr.co_occurrence
     gr.centrality_scores
     gr.interaction_matrix
@@ -42,7 +39,33 @@ import squidpy as sq
     gr.calculate_niche_spatialleiden
 ```
 
-## Image
+### **neighbors**
+
+See the {doc}`extensibility guide </extensibility>` for how to implement a custom graph
+builder. ``GraphMatrixT`` is the type variable those interfaces are generic over; it is
+documented here rather than beside the ``gr`` functions, where a bare type variable read as
+public API.
+
+```{eval-rst}
+.. module:: squidpy.gr.neighbors
+.. currentmodule:: squidpy.gr
+.. autosummary::
+    :toctree: api
+
+    neighbors.GraphBuilder
+    neighbors.GraphBuilderCSR
+    neighbors.GraphPostprocessor
+    neighbors.DistanceIntervalPostprocessor
+    neighbors.PercentilePostprocessor
+    neighbors.TransformPostprocessor
+    neighbors.KNNBuilder
+    neighbors.RadiusBuilder
+    neighbors.DelaunayBuilder
+    neighbors.GridBuilder
+    neighbors.GraphMatrixT
+```
+
+## Image `im`
 ```{eval-rst}
 .. module:: squidpy.im
 .. currentmodule:: squidpy
@@ -55,7 +78,7 @@ import squidpy as sq
     im.SegmentationModel
 ```
 
-## Plotting
+## Plotting `pl`
 ```{eval-rst}
 .. module:: squidpy.pl
 .. currentmodule:: squidpy
@@ -74,7 +97,7 @@ import squidpy as sq
     pl.var_by_distance
 ```
 
-## Reading
+## Reading `read`
 ```{eval-rst}
 .. module:: squidpy.read
 .. currentmodule:: squidpy
@@ -86,7 +109,7 @@ import squidpy as sq
     read.nanostring
 ```
 
-## Tools
+## Tools `tl`
 ```{eval-rst}
 .. module:: squidpy.tl
 .. currentmodule:: squidpy
@@ -97,7 +120,7 @@ import squidpy as sq
     tl.var_by_distance
 ```
 
-## Datasets
+## Datasets `datasets`
 ```{eval-rst}
 .. module:: squidpy.datasets
 .. currentmodule:: squidpy
@@ -121,56 +144,115 @@ import squidpy as sq
     datasets.visium_fluo_image_crop
 ```
 
-## Extensibility
-
-See the {doc}`extensibility guide </extensibility>` for how to implement a custom graph builder.
-
-```{eval-rst}
-.. module:: squidpy.gr.neighbors
-.. currentmodule:: squidpy
-.. autosummary::
-    :toctree: api
-
-    gr.neighbors.GraphBuilder
-    gr.neighbors.GraphBuilderCSR
-    gr.neighbors.GraphMatrixT
-    gr.neighbors.GraphPostprocessor
-    gr.neighbors.DistanceIntervalPostprocessor
-    gr.neighbors.PercentilePostprocessor
-    gr.neighbors.TransformPostprocessor
-    gr.neighbors.KNNBuilder
-    gr.neighbors.RadiusBuilder
-    gr.neighbors.DelaunayBuilder
-    gr.neighbors.GridBuilder
-```
-
-## Experimental
+## Experimental `experimental`
 
 ```{eval-rst}
 .. module:: squidpy.experimental
+```
+
+Under active development: names and signatures here may change without a deprecation cycle.
+
+### Images `im`
+
+#### Features, tiling and rasterization
+
+```{eval-rst}
+.. module:: squidpy.experimental.im
+.. currentmodule:: squidpy.experimental
+.. autosummary::
+    :toctree: api
+
+    im.calculate_image_features
+    im.make_tiles
+    im.make_tiles_from_spots
+```
+
+#### Quality control
+
+```{eval-rst}
+.. currentmodule:: squidpy.experimental
+.. autosummary::
+    :toctree: api
+
+    im.qc_image
+```
+
+#### Tissue detection
+
+```{eval-rst}
+.. currentmodule:: squidpy.experimental
+.. autosummary::
+    :toctree: api
+
+    im.detect_tissue
+```
+
+#### Stain normalization
+
+```{eval-rst}
+.. currentmodule:: squidpy.experimental
+.. autosummary::
+    :toctree: api
+
+    im.fit_stain_reference
+    im.estimate_white_point
+    im.StainFit
+```
+
+### Tools `tl`
+
+```{eval-rst}
+.. module:: squidpy.experimental.tl
+.. currentmodule:: squidpy.experimental
+.. autosummary::
+    :toctree: api
+
+    tl.calculate_tiling_qc
+    tl.assign_stitch_groups
+    tl.make_stitched_labels
+```
+
+### Plotting `pl`
+
+```{eval-rst}
+.. module:: squidpy.experimental.pl
+.. currentmodule:: squidpy.experimental
+.. autosummary::
+    :toctree: api
+
+    pl.tiling_qc
+    pl.qc_image
+```
+
+## Types `types`
+
+The parameter bags and result tuples, collected by kind rather than by domain.
+
+### Parameters
+
+```{eval-rst}
+.. module:: squidpy.types
 .. currentmodule:: squidpy
 .. autosummary::
     :toctree: api
 
-    experimental.im.calculate_image_features
-    experimental.tl.calculate_tiling_qc
-    experimental.tl.assign_stitch_groups
-    experimental.tl.make_stitched_labels
-    experimental.pl.tiling_qc
-    experimental.im.fit_stain_reference
-    experimental.im.estimate_white_point
+    types.TilingQCParams
+    types.StitchParams
+    types.BackgroundDetectionParams
+    types.FelzenszwalbParams
+    types.WekaParams
+    types.ReinhardParams
+    types.MacenkoParams
+    types.VahadaneParams
 ```
 
-## Types
-
-The public parameter bags. Every key is optional and falls back to the default shown with
-it. They tune :mod:`squidpy.experimental` functions, but the module is top level because
-what it holds is not itself experimental.
+### Results
 
 ```{eval-rst}
-.. automodule:: squidpy.types
-    :members:
+.. currentmodule:: squidpy
+.. autosummary::
+    :toctree: api
 
-.. autoclass:: squidpy.experimental.im.StainFit
-    :members:
+    types.SpatialNeighborsResult
+    types.NhoodEnrichmentResult
 ```
