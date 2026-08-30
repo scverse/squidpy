@@ -70,7 +70,7 @@ def qc_image(
     image_key
         Key of the image in ``sdata.images`` to analyze.
     scale
-        Scale level to use for processing. Defaults to ``"scale0"``.
+        Scale level to use for processing.
     metrics
         QC metric name, or a list of them. ``None`` uses sensible defaults based on
         ``is_hne``. Accepted values, by what they measure:
@@ -96,7 +96,7 @@ def qc_image(
         Percentile threshold (0-1) for outlier detection. A tile is flagged as
         an outlier if its within-tissue percentile rank falls below this value.
         For example, ``0.1`` flags the bottom 10% of tissue tiles (by their
-        worst sharpness metric) as outliers. Default is ``0.1``.
+        worst sharpness metric) as outliers.
     progress
         Whether to show progress bar during computation.
     tissue_mask_key

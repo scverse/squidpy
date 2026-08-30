@@ -954,7 +954,7 @@ def calculate_image_features(
         How to handle image/labels whose pixel grids do not match (via their
         SpatialData transformations).
 
-        * ``"strict"`` (default): require the relative transform between image
+        * ``"strict"``: require the relative transform between image
           and labels to be identity or an integer-pixel translation; raise
           otherwise with a hint pointing to :func:`spatialdata.rasterize`.
         * ``"rasterize"``: resample labels onto the image pixel grid using
@@ -965,16 +965,15 @@ def calculate_image_features(
         Cells falling outside the image/labels overlap are dropped (logged at
         INFO).
     key_added
-        Key under which to store the result in ``sdata.tables``. If ``None``
-        (default), the key is derived from the region and, when an image is
+        Key under which to store the result in ``sdata.tables``. If ``None``, the key is derived from the region and, when an image is
         used, the image key: ``f"morphology_{labels_key or shapes_key}_{image_key}"``
         (or ``f"morphology_{labels_key or shapes_key}"`` for a morphology-only
         run). This keeps per-region / per-image runs from clobbering each other.
     invalid_as_zero
-        If ``True``, replace ``inf``/``NaN`` with zero. ``False`` (default) keeps
+        If ``True``, replace ``inf``/``NaN`` with zero. ``False`` keeps
         them, so undefined features stay distinguishable from genuine zeros.
     drop_constant_features
-        If ``True`` (default), drop zero-variance feature columns (they break
+        If ``True``, drop zero-variance feature columns (they break
         scaling/PCA downstream). Applied per call and skipped for a single cell;
         when comparing samples, prefer dropping constants on the concatenated
         table so column sets stay aligned.

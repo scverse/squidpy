@@ -284,7 +284,7 @@ def resolve_tissue_mask(
 
     If *tissue_mask_key* is given and exists, it is returned as-is.
     Otherwise falls back to ``f"{image_key}_tissue"``. When that key is missing,
-    the behaviour depends on *auto_create*: if ``True`` (default) ``detect_tissue``
+    the behaviour depends on *auto_create*: if ``True`` ``detect_tissue``
     is run to create it; if ``False`` a :class:`KeyError` is raised asking the
     caller to run ``detect_tissue`` first.
 

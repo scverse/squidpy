@@ -104,6 +104,9 @@ autodoc_typehints = "signature"
 autodoc_mock_imports = ["jax"]
 # show each parameter's default next to its type, as scanpy does
 typehints_defaults = "braces"
+# a closed vocabulary this long is unreadable spelled out -- and `qc_image` spells it
+# twice, once bare and once inside a list; the alias name is the useful thing
+autodoc_type_aliases = {"QCMetric": "QCMetric"}
 autodoc_docstring_signature = True
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
