@@ -13,7 +13,7 @@ from ._qc_metrics import QCMetric
 from ._stain import (
     MacenkoParams,
     ReinhardParams,
-    StainReference,
+    StainFit,
     VahadaneParams,
     estimate_white_point,
     fit_stain_reference,
@@ -25,7 +25,7 @@ __all__ = [
     "MacenkoParams",
     "QCMetric",
     "ReinhardParams",
-    "StainReference",
+    "StainFit",
     "VahadaneParams",
     "WekaParams",
     "calculate_image_features",
