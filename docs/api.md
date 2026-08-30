@@ -151,10 +151,11 @@ public API.
 ```
 
 Under active development: names and signatures here may change without a deprecation cycle.
-Laid out by submodule, the way the stable API is.
 
 ### Images `im`
+
 #### Features, tiling and rasterization
+
 ```{eval-rst}
 .. module:: squidpy.experimental.im
 .. currentmodule:: squidpy.experimental
@@ -169,6 +170,7 @@ Laid out by submodule, the way the stable API is.
 ```
 
 #### Quality control
+
 ```{eval-rst}
 .. currentmodule:: squidpy.experimental
 .. autosummary::
@@ -178,6 +180,7 @@ Laid out by submodule, the way the stable API is.
 ```
 
 #### Tissue detection
+
 ```{eval-rst}
 .. currentmodule:: squidpy.experimental
 .. autosummary::
@@ -187,20 +190,21 @@ Laid out by submodule, the way the stable API is.
 ```
 
 #### Stain normalization
+
 ```{eval-rst}
 .. currentmodule:: squidpy.experimental
 .. autosummary::
     :toctree: api
 
     im.fit_stain_reference
-    im.normalize_stains
-    im.decompose_stains
     im.estimate_white_point
-    im.StainReference
+    im.StainFit
 ```
 
 ### Tools `tl`
+
 #### Alignment
+
 ```{eval-rst}
 .. module:: squidpy.experimental.tl
 .. currentmodule:: squidpy.experimental
@@ -233,6 +237,7 @@ offers ``warp_image``.
 ```
 
 #### Tiling and stitching
+
 ```{eval-rst}
 .. currentmodule:: squidpy.experimental
 .. autosummary::
@@ -244,6 +249,7 @@ offers ``warp_image``.
 ```
 
 ### Plotting `pl`
+
 ```{eval-rst}
 .. module:: squidpy.experimental.pl
 .. currentmodule:: squidpy.experimental
@@ -256,8 +262,7 @@ offers ``warp_image``.
 
 ## Types `types`
 
-The parameter bags and result tuples, collected by kind rather than by domain. Anything
-carrying behaviour is a fit and lives with the functions that produce it.
+The parameter bags and result tuples, collected by kind rather than by domain.
 
 ### Parameters
 

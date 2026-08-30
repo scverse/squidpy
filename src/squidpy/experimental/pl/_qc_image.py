@@ -32,7 +32,7 @@ def qc_image(
         SpatialData object containing QC results.
     image_key : str
         Image key used in qc_image function.
-    metrics : QCMetric or list of QCMetric, optional
+    metrics : str or list of str, optional
         Specific metrics to plot. If None, plots all calculated metrics.
     figsize : tuple, optional
         Figure size (width, height). Auto-calculated if None.
@@ -65,8 +65,7 @@ def qc_image(
     if metrics is not None:
         metrics_list = metrics if isinstance(metrics, list) else [metrics]
         metrics_to_plot = []
-        for metric in metrics_list:
-            metric_name = metric
+        for metric_name in metrics_list:
             if metric_name not in calculated_metrics:
                 raise ValueError(f"Metric '{metric_name}' not found. Available: {calculated_metrics}")
             metrics_to_plot.append(metric_name)

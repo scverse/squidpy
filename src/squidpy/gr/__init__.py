@@ -36,6 +36,8 @@ __all__ = [
     "GraphMatrixT",
     "neighbors",
     "mask_graph",
+    "SpatialNeighborsResult",
+    "NhoodEnrichmentResult",
     "spatial_neighbors",
     "spatial_neighbors_from_builder",
     "spatial_neighbors_knn",

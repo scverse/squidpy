@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
-from typing import Any, Literal, cast, get_args
+from typing import Any, Literal, Unpack, cast, get_args
 
 import dask.array as da
 import numpy as np
@@ -22,80 +21,44 @@ from spatialdata.models import Labels2DModel
 from spatialdata.transformations import get_transformation
 
 from squidpy._utils import (
-    RNGLike,
-    SeedLike,
     _ensure_dim_order,
     _get_scale_factors,
     _yx_from_shape,
     legacy_random,
 )
+from squidpy.experimental.utils._params import resolve_params
+from squidpy.types import (
+    _BACKGROUND_DEFAULTS,
+    _FELZENSZWALB_DEFAULTS,
+    _WEKA_DEFAULTS,
+    BackgroundDetectionParams,
+    FelzenszwalbParams,
+    WekaParams,
+)
 
 from ._utils import flatten_channels, get_element_data
 
-#: The segmentation methods :func:`detect_tissue` accepts. A ``Literal`` rather than an enum:
-#: the members carried no value of their own, every use was an equality test, and callers
-#: write the string anyway -- so an enum only added a name to import and to document.
+#: The segmentation methods :func:`detect_tissue` accepts.
 DetectTissueMethod = Literal["otsu", "felzenszwalb", "weka"]
 
 
-@dataclass(slots=True)
-class BackgroundDetectionParams:
-    """
-    Which corners are background, and how large the corner boxes should be.
-    If no corners are flagged True, orientation falls back to bright background.
-    """
-
-    ymin_xmin_is_bg: bool = True
-    ymax_xmin_is_bg: bool = True
-    ymin_xmax_is_bg: bool = True
-    ymax_xmax_is_bg: bool = True
-    corner_size_pct: float = 0.01  # fraction of height/width
-
-    @property
-    def any_corner(self) -> bool:
-        return any(
-            (
-                self.ymin_xmin_is_bg,
-                self.ymax_xmin_is_bg,
-                self.ymin_xmax_is_bg,
-                self.ymax_xmax_is_bg,
-            )
+def any_corner(params: BackgroundDetectionParams) -> bool:
+    """Whether any corner is flagged as background."""
+    return any(
+        (
+            params["ymin_xmin_is_bg"],
+            params["ymax_xmin_is_bg"],
+            params["ymin_xmax_is_bg"],
+            params["ymax_xmax_is_bg"],
         )
+    )
 
 
-@dataclass(slots=True)
-class FelzenszwalbParams:
-    """
-    Size-aware superpixel defaults for felzenszwalb segmentation.
-    """
-
-    grid_rows: int = 100
-    grid_cols: int = 100
-    sigma_frac: float = 0.008  # blur = this * short side, clipped to [1, 5] px
-    scale_coef: float = 0.25  # scale = coef * target_area
-    min_size_coef: float = 0.20  # min_size = coef * target_area
-
-
-@dataclass(slots=True)
-class WekaParams:
-    """
-    Parameters for WEKA-like trainable segmentation.
-    """
-
-    sigma_min: float = 1.0
-    sigma_max: float = 16.0
-    edges: bool = True
-    pseudo_tissue_percentile: float = 90.0  # percentile of distance-from-bg to label as tissue
-    pseudo_min_pixels: int = 50  # minimum number of tissue pixels to seed
-    rf_estimators: int = 100
-    rf_max_depth: int | None = 10
-    rf_max_samples: float = 0.05
-    rng: SeedLike | RNGLike | None = None
-
-    # Second-stage refinement with a simple classifier
-    refine_with_classifier: bool = True
-    refine_n_samples_per_class: int = 50_000
-    refine_bg_prob_threshold: float = 0.6  # only drop pixels very likely to be background
+#: The params dataclass each method takes. OTSU is absent: it accepts none.
+_METHOD_DEFAULTS: dict[DetectTissueMethod, FelzenszwalbParams | WekaParams] = {
+    "felzenszwalb": _FELZENSZWALB_DEFAULTS,
+    "weka": _WEKA_DEFAULTS,
+}
 
 
 def _normalize_margins(
@@ -218,7 +181,6 @@ def detect_tissue(
     method: DetectTissueMethod = "otsu",
     method_params: FelzenszwalbParams | WekaParams | Mapping[str, Any] | None = None,
     channel_format: Literal["infer", "rgb", "rgba", "multichannel"] = "infer",
-    background_detection_params: BackgroundDetectionParams | None = None,
     corners_are_background: bool = True,
     border_margin_px: int | Sequence[int] = 0,
     min_specimen_area_frac: float = 0.01,
@@ -228,6 +190,7 @@ def detect_tissue(
     mask_smoothing_cycles: int = 0,
     new_labels_key: str | None = None,
     inplace: bool = True,
+    **background_detection_params: Unpack[BackgroundDetectionParams],
 ) -> np.ndarray | None:
     """
     Detect tissue regions in an image and optionally store an integer-labeled mask.
@@ -267,12 +230,10 @@ def detect_tissue(
             - `"rgba"` - RGBA image.
             - `"multichannel"` - Multi-channel image.
 
-    background_detection_params
-        Parameters for background detection via corner regions. If `None`, uses corners
-        specified by `corners_are_background` for all four corners.
     corners_are_background
-        Whether corners are considered background regions. Used for orienting threshold
-        if `background_detection_params` is `None`.
+        Whether corners are considered background regions, used for orienting the
+        threshold. Applies to all four corners; override individual corners through
+        ``**background_detection_params``.
     min_specimen_area_frac
         Minimum fraction of image area for a region to be considered a specimen.
     n_samples
@@ -288,6 +249,9 @@ def detect_tissue(
     new_labels_key
         Key to store the resulting labels in ``sdata.labels``. If `None`, uses
         `"{image_key}_tissue"`.
+    **background_detection_params
+        Per-corner background priors and corner-box size, passed as keyword arguments.
+        Each corner flag defaults to ``corners_are_background``.
     inplace
         If `True`, stores labels in ``sdata.labels``. If `False`, returns the mask array.
 
@@ -307,6 +271,8 @@ def detect_tissue(
     Processing is performed at an appropriate resolution and then upscaled to match
     the original image dimensions.
     """
+    # Case-insensitive, as the enum lookup it replaces was.
+    method = method.lower() if isinstance(method, str) else method
     if method not in get_args(DetectTissueMethod):
         raise ValueError(f"method must be one of {get_args(DetectTissueMethod)}, found {method!r}")
 
@@ -319,38 +285,22 @@ def detect_tissue(
         if method_params is not None:
             raise ValueError("`method_params` are not supported for OTSU tissue detection.")
         resolved_method_params = None
-    elif method == "felzenszwalb":
-        if method_params is None:
-            resolved_method_params = FelzenszwalbParams()
-        elif isinstance(method_params, FelzenszwalbParams):
-            resolved_method_params = method_params
-        elif isinstance(method_params, Mapping):
-            resolved_method_params = FelzenszwalbParams(**method_params)
-        else:
-            raise TypeError(
-                f"`method_params` for 'felzenszwalb' must be a FelzenszwalbParams or mapping, "
-                f"got {type(method_params).__name__}.",
-            )
-    elif method == "weka":
-        if method_params is None:
-            resolved_method_params = WekaParams()
-        elif isinstance(method_params, WekaParams):
-            resolved_method_params = method_params
-        elif isinstance(method_params, Mapping):
-            resolved_method_params = WekaParams(**method_params)
-        else:
-            raise TypeError(
-                f"`method_params` for 'weka' must be a WekaParams or mapping, got {type(method_params).__name__}.",
-            )
+    elif (method_defaults := _METHOD_DEFAULTS.get(method)) is not None:
+        resolved_method_params = resolve_params(method_params, defaults=method_defaults)
     else:
         raise ValueError(f"Unsupported method: {method}")
 
     # Background params
-    bgp = background_detection_params or BackgroundDetectionParams(
+    corner_priors = BackgroundDetectionParams(
         ymin_xmin_is_bg=corners_are_background,
         ymax_xmin_is_bg=corners_are_background,
         ymin_xmax_is_bg=corners_are_background,
         ymax_xmax_is_bg=corners_are_background,
+    )
+    bgp = resolve_params(
+        {**corner_priors, **background_detection_params},  # an explicit corner wins over the broadcast
+        defaults=_BACKGROUND_DEFAULTS,
+        arg_name="background_detection_params",
     )
 
     manual_scale = scale.lower() != "auto"
@@ -366,7 +316,7 @@ def detect_tissue(
     base_margin_px = border_margin_px
     if method == "weka" and _is_zero_margin(base_margin_px):
         wp_local = cast(WekaParams, resolved_method_params)
-        base_margin_px = getattr(wp_local, "border_margin_px", 0)
+        base_margin_px = wp_local.get("border_margin_px", 0)
     target_shape = _get_target_upscale_shape(sdata, image_key)
     normalized_margins_target = _normalize_margins(base_margin_px, target_shape)
 
@@ -605,13 +555,13 @@ def _segment_felzenszwalb(img_grey: np.ndarray, params: FelzenszwalbParams) -> n
     """
     h, w = img_grey.shape
     short = min(h, w)
-    sigma = float(np.clip(params.sigma_frac * short, 1.0, 5.0))
+    sigma = float(np.clip(params["sigma_frac"] * short, 1.0, 5.0))
     img_s = img_as_float(gaussian(img_grey, sigma=sigma))
 
-    target_regions = max(1, params.grid_rows * params.grid_cols)
+    target_regions = max(1, params["grid_rows"] * params["grid_cols"])
     target_area = (h * w) / float(target_regions)
-    scale = float(max(1.0, params.scale_coef * target_area))
-    min_size = int(max(1, params.min_size_coef * target_area))
+    scale = float(max(1.0, params["scale_coef"] * target_area))
+    min_size = int(max(1, params["min_size_coef"] * target_area))
 
     return np.array(
         felzenszwalb(
@@ -661,10 +611,10 @@ def _segment_weka(
     feats = feature.multiscale_basic_features(
         img_f,
         intensity=True,
-        edges=weka_params.edges,
+        edges=weka_params["edges"],
         texture=True,
-        sigma_min=weka_params.sigma_min,
-        sigma_max=weka_params.sigma_max,
+        sigma_min=weka_params["sigma_min"],
+        sigma_max=weka_params["sigma_max"],
         channel_axis=channel_axis,
     )
 
@@ -701,17 +651,17 @@ def _segment_weka(
 
     # Pseudo tissue seeds from most non-background-like pixels
     if np.any(non_bg):
-        perc = float(np.clip(weka_params.pseudo_tissue_percentile, 0.0, 100.0))
+        perc = float(np.clip(weka_params["pseudo_tissue_percentile"], 0.0, 100.0))
         thr = np.percentile(zmap[non_bg], perc)
         tissue_mask = (zmap >= thr) & non_bg
 
         # Ensure minimum number of tissue seeds
-        if tissue_mask.sum() < weka_params.pseudo_min_pixels:
+        if tissue_mask.sum() < weka_params["pseudo_min_pixels"]:
             flat_non_bg = np.flatnonzero(non_bg)
             if flat_non_bg.size > 0:
                 z_flat = zmap.ravel()[flat_non_bg]
                 order = np.argsort(z_flat)[::-1]
-                n_take = min(flat_non_bg.size, weka_params.pseudo_min_pixels)
+                n_take = min(flat_non_bg.size, weka_params["pseudo_min_pixels"])
                 chosen = flat_non_bg[order[:n_take]]
 
                 seed_mask_flat = np.zeros_like(non_bg.ravel(), dtype=bool)
@@ -745,13 +695,13 @@ def _segment_weka(
 
     # one generator for the whole segmentation, so the forest and the refinement step
     # are seeded independently instead of sharing a single seed
-    rng = np.random.default_rng(weka_params.rng)
+    rng = np.random.default_rng(weka_params["rng"])
 
     clf = RandomForestClassifier(
-        n_estimators=weka_params.rf_estimators,
+        n_estimators=weka_params["rf_estimators"],
         n_jobs=-1,
-        max_depth=weka_params.rf_max_depth,
-        max_samples=weka_params.rf_max_samples,
+        max_depth=weka_params["rf_max_depth"],
+        max_samples=weka_params["rf_max_samples"],
         random_state=legacy_random(rng),
     )
     clf = future.fit_segmenter(training_labels, feats, clf)
@@ -760,12 +710,12 @@ def _segment_weka(
     prior_mask = np.asarray(result == 2) & inner_mask
 
     # Optional second-stage refinement: inside-vs-outside mask classification
-    if weka_params.refine_with_classifier:
+    if weka_params["refine_with_classifier"]:
         prior_mask = _refine_with_background_classifier(
             feats=feats,
             prior_mask=prior_mask,
-            n_samples_per_class=weka_params.refine_n_samples_per_class,
-            bg_prob_threshold=weka_params.refine_bg_prob_threshold,
+            n_samples_per_class=weka_params["refine_n_samples_per_class"],
+            bg_prob_threshold=weka_params["refine_bg_prob_threshold"],
             rng=rng,
         )
 
@@ -908,17 +858,17 @@ def _corner_mask(shape: tuple[int, int], params: BackgroundDetectionParams) -> n
     Build a boolean mask for selected corners.
     """
     H, W = shape
-    ch = max(1, int(params.corner_size_pct * H))
-    cw = max(1, int(params.corner_size_pct * W))
+    ch = max(1, int(params["corner_size_pct"] * H))
+    cw = max(1, int(params["corner_size_pct"] * W))
 
     mask = np.zeros((H, W), dtype=bool)
-    if params.ymin_xmin_is_bg:
+    if params["ymin_xmin_is_bg"]:
         mask[:ch, :cw] = True
-    if params.ymin_xmax_is_bg:
+    if params["ymin_xmax_is_bg"]:
         mask[:ch, -cw:] = True
-    if params.ymax_xmin_is_bg:
+    if params["ymax_xmin_is_bg"]:
         mask[-ch:, :cw] = True
-    if params.ymax_xmax_is_bg:
+    if params["ymax_xmax_is_bg"]:
         mask[-ch:, -cw:] = True
     return mask
 
@@ -928,7 +878,7 @@ def _background_is_bright(img_grey: np.ndarray, params: BackgroundDetectionParam
     Decide if background is bright using flagged corners.
     If none are flagged or mask ends up empty, return True.
     """
-    if not params.any_corner:
+    if not any_corner(params):
         return True
 
     corner_mask = _corner_mask(img_grey.shape, params)

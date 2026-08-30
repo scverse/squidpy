@@ -33,6 +33,24 @@ def sdata_hne(_sdata_hne_with_tissue):
     return copy.deepcopy(_sdata_hne_with_tissue)
 
 
+def test_qc_image_accepts_a_bare_metric_string(sdata_hne) -> None:
+    """A single metric name, not wrapped in a list.
+
+    `QCMetric` was a `StrEnum`, but the guard was `isinstance(m, QCMetric)`, which is False
+    for the plain string the member compares equal to -- so this raised `TypeError` while
+    the docs advertised the string form.
+    """
+    sq.experimental.im.qc_image(sdata_hne, image_key="hne", tile_size=_FAST_TILE, metrics="tenengrad", progress=False)
+    assert any("tenengrad" in name for name in sdata_hne.tables["qc_img_hne"].var_names)
+
+
+def test_qc_image_names_the_unknown_metric(sdata_hne) -> None:
+    with pytest.raises(ValueError, match=r"Unknown metrics \['not_a_metric'\]"):
+        sq.experimental.im.qc_image(
+            sdata_hne, image_key="hne", tile_size=_FAST_TILE, metrics=["not_a_metric"], progress=False
+        )
+
+
 class TestQCImage(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_calc_qc_image_hne(self, sdata_hne):
         """Test QC image overlay with a single sharpness metric."""

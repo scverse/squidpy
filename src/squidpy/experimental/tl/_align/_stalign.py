@@ -4,12 +4,19 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, TypedDict, Unpack
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Unpack
 
 import numpy as np
 import numpy.typing as npt
 
-from squidpy.experimental.utils._params import Default, defaults_of
+from squidpy.types import (
+    _IMAGE_DEFAULTS,
+    _OBS_DEFAULTS,
+    _VOLUME_DEFAULTS,
+    StalignImageParams,
+    StalignObsParams,
+    StalignVolumeParams,
+)
 
 if TYPE_CHECKING:
     import jax
@@ -23,246 +30,6 @@ else:
     # imported here. `Any` is the placeholder that keeps that resolvable.
     JaxArray = Any
 
-
-class StalignObsParams(TypedDict, total=False):
-    """The LDDMM controls :func:`~squidpy.experimental.tl.stalign_align_obs` takes.
-
-    Every key is optional and falls back to the default shown with it. The point-cloud
-    path rasterizes both clouds into density images and then runs the same solver as the
-    image path, so it takes everything that does plus the three rasterization knobs.
-    """
-
-    initial_affine: Annotated[npt.ArrayLike | None, Default(None)]
-    """Homogeneous ``(3, 3)`` affine in ``(x, y)`` to start from."""
-
-    initial_velocity: Annotated[npt.ArrayLike | None, Default(None)]
-    """Continuation state from a prior fit, in the solver's row-column convention."""
-
-    velocity_grid: Annotated[tuple[npt.ArrayLike, npt.ArrayLike] | None, Default(None)]
-    """Axes ``initial_velocity`` lives on, row-column."""
-
-    a: Annotated[float, Default(500.0)]
-    """Sobolev kernel width -- the spatial scale the velocity field is smoothed over, so it
-    sets how local a deformation can be."""
-
-    p: Annotated[float, Default(2.0)]
-    """Power of the regularisation operator."""
-
-    expand: Annotated[float, Default(2.0)]
-    """Padding factor sizing the velocity grid beyond the source extent."""
-
-    nt: Annotated[int, Default(3)]
-    """Integration steps along the deformation path."""
-
-    niter: Annotated[int, Default(5000)]
-    """Maximum iterations."""
-
-    diffeo_start: Annotated[int, Default(0)]
-    """Iteration at which the diffeomorphic part starts updating, letting the affine settle
-    first."""
-
-    epL: Annotated[float, Default(2e-08)]
-    """Gradient-descent step size for the linear part. **Scale dependent.**"""
-
-    epT: Annotated[float, Default(0.2)]
-    """Gradient-descent step size for the translation. **Scale dependent.**"""
-
-    epV: Annotated[float, Default(2000.0)]
-    """Gradient-descent step size for the velocity field. **Scale dependent**, and the one to
-    reach for first -- too large and the deformation overwhelms the affine."""
-
-    sigmaM: Annotated[float, Default(1.0)]
-    """Noise scale of the matching term."""
-
-    sigmaB: Annotated[float, Default(2.0)]
-    """Noise scale of the background term."""
-
-    sigmaA: Annotated[float, Default(5.0)]
-    """Noise scale of the artifact term."""
-
-    sigmaR: Annotated[float, Default(500000.0)]
-    """Noise scale of the regularisation term; larger penalises the velocity field less."""
-
-    sigmaP: Annotated[float, Default(20.0)]
-    """Noise scale of the landmark point-matching term."""
-
-    muA: Annotated[npt.ArrayLike | None, Default(None)]
-    """Fixed per-channel artifact means. ``None`` estimates them during fitting."""
-
-    muB: Annotated[npt.ArrayLike | None, Default(None)]
-    """Fixed per-channel background means. ``None`` estimates them during fitting."""
-
-    tol: Annotated[float | None, Default(None)]
-    """Relative objective improvement below which the fit stops early. ``None`` always runs
-    ``niter``."""
-
-    patience: Annotated[int, Default(25)]
-    """Iterations the improvement must stay under ``tol`` before stopping."""
-
-    dx: Annotated[float, Default(30.0)]
-    """Grid spacing of the density rasters."""
-
-    blur: Annotated[float | Sequence[float], Default((2.0, 1.0, 0.5))]
-    """Gaussian blur scale(s) applied to the rasters."""
-
-    raster_expand: Annotated[float, Default(1.1)]
-    """Field-of-view padding factor for the rasters."""
-
-
-class StalignImageParams(TypedDict, total=False):
-    """The LDDMM controls :func:`~squidpy.experimental.tl.stalign_align_image` takes.
-
-    Every key is optional and falls back to the default shown with it. The same schema as
-    :class:`~squidpy.types.StalignObsParams` minus the rasterization knobs, and with the
-    step sizes retuned: a kernel width in pixels is not one in cell coordinates.
-    """
-
-    initial_affine: Annotated[npt.ArrayLike | None, Default(None)]
-    """Homogeneous ``(3, 3)`` affine in ``(x, y)`` to start from."""
-
-    initial_velocity: Annotated[npt.ArrayLike | None, Default(None)]
-    """Continuation state from a prior fit, in the solver's row-column convention."""
-
-    velocity_grid: Annotated[tuple[npt.ArrayLike, npt.ArrayLike] | None, Default(None)]
-    """Axes ``initial_velocity`` lives on, row-column."""
-
-    a: Annotated[float, Default(20.0)]
-    """Sobolev kernel width -- the spatial scale the velocity field is smoothed over, so it
-    sets how local a deformation can be."""
-
-    p: Annotated[float, Default(2.0)]
-    """Power of the regularisation operator."""
-
-    expand: Annotated[float, Default(2.0)]
-    """Padding factor sizing the velocity grid beyond the source extent."""
-
-    nt: Annotated[int, Default(3)]
-    """Integration steps along the deformation path."""
-
-    niter: Annotated[int, Default(200)]
-    """Maximum iterations."""
-
-    diffeo_start: Annotated[int, Default(100)]
-    """Iteration at which the diffeomorphic part starts updating, letting the affine settle
-    first."""
-
-    epL: Annotated[float, Default(2e-08)]
-    """Gradient-descent step size for the linear part. **Scale dependent.**"""
-
-    epT: Annotated[float, Default(0.2)]
-    """Gradient-descent step size for the translation. **Scale dependent.**"""
-
-    epV: Annotated[float, Default(1.0)]
-    """Gradient-descent step size for the velocity field. **Scale dependent**, and the one to
-    reach for first -- too large and the deformation overwhelms the affine."""
-
-    sigmaM: Annotated[float, Default(1.0)]
-    """Noise scale of the matching term."""
-
-    sigmaB: Annotated[float, Default(2.0)]
-    """Noise scale of the background term."""
-
-    sigmaA: Annotated[float, Default(5.0)]
-    """Noise scale of the artifact term."""
-
-    sigmaR: Annotated[float, Default(500000.0)]
-    """Noise scale of the regularisation term; larger penalises the velocity field less."""
-
-    sigmaP: Annotated[float, Default(20.0)]
-    """Noise scale of the landmark point-matching term."""
-
-    muA: Annotated[npt.ArrayLike | None, Default(None)]
-    """Fixed per-channel artifact means. ``None`` estimates them during fitting."""
-
-    muB: Annotated[npt.ArrayLike | None, Default(None)]
-    """Fixed per-channel background means. ``None`` estimates them during fitting."""
-
-    tol: Annotated[float | None, Default(None)]
-    """Relative objective improvement below which the fit stops early. ``None`` always runs
-    ``niter``."""
-
-    patience: Annotated[int, Default(25)]
-    """Iterations the improvement must stay under ``tol`` before stopping."""
-
-
-class StalignVolumeParams(TypedDict, total=False):
-    """The LDDMM controls :func:`~squidpy.experimental.tl.stalign_align_volume` takes.
-
-    Every key is optional and falls back to the default shown with it. Two keys the rank-2
-    schemas carry are absent: ``sigmaP``, because the rank-3 path has no point-matching
-    energy, and ``initial_affine``, which is a named ``(4, 4)`` argument on the function
-    rather than a solver key.
-    """
-
-    initial_velocity: Annotated[npt.ArrayLike | None, Default(None)]
-    """Continuation state from a prior fit, in the solver's row-column convention."""
-
-    velocity_grid: Annotated[tuple[npt.ArrayLike, npt.ArrayLike, npt.ArrayLike] | None, Default(None)]
-    """Axes ``initial_velocity`` lives on, row-column."""
-
-    a: Annotated[float, Default(500.0)]
-    """Sobolev kernel width -- the spatial scale the velocity field is smoothed over, so it
-    sets how local a deformation can be."""
-
-    p: Annotated[float, Default(2.0)]
-    """Power of the regularisation operator."""
-
-    expand: Annotated[float, Default(1.25)]
-    """Padding factor sizing the velocity grid beyond the source extent."""
-
-    nt: Annotated[int, Default(3)]
-    """Integration steps along the deformation path."""
-
-    niter: Annotated[int, Default(5000)]
-    """Maximum iterations."""
-
-    diffeo_start: Annotated[int, Default(0)]
-    """Iteration at which the diffeomorphic part starts updating, letting the affine settle
-    first."""
-
-    epL: Annotated[float, Default(1e-06)]
-    """Gradient-descent step size for the linear part. **Scale dependent.**"""
-
-    epT: Annotated[float, Default(10.0)]
-    """Gradient-descent step size for the translation. **Scale dependent.**"""
-
-    epV: Annotated[float, Default(1000.0)]
-    """Gradient-descent step size for the velocity field. **Scale dependent**, and the one to
-    reach for first -- too large and the deformation overwhelms the affine."""
-
-    sigmaM: Annotated[float, Default(1.0)]
-    """Noise scale of the matching term."""
-
-    sigmaB: Annotated[float, Default(2.0)]
-    """Noise scale of the background term."""
-
-    sigmaA: Annotated[float, Default(5.0)]
-    """Noise scale of the artifact term."""
-
-    sigmaR: Annotated[float, Default(1000000.0)]
-    """Noise scale of the regularisation term; larger penalises the velocity field less."""
-
-    muA: Annotated[npt.ArrayLike | None, Default(None)]
-    """Fixed per-channel artifact means. ``None`` estimates them during fitting."""
-
-    muB: Annotated[npt.ArrayLike | None, Default(None)]
-    """Fixed per-channel background means. ``None`` estimates them during fitting."""
-
-    tol: Annotated[float | None, Default(None)]
-    """Relative objective improvement below which the fit stops early. ``None`` always runs
-    ``niter``."""
-
-    patience: Annotated[int, Default(25)]
-    """Iterations the improvement must stay under ``tol`` before stopping."""
-
-
-#: Defaults, harvested from the ``Default(...)`` each key declares. One source of truth for
-#: the resolver and for the rendered docs, rather than a dict that has to be kept in step.
-_OBS_DEFAULTS: StalignObsParams = defaults_of(StalignObsParams)
-_IMAGE_DEFAULTS: StalignImageParams = defaults_of(StalignImageParams)
-#: `sigmaP` is not a rank-3 knob and the public schema omits it, but `lddmm` requires the
-#: argument, so it is supplied here rather than exposed.
-_VOLUME_DEFAULTS: dict[str, Any] = {**defaults_of(StalignVolumeParams), "sigmaP": 2e1}
 
 #: Keys the fit functions consume themselves rather than forwarding to the solver:
 #: the rasterization knobs, and the affine that becomes the solver's `L`/`T`.

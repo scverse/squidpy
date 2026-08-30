@@ -129,9 +129,6 @@ def qc_image(
     else:
         metrics = list(metrics)
 
-    # Validated against the Literal's members rather than by `isinstance`: the previous
-    # check rejected a plain string even though `StrEnum` made it equal to the member it
-    # named, so `metrics="tenengrad"` raised.
     unknown = [m for m in metrics if m not in get_args(QCMetric)]
     if unknown:
         available = ", ".join(get_args(QCMetric))
@@ -141,7 +138,7 @@ def qc_image(
     if not is_hne:
         hne_requested = _HNE_METRICS & set(metrics)
         if hne_requested:
-            names = ", ".join(m for m in hne_requested)
+            names = ", ".join(hne_requested)
             raise ValueError(
                 f"H&E-specific metrics ({names}) cannot be used when is_hne=False. "
                 f"Set is_hne=True or remove these metrics."

@@ -8,13 +8,13 @@ transform is a single per-pixel matmul and stays lazy.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, fields
 from typing import Any
 
 import numpy as np
 import xarray as xr
 
-from squidpy._utils import RNGLike, SeedLike, legacy_random
+from squidpy._utils import legacy_random
+from squidpy._validators import assert_non_negative, assert_positive
 from squidpy.experimental.im._stain._constants import RUIFROK_HE
 from squidpy.experimental.im._stain._conversion import (
     _apply_along_channel,
@@ -24,7 +24,7 @@ from squidpy.experimental.im._stain._conversion import (
     sda_to_rgb,
 )
 from squidpy.experimental.im._stain._mask import as_spatial_mask, foreground_mask_from_sda
-from squidpy.experimental.im._stain._reference import StainMethod, StainReference
+from squidpy.experimental.im._stain._reference import StainFit, StainMethod
 from squidpy.experimental.im._stain._validation import (
     StainFittingError,
     _unit_columns,
@@ -32,85 +32,43 @@ from squidpy.experimental.im._stain._validation import (
     reorder_to_canonical,
     validate_stain_matrix,
 )
+from squidpy.experimental.utils._params import resolve_params
+from squidpy.types import (
+    _MACENKO_DEFAULTS,
+    _VAHADANE_DEFAULTS,
+    MacenkoParams,
+    VahadaneParams,
+)
 
 _MAXC_PERCENTILE = 99.0
 _MAXC_FLOOR = 1e-6
 
 
-@dataclass(slots=True, frozen=True)
-class MacenkoParams:
-    """Tuning knobs for Macenko stain-matrix fitting."""
-
-    alpha: float = 1.0
-    """Angular percentile (deg) for the two stain directions; the extremes are taken at ``alpha`` / ``100 - alpha``."""
-
-    beta: float = 0.15
-    """Mean-absorbance cutoff selecting tissue pixels (optical-density space)."""
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "alpha", float(self.alpha))
-        object.__setattr__(self, "beta", float(self.beta))
-        if not 0.0 < self.alpha < 50.0:
-            raise ValueError(f"`alpha` must be in (0, 50), got {self.alpha}.")
-        if self.beta < 0.0:
-            raise ValueError(f"`beta` must be >= 0, got {self.beta}.")
+def validate_macenko_params(params: dict[str, Any]) -> None:
+    """Coerce ``params`` in place and range-check it. Raises on invalid values."""
+    params["alpha"] = float(params["alpha"])
+    params["beta"] = float(params["beta"])
+    if not 0.0 < params["alpha"] < 50.0:  # open interval, so `assert_in_range` does not fit
+        raise ValueError(f"`alpha` must be in (0, 50), got {params['alpha']}.")
+    assert_non_negative(params["beta"], name="beta")
 
 
-@dataclass(slots=True, frozen=True)
-class VahadaneParams:
-    """Tuning knobs for Vahadane (sparse-NMF) stain-matrix fitting."""
-
-    beta: float = 0.15
-    """Mean-absorbance cutoff selecting tissue pixels (optical-density space)."""
-
-    lambda1: float = 0.1
-    """L1 sparsity regularisation on the concentration factor of the NMF."""
-
-    n_iter: int = 200
-    """Maximum NMF iterations."""
-
-    rng: SeedLike | RNGLike | None = None
-    """Source of randomness for NMF initialisation tie-breaking; `None` draws from OS entropy."""
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "beta", float(self.beta))
-        object.__setattr__(self, "lambda1", float(self.lambda1))
-        object.__setattr__(self, "n_iter", int(self.n_iter))
-        if self.beta < 0.0:
-            raise ValueError(f"`beta` must be >= 0, got {self.beta}.")
-        if self.lambda1 < 0.0:
-            raise ValueError(f"`lambda1` must be >= 0, got {self.lambda1}.")
-        if self.n_iter < 1:
-            raise ValueError(f"`n_iter` must be >= 1, got {self.n_iter}.")
-
-
-_MACENKO_DEFAULTS = MacenkoParams()
-_VAHADANE_DEFAULTS = VahadaneParams()
-_MACENKO_FIELDS = frozenset(f.name for f in fields(MacenkoParams))
-_VAHADANE_FIELDS = frozenset(f.name for f in fields(VahadaneParams))
-
-
-def _resolve_params(params: Any, cls: type, defaults: Any, valid_fields: frozenset[str]) -> Any:
-    if params is None:
-        return defaults
-    if isinstance(params, cls):
-        return params
-    if isinstance(params, Mapping):
-        unknown = set(params) - valid_fields
-        if unknown:
-            raise ValueError(
-                f"Unknown `method_params` field(s): {sorted(unknown)}; expected from {sorted(valid_fields)}."
-            )
-        return cls(**params)
-    raise TypeError(f"`method_params` must be {cls.__name__}, Mapping, or None; got {type(params).__name__}.")
+def validate_vahadane_params(params: dict[str, Any]) -> None:
+    """Coerce ``params`` in place and range-check it. Raises on invalid values."""
+    params["beta"] = float(params["beta"])
+    params["lambda1"] = float(params["lambda1"])
+    params["n_iter"] = int(params["n_iter"])
+    assert_non_negative(params["beta"], name="beta")
+    assert_non_negative(params["lambda1"], name="lambda1")
+    assert_positive(params["n_iter"], name="n_iter")
 
 
 def _resolve_macenko_params(params: MacenkoParams | Mapping[str, Any] | None) -> MacenkoParams:
-    return _resolve_params(params, MacenkoParams, _MACENKO_DEFAULTS, _MACENKO_FIELDS)
+    return resolve_params(params, defaults=_MACENKO_DEFAULTS, validate=validate_macenko_params)
 
 
 def _resolve_vahadane_params(params: VahadaneParams | Mapping[str, Any] | None) -> VahadaneParams:
-    return _resolve_params(params, VahadaneParams, _VAHADANE_DEFAULTS, _VAHADANE_FIELDS)
+    return resolve_params(params, defaults=_VAHADANE_DEFAULTS, validate=validate_vahadane_params)
 
 
 def _tissue_od(
@@ -169,10 +127,10 @@ def _vahadane_stain_matrix(od: np.ndarray, params: VahadaneParams) -> np.ndarray
     nmf = NMF(
         n_components=2,
         init="nndsvda",
-        random_state=legacy_random(np.random.default_rng(params.rng)),
-        alpha_W=params.lambda1,
+        random_state=legacy_random(np.random.default_rng(params["rng"])),
+        alpha_W=params["lambda1"],
         l1_ratio=1.0,
-        max_iter=params.n_iter,
+        max_iter=params["n_iter"],
     )
     nmf.fit(np.clip(od, 0.0, None))  # NMF requires non-negative absorbance
     stains = nmf.components_.T  # (3, 2)
@@ -195,7 +153,7 @@ def _stain_matrix(
     ``reference`` (the canonical H/E vectors) drives both the column ordering and
     the deviation gate; ``max_angle_deg`` is the gate tolerance.
     """
-    raw = _macenko_stain_matrix(od, params.alpha) if method == "macenko" else _vahadane_stain_matrix(od, params)
+    raw = _macenko_stain_matrix(od, params["alpha"]) if method == "macenko" else _vahadane_stain_matrix(od, params)
     matrix = complement_third_column(reorder_to_canonical(raw, reference))
     validate_stain_matrix(matrix, reference=reference, max_angle_deg=max_angle_deg, image_key=image_key)
     return matrix
@@ -221,11 +179,13 @@ def fit_decomposition(
     image_key: str | None = None,
     reference: dict[str, np.ndarray] = RUIFROK_HE,
     max_angle_deg: float = 45.0,
-) -> StainReference:
-    """Fit a decomposition :class:`StainReference` (stain matrix + max concentrations)."""
-    od = _tissue_od(image_rgb, white_point, params.beta, tissue_mask=tissue_mask, image_key=image_key)
+) -> StainFit:
+    """Fit a decomposition :class:`~squidpy.experimental.im.StainFit` (stain matrix + max concentrations)."""
+    # `params` is `total=False`, so resolve rather than assume every key is present.
+    params = _resolve_macenko_params(params) if method == "macenko" else _resolve_vahadane_params(params)
+    od = _tissue_od(image_rgb, white_point, params["beta"], tissue_mask=tissue_mask, image_key=image_key)
     matrix = _stain_matrix(od, method, params, image_key=image_key, reference=reference, max_angle_deg=max_angle_deg)
-    return StainReference(
+    return StainFit(
         method=method,
         stain_matrix=matrix,
         white_point=np.asarray(white_point, dtype=np.float64),
@@ -239,7 +199,7 @@ def _matmul_kernel(x: np.ndarray, *, matrix: np.ndarray, dtype: np.dtype) -> np.
 
 def apply_decomposition(
     image_rgb: xr.DataArray,
-    reference: StainReference,
+    reference: StainFit,
     params: Any,
     *,
     fit_rgb: xr.DataArray | None = None,
@@ -261,9 +221,11 @@ def apply_decomposition(
     """
     _check_channel_dim(image_rgb)
     bg = reference.white_point
+    # `params` is `total=False`, so resolve rather than assume every key is present.
+    params = _resolve_macenko_params(params) if reference.method == "macenko" else _resolve_vahadane_params(params)
 
     od_src = _tissue_od(
-        fit_rgb if fit_rgb is not None else image_rgb, bg, params.beta, tissue_mask=tissue_mask, image_key=None
+        fit_rgb if fit_rgb is not None else image_rgb, bg, params["beta"], tissue_mask=tissue_mask, image_key=None
     )
     w_src = _stain_matrix(od_src, reference.method, params, image_key=None)
     operator = reference.stain_matrix @ np.linalg.pinv(w_src)

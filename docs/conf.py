@@ -94,14 +94,15 @@ suppress_warnings = ["download.not_readable", "git.too_shallow"]
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-autosummary_generate = True
 # Keep documented objects (every params key, every attribute) out of the left nav:
 # it should list pages and sections, not one entry per key.
 toc_object_entries = False
+autosummary_generate = True
 autodoc_member_order = "groupwise"
 autodoc_typehints = "signature"
-autodoc_docstring_signature = True
+# jax is an optional extra; mock it so the fit classes' annotations render without it
 autodoc_mock_imports = ["jax"]
+autodoc_docstring_signature = True
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
@@ -146,8 +147,6 @@ nitpick_ignore = [
     ("py:class", "NDArray"),
     # numpy.typing.NDArray canonicalizes to this private path, which has no doc target
     ("py:class", "numpy._typing._array_like.NDArray"),
-    ("py:class", "np.number"),
-    ("py:class", "csr_matrix"),
     ("py:class", "numpy._typing._array_like.ArrayLike"),
     # `npt.ArrayLike` in a signature resolves to its union members, which are private
     ("py:class", "numpy._typing._array_like._SupportsArray"),
@@ -155,6 +154,8 @@ nitpick_ignore = [
     # optional dep mocked at build time (see autodoc_mock_imports), so no resolvable target
     ("py:class", "jax.Array"),
     ("py:class", "JaxArray"),
+    ("py:class", "np.number"),
+    ("py:class", "csr_matrix"),
     # no idea why those aren’t exported
     ("py:class", "squidpy._constants._constants.SpatialAutocorr"),
     ("py:class", "squidpy._constants._constants.CoordType"),
@@ -181,18 +182,18 @@ html_theme_options = {"navigation_depth": 5, "logo_only": True}
 html_show_sphinx = False
 
 
-# Each params key carries its default in the `Annotated` metadata of its declaration
-# (`squidpy.experimental.utils._params.Default`). Read it from there -- one source of truth,
-# no defaults restated in docstrings where they could drift.
+# Each params key carries its default in the `Annotated` metadata of its
+# declaration (`squidpy.experimental.utils._params.Default`). Read it from there --
+# one source of truth, no defaults restated in docstrings where they could drift.
 
 
 @cache
 def _params_defaults() -> dict[str, dict[str, object]]:
     """Read every params key's ``Default`` -- and then hide it from autodoc.
 
-    Autodoc renders `Annotated` metadata verbatim (`Annotated[float, Default(1.0)]`), so once
-    the defaults are in hand each annotation is replaced by its bare type. `_append_default`
-    puts the default back where it belongs, in the description.
+    Autodoc renders `Annotated` metadata verbatim (`Annotated[float, Default(1.0)]`),
+    so once the defaults are in hand each annotation is replaced by its bare type.
+    `_append_default` puts the default back where it belongs, in the description.
     """
     from typing import get_type_hints
 
@@ -203,13 +204,7 @@ def _params_defaults() -> dict[str, dict[str, object]]:
     # only the `*Params` types carry per-key defaults; the result types do not
     for name in (n for n in types.__all__ if n.endswith("Params")):
         cls = getattr(types, name)
-        try:
-            declared = dict(defaults_of(cls))
-        except TypeError:
-            # Not every params class carries `Default(...)` yet -- the dataclass ones still
-            # keep their defaults on the field. Skip them; they render their own defaults.
-            continue
-        defaults[name] = declared
+        defaults[name] = dict(defaults_of(cls))
         cls.__annotations__ = {
             key: hint.__origin__ if hasattr(hint, "__metadata__") else hint
             for key, hint in get_type_hints(cls, include_extras=True).items()

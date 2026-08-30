@@ -35,11 +35,7 @@ class InputKind(StrEnum):
     MASK = "mask"  # (ty, tx) binary float32
 
 
-#: The metrics :func:`~squidpy.experimental.im.qc_image` can compute. A ``Literal`` rather
-#: than an enum: the members were already their own strings under ``StrEnum``, every use was
-#: as a dict key or an equality test, and callers write the string anyway. The enum only
-#: added a name to import -- and a validation that rejected the plain string it compared
-#: equal to.
+#: The metrics :func:`~squidpy.experimental.im.qc_image` can compute.
 QCMetric = Literal[
     # Sharpness (grayscale input)
     "tenengrad",

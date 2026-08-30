@@ -13,19 +13,15 @@ from ._rasterize_points import rasterize_points, sample_volume
 from ._stain import (
     MacenkoParams,
     ReinhardParams,
-    StainReference,
+    StainFit,
     VahadaneParams,
-    decompose_stains,
     estimate_white_point,
     fit_stain_reference,
-    normalize_stains,
 )
 
 __all__ = [
-    "StainReference",
+    "StainFit",
     "calculate_image_features",
-    "normalize_stains",
-    "decompose_stains",
     "detect_tissue",
     "estimate_white_point",
     "fit_stain_reference",
