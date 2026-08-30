@@ -1,4 +1,4 @@
-"""Parameter types and their defaults."""
+"""Parameter and result types."""
 
 from __future__ import annotations
 
@@ -7,13 +7,19 @@ from typing import Annotated, TypedDict
 
 from squidpy._params import Default
 from squidpy._utils import RNGLike, SeedLike
+from squidpy.gr._build import SpatialNeighborsResult
+from squidpy.gr._nhood import NhoodEnrichmentResult
 
 __all__ = [
+    # Parameters
     "FelzenszwalbParams",
     "WekaParams",
     "ReinhardParams",
     "MacenkoParams",
     "VahadaneParams",
+    # Results
+    "NhoodEnrichmentResult",
+    "SpatialNeighborsResult",
 ]
 
 

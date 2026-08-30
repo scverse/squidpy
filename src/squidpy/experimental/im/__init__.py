@@ -18,12 +18,7 @@ from ._stain import (
 )
 
 __all__ = [
-    "FelzenszwalbParams",
-    "MacenkoParams",
-    "ReinhardParams",
     "StainFit",
-    "VahadaneParams",
-    "WekaParams",
     "calculate_image_features",
     "detect_tissue",
     "estimate_white_point",
