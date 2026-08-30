@@ -16,15 +16,10 @@ from tests.experimental.conftest import ALIGN_PTS, TINY_SOLVER, make_adata
 pytest.importorskip("jax")
 
 from squidpy.experimental.tl import (  # noqa: E402
-    stalign_affine_xyz,
+    StalignFit,
     stalign_align_image,
     stalign_align_obs,
     stalign_align_volume,
-    stalign_apply_transform,
-    stalign_apply_warp,
-    stalign_deformation_grid,
-    stalign_store_fit,
-    stalign_transform_points,
 )
 from squidpy.experimental.tl._align._io import fit_from_uns  # noqa: E402
 
@@ -42,16 +37,19 @@ def test_obs_fit_returns_a_result_and_applies_to_a_copy() -> None:
     ref, query = make_adata(ALIGN_PTS), make_adata(ALIGN_PTS + 0.4)
 
     result = stalign_align_obs(ref, query, **TINY_SOLVER)
-    assert result["aligned_points"].shape == ALIGN_PTS.shape
+    assert result.aligned_points.shape == ALIGN_PTS.shape
+    # the point path carries no raster frame, so the frame-dependent ops are not on it
+    assert not hasattr(result, "warp_image")
+    assert not hasattr(result, "deformation_grid")
 
-    handed_back = stalign_apply_transform(result, query, inplace=False)
+    handed_back = result.transform(query, inplace=False)
     assert handed_back.shape == ALIGN_PTS.shape
     assert "spatial_aligned" not in query.obsm, "`inplace=False` must leave the input untouched"
 
     # one fit, applied more than once, and writing agrees with what was handed back
-    assert stalign_apply_transform(result, query) is None
+    assert result.transform(query) is None
     np.testing.assert_array_equal(query.obsm["spatial_aligned"], handed_back)
-    assert stalign_apply_transform(result, query, key_added="elsewhere") is None
+    assert result.transform(query, key_added="elsewhere") is None
     np.testing.assert_array_equal(query.obsm["elsewhere"], handed_back)
 
 
@@ -68,25 +66,19 @@ def test_image_fit_reads_both_element_layouts(scale_factors: list[int] | None) -
     sdata_query = _sdata_image(np.roll(image, 1, axis=1), "img", **kwargs)
 
     result = stalign_align_image(sdata_ref, sdata_query, image_key="img", **IMAGE_SOLVER)
-    assert result["ref_axes"][0].shape == (32,)
+    assert result.ref_axes[0].shape == (32,)
 
-    handed_back = stalign_apply_warp(result, sdata_ref, sdata_query, image_key="img", inplace=False)
-    assert handed_back.shape == image.shape
-    assert not sdata_query.images.keys() - {"img"}, "`inplace=False` must leave the input untouched"
-
-    # the default key derives from the element it warps, the way `sc.tl.dendrogram`'s does
-    assert stalign_apply_warp(result, sdata_ref, sdata_query, image_key="img") is None
-    np.testing.assert_array_equal(np.asarray(sdata_query.images["img_aligned"]), handed_back)
+    warped = np.asarray(result.warp_image(image))
+    assert warped.shape == image.shape
+    assert not sdata_query.images.keys() - {"img"}, "warping returns an array and writes nothing"
 
 
-def test_image_fit_reads_units_and_placement_off_the_elements() -> None:
+def test_image_fit_reads_units_off_the_elements() -> None:
     """The elements' own scale and translation are the units the fit runs in.
 
-    Nothing is restated as a `*_scale` argument that could contradict the container, and
-    the warped element -- which lands on the reference's grid -- inherits the reference's
-    placement rather than a reconstructed one.
+    Nothing is restated as a `*_scale` argument that could contradict the container.
     """
-    from spatialdata.transformations import Scale, Sequence, Translation, get_transformation
+    from spatialdata.transformations import Scale, Sequence, Translation
 
     image = np.random.default_rng(0).random((1, 24, 24))
     placement = Sequence([Scale([2.0, 2.0], axes=("y", "x")), Translation([100.0, 50.0], axes=("y", "x"))])
@@ -95,16 +87,11 @@ def test_image_fit_reads_units_and_placement_off_the_elements() -> None:
 
     result = stalign_align_image(sdata_ref, sdata_query, image_key="img", a=8.0, nt=1, niter=2, epV=1.0)
 
-    assert float(result["ref_axes"][0][1] - result["ref_axes"][0][0]) == 2.0, "the element's scale is the unit"
-    assert float(result["ref_axes"][0][0]) == 100.0, "the element's translation is the origin"
-    assert float(result["query_axes"][1][0]) == 50.0
-
-    assert stalign_apply_warp(result, sdata_ref, sdata_query, image_key="img", key_added="w") is None
-    axes = {"input_axes": ("y", "x"), "output_axes": ("y", "x")}
-    np.testing.assert_allclose(
-        get_transformation(sdata_query.images["w"], to_coordinate_system="global").to_affine_matrix(**axes),
-        get_transformation(sdata_ref.images["img"], to_coordinate_system="global").to_affine_matrix(**axes),
-    )
+    assert float(result.ref_axes[0][1] - result.ref_axes[0][0]) == 2.0, "the element's scale is the unit"
+    assert float(result.ref_axes[0][0]) == 100.0, "the element's translation is the origin"
+    assert float(result.query_axes[1][0]) == 50.0
+    # the warped image lands on the reference's grid, which is what its axes describe
+    assert np.asarray(result.warp_image(image)).shape == image.shape
 
 
 def test_slice_fit_places_a_section_in_a_volume() -> None:
@@ -116,8 +103,9 @@ def test_slice_fit_places_a_section_in_a_volume() -> None:
         sdata_ref, sdata_query, image_key=("volume", "section"), a=3.0, nt=1, niter=2, epV=1.0
     )
 
-    assert stalign_affine_xyz(result).shape == (4, 4)
-    assert stalign_transform_points(result, ALIGN_PTS).shape == (len(ALIGN_PTS), 3)
+    assert result.transform_points(ALIGN_PTS).shape == (len(ALIGN_PTS), 3)
+    # the reference is a volume, so there is no image to resample
+    assert not hasattr(result, "warp_image")
 
 
 def test_a_2d_reference_is_rejected_with_a_pointer_to_the_2d_path() -> None:
@@ -165,10 +153,10 @@ def test_writing_coords_from_a_different_frame_is_refused() -> None:
     skewed = _sdata_section_with_table(10.0)
     fit = stalign_align_volume(sdata_ref, skewed, **kwargs)
     with pytest.raises(ValueError, match=r"non-identity transformation into 'global'"):
-        stalign_apply_transform(fit, skewed, **applied)
+        fit.transform(skewed, **applied)
 
     identity = _sdata_section_with_table(None)
-    out = stalign_apply_transform(stalign_align_volume(sdata_ref, identity, **kwargs), identity, **applied)
+    out = stalign_align_volume(sdata_ref, identity, **kwargs).transform(identity, **applied)
     assert out is None, "`inplace` defaults to True"
     assert identity.tables["t"].obsm["ref_xyz"].shape == (3, 3)
 
@@ -194,7 +182,7 @@ def test_image_landmarks_reach_the_solver() -> None:
     plain = fit_stalign_image(ref, query, **solver)
     with_landmarks = fit_stalign_image(ref, query, landmarks_ref=_LM_REF, landmarks_query=_LM_QUERY, **solver)
 
-    assert not np.allclose(plain["affine"], with_landmarks["affine"])
+    assert not np.allclose(plain.affine, with_landmarks.affine)
 
 
 def test_landmarks_and_initial_affine_are_not_exclusive() -> None:
@@ -212,7 +200,7 @@ def test_landmarks_and_initial_affine_are_not_exclusive() -> None:
 
     pinned = fit_stalign_image(ref, query, initial_affine=np.eye(3), **landmarks, **solver)
     derived = fit_stalign_image(ref, query, **landmarks, **solver)
-    assert not np.allclose(pinned["affine"], derived["affine"]), "the given affine must win over the derived one"
+    assert not np.allclose(pinned.affine, derived.affine), "the given affine must win over the derived one"
 
     # the point-cloud path shares the resolution, so it accepts the same combination
     assert fit_stalign_obs(ALIGN_PTS, ALIGN_PTS + 0.4, initial_affine=np.eye(3), **landmarks, **TINY_SOLVER)
@@ -240,7 +228,7 @@ def test_stalign_align_image_forwards_landmarks() -> None:
         sdata_ref, sdata_query, landmarks_ref=_LM_REF, landmarks_query=_LM_QUERY, **solver
     )
 
-    assert not np.allclose(plain["affine"], with_landmarks["affine"])
+    assert not np.allclose(plain.affine, with_landmarks.affine)
 
 
 # --- storing a fit --------------------------------------------------------------------
@@ -264,26 +252,29 @@ def test_a_stored_fit_survives_a_zarr_round_trip_and_still_transforms(tmp_path) 
         **VOLUME_SOLVER,
     )
     adata = make_adata(ALIGN_PTS)
-    assert stalign_store_fit(fit, adata) is None
+    assert fit.to_uns(adata) is None
 
     path = tmp_path / "a.zarr"
     adata.write_zarr(path)
     reloaded = ad.read_zarr(path)
 
-    # applying by key is the read path; it has to agree with the in-memory fit
-    stalign_apply_transform(fit, adata, key_added="direct")
-    stalign_apply_transform("stalign", reloaded, key_added="by_key")
-    restored = fit_from_uns(reloaded, "stalign")
+    # reloading is the read path; it has to agree with the in-memory fit
+    fit.transform(adata, key_added="direct")
+    restored = StalignFit.from_uns(reloaded)
+    restored.transform(reloaded, key_added="by_key")
 
-    assert restored["rank"] == 3
-    assert len(restored["velocity_grid"]) == 3
-    assert [a.shape for a in restored["ref_axes"]] == [a.shape for a in fit["ref_axes"]]
+    # `kind`, not `rank`, is the discriminant -- and it has to come back as the right class
+    assert type(restored) is type(fit)
+    assert restored.kind == "volume"
+    assert restored.rank == 3
+    assert len(restored.velocity_grid) == 3
+    assert [a.shape for a in restored.ref_axes] == [a.shape for a in fit.ref_axes]
     # the ragged pair is what a list would have destroyed
-    assert restored["query_axes"][0].shape != restored["query_axes"][1].shape
+    assert restored.query_axes[0].shape != restored.query_axes[1].shape
     np.testing.assert_allclose(reloaded.obsm["by_key"], adata.obsm["direct"], rtol=0, atol=1e-6)
     np.testing.assert_allclose(
-        np.asarray(stalign_transform_points(restored, ALIGN_PTS)),
-        np.asarray(stalign_transform_points(fit, ALIGN_PTS)),
+        np.asarray(restored.transform_points(ALIGN_PTS)),
+        np.asarray(fit.transform_points(ALIGN_PTS)),
         rtol=0,
         atol=1e-6,
     )
@@ -292,25 +283,31 @@ def test_a_stored_fit_survives_a_zarr_round_trip_and_still_transforms(tmp_path) 
 def test_reading_a_key_that_is_not_a_fit_says_so() -> None:
     adata = make_adata(ALIGN_PTS)
     adata.uns["junk"] = {"affine": np.eye(3)}
-    with pytest.raises(ValueError, match=r"carries no `rank`"):
+    with pytest.raises(ValueError, match=r"carries no `kind`"):
         fit_from_uns(adata, "junk")
     with pytest.raises(KeyError, match=r"no `uns\['missing'\]`"):
         fit_from_uns(adata, "missing")
-    # the same message has to reach a caller who passed the key to an apply function
+    # the same message has to reach a caller coming through the public classmethod
     with pytest.raises(KeyError, match=r"no `uns\['missing'\]`"):
-        stalign_apply_transform("missing", adata)
+        StalignFit.from_uns(adata, key="missing")
 
 
-def test_warping_by_key_rejects_a_rank_3_fit() -> None:
+def test_a_reloaded_volume_fit_cannot_warp() -> None:
+    """The rank-3 "no image to resample" rule survives a round-trip through `uns`.
+
+    It used to be a runtime check on the by-key path; now it is the decoded class not
+    having the method at all, which is what `kind` is stored for.
+    """
     volume = np.random.default_rng(0).random((1, 5, 8, 8))
     sdata = _sdata_image(volume, "volume")
     sdata.images["section"] = _sdata_image(volume[:, 2], "section").images["section"]
     fit = stalign_align_volume(sdata, image_key=("volume", "section"), **VOLUME_SOLVER)
     sdata.tables["table"] = make_adata(ALIGN_PTS)
-    stalign_store_fit(fit, sdata, table_key="table")
+    fit.to_uns(sdata, table_key="table")
 
-    with pytest.raises(ValueError, match=r"needs a rank-2 fit"):
-        stalign_apply_warp("stalign", sdata, image_key=("volume", "section"), table_key="table")
+    restored = StalignFit.from_uns(sdata, table_key="table")
+    assert restored.kind == "volume"
+    assert not hasattr(restored, "warp_image")
 
 
 # --- deformation_grid at rank 3 -------------------------------------------------------
@@ -334,15 +331,15 @@ def test_volume_deformation_grid_is_the_transform_the_objective_uses() -> None:
         **VOLUME_SOLVER,
     )
 
-    backward = stalign_deformation_grid(result)
+    backward = result.deformation_grid()
     assert backward.shape == (3, 1, 12, 12), "the section is lifted onto z = 0, hence the length-1 z"
-    assert stalign_deformation_grid(result, direction="forward").shape == (3, 5, 12, 12)
+    assert result.deformation_grid(direction="forward").shape == (3, 5, 12, 12)
 
     internal = transform_grid_row_col(
-        (jnp.zeros(1, dtype=jax_dtype()), *result["query_axes"]),
-        result["velocity_grid"],
-        result["velocity"],
-        result["affine"],
+        (jnp.zeros(1, dtype=jax_dtype()), *result.query_axes),
+        result.velocity_grid,
+        result.velocity,
+        result.affine,
         direction="backward",
     )
     assert jnp.array_equal(backward, internal)
@@ -357,4 +354,4 @@ def test_volume_deformation_grid_rejects_a_bad_direction() -> None:
         **VOLUME_SOLVER,
     )
     with pytest.raises(ValueError, match=r"'forward' or 'backward'"):
-        stalign_deformation_grid(result, direction="sideways")
+        result.deformation_grid(direction="sideways")

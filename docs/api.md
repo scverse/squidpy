@@ -157,8 +157,6 @@ tuning as flat keyword arguments, listed below, and return the fitted map itself
     experimental.tl.StalignImageSolverKwargs
     experimental.tl.StalignObsSolverKwargs
     experimental.tl.StalignVolumeSolverKwargs
-    experimental.tl.Stalign2DResult
-    experimental.tl.Stalign3DResult
 ```
 
 ## Experimental
@@ -177,13 +175,10 @@ tuning as flat keyword arguments, listed below, and return the fitted map itself
     experimental.tl.stalign_align_obs
     experimental.tl.stalign_align_image
     experimental.tl.stalign_align_volume
-    experimental.tl.stalign_apply_transform
-    experimental.tl.stalign_apply_warp
-    experimental.tl.stalign_store_fit
-    experimental.tl.stalign_transform_points
-    experimental.tl.stalign_warp_image
-    experimental.tl.stalign_deformation_grid
-    experimental.tl.stalign_affine_xyz
+    experimental.tl.StalignFit
+    experimental.tl.StalignObsFit
+    experimental.tl.StalignImageFit
+    experimental.tl.StalignVolumeFit
     experimental.tl.align_landmarks
     experimental.tl.assign_stitch_groups
     experimental.tl.StitchParams

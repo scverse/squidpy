@@ -1,51 +1,39 @@
 from __future__ import annotations
 
-# The concrete result classes and the solver-tuning TypedDicts are exported because
-# callers need them: a result is what a fit returns, and the TypedDicts document the knobs.
+# The fit classes and the solver-tuning TypedDicts are exported because callers need them:
+# a fit is what an alignment returns, and the TypedDicts document the solver knobs.
 from ._align import (
-    Stalign2DResult,
-    Stalign3DResult,
+    StalignFit,
+    StalignImageFit,
     StalignImageSolverKwargs,
+    StalignObsFit,
     StalignObsSolverKwargs,
-    StalignResult,
+    StalignVolumeFit,
     StalignVolumeSolverKwargs,
     align_landmarks,
-    stalign_affine_xyz,
     stalign_align_image,
     stalign_align_obs,
     stalign_align_volume,
-    stalign_apply_transform,
-    stalign_apply_warp,
-    stalign_deformation_grid,
-    stalign_store_fit,
-    stalign_transform_points,
-    stalign_warp_image,
 )
 from ._stitched_labels import make_stitched_labels
 from ._tiling_qc import TilingQCParams, calculate_tiling_qc
 from ._tiling_stitch import StitchParams, assign_stitch_groups
 
 __all__ = [
-    "StalignObsSolverKwargs",
-    "Stalign2DResult",
-    "Stalign3DResult",
-    "StalignResult",
-    "StalignVolumeSolverKwargs",
+    "StalignFit",
+    "StalignImageFit",
     "StalignImageSolverKwargs",
+    "StalignObsFit",
+    "StalignObsSolverKwargs",
+    "StalignVolumeFit",
+    "StalignVolumeSolverKwargs",
     "StitchParams",
     "TilingQCParams",
     "align_landmarks",
-    "stalign_align_image",
-    "stalign_align_obs",
-    "stalign_align_volume",
     "assign_stitch_groups",
     "calculate_tiling_qc",
     "make_stitched_labels",
-    "stalign_affine_xyz",
-    "stalign_apply_transform",
-    "stalign_apply_warp",
-    "stalign_store_fit",
-    "stalign_deformation_grid",
-    "stalign_transform_points",
-    "stalign_warp_image",
+    "stalign_align_image",
+    "stalign_align_obs",
+    "stalign_align_volume",
 ]
