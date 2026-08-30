@@ -214,14 +214,6 @@ def detect_tissue(
         Optional parameters specific to the selected method. For `"felzenszwalb"`, provide a
         :class:`~squidpy.types.FelzenszwalbParams` instance or a mapping of its fields. For `"weka"`, provide a
         :class:`~squidpy.types.WekaParams` instance or mapping. Passing values when ``method="otsu"`` is not supported.
-    border_margin_px
-        Ignore a border when seeding and predicting tissue. Can be:
-
-            - a single int applied to all sides, or
-            - a sequence of four ints ``(top, bottom, left, right)``.
-
-        Useful for masking out fiducial rings or slide edges. Applied consistently across all methods.
-
     channel_format
         Expected format of image channels. Valid options are:
 
@@ -234,6 +226,13 @@ def detect_tissue(
         Whether corners are considered background regions, used for orienting the
         threshold. Applies to all four corners; override individual corners through
         ``**background_detection_params``.
+    border_margin_px
+        Ignore a border when seeding and predicting tissue. Can be:
+
+            - a single int applied to all sides, or
+            - a sequence of four ints ``(top, bottom, left, right)``.
+
+        Useful for masking out fiducial rings or slide edges. Applied consistently across all methods.
     min_specimen_area_frac
         Minimum fraction of image area for a region to be considered a specimen.
     n_samples
@@ -249,11 +248,11 @@ def detect_tissue(
     new_labels_key
         Key to store the resulting labels in ``sdata.labels``. If `None`, uses
         `"{image_key}_tissue"`.
+    inplace
+        If `True`, stores labels in ``sdata.labels``. If `False`, returns the mask array.
     **background_detection_params
         Per-corner background priors and corner-box size, passed as keyword arguments.
         Each corner flag defaults to ``corners_are_background``.
-    inplace
-        If `True`, stores labels in ``sdata.labels``. If `False`, returns the mask array.
 
     Returns
     -------

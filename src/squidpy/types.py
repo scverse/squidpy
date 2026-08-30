@@ -49,8 +49,7 @@ __all__ = [
 class BackgroundDetectionParams(TypedDict, total=False):
     """Which corners are background, and how large the corner boxes should be.
 
-    If no corners are flagged ``True``, orientation falls back to bright
-    background -- see ``any_corner``.
+    If no corners are flagged ``True``, background is taken to be the bright side.
     """
 
     ymin_xmin_is_bg: Annotated[bool, Default(True)]
