@@ -404,7 +404,7 @@ def fit_stalign_volume(
     initial_rotation: float = 0.0,
     initial_scale: float = 1.0,
     initial_affine: npt.ArrayLike | None = None,
-    **solver_kwargs: Unpack[StalignVolumeParams],
+    **solver_params: Unpack[StalignVolumeParams],
 ) -> StalignVolumeFit:
     """Fit a single 2D section into a 3D reference volume, array-in / array-out.
 
@@ -431,7 +431,7 @@ def fit_stalign_volume(
     initial_affine
         Homogeneous ``(4, 4)`` affine in ``(x, y, z)`` order, replacing the three
         ``initial_*`` arguments above and mutually exclusive with them.
-    solver_kwargs
+    solver_params
         See :class:`StalignVolumeParams`.
 
     Returns
@@ -447,7 +447,7 @@ def fit_stalign_volume(
 
     # `dict[str, Any]`, not the TypedDict: merging two different TypedDicts with `|` is
     # not an operation the type system defines, and the values are heterogeneous anyway.
-    opts: dict[str, Any] = _VOLUME_DEFAULTS | solver_kwargs
+    opts: dict[str, Any] = _VOLUME_DEFAULTS | solver_params
     dtype = jax_dtype()
 
     target_image = as_chw(query, name="query", ndim=2)
@@ -594,7 +594,7 @@ def fit_stalign_obs(
     *,
     landmarks_ref: npt.ArrayLike | None = None,
     landmarks_query: npt.ArrayLike | None = None,
-    **solver_kwargs: Unpack[StalignObsParams],
+    **solver_params: Unpack[StalignObsParams],
 ) -> StalignObsFit:
     """Fit a deformation mapping the ``query`` cloud onto the ``ref`` cloud.
 
@@ -611,7 +611,7 @@ def fit_stalign_obs(
         Must be given together. Not exclusive with ``initial_affine``: landmarks always
         contribute the point-matching term, and additionally derive the starting affine
         when ``initial_affine`` is absent.
-    solver_kwargs
+    solver_params
         See :class:`StalignObsParams`.
 
     Returns
@@ -623,7 +623,7 @@ def fit_stalign_obs(
     from ._stalign_impl._core import lddmm, transform_points_row_col
     from ._stalign_impl._helpers import rasterize_cloud, validate_points
 
-    opts = _OBS_DEFAULTS | solver_kwargs
+    opts = _OBS_DEFAULTS | solver_params
     linear, translation, src_lm, tgt_lm = _initial_affine_and_landmarks(
         landmarks_ref, landmarks_query, opts.get("initial_affine")
     )
@@ -675,7 +675,7 @@ def fit_stalign_image(
     query_axes: Sequence[npt.ArrayLike] | None = None,
     landmarks_ref: npt.ArrayLike | None = None,
     landmarks_query: npt.ArrayLike | None = None,
-    **solver_kwargs: Unpack[StalignImageParams],
+    **solver_params: Unpack[StalignImageParams],
 ) -> StalignImageFit:
     """Fit a deformation mapping the ``query`` image onto the ``ref`` image.
 
@@ -697,7 +697,7 @@ def fit_stalign_image(
         Paired ``(x, y)`` landmark arrays in the *images'* physical units, matched by row
         order. See :func:`_initial_affine_and_landmarks` for how they combine with
         ``initial_affine``.
-    solver_kwargs
+    solver_params
         See :class:`StalignImageParams`.
 
     Returns
@@ -709,7 +709,7 @@ def fit_stalign_image(
     from ._stalign_impl._core import lddmm
     from ._stalign_impl._helpers import as_chw, resolve_axes
 
-    opts = _IMAGE_DEFAULTS | solver_kwargs
+    opts = _IMAGE_DEFAULTS | solver_params
     linear, translation, src_lm, tgt_lm = _initial_affine_and_landmarks(
         landmarks_ref, landmarks_query, opts.get("initial_affine")
     )

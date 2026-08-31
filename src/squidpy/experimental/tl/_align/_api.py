@@ -178,7 +178,7 @@ def stalign_align_obs(
     table_key: str | tuple[str | None, str | None] | None = None,
     landmarks_ref: npt.ArrayLike | None = None,
     landmarks_query: npt.ArrayLike | None = None,
-    **solver_kwargs: Unpack[StalignObsParams],
+    **solver_params: Unpack[StalignObsParams],
 ) -> StalignObsFit:
     """Align a query point cloud onto a reference with STalign (diffeomorphic LDDMM).
 
@@ -202,7 +202,7 @@ def stalign_align_obs(
     landmarks_ref, landmarks_query
         Optional paired ``(x, y)`` landmark arrays (matched by row order) used to
         initialise the affine.
-    solver_kwargs
+    solver_params
         LDDMM solver tuning; see
         :class:`~squidpy.types.StalignObsParams` for the accepted
         keys, their meaning, and their defaults.
@@ -230,7 +230,7 @@ def stalign_align_obs(
         query=_read_coords_2d(query_adata, query_spatial, side="query", name="spatial_key"),
         landmarks_ref=landmarks_ref,
         landmarks_query=landmarks_query,
-        **solver_kwargs,
+        **solver_params,
     )
 
 
@@ -243,7 +243,7 @@ def stalign_align_image(
     query_coordinate_system: str = "global",
     landmarks_ref: npt.ArrayLike | None = None,
     landmarks_query: npt.ArrayLike | None = None,
-    **solver_kwargs: Unpack[StalignImageParams],
+    **solver_params: Unpack[StalignImageParams],
 ) -> StalignImageFit:
     """Align a query image onto a reference image with STalign (diffeomorphic LDDMM).
 
@@ -271,7 +271,7 @@ def stalign_align_image(
         transformations supply, not pixel indices. They contribute the point-matching term
         the solver weights by ``sigmaP``, and derive the starting affine unless
         ``initial_affine`` is given, in which case that wins and the matching term stays.
-    solver_kwargs
+    solver_params
         LDDMM solver tuning; see
         :class:`~squidpy.types.StalignImageParams` for the accepted
         keys, their meaning, and their defaults. ``a``, ``epL``, ``epT`` and ``epV`` are
@@ -304,7 +304,7 @@ def stalign_align_image(
             ),
             landmarks_ref=landmarks_ref,
             landmarks_query=landmarks_query,
-            **solver_kwargs,
+            **solver_params,
         ),
         coordinate_system=query_coordinate_system,
     )
@@ -391,7 +391,7 @@ def stalign_align_volume(
     initial_rotation: float = 0.0,
     initial_scale: float = 1.0,
     initial_affine: npt.ArrayLike | None = None,
-    **solver_kwargs: Unpack[StalignVolumeParams],
+    **solver_params: Unpack[StalignVolumeParams],
 ) -> StalignVolumeFit:
     """Place a 2D section into a 3D reference volume with STalign (diffeomorphic LDDMM).
 
@@ -431,7 +431,7 @@ def stalign_align_volume(
     initial_affine
         Homogeneous ``(4, 4)`` affine in ``(x, y, z)``, replacing the three ``initial_*``
         arguments above. The escape hatch when the initialisation needs to be exact.
-    solver_kwargs
+    solver_params
         LDDMM solver tuning; see
         :class:`~squidpy.types.StalignVolumeParams`.
 
@@ -464,7 +464,7 @@ def stalign_align_volume(
             initial_rotation=initial_rotation,
             initial_scale=initial_scale,
             initial_affine=initial_affine,
-            **solver_kwargs,
+            **solver_params,
         ),
         coordinate_system=query_coordinate_system,
     )
