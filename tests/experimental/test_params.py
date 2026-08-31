@@ -21,7 +21,10 @@ def _matches(value: object, hint: Any) -> bool:
     satisfies a ``float`` key) and keeps ``bool`` distinct from ``int``.
     """
     if get_origin(hint) in (Union, UnionType):
-        return any(_matches(value, arg) for arg in get_args(hint))
+        # A member may not be `isinstance`-checkable at all -- `npt.ArrayLike` unions in
+        # non-runtime-checkable protocols -- so an unverifiable arm is skipped rather than
+        # failing the whole union.
+        return any(_safe_matches(value, arg) for arg in get_args(hint))
     origin = get_origin(hint) or hint
     if origin is bool:
         return isinstance(value, bool)
@@ -30,6 +33,14 @@ def _matches(value: object, hint: Any) -> bool:
     if origin is float:
         return isinstance(value, int | float) and not isinstance(value, bool)
     return isinstance(value, origin)
+
+
+def _safe_matches(value: object, hint: Any) -> bool:
+    """`_matches`, treating an un-checkable hint as "not this arm" instead of an error."""
+    try:
+        return _matches(value, hint)
+    except TypeError:
+        return False
 
 
 class TestDefaultsOf:

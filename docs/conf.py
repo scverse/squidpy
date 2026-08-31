@@ -100,6 +100,8 @@ toc_object_entries = False
 autosummary_generate = True
 autodoc_member_order = "groupwise"
 autodoc_typehints = "signature"
+# jax is an optional extra; mock it so the fit classes' annotations render without it
+autodoc_mock_imports = ["jax"]
 # show each parameter's default next to its type, as scanpy does
 typehints_defaults = "braces"
 # a closed vocabulary this long is unreadable spelled out -- and `qc_image` spells it
@@ -152,6 +154,13 @@ nitpick_ignore = [
     ("py:class", "NDArray"),
     # numpy.typing.NDArray canonicalizes to this private path, which has no doc target
     ("py:class", "numpy._typing._array_like.NDArray"),
+    ("py:class", "numpy._typing._array_like.ArrayLike"),
+    # `npt.ArrayLike` in a signature resolves to its union members, which are private
+    ("py:class", "numpy._typing._array_like._SupportsArray"),
+    ("py:class", "numpy._typing._nested_sequence._NestedSequence"),
+    # optional dep mocked at build time (see autodoc_mock_imports), so no resolvable target
+    ("py:class", "jax.Array"),
+    ("py:class", "JaxArray"),
     ("py:class", "np.number"),
     ("py:class", "csr_matrix"),
     # no idea why those aren’t exported

@@ -163,6 +163,8 @@ Under active development: names and signatures here may change without a depreca
     :toctree: api
 
     im.calculate_image_features
+    im.rasterize_points
+    im.sample_volume
     im.make_tiles
     im.make_tiles_from_spots
 ```
@@ -201,8 +203,42 @@ Under active development: names and signatures here may change without a depreca
 
 ### Tools `tl`
 
+#### Alignment
+
 ```{eval-rst}
 .. module:: squidpy.experimental.tl
+.. currentmodule:: squidpy.experimental
+.. autosummary::
+    :toctree: api
+
+    tl.stalign_align_obs
+    tl.stalign_align_image
+    tl.stalign_align_volume
+    tl.align_landmarks
+    tl.apply_affine
+```
+
+#### Fits
+
+What an alignment returns: a frozen object carrying the operations that apply it. One class
+per entry point, because what a fit can do follows from what it was fitted from -- only the
+two that carry a raster frame offer ``deformation_grid``, and only the rank-2 image fit
+offers ``warp_image``.
+
+```{eval-rst}
+.. currentmodule:: squidpy.experimental
+.. autosummary::
+    :toctree: api
+
+    tl.StalignFit
+    tl.StalignObsFit
+    tl.StalignImageFit
+    tl.StalignVolumeFit
+```
+
+#### Tiling and stitching
+
+```{eval-rst}
 .. currentmodule:: squidpy.experimental
 .. autosummary::
     :toctree: api
@@ -236,6 +272,9 @@ The parameter bags and result tuples, collected by kind rather than by domain.
 .. autosummary::
     :toctree: api
 
+    types.StalignObsParams
+    types.StalignImageParams
+    types.StalignVolumeParams
     types.TilingQCParams
     types.StitchParams
     types.BackgroundDetectionParams
