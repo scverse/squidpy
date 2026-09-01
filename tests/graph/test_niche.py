@@ -140,6 +140,7 @@ def test_niche_cellcharter_library_seeds_are_independent(dummy_adata2: AnnData, 
 
 # more special test cases
 
+
 def test_niche_calc_library_key_dummy_adata(dummy_adata2: AnnData):
     "Check whether niche calculation when library_key is supplied works as intended for dummy_adata2."
 

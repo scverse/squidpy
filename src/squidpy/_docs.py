@@ -239,7 +239,7 @@ spatial_connectivities_key
     Key in :attr:`anndata.AnnData.obsp` containing the spatial connectivity matrix."""
 _niche_embedding_key_added = """\
 embedding_key_added
-    Controls the name of the key to be added in :attr:`anndata.AnnData.obsm`, which will hold 
+    Controls the name of the key to be added in :attr:`anndata.AnnData.obsm`, which will hold
     the niche embedding computed."""
 _niche_mask = """\
 mask
