@@ -237,6 +237,10 @@ library_key
 _niche_spatial_conn_key = """\
 spatial_connectivities_key
     Key in :attr:`anndata.AnnData.obsp` containing the spatial connectivity matrix."""
+_niche_embedding_key_added = """\
+embedding_key_added
+    Controls the name of the key to be added in :attr:`anndata.AnnData.obsm`, which will hold 
+    the niche embedding computed."""
 _niche_mask = """\
 mask
     Boolean :class:`pandas.Series` indexed like :attr:`anndata.AnnData.obs`. Observations that
@@ -248,6 +252,7 @@ min_niche_size
     are relabeled ``'not_a_niche'``."""
 # the postprocessing + output params every user-facing niche function shares, in signature order
 _niche_common_params = f"""\
+{_niche_embedding_key_added}
 {_niche_min_niche_size}
 {_niche_mask}
 {_library_key}
@@ -514,6 +519,7 @@ d = DocstringProcessor(
     plotting_library_id=_plotting_library_id,
     library_key=_library_key,
     niche_spatial_conn_key=_niche_spatial_conn_key,
+    niche_embedding_key_added=_niche_embedding_key_added,
     niche_mask=_niche_mask,
     niche_min_niche_size=_niche_min_niche_size,
     niche_common_params=_niche_common_params,

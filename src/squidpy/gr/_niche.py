@@ -214,8 +214,9 @@ def calculate_niche(
             distance,
             abs_nhood,
             n_hop_weights,
-            min_niche_size,
-            mask,
+            embedding_key_added='niche_embedding',
+            min_niche_size=min_niche_size,
+            mask=mask,
             library_key=library_key,
             copy=not inplace,
             table_key=table_key,
@@ -229,8 +230,9 @@ def calculate_niche(
             resolutions,
             n_neighbors,
             spatial_connectivities_key,
-            min_niche_size,
-            mask,
+            embedding_key_added='niche_embedding',
+            min_niche_size=min_niche_size,
+            mask=mask,
             library_key=library_key,
             copy=not inplace,
             table_key=table_key,
@@ -247,8 +249,9 @@ def calculate_niche(
             spatial_connectivities_key,
             n_components,
             use_rep,
-            min_niche_size,
-            mask,
+            embedding_key_added='niche_embedding',
+            min_niche_size=min_niche_size,
+            mask=mask,
             library_key=library_key,
             copy=not inplace,
             table_key=table_key,
@@ -286,6 +289,7 @@ def calculate_niche_neighborhood(
     distance: int = 1,
     abs_nhood: bool = False,
     n_hop_weights: list[float] | None = None,
+    embedding_key_added: str = 'niche_embedding',
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     library_key: str | None = None,
@@ -351,6 +355,7 @@ def calculate_niche_neighborhood(
         data,
         embedder,
         clusterer,
+        embedding_key_added,
         min_niche_size=min_niche_size,
         mask=mask,
         library_key=library_key,
@@ -365,6 +370,7 @@ def calculate_niche_utag(
     resolutions: float | list[float],
     n_neighbors: int = 15,
     spatial_connectivities_key: str = "spatial_connectivities",
+    embedding_key_added: str = 'niche_embedding',
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     library_key: str | None = None,
@@ -409,6 +415,7 @@ def calculate_niche_utag(
         data,
         embedder,
         clusterer,
+        embedding_key_added,
         min_niche_size=min_niche_size,
         mask=mask,
         library_key=library_key,
@@ -426,6 +433,7 @@ def calculate_niche_cellcharter(
     spatial_connectivities_key: str = "spatial_connectivities",
     n_components: int = 10,
     use_rep: str | None = None,
+    embedding_key_added: str = 'niche_embedding',
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     library_key: str | None = None,
@@ -473,6 +481,7 @@ def calculate_niche_cellcharter(
         data,
         embedder,
         clusterer,
+        embedding_key_added,
         min_niche_size=min_niche_size,
         mask=mask,
         library_key=library_key,
@@ -650,6 +659,7 @@ def _calculate_niche_custom(
     data: AnnData | SpatialData,
     embedder: _NicheEmbedder,
     clusterer: _NicheClusterer,
+    embedding_key_added: str = 'niche_embedding',
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     library_key: str | None = None,
@@ -696,6 +706,9 @@ def _calculate_niche_custom(
 
     adata = orig_adata.copy() if copy else orig_adata
 
+    embedding = embedder.get_embedding(adata)
+    adata.obsm[embedding_key_added] = embedding
+
     if library_key is not None:
         assert_key_in_adata(adata, library_key, attr="obs")
         logg.info(f"Stratifying by library_key '{library_key}'")
@@ -712,9 +725,9 @@ def _calculate_niche_custom(
 
             lib_adata = adata[lib_indices].copy()
 
-            _run_niche_pipeline(
-                lib_adata, embedder, clusterer, mask=mask, min_niche_size=min_niche_size, prefix=f"lib={lib_id}_"
-            )
+            lib_embedding = lib_adata.obsm[embedding_key_added]
+            result_columns = clusterer.cluster(lib_adata, lib_embedding)
+            _postprocess_niche_results(lib_adata, result_columns, mask, min_niche_size, prefix=f"lib={lib_id}_")
 
             # from itr==1 onwards, adata will hold the columns that are being added hence,
             # added_columns will be empty. Hence only obtain added_columns when itr==0
@@ -728,7 +741,8 @@ def _calculate_niche_custom(
                 adata.obs.loc[lib_indices, col] = list(lib_adata.obs[col].astype("str"))
 
     else:
-        _run_niche_pipeline(adata, embedder, clusterer, mask=mask, min_niche_size=min_niche_size)
+        result_columns = clusterer.cluster(adata, embedding)
+        _postprocess_niche_results(adata, result_columns, mask, min_niche_size)
 
     # For SpatialData, the column names shouldn't have = sign. Hence, run sanitize_table.
     # TODO: In future, change the naming standard of any niche columns added to not have '=' to be compatible with spatialdata naming
@@ -736,20 +750,6 @@ def _calculate_niche_custom(
         sanitize_table(adata)
 
     return adata if copy else None
-
-
-def _run_niche_pipeline(
-    adata: AnnData,
-    embedder: _NicheEmbedder,
-    clusterer: _NicheClusterer,
-    mask: pd.Series | None,
-    min_niche_size: int | None,
-    prefix: str | None = None,
-) -> None:
-    """Embed, cluster, and postprocess ``adata`` in place."""
-    embedding = embedder.get_embedding(adata)
-    result_columns = clusterer.cluster(adata, embedding)
-    _postprocess_niche_results(adata, result_columns, mask, min_niche_size, prefix)
 
 
 def _validate_niche_args(
