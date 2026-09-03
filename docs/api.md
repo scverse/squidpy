@@ -43,11 +43,6 @@ import squidpy as sq
     gr.calculate_niche_spatialleiden
     gr.cluster_auto_k
     gr.cluster_stability
-
-.. autosummary::
-    :toctree: api
-    :template: autosummary/typed_dict.rst
-
     gr.ClusterAutoKResult
 ```
 
