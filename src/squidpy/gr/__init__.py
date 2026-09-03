@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from squidpy.gr import neighbors
+from squidpy.gr._autok import ClusterAutoKResult
 from squidpy.gr._build import (
     SpatialNeighborsResult,
     mask_graph,
@@ -13,12 +14,14 @@ from squidpy.gr._build import (
     spatial_neighbors_knn,
     spatial_neighbors_radius,
 )
+from squidpy.gr._cluster_auto_k import cluster_auto_k, cluster_stability
 from squidpy.gr._ligrec import ligrec
 from squidpy.gr._nhood import (
     NhoodEnrichmentResult,
     centrality_scores,
     interaction_matrix,
     nhood_enrichment,
+    nhood_entropy,
 )
 from squidpy.gr._niche import (
     calculate_niche,
@@ -36,6 +39,7 @@ __all__ = [
     "GraphMatrixT",
     "SpatialNeighborsResult",
     "NhoodEnrichmentResult",
+    "ClusterAutoKResult",
     "neighbors",
     "mask_graph",
     "spatial_neighbors",
@@ -49,10 +53,13 @@ __all__ = [
     "calculate_niche_utag",
     "calculate_niche_cellcharter",
     "calculate_niche_spatialleiden",
+    "cluster_auto_k",
+    "cluster_stability",
     "ligrec",
     "centrality_scores",
     "interaction_matrix",
     "nhood_enrichment",
+    "nhood_entropy",
     "co_occurrence",
     "spatial_autocorr",
     "ripley",
