@@ -733,9 +733,9 @@ def assign_stitch_groups(
     labels_key
         Key in ``sdata.labels``.
     qc_table_key
-        Key of the QC table.  Defaults to ``"{labels_key}_qc"``.
+        Key of the QC table.
     min_confidence
-        Threshold on ``stitch_confidence``.  ``0.7`` (default) is a starting
+        Threshold on ``stitch_confidence``.  ``0.7`` is a starting
         point; raise it for stricter precision, lower for recall.  Tune for
         your data -- the score is heuristic, not a calibrated probability.
     max_gap
