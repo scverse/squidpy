@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from anndata import AnnData
+from anndata import AnnData, read_h5ad
 from pandas import Series
+from pandas.testing import assert_frame_equal
 from scanpy.pp import neighbors
 from scipy.sparse import csr_matrix
 from spatialdata import SpatialData
@@ -102,7 +103,7 @@ def test_niche_cellcharter_rng_reproducible(dummy_adata2: AnnData):
 def test_niche_cellcharter_rng_none_runs(dummy_adata2: AnnData):
     "`rng=None` (the default) must work: it means 'draw from OS entropy', not 'missing argument'."
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
-    calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean", seed=None)
+    calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean", rng=None)
     assert "cellcharter_niche" in dummy_adata2.obs.columns
 
 
@@ -205,7 +206,7 @@ def test_niche_cellcharter_accepts_a_dense_x(dummy_adata2: AnnData, aggregation:
     dense = dummy_adata2.copy()
     sparse = dummy_adata2.copy()
     sparse.X = csr_matrix(sparse.X)
-    kwargs = {"distance": 2, "aggregation": aggregation, "n_components": 2, "seed": 0, "copy": True}
+    kwargs = {"distance": 2, "aggregation": aggregation, "n_components": 2, "rng": 0, "copy": True}
 
     from_dense = calculate_niche_cellcharter(dense, **kwargs)
     from_sparse = calculate_niche_cellcharter(sparse, **kwargs)
@@ -216,7 +217,7 @@ def test_cellcharter_forwards_model_params():
     adata = AnnData(np.repeat(np.array([[0.0, 0.0], [1.0, 1.0]]), 15, axis=0).astype(np.float32))
     adata.obsm["spatial"] = np.random.default_rng(0).random((30, 2)) * 10
     spatial_neighbors_knn(adata, n_neighs=4)
-    kwargs = {"distance": 1, "n_clusters": 3, "seed": 0, "copy": True}
+    kwargs = {"distance": 1, "n_clusters": 3, "rng": 0, "copy": True}
 
     with pytest.raises(ValueError, match=r"ill-defined empirical covariance"):
         calculate_niche_cellcharter(adata, model_params={"reg_covar": 0.0}, **kwargs)
@@ -228,7 +229,7 @@ def test_cellcharter_forwards_model_params():
 
 def test_niche_cellcharter_n_clusters_none_keeps_a_single_fit(dummy_adata2: AnnData):
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
-    kwargs = {"distance": 2, "aggregation": "mean", "n_components": 4, "seed": 0, "copy": True}
+    kwargs = {"distance": 2, "aggregation": "mean", "n_components": 4, "rng": 0, "copy": True}
 
     default = calculate_niche_cellcharter(dummy_adata2, **kwargs)
     explicit = calculate_niche_cellcharter(dummy_adata2, n_clusters=4, **kwargs)
