@@ -214,8 +214,9 @@ def calculate_niche(
             distance,
             abs_nhood,
             n_hop_weights,
-            min_niche_size,
-            mask,
+            embedding_key_added="niche_embedding",
+            min_niche_size=min_niche_size,
+            mask=mask,
             library_key=library_key,
             copy=not inplace,
             table_key=table_key,
@@ -228,9 +229,11 @@ def calculate_niche(
             data,
             resolutions,
             n_neighbors,
-            spatial_connectivities_key,
-            min_niche_size,
-            mask,
+            use_layer=None,
+            spatial_connectivities_key=spatial_connectivities_key,
+            embedding_key_added="niche_embedding",
+            min_niche_size=min_niche_size,
+            mask=mask,
             library_key=library_key,
             copy=not inplace,
             table_key=table_key,
@@ -247,8 +250,9 @@ def calculate_niche(
             spatial_connectivities_key,
             n_components,
             use_rep,
-            min_niche_size,
-            mask,
+            embedding_key_added="niche_embedding",
+            min_niche_size=min_niche_size,
+            mask=mask,
             library_key=library_key,
             copy=not inplace,
             table_key=table_key,
@@ -286,6 +290,7 @@ def calculate_niche_neighborhood(
     distance: int = 1,
     abs_nhood: bool = False,
     n_hop_weights: list[float] | None = None,
+    embedding_key_added: str = "niche_embedding",
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     library_key: str | None = None,
@@ -351,6 +356,7 @@ def calculate_niche_neighborhood(
         data,
         embedder,
         clusterer,
+        embedding_key_added,
         min_niche_size=min_niche_size,
         mask=mask,
         library_key=library_key,
@@ -364,7 +370,9 @@ def calculate_niche_utag(
     data: AnnData | SpatialData,
     resolutions: float | list[float],
     n_neighbors: int = 15,
+    use_layer: str | None = None,
     spatial_connectivities_key: str = "spatial_connectivities",
+    embedding_key_added: str = "niche_embedding",
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     library_key: str | None = None,
@@ -387,6 +395,9 @@ def calculate_niche_utag(
         Number of neighbors used when constructing the graph for Leiden clustering.
     resolutions
         Resolution parameter(s) for Leiden clustering. Can be a single float or a list.
+    use_layer
+        Which key from `adata.layers` to use to aggregate features from. If None,
+        uses ``adata.X``.
     %(niche_spatial_conn_key)s
     %(niche_common_params)s
     %(table_key)s
@@ -399,7 +410,7 @@ def calculate_niche_utag(
 
     """
 
-    embedder = _UtagEmbedder(spatial_connectivities_key)
+    embedder = _UtagEmbedder(spatial_connectivities_key, use_layer)
 
     clusterer = _LeidenClusterer(
         n_neighbors, resolutions, "utag_niche", flavor=flavor, n_iterations=n_iterations, rng=rng
@@ -409,6 +420,7 @@ def calculate_niche_utag(
         data,
         embedder,
         clusterer,
+        embedding_key_added,
         min_niche_size=min_niche_size,
         mask=mask,
         library_key=library_key,
@@ -426,6 +438,7 @@ def calculate_niche_cellcharter(
     spatial_connectivities_key: str = "spatial_connectivities",
     n_components: int = 10,
     use_rep: str | None = None,
+    embedding_key_added: str = "niche_embedding",
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     library_key: str | None = None,
@@ -473,6 +486,7 @@ def calculate_niche_cellcharter(
         data,
         embedder,
         clusterer,
+        embedding_key_added,
         min_niche_size=min_niche_size,
         mask=mask,
         library_key=library_key,
@@ -650,6 +664,7 @@ def _calculate_niche_custom(
     data: AnnData | SpatialData,
     embedder: _NicheEmbedder,
     clusterer: _NicheClusterer,
+    embedding_key_added: str = "niche_embedding",
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     library_key: str | None = None,
@@ -696,6 +711,9 @@ def _calculate_niche_custom(
 
     adata = orig_adata.copy() if copy else orig_adata
 
+    embedding = embedder.get_embedding(adata)
+    adata.obsm[embedding_key_added] = embedding
+
     if library_key is not None:
         assert_key_in_adata(adata, library_key, attr="obs")
         logg.info(f"Stratifying by library_key '{library_key}'")
@@ -712,9 +730,9 @@ def _calculate_niche_custom(
 
             lib_adata = adata[lib_indices].copy()
 
-            _run_niche_pipeline(
-                lib_adata, embedder, clusterer, mask=mask, min_niche_size=min_niche_size, prefix=f"lib={lib_id}_"
-            )
+            lib_embedding = lib_adata.obsm[embedding_key_added]
+            result_columns = clusterer.cluster(lib_adata, lib_embedding)
+            _postprocess_niche_results(lib_adata, result_columns, mask, min_niche_size, prefix=f"lib={lib_id}_")
 
             # from itr==1 onwards, adata will hold the columns that are being added hence,
             # added_columns will be empty. Hence only obtain added_columns when itr==0
@@ -728,7 +746,8 @@ def _calculate_niche_custom(
                 adata.obs.loc[lib_indices, col] = list(lib_adata.obs[col].astype("str"))
 
     else:
-        _run_niche_pipeline(adata, embedder, clusterer, mask=mask, min_niche_size=min_niche_size)
+        result_columns = clusterer.cluster(adata, embedding)
+        _postprocess_niche_results(adata, result_columns, mask, min_niche_size)
 
     # For SpatialData, the column names shouldn't have = sign. Hence, run sanitize_table.
     # TODO: In future, change the naming standard of any niche columns added to not have '=' to be compatible with spatialdata naming
@@ -736,20 +755,6 @@ def _calculate_niche_custom(
         sanitize_table(adata)
 
     return adata if copy else None
-
-
-def _run_niche_pipeline(
-    adata: AnnData,
-    embedder: _NicheEmbedder,
-    clusterer: _NicheClusterer,
-    mask: pd.Series | None,
-    min_niche_size: int | None,
-    prefix: str | None = None,
-) -> None:
-    """Embed, cluster, and postprocess ``adata`` in place."""
-    embedding = embedder.get_embedding(adata)
-    result_columns = clusterer.cluster(adata, embedding)
-    _postprocess_niche_results(adata, result_columns, mask, min_niche_size, prefix)
 
 
 def _validate_niche_args(
@@ -1246,12 +1251,15 @@ class _UtagEmbedder(_NicheEmbedder):
     """Compute a UTAG-style embedding by propagating features over spatial neighbors.
 
     The embedding is constructed by normalizing the spatial connectivity matrix,
-    multiplying it by ``adata.X``, and then applying PCA to the propagated
-    feature matrix.
+    multiplying it by ``adata.X`` (or a different layer if passed), and then applying
+    PCA to the propagated feature matrix.
 
     Parameters
     ----------
     %(niche_spatial_conn_key)s
+    use_layer
+        Which key from `adata.layers` to use to aggregate features from. If None,
+        uses ``adata.X``.
 
     Notes
     -----
@@ -1262,8 +1270,10 @@ class _UtagEmbedder(_NicheEmbedder):
     def __init__(
         self,
         spatial_connectivities_key: str,
+        use_layer: str | None,
     ):
         self.spatial_connectivities_key = spatial_connectivities_key
+        self.use_layer = use_layer
 
     def get_embedding(self, adata: AnnData) -> NDArrayA:
         """
@@ -1272,10 +1282,12 @@ class _UtagEmbedder(_NicheEmbedder):
         """
 
         adjacency_matrix = adata.obsp[self.spatial_connectivities_key]
-        new_feature_matrix = normalize(adjacency_matrix, norm="l1", axis=1) @ adata.X
-        adata_utag = ad.AnnData(X=new_feature_matrix)
-        sc.tl.pca(adata_utag)  # note: unlike with flavor 'neighborhood' dim reduction is performed here
-        return adata_utag.obsm["X_pca"]
+        if self.use_layer is not None:
+            new_feature_matrix = normalize(adjacency_matrix, norm="l1", axis=1) @ adata.layers[self.use_layer]
+        else:
+            new_feature_matrix = normalize(adjacency_matrix, norm="l1", axis=1) @ adata.X
+        pca = sc.tl.pca(new_feature_matrix)  # note: unlike with flavor 'neighborhood' dim reduction is performed here
+        return pca
 
 
 # TODO: This function requires some work later on. Right now keeping the implementation just like how
