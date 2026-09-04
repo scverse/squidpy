@@ -396,7 +396,7 @@ def calculate_niche_utag(
     resolutions
         Resolution parameter(s) for Leiden clustering. Can be a single float or a list.
     use_layer
-        Which key from ``adata.layers`` to use to aggregate features from. If None,
+        Which key from `adata.layers` to use to aggregate features from. If None,
         uses ``adata.X``.
     %(niche_spatial_conn_key)s
     %(niche_common_params)s
@@ -1258,7 +1258,7 @@ class _UtagEmbedder(_NicheEmbedder):
     ----------
     %(niche_spatial_conn_key)s
     use_layer
-        Which key from ``adata.layers`` to use to aggregate features from. If None,
+        Which key from `adata.layers` to use to aggregate features from. If None,
         uses ``adata.X``.
 
     Notes
