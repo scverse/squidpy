@@ -1251,7 +1251,7 @@ class _UtagEmbedder(_NicheEmbedder):
     """Compute a UTAG-style embedding by propagating features over spatial neighbors.
 
     The embedding is constructed by normalizing the spatial connectivity matrix,
-    multiplying it by ``adata.X`` (or a different layer if passed), and then applying 
+    multiplying it by ``adata.X`` (or a different layer if passed), and then applying
     PCA to the propagated feature matrix.
 
     Parameters
