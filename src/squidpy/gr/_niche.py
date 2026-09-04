@@ -229,7 +229,8 @@ def calculate_niche(
             data,
             resolutions,
             n_neighbors,
-            spatial_connectivities_key,
+            use_layer=None,
+            spatial_connectivities_key=spatial_connectivities_key,
             embedding_key_added="niche_embedding",
             min_niche_size=min_niche_size,
             mask=mask,
@@ -369,6 +370,7 @@ def calculate_niche_utag(
     data: AnnData | SpatialData,
     resolutions: float | list[float],
     n_neighbors: int = 15,
+    use_layer: str | None = None,
     spatial_connectivities_key: str = "spatial_connectivities",
     embedding_key_added: str = "niche_embedding",
     min_niche_size: int | None = None,
@@ -393,6 +395,9 @@ def calculate_niche_utag(
         Number of neighbors used when constructing the graph for Leiden clustering.
     resolutions
         Resolution parameter(s) for Leiden clustering. Can be a single float or a list.
+    use_layer
+        Which key from ``adata.layers`` to use to aggregate features from. If None,
+        uses ``adata.X``.
     %(niche_spatial_conn_key)s
     %(niche_common_params)s
     %(table_key)s
@@ -405,7 +410,7 @@ def calculate_niche_utag(
 
     """
 
-    embedder = _UtagEmbedder(spatial_connectivities_key)
+    embedder = _UtagEmbedder(spatial_connectivities_key, use_layer)
 
     clusterer = _LeidenClusterer(
         n_neighbors, resolutions, "utag_niche", flavor=flavor, n_iterations=n_iterations, rng=rng
@@ -1246,12 +1251,15 @@ class _UtagEmbedder(_NicheEmbedder):
     """Compute a UTAG-style embedding by propagating features over spatial neighbors.
 
     The embedding is constructed by normalizing the spatial connectivity matrix,
-    multiplying it by ``adata.X``, and then applying PCA to the propagated
-    feature matrix.
+    multiplying it by ``adata.X`` (or a different layer if passed), and then applying 
+    PCA to the propagated feature matrix.
 
     Parameters
     ----------
     %(niche_spatial_conn_key)s
+    use_layer
+        Which key from ``adata.layers`` to use to aggregate features from. If None,
+        uses ``adata.X``.
 
     Notes
     -----
@@ -1262,8 +1270,10 @@ class _UtagEmbedder(_NicheEmbedder):
     def __init__(
         self,
         spatial_connectivities_key: str,
+        use_layer: str | None,
     ):
         self.spatial_connectivities_key = spatial_connectivities_key
+        self.use_layer = use_layer
 
     def get_embedding(self, adata: AnnData) -> NDArrayA:
         """
@@ -1272,10 +1282,12 @@ class _UtagEmbedder(_NicheEmbedder):
         """
 
         adjacency_matrix = adata.obsp[self.spatial_connectivities_key]
-        new_feature_matrix = normalize(adjacency_matrix, norm="l1", axis=1) @ adata.X
-        adata_utag = ad.AnnData(X=new_feature_matrix)
-        sc.tl.pca(adata_utag)  # note: unlike with flavor 'neighborhood' dim reduction is performed here
-        return adata_utag.obsm["X_pca"]
+        if self.use_layer is not None:
+            new_feature_matrix = normalize(adjacency_matrix, norm="l1", axis=1) @ adata.layers[self.use_layer]
+        else:
+            new_feature_matrix = normalize(adjacency_matrix, norm="l1", axis=1) @ adata.X
+        pca = sc.tl.pca(new_feature_matrix)  # note: unlike with flavor 'neighborhood' dim reduction is performed here
+        return pca
 
 
 # TODO: This function requires some work later on. Right now keeping the implementation just like how
