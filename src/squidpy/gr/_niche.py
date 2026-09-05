@@ -1163,9 +1163,7 @@ class _NhoodProfileEmbedder(_NicheEmbedder):
         profile = matrix.tocsr() @ one_hot
 
         # convert to dataframe (csr for final storage, dense for pandas)
-        profile_df = pd.DataFrame(
-            profile, index=adata.obs_names, columns=categories_order
-        )
+        profile_df = pd.DataFrame(profile, index=adata.obs_names, columns=categories_order)
 
         # now according to parameter abs_nhood, make raw counts into proportions or not
         if not self.abs_nhood:
