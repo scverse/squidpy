@@ -10,7 +10,7 @@ import pandas as pd
 import scanpy as sc
 import scipy.sparse as sps
 from anndata import AnnData
-from scipy.sparse import coo_matrix, hstack, issparse, lil_matrix, spdiags
+from scipy.sparse import coo_matrix, hstack, issparse, spdiags
 from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import normalize
 from spatialdata import SpatialData, sanitize_table
