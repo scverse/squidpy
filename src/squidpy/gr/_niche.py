@@ -1152,31 +1152,19 @@ class _NhoodProfileEmbedder(_NicheEmbedder):
             )
             adata.obs[self.groups] = adata.obs[self.groups].astype("category")
 
-        # ensure matrix is in csc format for efficient column slicing
-        if matrix.format != "csc":
-            matrix = matrix.tocsc()
-
         # get cell categories in order
         categories_order = adata.obs[self.groups].cat.categories
-        n_categories = len(categories_order)
 
-        # map category to column index
-        category_to_idx = {ct: i for i, ct in enumerate(categories_order)}
+        one_hot = pd.get_dummies(
+            adata.obs[self.groups],
+            dtype=np.float64,
+        ).to_numpy()
 
-        # pre allocate sparse LIL matrix for efficient assignment (n_cells x n_categories)
-        profile_sparse = lil_matrix((matrix.shape[0], n_categories), dtype=np.float64)
-
-        # for each category, sum over cells of that category
-        for ct in categories_order:
-            ct_mask = adata.obs[self.groups] == ct  # boolean mask for cells of this category
-            col_indices = np.where(ct_mask)[0]  # indices of those cells
-            if len(col_indices) > 0:
-                col_slice = matrix[:, col_indices]  # sparse submatrix
-                profile_sparse[:, category_to_idx[ct]] = col_slice.sum(axis=1).A1
+        profile = matrix.tocsr() @ one_hot
 
         # convert to dataframe (csr for final storage, dense for pandas)
         profile_df = pd.DataFrame(
-            profile_sparse.tocsr().todense(), index=adata.obs[self.groups].index, columns=categories_order
+            profile, index=adata.obs_names, columns=categories_order
         )
 
         # now according to parameter abs_nhood, make raw counts into proportions or not
