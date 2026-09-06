@@ -1039,6 +1039,7 @@ def _hop(
     """get nearest neighbor of neighbors"""
 
     adj_hop = adj_hop @ adj
+    adj_hop.data[:] = 1
 
     if adj_visited is not None:
         adj_hop = adj_hop > adj_visited
