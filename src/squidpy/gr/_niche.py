@@ -1022,10 +1022,8 @@ def _check_unnecessary_args(flavor: str, param_dict: dict[str, Any], param_specs
 def _setdiag(adjacency_matrix: sps.spmatrix, value: int) -> sps.spmatrix:
     """remove self-loops"""
 
-    if issparse(adjacency_matrix):
-        adjacency_matrix = adjacency_matrix.tolil()
+    # assuming adjacency_matrix is sparse
     adjacency_matrix.setdiag(value)
-    adjacency_matrix = adjacency_matrix.tocsr()
     if value == 0:
         adjacency_matrix.eliminate_zeros()
     return adjacency_matrix
