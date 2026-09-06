@@ -1137,41 +1137,30 @@ class _NhoodProfileEmbedder(_NicheEmbedder):
         self,
         adata: AnnData,
         matrix: coo_matrix,
-    ) -> pd.DataFrame:
+    ) -> NDArrayA:
         """
         Returns an obs x category matrix where each column is the absolute/relative frequency of a category in the neighborhood
         """
-
-        # ensure that adata.obs[group] is of categorical type, as that makes it explicit, which cols of the returned profile_df
-        # correspond to which categories in group
-        if adata.obs[self.groups].dtype.name != "category":
-            warnings.warn(
-                "Since adata.obs[groups] does not already have categorical dtype, converting it into categorical type.",
-                stacklevel=2,
-            )
-            adata.obs[self.groups] = adata.obs[self.groups].astype("category")
-
-        # get cell categories in order
-        categories_order = adata.obs[self.groups].cat.categories
 
         one_hot = pd.get_dummies(
             adata.obs[self.groups],
             dtype=np.float64,
         ).to_numpy()
 
-        profile = matrix.tocsr() @ one_hot
-
-        # convert to dataframe (csr for final storage, dense for pandas)
-        profile_df = pd.DataFrame(profile, index=adata.obs_names, columns=categories_order)
+        profile = matrix.tocsr() @ one_hot # returns a np array
 
         # now according to parameter abs_nhood, make raw counts into proportions or not
         if not self.abs_nhood:
-            total_neighs = profile_df.sum(axis=1)
-            profile_df = profile_df.div(total_neighs, axis=0)
-            # this may lead to some values being nan, as some cells might have had no neighbors. Make those values as 0
-            profile_df = profile_df.fillna(0.0)
+            total_neighs = profile.sum(axis=1)[:, None]
+            # Some cells might have no neighbors. Make corresponding proportions as 0
+            profile = np.divide(
+                profile,
+                total_neighs,
+                out=np.zeros_like(profile),
+                where=total_neighs != 0,
+            )
 
-        return profile_df
+        return profile
 
     def get_embedding(self, adata: AnnData) -> NDArrayA:
         """
@@ -1218,17 +1207,10 @@ class _NhoodProfileEmbedder(_NicheEmbedder):
 
             nhood_profile = weighted_profile
 
-        # create AnnData object from neighborhood profile to perform scanpy functions
-        # Use .to_numpy(copy=True) to ensure the array is writeable (required for pandas CoW compatibility)
-        # Preserve the DataFrame index for later matching with adata_masked
-        adata_neighborhood = ad.AnnData(
-            X=nhood_profile.to_numpy(copy=True), obs=pd.DataFrame(index=nhood_profile.index)
-        )
-
         # reason for scaling see https://monkeybread.readthedocs.io/en/latest/notebooks/tutorial.html#niche-analysis
         if self.scale:
-            sc.pp.scale(adata_neighborhood, zero_center=True)
-        return adata_neighborhood.X
+            sc.pp.scale(nhood_profile, zero_center=True)
+        return nhood_profile
 
 
 @d.dedent
