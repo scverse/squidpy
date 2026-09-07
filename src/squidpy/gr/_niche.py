@@ -1211,9 +1211,7 @@ class _NhoodProfileEmbedder(_NicheEmbedder):
             if self.n_hop_weights is None:
                 weights = [1.0] * self.distance
             elif len(self.n_hop_weights) < self.distance:
-                # Extend weights if too few provided
-                weights = self.n_hop_weights + [self.n_hop_weights[-1]] * (self.distance - len(self.n_hop_weights))
-                logg.debug(f"Extended weights to match distance: {weights}")
+                logg.error(f'Number of weights provided is less than hops requested. n_hop_weights = {self.n_hop_weights} is less than distance = {self.distance}')
             else:
                 weights = self.n_hop_weights
 
