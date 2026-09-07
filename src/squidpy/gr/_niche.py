@@ -1055,7 +1055,7 @@ def _compute_hop_adjacency_matrices(
 
     adj_mat_list = [adjacency_matrix]
 
-    # force diagonal to 1 here so self-returns during BFS expansion are filtered 
+    # force diagonal to 1 here so self-returns during BFS expansion are filtered
     # out, regardless of whether the input matrix itself has self-loops.
     adj_visited = adjacency_matrix.copy()
     adj_visited.setdiag(1)
@@ -1175,7 +1175,7 @@ class _NhoodProfileEmbedder(_NicheEmbedder):
             dtype=np.float64,
         ).to_numpy()
 
-        profile = matrix.tocsr() @ one_hot # returns a np array
+        profile = matrix.tocsr() @ one_hot  # returns a np array
 
         # now according to parameter abs_nhood, make raw counts into proportions or not
         if not self.abs_nhood:
@@ -1356,7 +1356,7 @@ class _CellcharterEmbedder(_NicheEmbedder):
                 "CellCharter recommends to use a dimensionality reduced embedding of the data, e.g. a scVI embedding. Since 'use_rep' is not provided, PCA will be used as proxy - performance may be suboptimal."
             )
             adjacency_matrix = adata.obsp[self.spatial_connectivities_key]
-            hop_adj_matrices = _compute_hop_adjacency_matrices(adjacency_matrix.tocsr(copy = True), max_hop=self.distance)
+            hop_adj_matrices = _compute_hop_adjacency_matrices(adjacency_matrix.tocsr(copy=True), max_hop=self.distance)
 
             aggregated_matrices = [adata.X]  # hop 0: raw features, no aggregation
             for hop_adj in hop_adj_matrices:
