@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from abc import ABC, abstractmethod
 from typing import Any, Literal
 
@@ -157,12 +156,10 @@ def calculate_niche(
         If 'False', return a new AnnData object with the niche labels.
     """
 
-    warnings.warn(
+    logg.warning(
         "Calling `calculate_niche` is deprecated and will be removed in squidpy "
         "v1.9.0. Use `calculate_niche_neighborhood`, `calculate_niche_utag`, "
         "`calculate_niche_cellcharter`, or `calculate_niche_spatialleiden` instead.",
-        FutureWarning,
-        stacklevel=2,
     )
 
     # cellcharter-only defaults stay guarded: filling them for other flavors would trip
