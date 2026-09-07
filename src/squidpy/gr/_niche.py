@@ -1019,31 +1019,59 @@ def _check_unnecessary_args(flavor: str, param_dict: dict[str, Any], param_specs
 ############
 
 
-def _setdiag(adjacency_matrix: sps.spmatrix, value: int) -> sps.spmatrix:
-    """remove self-loops"""
+def _compute_hop_adjacency_matrices(
+    adjacency_matrix: sps.spmatrix,
+    max_hop: int,
+) -> list[sps.spmatrix]:
+    """Compute a sequence of 'new-connections-only' adjacency matrices for increasing hop distances.
 
-    # assuming adjacency_matrix is sparse
-    adjacency_matrix.setdiag(value)
-    if value == 0:
-        adjacency_matrix.eliminate_zeros()
-    return adjacency_matrix
+    Parameters
+    ----------
+    adjacency_matrix
+        The 1-hop (direct neighbor) adjacency matrix. Used as-is: if it has an
+        explicit self-loop (diagonal == 1), that is respected and preserved in
+        the output; it is never forced to 0 or 1 by this function.
+    max_hop
+        Number of hop levels to compute (>= 1).
 
+    Returns
+    -------
+    A list ``adj_mat_list`` of length ``max_hop`` where:
 
-def _hop(
-    adj_hop: sps.spmatrix,
-    adj: sps.spmatrix,
-    adj_visited: sps.spmatrix = None,
-) -> tuple[sps.spmatrix, sps.spmatrix]:
-    """get nearest neighbor of neighbors"""
+    - ``adj_mat_list[0]`` is exactly ``adjacency_matrix`` (unmodified).
+    - ``adj_mat_list[k]`` (k >= 1) has a 1 at ``(i, j)`` iff cell ``i`` and ``j``
+      are reachable in exactly ``k + 1`` hops *and* were not already connected
+      in any of ``adj_mat_list[0], ..., adj_mat_list[k-1]``.
 
-    adj_hop = adj_hop @ adj
-    adj_hop.data[:] = 1
+    Notes
+    -----
+    Internally, a "visited" matrix tracks all pairs already accounted for
+    (including the diagonal, which is always treated as visited here to avoid
+    counting a cell reaching itself via an out-and-back path as a genuine new
+    hop-connection).
+    """
+    if max_hop < 1:
+        raise ValueError(f"max_hop must be >= 1, got {max_hop}.")
 
-    if adj_visited is not None:
-        adj_hop = adj_hop > adj_visited
-        adj_visited = adj_visited + adj_hop
+    adj_mat_list = [adjacency_matrix]
 
-    return adj_hop, adj_visited
+    # force diagonal to 1 here so self-returns during BFS expansion are filtered 
+    # out, regardless of whether the input matrix itself has self-loops.
+    adj_visited = adjacency_matrix.copy()
+    adj_visited.setdiag(1)
+
+    # frontier holds only the newest layer of connections discovered so far
+    # Multiplying just the frontier (not everything visited) forward
+    # keeps the sparse matrices small.
+    frontier = adjacency_matrix
+    for _ in range(1, max_hop):
+        frontier = frontier @ adjacency_matrix
+        frontier.data[:] = 1
+        frontier = frontier > adj_visited  # keep only newly-discovered pairs
+        adj_visited = adj_visited + frontier
+        adj_mat_list.append(frontier)
+
+    return adj_mat_list
 
 
 def _normalize(adj: sps.spmatrix) -> sps.spmatrix:
@@ -1328,29 +1356,17 @@ class _CellcharterEmbedder(_NicheEmbedder):
                 "CellCharter recommends to use a dimensionality reduced embedding of the data, e.g. a scVI embedding. Since 'use_rep' is not provided, PCA will be used as proxy - performance may be suboptimal."
             )
             adjacency_matrix = adata.obsp[self.spatial_connectivities_key]
-            layers = list(range(self.distance + 1))
+            hop_adj_matrices = _compute_hop_adjacency_matrices(adjacency_matrix.tocsr(copy = True), max_hop=self.distance)
 
-            aggregated_matrices = []
-            adj_hop = _setdiag(adjacency_matrix, 0)  # Remove self-loops, set diagonal to 0
-            adj_visited = _setdiag(adjacency_matrix.copy(), 1)  # Track visited neighbors
-            for k in layers:
-                if k == 0:
-                    # get original count matrix (not aggregated)
-                    aggregated_matrices.append(adata.X)
-                else:
-                    # get count and adjacency matrix for k-hop (neighbor of neighbor of neighbor ...) and aggregate them
-                    if k > 1:
-                        adj_hop, adj_visited = _hop(adj_hop, adjacency_matrix, adj_visited)
-                    adj_hop_norm = _normalize(adj_hop)
-                    aggregated_matrix = _aggregate(adata, adj_hop_norm, self.aggregation)
-                    aggregated_matrices.append(aggregated_matrix)
+            aggregated_matrices = [adata.X]  # hop 0: raw features, no aggregation
+            for hop_adj in hop_adj_matrices:
+                hop_adj_norm = _normalize(hop_adj)
+                aggregated_matrices.append(_aggregate(adata, hop_adj_norm, self.aggregation))
 
             concatenated_matrix = hstack(aggregated_matrices)  # Stack all matrices horizontally
             arr = concatenated_matrix.toarray()  # Densify
 
-            arr_ad = ad.AnnData(X=arr)
-            sc.tl.pca(arr_ad)
-            embedding = arr_ad.obsm["X_pca"]
+            embedding = sc.tl.pca(arr)
 
         return embedding
 
