@@ -10,7 +10,7 @@ import pandas as pd
 import scanpy as sc
 import scipy.sparse as sps
 from anndata import AnnData
-from scipy.sparse import coo_matrix, hstack, spdiags
+from scipy.sparse import coo_matrix, hstack, spdiags, issparse, csr_array
 from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import normalize
 from spatialdata import SpatialData, sanitize_table
@@ -1020,7 +1020,7 @@ def _check_unnecessary_args(flavor: str, param_dict: dict[str, Any], param_specs
 
 
 def _compute_hop_adjacency_matrices(
-    adjacency_matrix: sps.spmatrix,
+    adjacency_matrix_orig: sps.spmatrix | NDArrayA,
     max_hop: int,
 ) -> list[sps.spmatrix]:
     """Compute a sequence of 'new-connections-only' adjacency matrices for increasing hop distances.
@@ -1053,6 +1053,11 @@ def _compute_hop_adjacency_matrices(
     if max_hop < 1:
         raise ValueError(f"max_hop must be >= 1, got {max_hop}.")
 
+    if not issparse(adjacency_matrix_orig):
+        adjacency_matrix = csr_array(adjacency_matrix_orig)
+    else:
+        adjacency_matrix = adjacency_matrix_orig
+
     adj_mat_list = [adjacency_matrix]
 
     # force diagonal to 1 here so self-returns during BFS expansion are filtered
@@ -1063,7 +1068,9 @@ def _compute_hop_adjacency_matrices(
     # frontier holds only the newest layer of connections discovered so far
     # Multiplying just the frontier (not everything visited) forward
     # keeps the sparse matrices small.
-    frontier = adjacency_matrix
+    frontier = adjacency_matrix # even though initially assigning adjacency_matrix, 
+    # after entering below loop, frontier is instantly assigned another array. 
+    # Hence adjacency_matrix is not modified
     for _ in range(1, max_hop):
         frontier = frontier @ adjacency_matrix
         frontier.data[:] = 1
@@ -1356,7 +1363,7 @@ class _CellcharterEmbedder(_NicheEmbedder):
                 "CellCharter recommends to use a dimensionality reduced embedding of the data, e.g. a scVI embedding. Since 'use_rep' is not provided, PCA will be used as proxy - performance may be suboptimal."
             )
             adjacency_matrix = adata.obsp[self.spatial_connectivities_key]
-            hop_adj_matrices = _compute_hop_adjacency_matrices(adjacency_matrix.tocsr(copy=True), max_hop=self.distance)
+            hop_adj_matrices = _compute_hop_adjacency_matrices(adjacency_matrix, max_hop=self.distance)
 
             aggregated_matrices = [adata.X]  # hop 0: raw features, no aggregation
             for hop_adj in hop_adj_matrices:
