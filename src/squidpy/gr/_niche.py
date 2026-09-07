@@ -1224,13 +1224,12 @@ class _NhoodProfileEmbedder(_NicheEmbedder):
             weighted_profile = weights[0] * nhood_profile
 
             # Calculate higher-order hop profiles
-            n_hop_adjacency_matrix = adata.obsp[self.spatial_connectivities_key].copy()
+            hop_adj_matrices = _compute_hop_adjacency_matrices(adata.obsp[self.spatial_connectivities_key], max_hop=self.distance)
 
             # get n_hop neighbor adjacency matrices by multiplying the original adjacency matrix with itself n times and get corresponding neighborhood profiles.
             for n_hop in range(1, self.distance):
-                logg.debug(f"Calculating {n_hop + 1}-hop neighbors")
-                # Multiply adjacency matrix by itself to get n+1 hop adjacency
-                n_hop_adjacency_matrix = n_hop_adjacency_matrix @ adata.obsp[self.spatial_connectivities_key]
+                logg.debug(f"Obtaining {n_hop + 1}-hop neighbors")
+                n_hop_adjacency_matrix = hop_adj_matrices[n_hop]
                 matrix = n_hop_adjacency_matrix.tocoo()
 
                 # Calculate and add weighted profile
