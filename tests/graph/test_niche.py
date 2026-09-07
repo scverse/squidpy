@@ -5,7 +5,7 @@ import pytest
 from anndata import AnnData
 from pandas import Series
 from scanpy.pp import neighbors
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, identity
 from spatialdata import SpatialData
 from spatialdata.models import TableModel
 
@@ -16,6 +16,7 @@ from squidpy.gr import (
     calculate_niche_neighborhood,
     spatial_neighbors_knn,
 )
+from squidpy.gr._niche import _compute_hop_adjacency_matrices
 
 N_NEIGHBORS = 20
 GROUPS = "celltype_mapped_refined"
@@ -220,6 +221,110 @@ def test_niche_calc_nhood_dummy_sdata(dummy_adata2: AnnData):
     calculate_niche(sdata, flavor="neighborhood", groups="celltype", n_neighbors=3, resolutions=1.0, table_key="adata")
 
     _assert_all_assigned(sdata["adata"], "nhood_niche_res_1.0")
+
+
+# test cases for _compute_hop_adjacency_matrices
+
+
+def _toarray(mat) -> np.ndarray:
+    """Densify a sparse (or already-dense) matrix for easy comparison in assertions."""
+    return np.asarray(mat.todense()) if hasattr(mat, "todense") else np.asarray(mat)
+
+
+def test_hop_adjacency_invalid_max_hop_raises():
+    "max_hop must be >= 1; anything smaller is rejected."
+    adj = csr_matrix(np.array([[0, 1], [1, 0]]))
+    with pytest.raises(ValueError, match="max_hop must be >= 1"):
+        _compute_hop_adjacency_matrices(adj, max_hop=0)
+    with pytest.raises(ValueError, match="max_hop must be >= 1"):
+        _compute_hop_adjacency_matrices(adj, max_hop=-3)
+
+
+def test_hop_adjacency_output_length_matches_max_hop():
+    "The returned list always has exactly `max_hop` entries."
+    adj = csr_matrix(np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]]))
+    for max_hop in (1, 2, 3, 5):
+        result = _compute_hop_adjacency_matrices(adj, max_hop=max_hop)
+        assert len(result) == max_hop
+
+
+def test_hop_adjacency_first_entry_is_input_unmodified():
+    "adj_mat_list[0] must be exactly the input matrix, self-loops and all."
+    adj = csr_matrix(np.array([[1, 1, 0], [1, 0, 1], [0, 1, 0]]))
+    result = _compute_hop_adjacency_matrices(adj, max_hop=1)
+    assert np.array_equal(_toarray(result[0]), _toarray(adj))
+
+
+def test_hop_adjacency_path_graph_two_hop_layer():
+    "On a 3-node path 0-1-2, the 2-hop layer connects only (0, 2): reachable in 2 steps but not adjacent."
+    adj = csr_matrix(np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]]))
+    result = _compute_hop_adjacency_matrices(adj, max_hop=2)
+
+    expected_hop2 = np.array([[0, 0, 1], [0, 0, 0], [1, 0, 0]])
+    assert np.array_equal(_toarray(result[1]), expected_hop2)
+
+
+def test_hop_adjacency_path_graph_beyond_diameter_is_empty():
+    "A 3-node path has diameter 2, so the 3-hop layer must be all zeros: no pair is exactly 3 apart."
+    adj = csr_matrix(np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]]))
+    result = _compute_hop_adjacency_matrices(adj, max_hop=3)
+
+    assert np.array_equal(_toarray(result[2]), np.zeros((3, 3)))
+
+
+def test_hop_adjacency_triangle_graph_two_hop_layer_is_empty():
+    "In a fully-connected triangle every pair is already 1-hop apart, so the 2-hop layer adds nothing new."
+    adj = csr_matrix(np.array([[0, 1, 1], [1, 0, 1], [1, 1, 0]]))
+    result = _compute_hop_adjacency_matrices(adj, max_hop=2)
+
+    assert np.array_equal(_toarray(result[1]), np.zeros((3, 3)))
+
+
+def test_hop_adjacency_self_loops_only_never_propagate():
+    "If the input has no off-diagonal edges, no cell can reach any other cell at any hop distance."
+    adj = identity(4, format="csr")
+    result = _compute_hop_adjacency_matrices(adj, max_hop=3)
+
+    assert np.array_equal(_toarray(result[0]), _toarray(adj))
+    for hop_layer in result[1:]:
+        assert np.array_equal(_toarray(hop_layer), np.zeros((4, 4)))
+
+
+def test_hop_adjacency_isolated_node_stays_isolated():
+    "A node with no edges at all must remain disconnected from everything, including itself, at every hop."
+    adj = csr_matrix(np.zeros((1, 1)))
+    result = _compute_hop_adjacency_matrices(adj, max_hop=3)
+
+    for hop_layer in result:
+        assert np.array_equal(_toarray(hop_layer), np.zeros((1, 1)))
+
+
+def test_hop_adjacency_layers_are_binary_despite_multiple_paths():
+    "A 4-cycle gives two distinct 2-hop paths between opposite corners; the output must read 0/1, not a path count."
+    # 4-cycle: 0-1-2-3-0
+    adj = csr_matrix(
+        np.array(
+            [
+                [0, 1, 0, 1],
+                [1, 0, 1, 0],
+                [0, 1, 0, 1],
+                [1, 0, 1, 0],
+            ]
+        )
+    )
+    result = _compute_hop_adjacency_matrices(adj, max_hop=2)
+    hop2 = _toarray(result[1])
+
+    assert set(np.unique(hop2)) <= {0, 1}
+    expected_hop2 = np.array(
+        [
+            [0, 0, 1, 0],
+            [0, 0, 0, 1],
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+        ]
+    )
+    assert np.array_equal(hop2, expected_hop2)
 
 
 # older tests
