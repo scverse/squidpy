@@ -133,11 +133,11 @@ def cluster_auto_k(
         model_params=model_params,
         seed=legacy_random(np.random.default_rng(rng)),
     )
-    logg.info(f"Selected K={result['best_k']} after {result['n_runs']} runs")
+    logg.info(f"Selected K={result.best_k} after {result.n_runs} runs")
 
-    labels = pd.DataFrame({key_added: pd.Categorical(result["labels"][result["best_k"]])}, index=adata.obs_names)
+    labels = pd.DataFrame({key_added: pd.Categorical(result.labels[result.best_k])}, index=adata.obs_names)
     if keep_all_labels:
-        for k, labeling in result["labels"].items():
+        for k, labeling in result.labels.items():
             labels[f"{key_added}_k{k}"] = pd.Categorical(labeling)
 
     for column in labels:

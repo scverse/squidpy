@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from itertools import combinations
-from typing import Any, TypedDict
+from typing import Any, NamedTuple
 
 import numpy as np
 import pandas as pd
@@ -137,13 +137,8 @@ def _stability_frame(n_clusters: Sequence[int], interior: Sequence[int], stabili
     )
 
 
-class ClusterAutoKResult(TypedDict):
-    """A sweep result.
-
-    Every field except ``labels`` survives an ``h5ad`` round trip with its type intact, and
-    ``to_uns`` returns exactly those. Lists would not -- they come back as arrays -- which
-    is why the fitted and scored K values are read off ``table`` rather than repeated as fields.
-    """
+class ClusterAutoKResult(NamedTuple):
+    """A sweep result."""
 
     #: Per-K diagnostics indexed by K, with the columns ``stability_mean``, ``stability_std``
     #: and ``nll``. Every fitted K has a row, but the ``+-1`` halo is never scored, so its
@@ -169,8 +164,8 @@ class ClusterAutoKResult(TypedDict):
 
 
 def to_uns(result: ClusterAutoKResult) -> dict[str, Any]:
-    """The storable part of *result*, for :attr:`anndata.AnnData.uns`."""
-    return {key: value for key, value in result.items() if key != "labels"}
+    # don't include labels since they are already in obs
+    return {key: value for key, value in result._asdict().items() if key != "labels"}
 
 
 def _fit_once(X: Any, k: int, random_state: int, model_params: Mapping[str, Any]) -> tuple[np.ndarray, float]:

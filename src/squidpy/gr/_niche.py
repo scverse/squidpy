@@ -1638,19 +1638,19 @@ class _AutoKGMMClusterer(_NicheClusterer):
             model_params=self.model_params,
             seed=legacy_random(self.rng),
         )
-        logg.info(f"Selected K={result['best_k']} after {result['n_runs']} runs")
+        logg.info(f"Selected K={result.best_k} after {result.n_runs} runs")
 
         if self.base_colname in adata.obs.columns:
             logg.info(f"Overwriting existing column '{self.base_colname}'")
 
-        adata.obs[self.base_colname] = pd.Categorical(result["labels"][result["best_k"]])
+        adata.obs[self.base_colname] = pd.Categorical(result.labels[result.best_k])
         result_columns = [self.base_colname]
 
         if self.store_labels:
             # obs, not obsm, so masking/min_niche_size/lib-prefixing apply
             for k in self.n_clusters:
                 colname = f"{self.base_colname}_k{k}"
-                adata.obs[colname] = pd.Categorical(result["labels"][k])
+                adata.obs[colname] = pd.Categorical(result.labels[k])
                 result_columns.append(colname)
 
         return result_columns, {self.uns_key: to_uns(result)}

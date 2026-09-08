@@ -11,7 +11,6 @@ from sklearn.metrics import fowlkes_mallows_score
 from squidpy.gr import cluster_auto_k, cluster_stability
 from squidpy.gr._autok import (
     DEFAULT_INIT_PARAMS,
-    ClusterAutoKResult,
     _score_block,
     expand_n_clusters,
     mirror_stability,
@@ -21,8 +20,7 @@ from squidpy.gr._autok import (
 from squidpy.gr._autok import cluster_stability as _cluster_stability
 
 
-def scored(result: ClusterAutoKResult) -> list[int]:
-    table = result["table"]
+def scored(table: pd.DataFrame) -> list[int]:
     return table.index[table["stability_mean"].notna()].tolist()
 
 
@@ -83,38 +81,38 @@ def test_sweep_is_reproducible_from_the_rng():
     X, ks = make_blobs(), [1, 2, 3, 4]
     first = sweep_auto_k(X, ks, max_runs=3, seed=0)
     second = sweep_auto_k(X, ks, max_runs=3, seed=0)
-    assert first["best_k"] == second["best_k"]
-    assert np.array_equal(first["stability"], second["stability"])
-    assert_frame_equal(first["table"], second["table"])
+    assert first.best_k == second.best_k
+    assert np.array_equal(first.stability, second.stability)
+    assert_frame_equal(first.table, second.table)
 
 
 def test_sweep_handles_non_contiguous_k_values():
     # regression: adjacent entries, not k+1
     result = sweep_auto_k(make_blobs(), [2, 5, 9], max_runs=2, seed=0)
-    assert list(result["table"].index) == [2, 5, 9]
-    assert scored(result) == [5]
-    assert result["best_k"] == 5
+    assert list(result.table.index) == [2, 5, 9]
+    assert scored(result.table) == [5]
+    assert result.best_k == 5
 
 
 def test_sweep_scores_only_interior_but_fits_the_halo():
     result = sweep_auto_k(make_blobs(), [1, 2, 3, 4, 5], max_runs=2, seed=0)
-    assert scored(result) == [2, 3, 4]
-    assert result["stability"].shape[0] == 3
-    assert result["best_k"] in scored(result)
+    assert scored(result.table) == [2, 3, 4]
+    assert result.stability.shape[0] == 3
+    assert result.best_k in scored(result.table)
     # nll is defined for every fitted K, including the halo
-    assert result["table"]["nll"].notna().all()
-    assert sorted(result["labels"]) == [1, 2, 3, 4, 5]
+    assert result.table["nll"].notna().all()
+    assert sorted(result.labels) == [1, 2, 3, 4, 5]
 
 
 def test_sweep_convergence():
     X, ks = make_blobs(), [1, 2, 3, 4]
     converged = sweep_auto_k(X, ks, max_runs=10, convergence_tol=np.inf, seed=0)
-    assert converged["converged"]
-    assert converged["n_runs"] < 10
+    assert converged.converged
+    assert converged.n_runs < 10
 
     exhausted = sweep_auto_k(X, ks, max_runs=3, convergence_tol=0.0, seed=0)
-    assert not exhausted["converged"]
-    assert exhausted["n_runs"] == 3
+    assert not exhausted.converged
+    assert exhausted.n_runs == 3
 
 
 def test_sweep_rejects_params_it_controls_itself():
@@ -167,7 +165,7 @@ def test_sweep_reg_covar_hint_not_for_other_errors():
 
 def test_sweep_auto_k_keeps_labels_narrow():
     result = sweep_auto_k(make_blobs(), [2, 3, 4], max_runs=2, seed=0)
-    assert {labels.dtype for labels in result["labels"].values()} == {np.dtype(np.uint32)}
+    assert {labels.dtype for labels in result.labels.values()} == {np.dtype(np.uint32)}
 
 
 # the per-K table
@@ -175,7 +173,7 @@ def test_sweep_auto_k_keeps_labels_narrow():
 
 def test_table_halo_unscored():
     result = sweep_auto_k(make_blobs(), [1, 2, 3, 4, 5], max_runs=2, seed=0)
-    frame = result["table"]
+    frame = result.table
 
     assert list(frame.index) == [1, 2, 3, 4, 5]
     assert frame.index.name == "k"
@@ -186,29 +184,29 @@ def test_table_halo_unscored():
     assert halo["stability_std"].isna().all()
     assert not halo["nll"].isna().any(), "the halo is fitted, so it has an nll"
 
-    assert scored(result) == [2, 3, 4], "the halo is never scored, so it can never be best"
+    assert scored(result.table) == [2, 3, 4], "the halo is never scored, so it can never be best"
 
 
 def test_best_k_is_the_most_stable_scored_k():
     result = sweep_auto_k(make_blobs(), [1, 2, 3, 4, 5], max_runs=3, seed=0)
-    assert result["best_k"] == scored(result)[int(np.argmax(result["stability"].mean(axis=1)))]
+    assert result.best_k == scored(result.table)[int(np.argmax(result.stability.mean(axis=1)))]
 
 
 def test_to_uns_carries_only_what_survives_h5ad(tmp_path):
     result = sweep_auto_k(make_blobs(), [1, 2, 3, 4, 5], max_runs=2, seed=0)
-    adata = AnnData(np.zeros((result["stability"].shape[0], 1), dtype=np.float32))
+    adata = AnnData(np.zeros((result.stability.shape[0], 1), dtype=np.float32))
     adata.uns["autok"] = to_uns(result)
 
     path = tmp_path / "autok.h5ad"
     adata.write_h5ad(path)
     reloaded = read_h5ad(path).uns["autok"]
 
-    assert set(reloaded) == set(result) - {"labels"}, "`labels` is K-keyed, so uns cannot hold it"
-    assert_frame_equal(reloaded["table"], result["table"])
-    np.testing.assert_allclose(reloaded["stability"], result["stability"])
-    assert reloaded["best_k"] == result["best_k"]
-    assert reloaded["n_runs"] == result["n_runs"]
-    assert reloaded["converged"] == result["converged"]
+    assert set(reloaded) == set(result._fields) - {"labels"}, "`labels` is K-keyed, so uns cannot hold it"
+    assert_frame_equal(reloaded["table"], result.table)
+    np.testing.assert_allclose(reloaded["stability"], result.stability)
+    assert reloaded["best_k"] == result.best_k
+    assert reloaded["n_runs"] == result.n_runs
+    assert reloaded["converged"] == result.converged
 
 
 # the public entry point
@@ -220,7 +218,7 @@ def test_cluster_auto_k_on_adata():
 
     diagnostics = adata.uns["cluster_auto_k"]
     assert list(diagnostics["table"].index) == [1, 2, 3, 4, 5]
-    assert diagnostics["best_k"] in scored(diagnostics)
+    assert diagnostics["best_k"] in scored(diagnostics["table"])
     assert list(adata.obs.columns) == ["cluster_auto_k"]
     assert adata.obs["cluster_auto_k"].dtype == "category"
 
@@ -239,7 +237,7 @@ def test_cluster_auto_k_uses_the_requested_representation():
     adata = AnnData(np.zeros((90, 2)))
     adata.obsm["X_embedding"] = make_blobs()
     cluster_auto_k(adata, (2, 4), use_rep="X_embedding", max_runs=2, rng=0)
-    assert adata.uns["cluster_auto_k"]["best_k"] in scored(adata.uns["cluster_auto_k"])
+    assert adata.uns["cluster_auto_k"]["best_k"] in scored(adata.uns["cluster_auto_k"]["table"])
 
 
 def test_cluster_auto_k_rejects_a_missing_representation():
@@ -422,9 +420,9 @@ def test_sweep_pins_its_stability_curve():
     # values the criterion produces, not the ground truth: three well-separated blobs score
     # K=2 above K=3, which is a property of comparing K against K+1, not of this port.
     result = sweep_auto_k(make_blobs(), list(range(1, 7)), max_runs=5, seed=0)
-    assert result["best_k"] == 2
+    assert result.best_k == 2
     np.testing.assert_allclose(
-        result["table"]["stability_mean"].to_numpy(),
+        result.table["stability_mean"].to_numpy(),
         [np.nan, 0.720930, 0.715650, 0.669296, 0.661156, np.nan],
         rtol=1e-5,
     )
@@ -434,5 +432,5 @@ def test_seed_is_keyed_by_run_and_k_not_by_position():
     X = make_blobs()
     short = sweep_auto_k(X, [1, 2, 3, 4, 5], max_runs=3, seed=42)
     long = sweep_auto_k(X, [1, 2, 3, 4, 5, 6], max_runs=3, seed=42)
-    for k in short["labels"]:
-        np.testing.assert_array_equal(short["labels"][k], long["labels"][k])
+    for k in short.labels:
+        np.testing.assert_array_equal(short.labels[k], long.labels[k])
