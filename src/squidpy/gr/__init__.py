@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from squidpy.gr import neighbors
-from squidpy.gr._autok import ClusterAutoKResult
 from squidpy.gr._build import (
     SpatialNeighborsResult,
     mask_graph,
@@ -39,7 +38,6 @@ __all__ = [
     "GraphMatrixT",
     "SpatialNeighborsResult",
     "NhoodEnrichmentResult",
-    "ClusterAutoKResult",
     "neighbors",
     "mask_graph",
     "spatial_neighbors",

@@ -9,12 +9,14 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from itertools import combinations
-from typing import Any, NamedTuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
 from sklearn.metrics import fowlkes_mallows_score, mean_absolute_percentage_error
 from sklearn.mixture import GaussianMixture
+
+from squidpy.types import ClusterAutoKResult
 
 # `best_k` is a function of run-to-run variability, and therefore of the initialization.
 # Pinned so that the selected K does not silently change with a scikit-learn default.
@@ -137,32 +139,6 @@ def _stability_frame(n_clusters: Sequence[int], interior: Sequence[int], stabili
     )
 
 
-class ClusterAutoKResult(NamedTuple):
-    """A sweep result."""
-
-    #: Per-K diagnostics indexed by K, with the columns ``stability_mean``, ``stability_std``
-    #: and ``nll``. Every fitted K has a row, but the ``+-1`` halo is never scored, so its
-    #: stability is ``NaN``.
-    table: pd.DataFrame
-
-    #: Raw similarity values, of shape ``(n_scored_k, n_comparisons)``. Row ``i`` belongs to
-    #: the ``i``-th scored K.
-    stability: np.ndarray
-
-    #: The scored K with the highest mean stability.
-    best_k: int
-
-    #: Number of runs actually performed, below ``max_runs`` if the sweep converged.
-    n_runs: int
-
-    #: Whether the sweep stopped early because the stability curve had settled.
-    converged: bool
-
-    #: Labeling of the best fit (lowest ``nll``) per K, for every fitted K, dropped by
-    #: ``to_uns``, because :mod:`anndata` cannot write a dict with non-string keys.
-    labels: dict[int, np.ndarray]
-
-
 def to_uns(result: ClusterAutoKResult) -> dict[str, Any]:
     # don't include labels since they are already in obs
     return {key: value for key, value in result._asdict().items() if key != "labels"}
@@ -221,7 +197,7 @@ def sweep_auto_k(
 
     Returns
     -------
-    The sweep result; see :class:`~squidpy.gr.ClusterAutoKResult`.
+    The sweep result; see :class:`~squidpy.types.ClusterAutoKResult`.
     """
     if max_runs <= 1:
         raise ValueError(f"stability needs at least 2 runs to compare, got max_runs={max_runs}")

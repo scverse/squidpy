@@ -146,6 +146,8 @@ nitpick_ignore = [
     # numpy.typing.NDArray canonicalizes to this private path, which has no doc target
     ("py:class", "numpy._typing._array_like.NDArray"),
     ("py:class", "np.number"),
+    ("py:class", "np.ndarray"),
+    ("py:class", "pd.DataFrame"),
     ("py:class", "csr_matrix"),
     # no idea why those aren’t exported
     ("py:class", "squidpy._constants._constants.SpatialAutocorr"),

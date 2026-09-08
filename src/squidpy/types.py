@@ -1,9 +1,12 @@
-"""Public ``*Params`` types for :mod:`squidpy.experimental`, and their defaults."""
+"""Public parameter bags and result schemas."""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Annotated, TypedDict
+from typing import Annotated, NamedTuple, TypedDict
+
+import numpy as np
+import pandas as pd
 
 from squidpy._utils import RNGLike, SeedLike
 from squidpy.experimental.utils._params import Default, defaults_of
@@ -21,6 +24,7 @@ DEFAULT_LUMINOSITY_THRESHOLD: float = 0.8
 _OD_BETA: float = 0.15
 
 __all__ = [
+    "ClusterAutoKResult",
     "BackgroundDetectionParams",
     "FelzenszwalbParams",
     "WekaParams",
@@ -213,3 +217,28 @@ class StitchParams(TypedDict, total=False):
 
 
 _STITCH_DEFAULTS: StitchParams = defaults_of(StitchParams)
+
+
+class ClusterAutoKResult(NamedTuple):
+    """A sweep result."""
+
+    #: Per-K diagnostics indexed by K, with the columns ``stability_mean``, ``stability_std``
+    #: and ``nll``. Every fitted K has a row, but the ``+-1`` halo is never scored, so its
+    #: stability is ``NaN``.
+    table: pd.DataFrame
+
+    #: Raw similarity values, of shape ``(n_scored_k, n_comparisons)``. Row ``i`` belongs to
+    #: the ``i``-th scored K.
+    stability: np.ndarray
+
+    #: The scored K with the highest mean stability.
+    best_k: int
+
+    #: Number of runs actually performed, below ``max_runs`` if the sweep converged.
+    n_runs: int
+
+    #: Whether the sweep stopped early because the stability curve had settled.
+    converged: bool
+
+    #: Labeling of the best fit (lowest ``nll``) per K, for every fitted K.
+    labels: dict[int, np.ndarray]

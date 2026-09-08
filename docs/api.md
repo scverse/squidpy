@@ -43,7 +43,6 @@ import squidpy as sq
     gr.calculate_niche_spatialleiden
     gr.cluster_auto_k
     gr.cluster_stability
-    gr.ClusterAutoKResult
 ```
 
 ## Image
@@ -169,8 +168,7 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
 
 ## Types
 
-The public parameter bags. Every key is optional and falls back to the default shown with
-it.
+The public parameter bags or result schemas.
 
 ```{eval-rst}
 .. automodule:: squidpy.types
