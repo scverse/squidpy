@@ -203,14 +203,14 @@ def calculate_niche(
     if flavor == "neighborhood":
         return calculate_niche_neighborhood(
             data,
-            groups,
-            resolutions,
-            n_neighbors,
-            spatial_connectivities_key,
-            scale,
-            distance,
-            abs_nhood,
-            n_hop_weights,
+            groups=groups,
+            resolutions=resolutions,
+            n_neighbors=n_neighbors,
+            spatial_connectivities_key=spatial_connectivities_key,
+            scale=scale,
+            distance=distance,
+            abs_nhood=abs_nhood,
+            n_hop_weights=n_hop_weights,
             embedding_key_added="niche_embedding",
             min_niche_size=min_niche_size,
             mask=mask,
@@ -224,8 +224,8 @@ def calculate_niche(
     elif flavor == "utag":
         return calculate_niche_utag(
             data,
-            resolutions,
-            n_neighbors,
+            resolutions=resolutions,
+            n_neighbors=n_neighbors,
             use_layer=None,
             spatial_connectivities_key=spatial_connectivities_key,
             embedding_key_added="niche_embedding",
@@ -241,12 +241,12 @@ def calculate_niche(
     elif flavor == "cellcharter":
         return calculate_niche_cellcharter(
             data,
-            distance,
-            aggregation,
-            rng,
-            spatial_connectivities_key,
-            n_components,
-            use_rep,
+            distance=distance,
+            aggregation=aggregation,
+            rng=rng,
+            spatial_connectivities_key=spatial_connectivities_key,
+            n_components=n_components,
+            use_rep=use_rep,
             embedding_key_added="niche_embedding",
             min_niche_size=min_niche_size,
             mask=mask,
@@ -258,15 +258,15 @@ def calculate_niche(
     elif flavor == "spatialleiden":
         return calculate_niche_spatialleiden(
             data,
-            resolutions,
-            latent_connectivities_key,
-            spatial_connectivities_key,
-            layer_ratio,
-            n_iterations,
-            use_weights,
-            rng,
-            min_niche_size,
-            mask,
+            resolutions=resolutions,
+            latent_connectivities_key=latent_connectivities_key,
+            spatial_connectivities_key=spatial_connectivities_key,
+            layer_ratio=layer_ratio,
+            n_iterations=n_iterations,
+            use_weights=use_weights,
+            rng=rng,
+            min_niche_size=min_niche_size,
+            mask=mask,
             prefix=None,
             library_key=library_key,
             copy=not inplace,
@@ -279,6 +279,7 @@ def calculate_niche(
 @d.dedent
 def calculate_niche_neighborhood(
     data: AnnData | SpatialData,
+    *,
     groups: str,
     resolutions: float | list[float],
     n_neighbors: int = 15,
@@ -293,7 +294,6 @@ def calculate_niche_neighborhood(
     library_key: str | None = None,
     copy: bool = False,
     table_key: str | None = None,
-    *,
     flavor: Literal["igraph", "leidenalg"] = "igraph",
     n_iterations: int = -1,
     rng: SeedLike | RNGLike | None = None,
@@ -313,6 +313,9 @@ def calculate_niche_neighborhood(
         Number of neighbors used when constructing the graph for Leiden clustering.
     resolutions
         Resolution parameter(s) for Leiden clustering. Can be a single float or a list.
+        Leiden clustering is performed on the neighborhood embedding for each resolution
+        value in ``resolutions``. Hence, there are as many niche columns added in ``adata.obs``
+        as number of resolution values supplied.
     %(niche_spatial_conn_key)s
     scale
         Whether to z-score the neighborhood profile prior to clustering.
@@ -365,6 +368,7 @@ def calculate_niche_neighborhood(
 @d.dedent
 def calculate_niche_utag(
     data: AnnData | SpatialData,
+    *,
     resolutions: float | list[float],
     n_neighbors: int = 15,
     use_layer: str | None = None,
@@ -375,7 +379,6 @@ def calculate_niche_utag(
     library_key: str | None = None,
     copy: bool = False,
     table_key: str | None = None,
-    *,
     flavor: Literal["igraph", "leidenalg"] = "igraph",
     n_iterations: int = -1,
     rng: SeedLike | RNGLike | None = None,
@@ -429,6 +432,7 @@ def calculate_niche_utag(
 @d.dedent
 def calculate_niche_cellcharter(
     data: AnnData | SpatialData,
+    *,
     distance: int = 3,
     aggregation: str = "mean",
     rng: SeedLike | RNGLike | None = None,
@@ -495,6 +499,7 @@ def calculate_niche_cellcharter(
 @d.dedent
 def calculate_niche_spatialleiden(
     data: AnnData | SpatialData,
+    *,
     resolutions: float | tuple[float, float] | list[float | tuple[float, float]],
     latent_connectivities_key: str = "connectivities",
     spatial_connectivities_key: str = "spatial_connectivities",
@@ -595,15 +600,15 @@ def calculate_niche_spatialleiden(
             # give prefix appropriate value so that the niche values indicate lib id.
             calculate_niche_spatialleiden(
                 lib_adata,
-                resolutions,
-                latent_connectivities_key,
-                spatial_connectivities_key,
-                layer_ratio,
-                n_iterations,
-                use_weights,
-                library_rngs[itr],
-                min_niche_size,
-                mask,
+                resolutions=resolutions,
+                latent_connectivities_key=latent_connectivities_key,
+                spatial_connectivities_key=spatial_connectivities_key,
+                layer_ratio=layer_ratio,
+                n_iterations=n_iterations,
+                use_weights=use_weights,
+                rng=library_rngs[itr],
+                min_niche_size=min_niche_size,
+                mask=mask,
                 prefix=f"lib={lib_id}_",
                 library_key=None,
                 copy=False,  # to save memory
@@ -1572,4 +1577,4 @@ def _postprocess_niche_results(
         if prefix is not None:
             labels = prefix + labels
 
-        adata.obs[col] = labels
+        adata.obs[col] = labels.astype('category')

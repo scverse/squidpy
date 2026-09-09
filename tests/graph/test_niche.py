@@ -204,7 +204,7 @@ def test_niche_calc_nhood_multipostprocessor_dummy_adata(dummy_adata2: AnnData):
     assert (niches[["a", "b"]] == "not_a_niche").all()
     # every real niche respects the requested minimum size
     real = niches[niches != "not_a_niche"]
-    assert (real.value_counts() >= 3).all()
+    assert (real.astype(str).value_counts() >= 3).all()
 
 
 def test_niche_calc_nhood_dummy_sdata(dummy_adata2: AnnData):
