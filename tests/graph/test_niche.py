@@ -7,10 +7,12 @@ from pandas import Series
 from pandas.testing import assert_frame_equal
 from scanpy.pp import neighbors
 from scipy.sparse import csr_matrix
+from sklearn.cluster import AgglomerativeClustering, KMeans
 from spatialdata import SpatialData
 from spatialdata.models import TableModel
 
 from squidpy.gr import (
+    _autok,
     _niche,
     calculate_niche,
     calculate_niche_cellcharter,
@@ -116,15 +118,17 @@ def test_niche_cellcharter_library_seeds_are_independent(dummy_adata2: AnnData, 
     second = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), copy=True, **kwargs)
     assert (first.obs["cellcharter_niche"] == second.obs["cellcharter_niche"]).all()
 
-    # clusterer is reused across libraries; record each fit's seed
+    # one clusterer, cloned and reseeded per library; record the seed each fit ran with.
+    # `fit_predict` rather than the constructor, since that is the one call both a
+    # `fit()`/`predict()` and a `fit_predict()` clusterer route through
     seen: list[int] = []
-    original = _niche.GaussianMixture
+    original = _autok.GaussianMixture.fit_predict
 
-    def spy(*args, **kwargs):
-        seen.append(kwargs["random_state"])
-        return original(*args, **kwargs)
+    def spy(self, X, *args, **kwargs):
+        seen.append(self.random_state)
+        return original(self, X, *args, **kwargs)
 
-    monkeypatch.setattr(_niche, "GaussianMixture", spy)
+    monkeypatch.setattr(_autok.GaussianMixture, "fit_predict", spy)
     calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), copy=True, **kwargs)
 
     assert len(seen) == 2, "expected one mixture fit per library"
@@ -450,3 +454,22 @@ def test_niche_copy_semantics(dummy_adata2: AnnData):
 
     assert calculate_niche_neighborhood(dummy_adata2, **kwargs) is None
     assert (dummy_adata2.obs[key] == out.obs[key]).all()
+
+
+def test_niche_custom_takes_any_sklearn_clusterer(dummy_adata2: AnnData):
+    """The clusterer slot needs `fit_predict` and nothing squidpy-specific.
+
+    `KMeans` takes a `random_state` and so is reseeded per fit; `AgglomerativeClustering`
+    takes none and is fitted as given. One niche column each.
+    """
+    spatial_neighbors_knn(dummy_adata2, n_neighs=3)
+
+    _niche._calculate_niche_custom(
+        dummy_adata2,
+        _niche._UtagEmbedder("spatial_connectivities", rng=np.random.default_rng(0)),
+        {"kmeans_niche": KMeans(n_clusters=2, n_init=1), "agglo_niche": AgglomerativeClustering(n_clusters=2)},
+        np.random.default_rng(0),
+    )
+
+    for column in ("kmeans_niche", "agglo_niche"):
+        assert _assert_all_assigned(dummy_adata2, column).nunique() == 2

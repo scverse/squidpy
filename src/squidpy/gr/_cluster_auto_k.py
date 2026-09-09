@@ -16,7 +16,7 @@ from spatialdata._logging import logger as logg
 from squidpy._docs import d
 from squidpy._utils import RNGLike, SeedLike, legacy_random
 from squidpy._validators import assert_isinstance, assert_key_in_adata
-from squidpy.gr._autok import _stability_frame, expand_n_clusters, sweep_auto_k, to_uns
+from squidpy.gr._autok import _gmm, _stability_frame, expand_n_clusters, label_columns, sweep_auto_k, to_uns
 from squidpy.gr._autok import cluster_stability as _cluster_stability
 from squidpy.gr._utils import _save_data, extract_adata_if_sdata
 
@@ -130,15 +130,12 @@ def cluster_auto_k(
         candidates,
         max_runs=max_runs,
         convergence_tol=convergence_tol,
-        model_params=model_params,
+        clusterer=_gmm(model_params),
         seed=legacy_random(np.random.default_rng(rng)),
     )
     logg.info(f"Selected K={result.best_k} after {result.n_runs} runs")
 
-    labels = pd.DataFrame({key_added: pd.Categorical(result.labels[result.best_k])}, index=adata.obs_names)
-    if keep_all_labels:
-        for k, labeling in result.labels.items():
-            labels[f"{key_added}_k{k}"] = pd.Categorical(labeling)
+    labels = pd.DataFrame(label_columns(result, key_added, all_labels=keep_all_labels), index=adata.obs_names)
 
     for column in labels:
         _save_data(adata, attr="obs", key=column, data=labels[column], prefix=column == key_added)

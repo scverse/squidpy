@@ -252,12 +252,15 @@ _niche_common_params = f"""\
 {_niche_mask}
 {_library_key}
 {_copy}"""
-_niche_leiden_params = f"""\
+_niche_leiden_backend = """\
 flavor
     Leiden backend passed to :func:`scanpy.tl.leiden`. Defaults to ``'igraph'``
     (the ``'leidenalg'`` backend is deprecated in scanpy).
 n_iterations
-    Number of Leiden iterations. ``-1`` iterates until convergence.
+    Number of Leiden iterations. ``-1`` iterates until convergence."""
+
+_niche_leiden_params = f"""\
+{_niche_leiden_backend}
 {_rng}
     Every resolution is clustered with an independent rng derived from it."""
 
@@ -518,6 +521,7 @@ d = DocstringProcessor(
     niche_min_niche_size=_niche_min_niche_size,
     niche_common_params=_niche_common_params,
     niche_leiden_params=_niche_leiden_params,
+    niche_leiden_backend=_niche_leiden_backend,
     sdata_params=_sdata_params,
     graph_common_params=_graph_common_params,
     n_jobs_libraries=_n_jobs_libraries,

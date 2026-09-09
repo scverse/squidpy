@@ -11,8 +11,9 @@ import pandas as pd
 import scanpy as sc
 import scipy.sparse as sps
 from anndata import AnnData
+from fast_array_utils.types import HasArrayNamespace as Array
 from scipy.sparse import issparse, spdiags
-from sklearn.mixture import GaussianMixture
+from sklearn.base import clone
 from sklearn.preprocessing import normalize
 from spatialdata import SpatialData, sanitize_table
 from spatialdata._logging import logger as logg
@@ -21,9 +22,11 @@ from squidpy._constants._constants import NicheDefinitions
 from squidpy._docs import d, inject_docs
 from squidpy._utils import NDArrayA, RNGLike, SeedLike, deprecated_randomness_param, legacy_random
 from squidpy._validators import assert_isinstance, assert_key_in_adata, assert_one_of
-from squidpy.gr._autok import DEFAULT_INIT_PARAMS, expand_n_clusters, sweep_auto_k, to_uns
+from squidpy.gr._autok import _gmm, check_model_params
+from squidpy.gr._clusterers import _AutoKClusterer, _LeidenClusterer
 from squidpy.gr._nhood import _nhood_profile
 from squidpy.gr._utils import extract_adata_if_sdata
+from squidpy.types import Clusterer, SweepableClusterer
 
 __all__ = [
     "calculate_niche",
@@ -336,29 +339,30 @@ def calculate_niche_neighborhood(
     """
 
     # Create instance of _NhoodProfileEmbedder using provided inputs
-    embedder = _NhoodProfileEmbedder(
-        groups,
-        spatial_connectivities_key,
-        scale,
-        distance,
-        abs_nhood,
-        n_hop_weights,
+    # the graph and the partitions are the two stochastic stages, so they get independent
+    # streams: changing one does not shift the other's draws
+    graph_rng, clusterer_rng = np.random.default_rng(rng).spawn(2)
+
+    embedder = _LatentGraphEmbedder(
+        _NhoodProfileEmbedder(
+            groups,
+            spatial_connectivities_key,
+            scale,
+            distance,
+            abs_nhood,
+            n_hop_weights,
+        ),
+        n_neighbors,
+        rng=graph_rng,
     )
 
-    # Create instance of _LeidenClusterer using provided inputs
-    clusterer = _LeidenClusterer(
-        n_neighbors,
-        resolutions,
-        "nhood_niche",
-        flavor=flavor,
-        n_iterations=n_iterations,
-        rng=rng,
-    )
+    clusterers = _leiden_clusterers("nhood_niche", resolutions, flavor=flavor, n_iterations=n_iterations)
 
     return _calculate_niche_custom(
         data,
         embedder,
-        clusterer,
+        clusterers,
+        clusterer_rng,
         min_niche_size=min_niche_size,
         mask=mask,
         library_key=library_key,
@@ -409,23 +413,19 @@ def calculate_niche_utag(
 
     # both stages are stochastic here, so they get independent streams: changing one does not
     # shift the other's draws, and results stay comparable across versions
-    embedder_rng, clusterer_rng = np.random.default_rng(rng).spawn(2)
+    embedder_rng, graph_rng, clusterer_rng = np.random.default_rng(rng).spawn(3)
 
-    embedder = _UtagEmbedder(spatial_connectivities_key, rng=embedder_rng)
-
-    clusterer = _LeidenClusterer(
-        n_neighbors,
-        resolutions,
-        "utag_niche",
-        flavor=flavor,
-        n_iterations=n_iterations,
-        rng=clusterer_rng,
+    embedder = _LatentGraphEmbedder(
+        _UtagEmbedder(spatial_connectivities_key, rng=embedder_rng), n_neighbors, rng=graph_rng
     )
+
+    clusterers = _leiden_clusterers("utag_niche", resolutions, flavor=flavor, n_iterations=n_iterations)
 
     return _calculate_niche_custom(
         data,
         embedder,
-        clusterer,
+        clusterers,
+        clusterer_rng,
         min_niche_size=min_niche_size,
         mask=mask,
         library_key=library_key,
@@ -519,23 +519,19 @@ def calculate_niche_cellcharter(
         distance, aggregation, spatial_connectivities_key, n_components, use_rep, rng=embedder_rng
     )
 
-    clusterer: _NicheClusterer
+    # up front, so a bad one is rejected before the embedding is computed
+    check_model_params(model_params or {})
+
+    clusterer: Clusterer
     if n_clusters is None or isinstance(n_clusters, int):
         # `n_components` doubles as rep width above; `n_clusters` takes over the mixture count
-        clusterer = _GMMClusterer(
-            n_components if n_clusters is None else n_clusters,
-            rng,
-            base_colname="cellcharter_niche",
-            model_params=model_params,
-        )
+        clusterer = _gmm(model_params, n_components=n_components if n_clusters is None else n_clusters)
     else:
-        clusterer = _AutoKGMMClusterer(
-            n_clusters,
-            rng,
+        clusterer = _AutoKClusterer(
+            n_clusters=n_clusters,
             max_runs=max_runs,
             convergence_tol=convergence_tol,
             store_labels=store_labels,
-            base_colname="cellcharter_niche",
             uns_key="cellcharter_niche_autok",
             model_params=model_params,
         )
@@ -543,7 +539,8 @@ def calculate_niche_cellcharter(
     return _calculate_niche_custom(
         data,
         embedder,
-        clusterer,
+        {"cellcharter_niche": clusterer},
+        rng,
         min_niche_size=min_niche_size,
         mask=mask,
         library_key=library_key,
@@ -720,7 +717,8 @@ def calculate_niche_spatialleiden(
 def _calculate_niche_custom(
     data: AnnData | SpatialData,
     embedder: _NicheEmbedder,
-    clusterer: _NicheClusterer,
+    clusterers: Mapping[str, Clusterer],
+    rng: np.random.Generator,
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     library_key: str | None = None,
@@ -737,8 +735,12 @@ def _calculate_niche_custom(
     %(adata)s
     embedder
         Instance of ``_NicheEmbedder`` used to compute an embedding from ``adata``.
-    clusterer
-        Instance of ``_NicheClusterer`` used to assign niches based on the embedding.
+    clusterers
+        The ``adata.obs`` column each :class:`~squidpy.types.Clusterer` labels, keyed by
+        column name. Any scikit-learn clusterer will do; several entries means several
+        niche columns, as a scan over Leiden resolutions does.
+    rng
+        Seeds every fit: one draw per clusterer, per library.
     %(niche_common_params)s
     %(table_key)s
 
@@ -752,8 +754,8 @@ def _calculate_niche_custom(
     If ``library_key`` is provided, the computation is performed independently
     for each library and results are merged back into ``adata``.
 
-    Any diagnostics returned by the clusterer are written to ``adata.uns`` under the keys it
-    provides. See :meth:`_NicheClusterer.cluster`.
+    Diagnostics a clusterer leaves in a ``niche_uns_`` attribute are written to
+    ``adata.uns``; see :mod:`squidpy.gr._clusterers`.
 
     See Also
     --------
@@ -762,7 +764,7 @@ def _calculate_niche_custom(
     calculate_niche_cellcharter : Convenience wrapper for cellcharter flavor niche analysis.
     calculate_niche_spatialleiden : Convenience wrapper for spatialleiden flavor niche analysis.
     _NicheEmbedder : Base class for embedding strategies.
-    _NicheClusterer : Base class for clustering strategies.
+    squidpy.types.Clusterer : What the clusterers have to implement.
     """
 
     # obtain adata if data was of sdata type
@@ -789,7 +791,13 @@ def _calculate_niche_custom(
             lib_adata = adata[lib_indices].copy()
 
             diagnostics = _run_niche_pipeline(
-                lib_adata, embedder, clusterer, mask=mask, min_niche_size=min_niche_size, prefix=f"lib={lib_id}_"
+                lib_adata,
+                embedder,
+                clusterers,
+                rng,
+                mask=mask,
+                min_niche_size=min_niche_size,
+                prefix=f"lib={lib_id}_",
             )
             if diagnostics is not None:
                 diagnostics_per_library[str(lib_id)] = diagnostics
@@ -814,7 +822,7 @@ def _calculate_niche_custom(
             }
 
     else:
-        diagnostics = _run_niche_pipeline(adata, embedder, clusterer, mask=mask, min_niche_size=min_niche_size)
+        diagnostics = _run_niche_pipeline(adata, embedder, clusterers, rng, mask=mask, min_niche_size=min_niche_size)
         if diagnostics is not None:
             adata.uns.update(diagnostics)
 
@@ -826,19 +834,71 @@ def _calculate_niche_custom(
     return adata if copy else None
 
 
+def _leiden_clusterers(
+    base_colname: str,
+    resolutions: float | list[float],
+    *,
+    flavor: Literal["igraph", "leidenalg"],
+    n_iterations: int,
+) -> dict[str, Clusterer]:
+    """One Leiden clusterer per resolution, keyed by the niche column each labels.
+
+    They all partition the one graph the embedder produced, which is what makes a scan
+    over resolutions comparable -- and cheap.
+    """
+    values = resolutions if isinstance(resolutions, list) else [resolutions]
+    return {
+        f"{base_colname}_res={res}": _LeidenClusterer(resolution=res, flavor=flavor, n_iterations=n_iterations)
+        for res in values
+    }
+
+
+def _seeded_clone(clusterer: Clusterer, rng: np.random.Generator) -> Clusterer:
+    """A clone of *clusterer* for one fit, reseeded if it takes a seed.
+
+    A clone per fit, so the caller's estimator is never mutated and no two fits -- one per
+    column, per library -- share a seed. Estimators that take no ``random_state`` are
+    cloned but not reseeded: :class:`~sklearn.cluster.AgglomerativeClustering`, say, has
+    none because nothing about it varies between runs. One that cannot be cloned at all is
+    fitted as given.
+    """
+    if not isinstance(clusterer, SweepableClusterer):
+        return clusterer
+    clusterer = clone(clusterer)
+    if "random_state" in clusterer.get_params():
+        clusterer.set_params(random_state=legacy_random(rng))
+    return clusterer
+
+
 def _run_niche_pipeline(
     adata: AnnData,
     embedder: _NicheEmbedder,
-    clusterer: _NicheClusterer,
+    clusterers: Mapping[str, Clusterer],
+    rng: np.random.Generator,
     mask: pd.Series | None,
     min_niche_size: int | None,
     prefix: str | None = None,
 ) -> dict[str, Any] | None:
     """Embed, cluster, postprocess in place; returns clusterer diagnostics as {uns_key: payload}."""
     embedding = embedder.get_embedding(adata)
-    result_columns, diagnostics = clusterer.cluster(adata, embedding)
-    _postprocess_niche_results(adata, result_columns, mask, min_niche_size, prefix)
-    return diagnostics
+
+    columns: dict[str, Array] = {}
+    diagnostics: dict[str, Any] = {}
+    for colname, clusterer in clusterers.items():
+        fitted = _seeded_clone(clusterer, rng)
+        columns[colname] = fitted.fit_predict(embedding)
+        # the two fitted attributes a niche flavor needs beyond one label column; see
+        # `squidpy.gr._clusterers`. A plain scikit-learn clusterer has neither.
+        columns |= {f"{colname}_{suffix}": extra for suffix, extra in getattr(fitted, "niche_columns_", {}).items()}
+        diagnostics |= getattr(fitted, "niche_uns_", {})
+
+    for colname, labels in columns.items():
+        if colname in adata.obs.columns:
+            logg.info(f"Overwriting existing column '{colname}'")
+        adata.obs[colname] = pd.Categorical(labels)
+
+    _postprocess_niche_results(adata, list(columns), mask, min_niche_size, prefix)
+    return diagnostics or None
 
 
 def _validate_niche_args(
@@ -1174,8 +1234,40 @@ class _NicheEmbedder(ABC):
     """
 
     @abstractmethod
-    def get_embedding(self, adata: AnnData) -> NDArrayA:
+    def get_embedding(self, adata: AnnData) -> Array:
         """return an embedding matrix, with cells as rows"""
+
+
+class _LatentGraphEmbedder(_NicheEmbedder):
+    """Another embedder's matrix, as a kNN graph.
+
+    The step between an embedding and a graph clusterer such as
+    :class:`~squidpy.gr._clusterers._LeidenClusterer`. It sits here rather than inside the
+    clusterer so that one graph serves any number of resolutions -- building it is the
+    expensive part, and every resolution has to partition the *same* graph for the scan to
+    mean anything.
+
+    Parameters
+    ----------
+    embedder
+        Produces the matrix the graph is built on.
+    n_neighbors
+        Number of neighbors of the kNN graph.
+    rng
+        Seeds the graph, which ``pynndescent`` approximates above ~4096 observations.
+    """
+
+    def __init__(self, embedder: _NicheEmbedder, n_neighbors: int, *, rng: np.random.Generator):
+        self.embedder = embedder
+        self.n_neighbors = n_neighbors
+        self.rng = rng
+
+    def get_embedding(self, adata: AnnData) -> sps.csr_matrix:
+        """The connectivities of the kNN graph over the wrapped embedding."""
+        # no dimension reduction, as in the original implementations
+        embedding = ad.AnnData(X=np.asarray(self.embedder.get_embedding(adata)))
+        sc.pp.neighbors(embedding, n_neighbors=self.n_neighbors, use_rep="X", random_state=legacy_random(self.rng))
+        return embedding.obsp["connectivities"]
 
 
 @d.dedent
@@ -1223,7 +1315,7 @@ class _NhoodProfileEmbedder(_NicheEmbedder):
         self.abs_nhood = abs_nhood
         self.n_hop_weights = n_hop_weights
 
-    def get_embedding(self, adata: AnnData) -> NDArrayA:
+    def get_embedding(self, adata: AnnData) -> Array:
         """
         adapted from https://github.com/immunitastx/monkeybread/blob/main/src/monkeybread/calc/_neighborhood_profile.py
         """
@@ -1306,7 +1398,7 @@ class _UtagEmbedder(_NicheEmbedder):
         self.spatial_connectivities_key = spatial_connectivities_key
         self.rng = rng if rng is not None else np.random.default_rng()
 
-    def get_embedding(self, adata: AnnData) -> NDArrayA:
+    def get_embedding(self, adata: AnnData) -> Array:
         """
         Performs inner product of adjacency matrix and feature matrix,
         such that each observation inherits features from its immediate neighbors as described in UTAG paper.
@@ -1374,7 +1466,7 @@ class _CellcharterEmbedder(_NicheEmbedder):
     # Also a note for user, n_components is only used when use_rep is not None. It is the number of
     # components from that representation to use as the embedding
     # aggregation is only used when use_rep is None
-    def get_embedding(self, adata: AnnData) -> NDArrayA:
+    def get_embedding(self, adata: AnnData) -> Array:
         """adapted from https://github.com/CSOgroup/cellcharter/blob/main/src/cellcharter/gr/_aggr.py
         and https://github.com/CSOgroup/cellcharter/blob/main/src/cellcharter/tl/_gmm.py"""
 
@@ -1421,239 +1513,6 @@ class _CellcharterEmbedder(_NicheEmbedder):
             embedding = arr_ad.obsm["X_pca"]
 
         return embedding
-
-
-############
-### clusterer classes
-############
-
-
-class _NicheClusterer(ABC):
-    """Base class for clustering embeddings into niche assignments.
-
-    Subclasses must implement :meth:`cluster`, which assigns cluster labels
-    and stores them in ``adata.obs``.
-    """
-
-    @abstractmethod
-    def cluster(self, adata: AnnData, embedding: NDArrayA) -> tuple[list[str], dict[str, Any] | None]:
-        """Add column/s in ``adata.obs`` with the clustering done.
-
-        Returns
-        -------
-        The names of the columns just added, and any diagnostics to store in ``adata.uns``
-        as a ``{uns_key: payload}`` mapping (``None`` when there are none).
-
-        Returned rather than written directly: under ``library_key`` the per-library ``uns``
-        is discarded by the merge, so the caller collects them and writes once.
-        """
-
-
-@d.dedent
-class _LeidenClusterer(_NicheClusterer):
-    """Cluster embeddings using the Leiden algorithm.
-
-    Parameters
-    ----------
-    n_neighbors
-        Number of neighbors used to construct the kNN graph.
-    resolutions
-        Resolution parameter(s) for Leiden clustering. Can be a single
-        float value or list of floats.
-    base_colname
-        Base name for columns added to ``adata.obs``. Resolution is
-        appended to this to unique identify columns for each resolution.
-    %(niche_leiden_params)s
-
-    Notes
-    -----
-    A separate clustering is computed for each resolution, producing multiple
-    niche annotation columns.
-    """
-
-    def __init__(
-        self,
-        n_neighbors: int,
-        resolutions: float | list[float],
-        base_colname: str = "niche_leiden",
-        *,
-        flavor: Literal["igraph", "leidenalg"] = "igraph",
-        n_iterations: int = -1,
-        rng: SeedLike | RNGLike | None = None,
-    ):
-        self.n_neighbors = n_neighbors
-        self.resolutions = resolutions if isinstance(resolutions, list) else [resolutions]
-        self.base_colname = base_colname
-        self.flavor = flavor
-        self.n_iterations = n_iterations
-        self.rng = np.random.default_rng(rng)
-
-    def cluster(self, adata: AnnData, embedding: NDArrayA) -> tuple[list[str], dict[str, Any] | None]:
-        # first create an adata object using the embedding provided
-        adata_embedding = ad.AnnData(X=embedding, obs=pd.DataFrame(index=adata.obs.index))
-
-        # required for leiden clustering (note: no dim reduction performed in original implementation)
-        # the graph is approximate above ~4096 observations (pynndescent), so it needs a seed
-        # of its own -- drawn before the per-resolution ones, which all share this graph
-        sc.pp.neighbors(
-            adata_embedding, n_neighbors=self.n_neighbors, use_rep="X", random_state=legacy_random(self.rng)
-        )
-
-        # For each resolution, apply leiden on neighborhood profile. Each cluster label equals to a niche label
-        niche_keys = []
-        # every resolution is a separate clustering run, so seed each one independently
-        resolution_rngs = self.rng.spawn(len(self.resolutions))
-        for res, res_rng in zip(self.resolutions, resolution_rngs, strict=True):
-            niche_key = f"{self.base_colname}_res={res}"
-            niche_keys.append(niche_key)
-
-            if niche_key in adata.obs.columns:
-                logg.info(f"Overwriting existing column '{niche_key}'")
-
-            # Default to the igraph backend so niche labels are reproducible across
-            # versions; leidenalg is deprecated in scanpy and unstable on small graphs.
-            # See scverse/squidpy#1260.
-            leiden_kwargs: dict[str, Any] = {
-                "flavor": self.flavor,
-                "n_iterations": self.n_iterations,
-                "random_state": legacy_random(res_rng),
-            }
-            # scanpy's igraph backend only supports undirected graphs and errors if
-            # ``directed`` is left at the leidenalg default of True, so pin it to False.
-            if self.flavor == "igraph":
-                leiden_kwargs["directed"] = False
-            sc.tl.leiden(adata_embedding, resolution=res, key_added=niche_key, **leiden_kwargs)
-
-            adata.obs[niche_key] = list(
-                adata_embedding.obs[niche_key]
-            )  # since constrain all embedders to return embedding with numrows==numcells and in same order, this should be fine
-
-        return niche_keys, None
-
-
-@d.dedent
-class _GMMClusterer(_NicheClusterer):
-    """Cluster embeddings with a Gaussian mixture model.
-
-    Parameters
-    ----------
-    n_components
-        Number of mixture components.
-    rng
-        rng supplying the seed of every mixture fit.
-    base_colname
-        Name of the output column added to ``adata.obs``.
-    """
-
-    def __init__(
-        self,
-        n_components: int,
-        rng: np.random.Generator,
-        base_colname: str = "niche_gmm",
-        model_params: Mapping[str, Any] | None = None,
-    ):
-        self.n_components = n_components
-        self.rng = rng
-        self.base_colname = base_colname
-        self.model_params = dict(model_params or {})
-
-    def cluster(self, adata: AnnData, embedding: NDArrayA) -> tuple[list[str], dict[str, Any] | None]:
-        """Returns niche labels generated by GMM clustering.
-        Compared to cellcharter this approach is simplified by using sklearn's GaussianMixture model without stability analysis.
-        See :class:`_AutoKGMMClusterer` for the stability-based selection of the number of components.
-        """
-        # cluster concatenated matrix with GMM, each cluster label equals to a niche label
-        gmm = GaussianMixture(
-            n_components=self.n_components,
-            random_state=legacy_random(self.rng),
-            **{"init_params": DEFAULT_INIT_PARAMS, **self.model_params},
-        )
-        gmm.fit(embedding)
-        niches = gmm.predict(embedding)
-
-        if self.base_colname in adata.obs.columns:
-            logg.info(f"Overwriting existing column '{self.base_colname}'")
-
-        adata.obs[self.base_colname] = pd.Categorical(niches)
-        return [self.base_colname], None
-
-
-@d.dedent
-class _AutoKGMMClusterer(_NicheClusterer):
-    """Cluster embeddings with a Gaussian mixture, choosing the number of components by stability.
-
-    Every candidate K is fitted ``max_runs`` times and scored by how stably its labeling
-    reproduces across runs; the labels of the most stable K become the niche assignment.
-
-    Parameters
-    ----------
-    n_clusters
-        Candidate numbers of clusters. A ``(min, max)`` tuple gains a ``+-1`` halo, see
-        ``expand_n_clusters``.
-    rng
-        Generator seeding every individual fit.
-    max_runs
-        Maximum number of repetitions per K.
-    convergence_tol
-        Stop early once the mean stability curve settles, see ``sweep_auto_k``.
-    store_labels
-        Also keep the labeling of every fitted K, as ``{base_colname}_k{K}`` columns.
-    base_colname
-        Name of the output column added to ``adata.obs``.
-    uns_key
-        Key in ``adata.uns`` under which the per-K diagnostics are returned.
-    """
-
-    def __init__(
-        self,
-        n_clusters: tuple[int, int] | Sequence[int],
-        rng: np.random.Generator,
-        max_runs: int = 10,
-        convergence_tol: float = 1e-2,
-        store_labels: bool = False,
-        base_colname: str = "niche_gmm",
-        uns_key: str = "niche_gmm_autok",
-        model_params: Mapping[str, Any] | None = None,
-    ):
-        self.n_clusters = expand_n_clusters(n_clusters)
-        self.rng = rng
-        self.max_runs = max_runs
-        self.convergence_tol = convergence_tol
-        self.store_labels = store_labels
-        self.base_colname = base_colname
-        self.uns_key = uns_key
-        self.model_params = model_params
-
-    def cluster(self, adata: AnnData, embedding: NDArrayA) -> tuple[list[str], dict[str, Any] | None]:
-        """Returns the niche labels of the most stable number of clusters, plus the per-K diagnostics."""
-        logg.info(
-            f"Selecting the number of clusters over K={self.n_clusters} with up to {self.max_runs} runs each "
-            f"({len(self.n_clusters) * self.max_runs} mixture fits at most)"
-        )
-        result = sweep_auto_k(
-            embedding,
-            self.n_clusters,
-            max_runs=self.max_runs,
-            convergence_tol=self.convergence_tol,
-            model_params=self.model_params,
-            seed=legacy_random(self.rng),
-        )
-        logg.info(f"Selected K={result.best_k} after {result.n_runs} runs")
-
-        if self.base_colname in adata.obs.columns:
-            logg.info(f"Overwriting existing column '{self.base_colname}'")
-
-        adata.obs[self.base_colname] = pd.Categorical(result.labels[result.best_k])
-        result_columns = [self.base_colname]
-
-        if self.store_labels:
-            # obs, not obsm, so masking/min_niche_size/lib-prefixing apply
-            for k in self.n_clusters:
-                colname = f"{self.base_colname}_k{k}"
-                adata.obs[colname] = pd.Categorical(result.labels[k])
-                result_columns.append(colname)
-
-        return result_columns, {self.uns_key: to_uns(result)}
 
 
 ############

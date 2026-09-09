@@ -6,11 +6,14 @@ import pytest
 from anndata import AnnData, read_h5ad
 from pandas.testing import assert_frame_equal
 from scipy.sparse import csr_matrix
+from sklearn.base import clone
+from sklearn.cluster import KMeans
 from sklearn.metrics import fowlkes_mallows_score
 
 from squidpy.gr import cluster_auto_k, cluster_stability
 from squidpy.gr._autok import (
     DEFAULT_INIT_PARAMS,
+    _gmm,
     _score_block,
     expand_n_clusters,
     mirror_stability,
@@ -18,6 +21,7 @@ from squidpy.gr._autok import (
     to_uns,
 )
 from squidpy.gr._autok import cluster_stability as _cluster_stability
+from squidpy.gr._clusterers import _AutoKClusterer
 
 
 def scored(table: pd.DataFrame) -> list[int]:
@@ -115,16 +119,16 @@ def test_sweep_convergence():
     assert exhausted.n_runs == 3
 
 
-def test_sweep_rejects_params_it_controls_itself():
+def test_default_gmm_rejects_params_the_sweep_controls_itself():
     for owned in ("n_components", "random_state"):
         with pytest.raises(ValueError, match=rf"'{owned}' cannot be set through 'model_params'"):
-            sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, model_params={owned: 3})
+            _gmm({owned: 3})
 
 
-def test_sweep_does_not_mutate_the_callers_model_params():
+def test_default_gmm_does_not_mutate_the_callers_model_params():
     # upstream pops `random_state` out of the caller's dict; we must not
     model_params = {"max_iter": 10}
-    sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, model_params=model_params, seed=0)
+    _gmm(model_params)
     assert model_params == {"max_iter": 10}
 
 
@@ -144,7 +148,7 @@ def test_sweep_init_params_is_pinned_but_overridable(monkeypatch):
     assert set(seen) == {DEFAULT_INIT_PARAMS}
 
     seen.clear()
-    sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, model_params={"init_params": "kmeans"}, seed=0)
+    sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, clusterer=_gmm({"init_params": "kmeans"}), seed=0)
     assert set(seen) == {"kmeans"}
 
 
@@ -153,12 +157,12 @@ def test_sweep_reg_covar_hint():
     # lands on a singular covariance
     X = np.repeat(np.array([[0.0, 0.0], [1.0, 1.0]]), 15, axis=0)
     with pytest.raises(ValueError, match=r"model_params=\{'reg_covar'"):
-        sweep_auto_k(X, [2, 3, 4], max_runs=2, model_params={"reg_covar": 0.0}, seed=0)
+        sweep_auto_k(X, [2, 3, 4], max_runs=2, clusterer=_gmm({"reg_covar": 0.0}), seed=0)
 
 
 def test_sweep_reg_covar_hint_not_for_other_errors():
     X = np.zeros((2, 2))  # fewer samples than components
-    with pytest.raises(ValueError, match=r"the mixture fit at K=\d+ failed") as excinfo:
+    with pytest.raises(ValueError, match=r"the fit at K=\d+ failed") as excinfo:
         sweep_auto_k(X, [2, 3, 4], max_runs=2, seed=0)
     assert "reg_covar" not in str(excinfo.value)
 
@@ -434,3 +438,24 @@ def test_seed_is_keyed_by_run_and_k_not_by_position():
     long = sweep_auto_k(X, [1, 2, 3, 4, 5, 6], max_runs=3, seed=42)
     for k in short.labels:
         np.testing.assert_array_equal(short.labels[k], long.labels[k])
+
+
+def test_autok_clusterer_is_sklearn_shaped():
+    """`clone` hands back the parameters as given, so the halo has to expand in `fit`."""
+    X = make_blobs()
+    est = _AutoKClusterer(n_clusters=(2, 4), random_state=1, store_labels=True)
+
+    assert clone(est).get_params()["n_clusters"] == (2, 4), "clone lost the (min, max) form"
+
+    est.fit(X)
+    assert est.labels_.shape == (len(X),)
+    assert est.best_k_ == est.result_.best_k
+    # what the niche pipeline picks up beyond the one label column
+    assert set(est.niche_columns_) == {f"k{k}" for k in est.result_.labels}
+    assert list(est.niche_uns_) == ["niche_autok"]
+
+
+def test_autok_clusterer_sweeps_a_non_mixture():
+    """Nothing about the sweep is specific to a Gaussian mixture."""
+    est = _AutoKClusterer(n_clusters=(2, 4), clusterer=KMeans(n_init=1), random_state=1).fit(make_blobs())
+    assert est.best_k_ in scored(est.result_.table), "the selected K has to be one that was scored"
