@@ -298,43 +298,94 @@ def calculate_niche_neighborhood(
     n_iterations: int = -1,
     rng: SeedLike | RNGLike | None = None,
 ) -> AnnData | None:
-    """Compute niche neighborhoods using a neighborhood profile embedding and Leiden clustering.
+    """Compute spatial niches from local cell-type composition.
 
-    Each observation is represented by the frequency of ``groups`` labels in its
-    spatial neighborhood, which is then clustered with the Leiden algorithm.
+    This method represents every observation by a **neighborhood composition
+    profile**: a vector describing the cell-type labels observed in its local
+    spatial neighborhood. Observations with similar surrounding cell-type
+    compositions are then grouped into niches using Leiden clustering.
+
+    A spatial connectivity graph must already be available in
+    ``adata.obsp[spatial_connectivities_key]``. The graph defines which
+    observations are spatial neighbors; this function does not construct the
+    graph itself.
+
+    For each observation ``i``, the method:
+
+    1. Retrieves observations reachable from ``i`` in the spatial graph up to
+       ``distance`` hops away.
+    2. Counts the values of ``groups`` among those neighboring observations.
+    3. Optionally combines profiles from different graph-hop distances using
+       ``n_hop_weights``.
+    4. Uses either raw counts or normalized cell-type proportions as the
+       neighborhood profile.
+    5. Optionally z-scores the resulting profile across observations (scale 
+       argument).
+    6. Constructs a k-nearest-neighbor graph from the profile embedding and
+       applies Leiden clustering at each requested resolution.
+
+    Thus, a niche is defined by a recurring **local cellular composition**,
+    rather than by the expression profile of an individual observation. For
+    example, cells surrounded by many immune cells and fibroblasts may be
+    assigned to one niche even when those cells themselves have different
+    expression profiles or cell-type labels.
 
     Parameters
     ----------
     %(adata)s
     groups
-        Column in ``adata.obs`` defining categorical groups (e.g. cell types)
-        used to compute neighborhood composition profiles.
-    n_neighbors
-        Number of neighbors used when constructing the graph for Leiden clustering.
+        Column in ``adata.obs`` containing categorical labels used to define
+        neighborhood composition, such as cell types, cell states, clusters,
+        or anatomical annotations.
     resolutions
-        Resolution parameter(s) for Leiden clustering. Can be a single float or a list.
-        Leiden clustering is performed on the neighborhood embedding for each resolution
-        value in ``resolutions``. Hence, there are as many niche columns added in ``adata.obs``
-        as number of resolution values supplied.
+        Resolution parameter(s) for Leiden clustering. A single value produces
+        one niche annotation. Supplying multiple values performs Leiden
+        clustering separately for each resolution and adds one niche column per
+        resolution to ``adata.obs``.
+    n_neighbors
+        Number of nearest neighbors used to construct the k-nearest-neighbor
+        graph on the neighborhood composition embedding before Leiden
+        clustering.
     %(niche_spatial_conn_key)s
     scale
-        Whether to z-score the neighborhood profile prior to clustering.
+        Whether to z-score each neighborhood-profile feature across
+        observations before constructing the clustering graph.
     distance
-        Number of hops to consider when constructing neighborhood profiles.
-        Values greater than ``1`` incorporate higher-order neighbors.
+        Maximum number of graph hops used to construct each neighborhood
+        profile. ``distance=1`` uses direct spatial neighbors. Larger values
+        incorporate increasingly distal observations in the spatial graph.
     abs_nhood
-        If ``True``, use absolute counts; otherwise normalize to proportions.
+        Whether to use absolute group counts in the neighborhood profile.
+
+        If ``False`` (the default), counts are normalized to proportions, so
+        each profile captures relative neighborhood composition and is less
+        sensitive to differences in neighborhood size.
+
+        If ``True``, raw counts are retained, so both composition and the
+        total number of reachable neighbors can influence the embedding.
     n_hop_weights
-        Weights for combining neighborhood profiles across hops.
+        Optional weights used when combining contributions from successive
+        graph-hop distances. If provided, the weights determine the relative
+        contribution of direct and higher-order neighbors to the final
+        neighborhood profile. If not provided, equal weights are used.
     %(niche_common_params)s
     %(table_key)s
     %(niche_leiden_params)s
 
     Returns
     -------
-    If ``copy = True``, returns a copy of ``adata`` with niche annotations added to ``.obs``.
-    Otherwise, modifies ``adata`` in place and returns ``None``.
+    If ``copy=True``, returns a copy of ``adata`` with the neighborhood profile
+    stored in ``.obsm[embedding_key_added]`` and niche assignments added to
+    ``.obs``. Otherwise, modifies ``adata`` in place and returns ``None``.
 
+    Notes
+    -----
+    This approach is most appropriate when niches are expected to differ
+    primarily in local **cellular composition**. In contrast,
+    :func:`calculate_niche_utag` and :func:`calculate_niche_cellcharter`
+    derive niche embeddings from spatially aggregated molecular or latent
+    features rather than from categorical group frequencies.
+    
     """
 
     # Create instance of _NhoodProfileEmbedder using provided inputs
@@ -383,21 +434,60 @@ def calculate_niche_utag(
     n_iterations: int = -1,
     rng: SeedLike | RNGLike | None = None,
 ) -> AnnData | None:
-    """Compute niche assignments using a UTAG-style neighborhood embedding.
+    """Compute spatial niches from UTAG-style feature aggregation.
 
-    Features are propagated over the spatial graph so each observation inherits
-    information from its immediate neighbors, then clustered with the Leiden algorithm.
+    Originally adapted from https://github.com/ElementoLab/utag/blob/main/utag/segmentation.py
+    This method computes a spatially aggregated feature representation for each
+    observation and clusters that representation with Leiden. The resulting
+    niches group observations that occur in similar local molecular
+    environments.
+
+    A spatial connectivity graph must already be available in
+    ``adata.obsp[spatial_connectivities_key]``. The graph determines how
+    features are propagated or aggregated across spatially neighboring
+    observations; this function does not construct the graph itself.
+
+    The method proceeds as follows:
+
+    1. Selects an input feature matrix from ``adata.X`` or from
+       ``adata.layers[use_layer]``.
+    2. Performs a normalized (by number of cell-neighbors) aggregation of 
+       features over the spatial connectivity graph, producing a new feature 
+       matrix in which each observation reflects information from its local 
+       spatial neighborhood.
+    3. Treats this spatially aggregated matrix as the niche embedding.
+    4. Constructs a k-nearest-neighbor graph in the embedding space.
+    5. Applies Leiden clustering at each requested resolution.
+
+    If the input contains gene expression values, the embedding describes
+    local expression programs rather than merely the categorical composition
+    of neighboring cells.
+
+    This differs from :func:`calculate_niche_neighborhood`, which uses counts
+    or proportions of a categorical ``groups`` annotation. UTAG-style
+    aggregation can identify niches that have similar local expression
+    patterns even when their neighborhoods contain different annotated cell
+    types, or when cell-type labels are unavailable.
 
     Parameters
     ----------
     %(adata)s
-    n_neighbors
-        Number of neighbors used when constructing the graph for Leiden clustering.
     resolutions
-        Resolution parameter(s) for Leiden clustering. Can be a single float or a list.
+        Resolution parameter(s) for Leiden clustering. A single value produces
+        one niche annotation. Supplying multiple values runs Leiden clustering
+        independently at each resolution and adds one niche column per
+        resolution to ``adata.obs``.
+    n_neighbors
+        Number of nearest neighbors used to construct the k-nearest-neighbor
+        graph on the spatially aggregated embedding before Leiden clustering.
     use_layer
-        Which key from `adata.layers` to use to aggregate features from. If None,
-        uses ``adata.X``.
+        Key in ``adata.layers`` containing the feature matrix to aggregate. If
+        ``None``, uses ``adata.X``.
+
+        Typically, this should contain a normalized expression matrix or
+        another observation-by-feature representation appropriate for local
+        aggregation. The selected matrix determines what biological signal is
+        used to define niches.
     %(niche_spatial_conn_key)s
     %(niche_common_params)s
     %(table_key)s
@@ -405,8 +495,10 @@ def calculate_niche_utag(
 
     Returns
     -------
-    If ``copy = True``, returns a copy of ``adata`` with niche annotations added to ``.obs``.
-    Otherwise, modifies ``adata`` in place and returns ``None``.
+    If ``copy=True``, returns a copy of ``adata`` with the spatially aggregated
+    embedding stored in ``.obsm[embedding_key_added]`` and niche assignments
+    added to ``.obs``. Otherwise, modifies ``adata`` in place and returns
+    ``None``.
 
     """
 
@@ -446,36 +538,78 @@ def calculate_niche_cellcharter(
     copy: bool = False,
     table_key: str | None = None,
 ) -> AnnData | None:
-    """Compute niche assignments using a CellCharter-style aggregation embedding.
+    """Compute spatial niches using a CellCharter-style embedding and GMM.
 
-    Features are aggregated across multi-hop spatial neighborhoods, then clustered
-    with a Gaussian mixture model.
+    This method identifies niches by clustering an embedding that represents
+    each observation together with information from its surrounding spatial
+    neighborhood. Unlike :func:`calculate_niche_neighborhood`, which builds
+    an embedding from categorical cell-type composition, this approach uses a
+    continuous feature representation and a Gaussian mixture model (GMM) for
+    clustering.
+
+    Two input modes are supported:
+
+    - If ``use_rep`` is provided, ``adata.obsm[use_rep]`` is used as the input
+      representation for niche clustering.
+    - If ``use_rep`` is ``None``, a CellCharter-style spatial embedding is
+      computed by aggregating features over the precomputed spatial graph,
+      including information from multi-hop neighborhoods up to ``distance``.
+
+    A spatial connectivity graph must already be present in
+    ``adata.obsp[spatial_connectivities_key]`` when spatial aggregation is
+    required. This function does not construct the graph itself.
+
+    When an embedding is computed internally, the method:
+
+    1. Starts from the available observation-level feature representation.
+    2. Aggregates neighborhood features over the spatial graph from direct
+       neighbors through ``distance`` graph hops.
+    3. Combines the aggregated features according to ``aggregation`` to create
+       a spatial-context embedding for every observation.
+    4. Fits a Gaussian mixture model with ``n_components`` mixture components.
+    5. Uses the GMM component assignments as niche labels.
+
+    Consequently, each niche corresponds to a probabilistic cluster in a
+    feature space that encodes both an observation's features and its broader
+    spatial context. Increasing ``distance`` allows the embedding to reflect
+    larger tissue-scale neighborhoods, whereas smaller values emphasize local
+    microenvironments.
 
     Parameters
     ----------
     %(adata)s
     distance
-        Number of neighborhood hops to aggregate when building the embedding.
+        Maximum number of graph hops included when constructing the
+        CellCharter-style spatial embedding. ``distance=1`` emphasizes direct
+        neighbors; larger values incorporate progressively more distal
+        observations in the spatial graph.
     aggregation
-        Aggregation mode used for neighborhood features, typically ``"mean"`` or
-        ``"variance"``.
+        Aggregation statistic used to summarize features across spatial
+        neighborhoods. Typical options include ``"mean"`` and ``"variance"``.
+
+        ``"mean"`` emphasizes the average local feature state, such as the
+        average local expression program. ``"variance"`` emphasizes local
+        heterogeneity in the feature representation.
     %(rng)s
         Seeds the Gaussian mixture clustering step. When stratifying by ``library_key``,
         every library is fitted with an independent rng derived from it.
     %(niche_spatial_conn_key)s
     n_components
-        Number of embedding components to retain when ``use_rep`` is provided,
-        or number of mixture components used by the clusterer.
+        Number of Gaussian mixture components used to assign niches.
+        Therefore, this parameter directly determines the number of niche 
+        labels produced per library or dataset.
     use_rep
-        Key in ``adata.obsm`` pointing to a precomputed representation to use
-        instead of deriving a spatially aggregated embedding.
+        Key in ``adata.obsm`` containing a precomputed observation-level
+        representation to cluster. When provided, this representation is used
+        instead of deriving a new spatially aggregated embedding.
     %(niche_common_params)s
     %(table_key)s
 
     Returns
     -------
-    If ``copy = True``, returns a copy of ``adata`` with niche annotations added to ``.obs``.
-    Otherwise, modifies ``adata`` in place and returns ``None``.
+    If ``copy=True``, returns a copy of ``adata`` with the embedding stored in
+    ``.obsm[embedding_key_added]`` and GMM-based niche assignments added to
+    ``.obs``. Otherwise, modifies ``adata`` in place and returns ``None``.
 
     """
 
