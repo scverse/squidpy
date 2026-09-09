@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
 from functools import partial
-from typing import Any, NamedTuple
+from typing import Any, Literal, NamedTuple
 
 import numba.types as nt
 import numpy as np
@@ -15,8 +15,9 @@ from numba import njit, prange
 from numpy.typing import NDArray
 from pandas import CategoricalDtype
 from scanpy import logging as logg
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, issparse, spmatrix
 from scipy.stats import entropy
+from sklearn.preprocessing import normalize
 from spatialdata import SpatialData
 
 from squidpy._constants._constants import Centrality
@@ -32,7 +33,7 @@ from squidpy._utils import (
     get_n_processes,
     parallelize,
 )
-from squidpy._validators import assert_positive
+from squidpy._validators import assert_key_in_adata, assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
@@ -41,7 +42,7 @@ from squidpy.gr._utils import (
     extract_adata_if_sdata,
 )
 
-__all__ = ["nhood_enrichment", "centrality_scores", "interaction_matrix", "nhood_entropy"]
+__all__ = ["nhood_enrichment", "centrality_scores", "interaction_matrix", "nhood_entropy", "nhood_aggregate"]
 
 
 class NhoodEnrichmentResult(NamedTuple):
@@ -435,6 +436,20 @@ def _interaction_matrix(
     return output
 
 
+def _onehot(labels: pd.Series) -> csr_matrix:
+    """Indicator matrix of ``labels``, one column per category.
+
+    Observations whose label is unassigned (``NaN``) get an all-zero row, so they are
+    counted in nobody's neighborhood.
+    """
+    codes = labels.astype("category").cat.codes.to_numpy()
+    keep = codes >= 0
+    return csr_matrix(
+        (np.ones(keep.sum()), (np.flatnonzero(keep), codes[keep])),
+        shape=(len(codes), len(labels.astype("category").cat.categories)),
+    )
+
+
 def _nhood_profile(labels: pd.Series, adj: csr_matrix, *, normalize: bool = True) -> pd.DataFrame:
     """Frequency of every ``labels`` category in each observation's neighborhood.
 
@@ -443,13 +458,7 @@ def _nhood_profile(labels: pd.Series, adj: csr_matrix, *, normalize: bool = True
     gets an all-zero row rather than ``NaN``.
     """
     labels = labels.astype("category")
-    codes = labels.cat.codes.to_numpy()
-    keep = codes >= 0
-    onehot = csr_matrix(
-        (np.ones(keep.sum()), (np.flatnonzero(keep), codes[keep])),
-        shape=(len(codes), len(labels.cat.categories)),
-    )
-    profile = pd.DataFrame((adj @ onehot).toarray(), index=labels.index, columns=labels.cat.categories)
+    profile = pd.DataFrame((adj @ _onehot(labels)).toarray(), index=labels.index, columns=labels.cat.categories)
     if not normalize:
         return profile
     return profile.div(profile.sum(axis=1), axis=0).fillna(0.0)
@@ -621,3 +630,240 @@ def _nhood_enrichment_helper(
         queue.put(Signal.FINISH)
 
     return perms
+
+
+def _shell_hop(adj_hop: spmatrix, adj: spmatrix, adj_visited: spmatrix) -> tuple[spmatrix, spmatrix]:
+    """One step out, dropping what earlier hops already reached."""
+    adj_hop = adj_hop @ adj
+    adj_hop = adj_hop > adj_visited
+    return adj_hop, adj_visited + adj_hop
+
+
+def _densify(matrix: Any) -> NDArrayA:
+    """Dense view of *matrix*, which may already be dense."""
+    return matrix.toarray() if issparse(matrix) else np.asarray(matrix)
+
+
+def _hop_adjacencies(
+    adj: spmatrix, hops: Sequence[int], hop_mode: Literal["power", "shell"]
+) -> dict[int, spmatrix | None]:
+    """The adjacency of each requested hop; ``None`` for hop 0, which is no neighborhood.
+
+    ``power`` takes matrix powers of *adj*, so hop *k* counts every walk of length *k* and
+    a near neighbor keeps contributing to the far hops. ``shell`` subtracts what earlier
+    hops already reached, as CellCharter does, making the hops disjoint rings.
+    """
+    if any(hop < 0 for hop in hops):
+        raise ValueError(f"'hops' must be non-negative, got {list(hops)!r}")
+
+    by_hop: dict[int, spmatrix | None] = {0: None}
+    if max(hops, default=0) < 1:
+        return by_hop
+
+    if hop_mode == "power":
+        current = adj
+        by_hop[1] = current
+        for hop in range(2, max(hops) + 1):
+            current = current @ adj
+            by_hop[hop] = current
+    elif hop_mode == "shell":
+        # CellCharter starts from the graph without self-loops, and counts every
+        # observation as already having visited itself. `setdiag` on the CSR directly:
+        # the diagonal of a kNN graph is empty, and filling it neither warns nor differs
+        # from the `tolil()` roundtrip it used to take.
+        adj_hop, adj_visited = adj.copy(), adj.copy()
+        adj_hop.setdiag(0)
+        adj_hop.eliminate_zeros()
+        adj_visited.setdiag(1)
+        by_hop[1] = adj_hop
+        for hop in range(2, max(hops) + 1):
+            adj_hop, adj_visited = _shell_hop(adj_hop, adj, adj_visited)
+            by_hop[hop] = adj_hop
+    else:
+        raise ValueError(f"'hop_mode' must be 'power' or 'shell', got {hop_mode!r}")
+    return by_hop
+
+
+def _aggregate_over(adj: spmatrix, features: Any, aggregation: Literal["mean", "sum", "variance"]) -> Any:
+    """Aggregate *features* over the neighborhood each row of *adj* defines."""
+    if aggregation == "sum":
+        return adj @ features
+    # rows sum to 1, so a high degree does not dominate the aggregate
+    normalized = normalize(adj, norm="l1", axis=1)
+    if aggregation == "mean":
+        return normalized @ features
+    if aggregation == "variance":
+        mean = _densify(normalized @ features)
+        dense = _densify(features)
+        return _densify(normalized @ (dense * dense)) - mean * mean
+    raise ValueError(f"'aggregation' must be 'mean', 'sum' or 'variance', got {aggregation!r}")
+
+
+def _resolve_hop_weights(hop_weights: Sequence[float] | None, n_hops: int) -> list[float]:
+    """One weight per hop, padding a short list with its last value."""
+    if hop_weights is None:
+        return [1.0] * n_hops
+    weights = list(hop_weights)
+    if len(weights) > n_hops:
+        raise ValueError(f"'hop_weights' has {len(weights)} values but there are {n_hops} hops")
+    if len(weights) < n_hops:
+        # a short list is more likely a mistake than an intention, so say so out loud
+        logg.warning(f"'hop_weights' has {len(weights)} values for {n_hops} hops; padding with {weights[-1]}")
+        weights += [weights[-1]] * (n_hops - len(weights))
+    return weights
+
+
+def _nhood_features(adata: AnnData, groups: str | None, use_rep: str | None, layer: str | None) -> Any:
+    """The matrix the neighborhoods are aggregated over."""
+    given = [name for name, value in (("groups", groups), ("use_rep", use_rep), ("layer", layer)) if value is not None]
+    if len(given) > 1:
+        raise ValueError(f"pass at most one of 'groups', 'use_rep' and 'layer', got {given}")
+    if groups is not None:
+        # any dtype: `_onehot` coerces, as the neighborhood profile always has
+        assert_key_in_adata(adata, groups, attr="obs")
+        return _onehot(adata.obs[groups])
+    if use_rep is not None:
+        assert_key_in_adata(adata, use_rep, attr="obsm")
+        return adata.obsm[use_rep]
+    if layer is not None:
+        assert_key_in_adata(adata, layer, attr="layers")
+        return adata.layers[layer]
+    return adata.X
+
+
+def _nhood_aggregate(
+    adata: AnnData,
+    *,
+    groups: str | None = None,
+    use_rep: str | None = None,
+    layer: str | None = None,
+    connectivity_key: str = "spatial_connectivities",
+    hops: Sequence[int] = (1,),
+    hop_mode: Literal["power", "shell"] = "power",
+    combine: Literal["concat", "sum"] = "concat",
+    hop_weights: Sequence[float] | None = None,
+    aggregation: Literal["mean", "sum", "variance"] = "mean",
+) -> NDArrayA:
+    """The aggregated matrix, without touching *adata*. See :func:`nhood_aggregate`."""
+    _assert_connectivity_key(adata, connectivity_key)
+    if not len(hops):
+        raise ValueError("'hops' must name at least one hop")
+
+    features = _nhood_features(adata, groups, use_rep, layer)
+    by_hop = _hop_adjacencies(adata.obsp[connectivity_key], hops, hop_mode)
+    # hop 0 is the observation itself, so it contributes the features unaggregated -- which
+    # is what makes `variance` over it 0 rather than meaningful
+    blocks = [features if hop == 0 else _aggregate_over(by_hop[hop], features, aggregation) for hop in hops]
+
+    if combine == "concat":
+        return np.hstack([_densify(block) for block in blocks])
+    if combine != "sum":
+        raise ValueError(f"'combine' must be 'concat' or 'sum', got {combine!r}")
+
+    weights = _resolve_hop_weights(hop_weights, len(blocks))
+    total = sum(weight * _densify(block) for weight, block in zip(weights, blocks, strict=True))
+    # a weighted mean over the hops, so the scale does not depend on how many there are.
+    # `sum` is counts, which are meant to stay counts.
+    return total if aggregation == "sum" else total / sum(weights)
+
+
+@d.dedent
+def nhood_aggregate(
+    data: AnnData | SpatialData,
+    *,
+    groups: str | None = None,
+    use_rep: str | None = None,
+    layer: str | None = None,
+    connectivity_key: str = "spatial_connectivities",
+    hops: Sequence[int] = (1,),
+    hop_mode: Literal["power", "shell"] = "power",
+    combine: Literal["concat", "sum"] = "concat",
+    hop_weights: Sequence[float] | None = None,
+    aggregation: Literal["mean", "sum", "variance"] = "mean",
+    key_added: str = "X_nhood",
+    copy: bool = False,
+    table_key: str | None = None,
+) -> AnnData | None:
+    """Summarise each observation's spatial neighborhood into a feature matrix.
+
+    The step every niche-calling method starts from: what is around an observation,
+    expressed as numbers it can be clustered on. The flavors of
+    :func:`~squidpy.gr.calculate_niche` differ in how they answer that, and each is a
+    choice of the arguments below.
+
+    Parameters
+    ----------
+    %(adata)s
+    %(table_key)s
+    groups
+        Column in :attr:`~anndata.AnnData.obs` whose categories are counted in each
+        neighborhood -- cell types, typically. Mutually exclusive with *use_rep* and
+        *layer*; the features default to :attr:`~anndata.AnnData.X`.
+    use_rep
+        Key in :attr:`~anndata.AnnData.obsm` holding the features to aggregate.
+    layer
+        Key in :attr:`~anndata.AnnData.layers` holding the features to aggregate.
+    connectivity_key
+        Key in :attr:`~anndata.AnnData.obsp` holding the spatial graph.
+    hops
+        Which neighborhood hops to aggregate. ``0`` is the observation itself, and
+        contributes its own features unaggregated.
+    hop_mode
+        ``'power'`` takes matrix powers of the graph, so hop *k* counts every walk of
+        length *k*. ``'shell'`` subtracts what nearer hops already reached, so the hops are
+        disjoint rings.
+    combine
+        ``'concat'`` puts the hops side by side, giving one block of columns each;
+        ``'sum'`` adds them into one block, weighted by *hop_weights*.
+    hop_weights
+        One weight per hop for ``combine='sum'``. A short list is padded with its last
+        value, and defaults to equal weights.
+    aggregation
+        How the neighbors' features are combined: ``'mean'``, ``'sum'`` (counts), or the
+        ``'variance'`` over the neighborhood.
+    key_added
+        Key in :attr:`~anndata.AnnData.obsm` to write the matrix to.
+    %(copy)s
+
+    Returns
+    -------
+    If ``copy = True``, returns a copy of ``adata``. Otherwise, modifies the ``adata``
+    with the following key:
+
+        - :attr:`anndata.AnnData.obsm` ``['{key_added}']`` - the aggregated matrix, one
+          row per observation.
+
+    Notes
+    -----
+    The three built-in niche flavors are each one call of this function followed by a
+    scaling step:
+
+    - ``neighborhood``: ``groups=...``, ``hops=range(1, k + 1)``, ``combine='sum'``,
+      then :func:`~scanpy.pp.scale`.
+    - ``utag``: the defaults, then :func:`~scanpy.tl.pca`.
+    - ``cellcharter``: ``hops=range(0, k + 1)``, ``hop_mode='shell'``, then
+      :func:`~scanpy.tl.pca`.
+
+    See Also
+    --------
+    calculate_niche : Niche calling, which starts from this.
+    nhood_entropy : How mixed each neighborhood is, over the same graph.
+    """
+    adata = extract_adata_if_sdata(data, table_key=table_key)
+    adata = adata.copy() if copy else adata
+
+    start = logg.info(f"Aggregating neighborhoods over hops `{list(hops)}`")
+    aggregated = _nhood_aggregate(
+        adata,
+        groups=groups,
+        use_rep=use_rep,
+        layer=layer,
+        connectivity_key=connectivity_key,
+        hops=hops,
+        hop_mode=hop_mode,
+        combine=combine,
+        hop_weights=hop_weights,
+        aggregation=aggregation,
+    )
+    _save_data(adata, attr="obsm", key=key_added, data=aggregated, time=start)
+    return adata if copy else None

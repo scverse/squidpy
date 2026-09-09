@@ -1,18 +1,26 @@
 from __future__ import annotations
 
+import sys
+
 import numpy as np
 import pandas as pd
 import pytest
 from anndata import AnnData
+from scanpy import settings
+from sklearn.preprocessing import normalize
 
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import (
+    _niche,
     centrality_scores,
     interaction_matrix,
+    nhood_aggregate,
     nhood_enrichment,
     nhood_entropy,
     spatial_neighbors_grid,
+    spatial_neighbors_knn,
 )
+from squidpy.gr._nhood import _nhood_aggregate
 
 _CK = "leiden"
 
@@ -220,3 +228,89 @@ class TestNhoodEntropy:
         adata = self._grid(["a", "b"] * 18)
         assert nhood_entropy(adata, "ct") is None
         np.testing.assert_allclose(adata.obs["ct_nhood_entropy"], nhood_entropy(adata, "ct", copy=True))
+
+
+# `nhood_aggregate` is the one primitive the three niche embedders are built on; these pin
+# each derivation to the embedder it replaced, since the flavors' output depends on it.
+
+
+@pytest.fixture
+def aggregate_adata() -> AnnData:
+    rng = np.random.default_rng(0)
+    adata = AnnData(X=rng.random((80, 7)))
+    adata.obsm["spatial"] = rng.random((80, 2)) * 10
+    adata.obs["celltype"] = pd.Categorical(rng.choice(list("abcd"), 80))
+    spatial_neighbors_knn(adata, n_neighs=6)
+    return adata
+
+
+@pytest.mark.parametrize(
+    ("distance", "hop_weights", "abs_nhood"),
+    [(1, None, False), (3, None, False), (3, [1.0, 0.5, 0.25], False), (2, None, True)],
+)
+def test_nhood_aggregate_derives_the_neighborhood_profile(
+    aggregate_adata: AnnData, distance: int, hop_weights: list[float] | None, abs_nhood: bool
+):
+    """Categories summed over the matrix powers of the graph."""
+    expected = _niche._nhood_profile_embedding(
+        aggregate_adata,
+        groups="celltype",
+        spatial_connectivities_key="spatial_connectivities",
+        scale=False,
+        distance=distance,
+        abs_nhood=abs_nhood,
+        n_hop_weights=hop_weights,
+    )
+
+    got = _nhood_aggregate(
+        aggregate_adata,
+        groups="celltype",
+        hops=range(1, distance + 1),
+        hop_mode="power",
+        combine="sum",
+        hop_weights=hop_weights,
+        aggregation="sum" if abs_nhood else "mean",
+    )
+    np.testing.assert_allclose(got, expected)
+
+
+def test_nhood_aggregate_derives_utag(aggregate_adata: AnnData):
+    """One hop, mean-aggregated: a row-normalized graph times the features."""
+    expected = normalize(aggregate_adata.obsp["spatial_connectivities"], norm="l1", axis=1) @ aggregate_adata.X
+    np.testing.assert_allclose(_nhood_aggregate(aggregate_adata, hops=(1,)), expected)
+
+
+@pytest.mark.parametrize(("distance", "aggregation"), [(1, "mean"), (3, "mean"), (2, "variance")])
+def test_nhood_aggregate_derives_cellcharter(aggregate_adata: AnnData, distance: int, aggregation: str):
+    """Disjoint hop rings, concatenated, with the observation's own features as hop 0."""
+    got = _nhood_aggregate(
+        aggregate_adata, hops=range(distance + 1), hop_mode="shell", combine="concat", aggregation=aggregation
+    )
+    assert got.shape == (aggregate_adata.n_obs, aggregate_adata.n_vars * (distance + 1))
+    # hop 0 is the features themselves, not an aggregate of them
+    np.testing.assert_allclose(got[:, : aggregate_adata.n_vars], aggregate_adata.X)
+
+
+def test_nhood_aggregate_writes_obsm(aggregate_adata: AnnData):
+    assert nhood_aggregate(aggregate_adata, groups="celltype", key_added="X_profile") is None
+    assert aggregate_adata.obsm["X_profile"].shape == (aggregate_adata.n_obs, 4)
+
+
+def test_nhood_aggregate_rejects_conflicting_features(aggregate_adata: AnnData):
+    with pytest.raises(ValueError, match=r"at most one of 'groups', 'use_rep' and 'layer'"):
+        nhood_aggregate(aggregate_adata, groups="celltype", layer="counts")
+
+
+def test_nhood_aggregate_warns_on_short_hop_weights(aggregate_adata: AnnData, capsys):
+    """A short list is more likely a mistake than an intention; see scverse/squidpy#1277."""
+    # scanpy's logger needs pointing at the captured stream, as in `test_ligrec.py`
+    settings.logfile = sys.stderr
+    _nhood_aggregate(aggregate_adata, groups="celltype", hops=(1, 2, 3), combine="sum", hop_weights=[1.0])
+    assert "padding with 1.0" in capsys.readouterr().err
+
+
+def test_nhood_aggregate_rejects_too_many_hop_weights(aggregate_adata: AnnData):
+    with pytest.raises(ValueError, match=r"'hop_weights' has 4 values but there are 2 hops"):
+        _nhood_aggregate(
+            aggregate_adata, groups="celltype", hops=(1, 2), combine="sum", hop_weights=[1.0, 1.0, 1.0, 1.0]
+        )

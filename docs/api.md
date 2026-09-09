@@ -28,6 +28,7 @@ import squidpy as sq
     gr.mask_graph
     gr.nhood_enrichment
     gr.NhoodEnrichmentResult
+    gr.nhood_aggregate
     gr.nhood_entropy
     gr.co_occurrence
     gr.centrality_scores

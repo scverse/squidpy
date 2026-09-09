@@ -7,7 +7,7 @@ from anndata import AnnData, read_h5ad
 from pandas.testing import assert_frame_equal
 from scipy.sparse import csr_matrix
 from sklearn.base import clone
-from sklearn.cluster import KMeans
+from sklearn.cluster import AgglomerativeClustering, KMeans
 from sklearn.metrics import fowlkes_mallows_score
 
 from squidpy.gr import cluster_auto_k, cluster_stability
@@ -459,3 +459,30 @@ def test_autok_clusterer_sweeps_a_non_mixture():
     """Nothing about the sweep is specific to a Gaussian mixture."""
     est = _AutoKClusterer(n_clusters=(2, 4), clusterer=KMeans(n_init=1), random_state=1).fit(make_blobs())
     assert est.best_k_ in scored(est.result_.table), "the selected K has to be one that was scored"
+
+
+def test_cluster_auto_k_takes_a_clusterer():
+    """Any sweepable clusterer, not only the default mixture."""
+    adata = AnnData(make_blobs())
+    cluster_auto_k(adata, (2, 4), clusterer=KMeans(n_init=1), max_runs=3, rng=0, key_added="kmeans_k")
+
+    assert adata.obs["kmeans_k"].notna().all()
+    assert adata.uns["kmeans_k"]["best_k"] in scored(adata.uns["kmeans_k"]["table"])
+
+
+def test_cluster_auto_k_rejects_clusterer_with_model_params():
+    with pytest.raises(ValueError, match=r"'model_params' configures the default mixture"):
+        cluster_auto_k(AnnData(make_blobs()), (2, 4), clusterer=KMeans(), model_params={"reg_covar": 1e-3})
+
+
+def test_cluster_auto_k_rejects_a_clusterer_that_cannot_be_swept():
+    """A clusterer without a seed looks perfectly stable at every K, so it is refused."""
+    with pytest.raises(ValueError, match=r"AgglomerativeClustering takes no 'random_state'"):
+        cluster_auto_k(AnnData(make_blobs()), (2, 4), clusterer=AgglomerativeClustering(), rng=0)
+
+
+def test_cluster_auto_k_takes_a_sparse_representation_with_a_clusterer():
+    """The dense-only guard is about the default mixture, not about every clusterer."""
+    adata = AnnData(csr_matrix(make_blobs()))
+    cluster_auto_k(adata, (2, 4), clusterer=KMeans(n_init=1), max_runs=3, rng=0, key_added="sparse_k")
+    assert adata.obs["sparse_k"].notna().all()

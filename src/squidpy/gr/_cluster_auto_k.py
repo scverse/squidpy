@@ -19,6 +19,7 @@ from squidpy._validators import assert_isinstance, assert_key_in_adata
 from squidpy.gr._autok import _gmm, _stability_frame, expand_n_clusters, label_columns, sweep_auto_k, to_uns
 from squidpy.gr._autok import cluster_stability as _cluster_stability
 from squidpy.gr._utils import _save_data, extract_adata_if_sdata
+from squidpy.types import SweepableClusterer
 
 __all__ = ["cluster_auto_k", "cluster_stability"]
 
@@ -32,6 +33,7 @@ def cluster_auto_k(
     max_runs: int = 10,
     convergence_tol: float = 1e-2,
     model_params: Mapping[str, Any] | None = None,
+    clusterer: SweepableClusterer | None = None,
     rng: SeedLike | RNGLike | None = None,
     keep_all_labels: bool = False,
     key_added: str = "cluster_auto_k",
@@ -45,7 +47,7 @@ def cluster_auto_k(
     stable K is the one whose partition is least sensitive to adding a cluster.
 
     Reimplements the K selection of CellCharter's ``ClusterAutoK``, using
-    :class:`~sklearn.mixture.GaussianMixture` for the fits.
+    :class:`~sklearn.mixture.GaussianMixture` for the fits unless *clusterer* says otherwise.
 
     Parameters
     ----------
@@ -67,7 +69,18 @@ def cluster_auto_k(
     model_params
         Extra keyword arguments for :class:`~sklearn.mixture.GaussianMixture`. The mapping is
         never modified. ``n_components`` and ``random_state`` are controlled by ``n_clusters``
-        and ``rng`` and are rejected here.
+        and ``rng`` and are rejected here. Mutually exclusive with *clusterer*.
+    clusterer
+        Fitted at every candidate K instead of the default mixture. Any
+        :class:`~squidpy.types.SweepableClusterer` will do -- scikit-learn's
+        :class:`~sklearn.cluster.KMeans`, cuML's, or your own -- as long as it takes a
+        number of clusters and a ``random_state``, both of which this sets per fit. It is
+        cloned for every fit, so the one passed in is never touched.
+
+        Being stochastic is a real requirement rather than a formality: stability scores
+        how much a K's labeling moves between runs, so a deterministic clusterer looks
+        perfectly stable at every K. That and clusterers that infer their own K are
+        rejected rather than run.
     %(rng)s
         Seeds every individual fit.
     keep_all_labels
@@ -108,21 +121,26 @@ def cluster_auto_k(
 
     assert_isinstance(max_runs, int, name="max_runs")
     assert_isinstance(convergence_tol, (float, int), name="convergence_tol")
+    if clusterer is not None and model_params is not None:
+        raise ValueError("'model_params' configures the default mixture, so it cannot be combined with 'clusterer'")
 
     adata = orig_adata.copy() if copy else orig_adata
     X = adata.obsm[use_rep] if use_rep is not None else adata.X
     if X is None:
         raise ValueError("'adata.X' is None. Pass a representation via 'use_rep'.")
-    if issparse(X):
+    if issparse(X) and clusterer is None:
         raise TypeError(
             "'GaussianMixture' does not support sparse input. Pass a dense representation via "
             "'use_rep', or densify with 'adata.X = adata.X.toarray()'."
         )
 
+    if clusterer is None:
+        clusterer = _gmm(model_params)
+
     candidates = expand_n_clusters(n_clusters)
     logg.info(
         f"Selecting the number of clusters over K={candidates} with up to {max_runs} runs each "
-        f"({len(candidates) * max_runs} mixture fits at most)"
+        f"({len(candidates) * max_runs} {type(clusterer).__name__} fits at most)"
     )
 
     result = sweep_auto_k(
@@ -130,7 +148,7 @@ def cluster_auto_k(
         candidates,
         max_runs=max_runs,
         convergence_tol=convergence_tol,
-        clusterer=_gmm(model_params),
+        clusterer=clusterer,
         seed=legacy_random(np.random.default_rng(rng)),
     )
     logg.info(f"Selected K={result.best_k} after {result.n_runs} runs")

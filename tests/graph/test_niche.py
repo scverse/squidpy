@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from functools import partial
+
 import numpy as np
 import pytest
 from anndata import AnnData, read_h5ad
@@ -466,7 +468,11 @@ def test_niche_custom_takes_any_sklearn_clusterer(dummy_adata2: AnnData):
 
     _niche._calculate_niche_custom(
         dummy_adata2,
-        _niche._UtagEmbedder("spatial_connectivities", rng=np.random.default_rng(0)),
+        partial(
+            _niche._utag_embedding,
+            spatial_connectivities_key="spatial_connectivities",
+            rng=np.random.default_rng(0),
+        ),
         {"kmeans_niche": KMeans(n_clusters=2, n_init=1), "agglo_niche": AgglomerativeClustering(n_clusters=2)},
         np.random.default_rng(0),
     )
