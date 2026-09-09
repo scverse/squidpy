@@ -9,7 +9,7 @@ import pandas as pd
 import scanpy as sc
 import scipy.sparse as sps
 from anndata import AnnData
-from scipy.sparse import coo_matrix, hstack, spdiags, issparse, csr_array
+from scipy.sparse import coo_matrix, csr_array, hstack, issparse, spdiags
 from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import normalize
 from spatialdata import SpatialData, sanitize_table
@@ -1070,8 +1070,8 @@ def _compute_hop_adjacency_matrices(
     # frontier holds only the newest layer of connections discovered so far
     # Multiplying just the frontier (not everything visited) forward
     # keeps the sparse matrices small.
-    frontier = adjacency_matrix # even though initially assigning adjacency_matrix, 
-    # after entering below loop, frontier is instantly assigned another array. 
+    frontier = adjacency_matrix  # even though initially assigning adjacency_matrix,
+    # after entering below loop, frontier is instantly assigned another array.
     # Hence adjacency_matrix is not modified
     for _ in range(1, max_hop):
         frontier = frontier @ adjacency_matrix
@@ -1216,7 +1216,9 @@ class _NhoodProfileEmbedder(_NicheEmbedder):
             if self.n_hop_weights is None:
                 weights = [1.0] * self.distance
             elif len(self.n_hop_weights) < self.distance:
-                logg.error(f'Number of weights provided is less than hops requested. n_hop_weights = {self.n_hop_weights} is less than distance = {self.distance}')
+                logg.error(
+                    f"Number of weights provided is less than hops requested. n_hop_weights = {self.n_hop_weights} is less than distance = {self.distance}"
+                )
             else:
                 weights = self.n_hop_weights
 
@@ -1224,7 +1226,9 @@ class _NhoodProfileEmbedder(_NicheEmbedder):
             weighted_profile = weights[0] * nhood_profile
 
             # Calculate higher-order hop profiles
-            hop_adj_matrices = _compute_hop_adjacency_matrices(adata.obsp[self.spatial_connectivities_key], max_hop=self.distance)
+            hop_adj_matrices = _compute_hop_adjacency_matrices(
+                adata.obsp[self.spatial_connectivities_key], max_hop=self.distance
+            )
 
             # get n_hop neighbor adjacency matrices by multiplying the original adjacency matrix with itself n times and get corresponding neighborhood profiles.
             for n_hop in range(1, self.distance):
@@ -1577,4 +1581,4 @@ def _postprocess_niche_results(
         if prefix is not None:
             labels = prefix + labels
 
-        adata.obs[col] = labels.astype('category')
+        adata.obs[col] = labels.astype("category")
