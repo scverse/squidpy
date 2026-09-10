@@ -1438,7 +1438,7 @@ class _UtagEmbedder(_NicheEmbedder):
             new_feature_matrix = normalize(adjacency_matrix, norm="l1", axis=1) @ adata.layers[self.use_layer]
         else:
             new_feature_matrix = normalize(adjacency_matrix, norm="l1", axis=1) @ adata.X
-        pca = sc.tl.pca(new_feature_matrix)  # note: unlike with flavor 'neighborhood' dim reduction is performed here
+        pca = sc.pp.pca(new_feature_matrix)  # note: unlike with flavor 'neighborhood' dim reduction is performed here
         return pca
 
 
@@ -1522,7 +1522,7 @@ class _NHopPCAEmbedder(_NicheEmbedder):
         concatenated_matrix = hstack(aggregated_matrices)  # Stack all matrices horizontally
         arr = concatenated_matrix.toarray()  # Densify
 
-        embedding = sc.tl.pca(arr)
+        embedding = sc.pp.pca(arr)
 
         return embedding
 
