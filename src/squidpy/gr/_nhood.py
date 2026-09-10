@@ -863,10 +863,6 @@ def nhood_aggregate(
     - ``cellcharter``: ``hops=range(0, k + 1)``, ``hop_mode='shell'``, then
       :func:`~scanpy.tl.pca`.
 
-    See Also
-    --------
-    calculate_niche : Niche calling, which starts from this.
-    nhood_entropy : How mixed each neighborhood is, over the same graph.
     """
     adata = extract_adata_if_sdata(data, table_key=table_key)
     adata = adata.copy() if copy else adata
