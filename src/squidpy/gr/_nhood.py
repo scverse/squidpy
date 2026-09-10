@@ -11,11 +11,12 @@ import numpy as np
 import pandas as pd
 import rustworkx as rx
 from anndata import AnnData
+from fast_array_utils.conv import to_dense
 from numba import njit, prange
 from numpy.typing import NDArray
 from pandas import CategoricalDtype
 from scanpy import logging as logg
-from scipy.sparse import csr_matrix, issparse, spmatrix
+from scipy.sparse import csr_matrix, spmatrix
 from scipy.stats import entropy
 from sklearn.preprocessing import normalize
 from spatialdata import SpatialData
@@ -639,11 +640,6 @@ def _shell_hop(adj_hop: spmatrix, adj: spmatrix, adj_visited: spmatrix) -> tuple
     return adj_hop, adj_visited + adj_hop
 
 
-def _densify(matrix: Any) -> NDArrayA:
-    """Dense view of *matrix*, which may already be dense."""
-    return matrix.toarray() if issparse(matrix) else np.asarray(matrix)
-
-
 def _hop_adjacencies(
     adj: spmatrix, hops: Sequence[int], hop_mode: Literal["power", "shell"]
 ) -> dict[int, spmatrix | None]:
@@ -693,9 +689,9 @@ def _aggregate_over(adj: spmatrix, features: Any, aggregation: Literal["mean", "
     if aggregation == "mean":
         return normalized @ features
     if aggregation == "variance":
-        mean = _densify(normalized @ features)
-        dense = _densify(features)
-        return _densify(normalized @ (dense * dense)) - mean * mean
+        mean = to_dense(normalized @ features)
+        dense = to_dense(features)
+        return to_dense(normalized @ (dense * dense)) - mean * mean
     raise ValueError(f"'aggregation' must be 'mean', 'sum' or 'variance', got {aggregation!r}")
 
 
@@ -737,7 +733,7 @@ def _nhood_aggregate(
     groups: str | None = None,
     use_rep: str | None = None,
     layer: str | None = None,
-    connectivity_key: str = "spatial_connectivities",
+    connectivity_key: str = Key.obsp.spatial_conn(),
     hops: Sequence[int] = (1,),
     hop_mode: Literal["power", "shell"] = "power",
     combine: Literal["concat", "sum"] = "concat",
@@ -756,12 +752,12 @@ def _nhood_aggregate(
     blocks = [features if hop == 0 else _aggregate_over(by_hop[hop], features, aggregation) for hop in hops]
 
     if combine == "concat":
-        return np.hstack([_densify(block) for block in blocks])
+        return np.hstack([to_dense(block) for block in blocks])
     if combine != "sum":
         raise ValueError(f"'combine' must be 'concat' or 'sum', got {combine!r}")
 
     weights = _resolve_hop_weights(hop_weights, len(blocks))
-    total = sum(weight * _densify(block) for weight, block in zip(weights, blocks, strict=True))
+    total = sum(weight * to_dense(block) for weight, block in zip(weights, blocks, strict=True))
     # a weighted mean over the hops, so the scale does not depend on how many there are.
     # `sum` is counts, which are meant to stay counts.
     return total if aggregation == "sum" else total / sum(weights)
@@ -774,7 +770,7 @@ def nhood_aggregate(
     groups: str | None = None,
     use_rep: str | None = None,
     layer: str | None = None,
-    connectivity_key: str = "spatial_connectivities",
+    connectivity_key: str = Key.obsp.spatial_conn(),
     hops: Sequence[int] = (1,),
     hop_mode: Literal["power", "shell"] = "power",
     combine: Literal["concat", "sum"] = "concat",
