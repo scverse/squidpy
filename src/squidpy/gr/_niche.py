@@ -161,10 +161,6 @@ def calculate_niche(
         If 'False', return a new AnnData object with the niche labels.
     """
 
-    # `warnings.warn`, not `logg.warning`: a deprecation has to be filterable and
-    # catchable by the caller, and `FutureWarning` is the one category Python shows to end
-    # users by default. Every other deprecation in squidpy does the same -- see
-    # `_build.py` and `_utils.py` -- and the tests assert them with `pytest.warns`.
     warnings.warn(
         "Calling `calculate_niche` is deprecated and will be removed in squidpy "
         "v1.9.0. Use `calculate_niche_neighborhood`, `calculate_niche_utag`, "
