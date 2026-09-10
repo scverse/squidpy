@@ -370,6 +370,8 @@ class GridBuilder(GraphBuilderCSR):
         }
 
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
+        # TODO: this is the ring expansion `_nhood._compute_hop_adjacency_matrices` does,
+        # where the search returns the hop each pair is first reached at directly
         if self.n_rings > 1:
             adj = self._base_adjacency(coords, set_diag=True)
             res, walk = adj, adj

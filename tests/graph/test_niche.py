@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import pytest
 from anndata import AnnData
+from fast_array_utils.conv import to_dense
 from pandas import Series
 from scanpy.pp import neighbors
-from scipy.sparse import csr_matrix, identity
+from scipy.sparse import csr_matrix, identity, issparse
+from scipy.sparse import hstack as sparse_hstack
 from spatialdata import SpatialData
 from spatialdata.models import TableModel
 
@@ -15,8 +18,15 @@ from squidpy.gr import (
     calculate_niche_cellcharter,
     calculate_niche_neighborhood,
     spatial_neighbors_knn,
+    spatial_neighbors_radius,
 )
-from squidpy.gr._niche import _compute_hop_adjacency_matrices
+from squidpy.gr._nhood import (
+    _compute_hop_adjacency_matrices,
+    _nhood_blocks,
+    _shell_adjacencies,
+    nhood_aggregate,
+)
+from squidpy.gr._niche import _nhood_profile_embedding
 
 N_NEIGHBORS = 20
 GROUPS = "celltype_mapped_refined"
@@ -368,3 +378,149 @@ def test_niche_copy_semantics(dummy_adata2: AnnData):
 
     assert calculate_niche_neighborhood(dummy_adata2, **kwargs) is None
     assert (dummy_adata2.obs[key] == out.obs[key]).all()
+
+
+def test_hop_adjacency_excludes_visited_pairs_on_a_weighted_graph():
+    # 0 and 1 are direct neighbours and also share three common neighbours
+    edges = [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 3), (1, 4), (4, 5)]
+
+    for weight in (1.0, 0.5):
+        adjacency = np.zeros((6, 6))
+        for i, j in edges:
+            adjacency[i, j] = adjacency[j, i] = weight
+
+        shells = _compute_hop_adjacency_matrices(csr_matrix(adjacency), max_hop=2)
+        assert not shells[1][0, 1], f"a one-hop neighbour reappeared in the two-hop shell at weight {weight}"
+        assert shells[1][0, 5], "a genuinely new two-hop pair went missing"
+
+
+def test_niche_neighborhood_rejects_too_few_hop_weights(dummy_adata2: AnnData):
+    with pytest.raises(ValueError, match=r"less than hops requested"):
+        calculate_niche_neighborhood(
+            dummy_adata2, groups="celltype", resolutions=1.0, n_neighbors=3, distance=3, n_hop_weights=[1.0]
+        )
+
+
+def test_hop_adjacency_power_mode_differs_from_shells():
+    edges = [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 3), (1, 4), (4, 5)]
+    adjacency = np.zeros((6, 6))
+    for i, j in edges:
+        adjacency[i, j] = adjacency[j, i] = 1
+    adjacency = csr_matrix(adjacency)
+
+    shells = _compute_hop_adjacency_matrices(adjacency, max_hop=2)
+    powers = [adjacency, adjacency @ adjacency]
+
+    # hop 1 is the graph itself either way
+    assert (shells[0] != powers[0]).nnz == 0
+    # hop 2 is not: powers count every 2-walk with multiplicity, shells only new pairs
+    assert powers[1][0, 1] == 3, "0 and 1 are joined by three 2-step paths"
+    assert not shells[1][0, 1], "0 and 1 were already joined at one hop"
+
+
+def test_neighborhood_profile_weights_by_path_count(dummy_adata2: AnnData):
+    spatial_neighbors_knn(dummy_adata2, n_neighs=3)
+    adj = dummy_adata2.obsp["spatial_connectivities"]
+    one_hot = pd.get_dummies(dummy_adata2.obs["celltype"], dtype=np.float64).to_numpy()
+
+    got = np.asarray(
+        _nhood_profile_embedding(
+            dummy_adata2,
+            groups="celltype",
+            spatial_connectivities_key="spatial_connectivities",
+            scale=False,
+            distance=3,
+            abs_nhood=False,
+            n_hop_weights=None,
+        )
+    )
+
+    expected, power = np.zeros_like(got), adj
+    for hop in range(3):
+        if hop:
+            power = power @ adj
+        profile = power @ one_hot
+        total = profile.sum(axis=1)[:, None]
+        expected += np.divide(profile, total, out=np.zeros_like(profile), where=total != 0)
+    np.testing.assert_allclose(got, expected / 3)
+
+
+def test_calculate_niche_deprecation_is_a_future_warning(dummy_adata2: AnnData):
+    with pytest.warns(FutureWarning, match=r"`calculate_niche` is deprecated"):
+        calculate_niche(dummy_adata2, flavor="utag", n_neighbors=3, resolutions=1.0, rng=0)
+
+
+def test_hop_adjacency_shells_are_boolean_on_a_weighted_graph():
+    edges = [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 3), (1, 4), (4, 5)]
+    for weight in (1.0, 0.5):
+        adjacency = np.zeros((6, 6))
+        for i, j in edges:
+            adjacency[i, j] = adjacency[j, i] = weight
+        shells = _compute_hop_adjacency_matrices(csr_matrix(adjacency), max_hop=2)
+
+        assert shells[0].dtype == bool, "the graph is cast to bool, as CellCharter does"
+        assert not shells[1][0, 1], f"one-hop neighbour reappeared in the two-hop shell at weight {weight}"
+        assert shells[1][0, 5]
+
+
+def test_hop_adjacency_powers_stay_numeric():
+    """`power` counts walks, so it must not be binarised along with the shells."""
+    edges = [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 3), (1, 4), (4, 5)]
+    adjacency = np.zeros((6, 6))
+    for i, j in edges:
+        adjacency[i, j] = adjacency[j, i] = 1
+    adjacency = csr_matrix(adjacency)
+    powers = [adjacency, adjacency @ adjacency]
+    assert powers[1][0, 1] == 3, "three 2-step paths, and the multiplicity has to survive"
+
+
+@pytest.mark.parametrize("sparse", [True, False])
+def test_nhood_blocks_stack_keeps_the_container(sparse: bool):
+    rng = np.random.default_rng(0)
+    X = rng.random((40, 5))
+    adata = AnnData(X=csr_matrix(X) if sparse else X)
+    adata.obsm["spatial"] = rng.random((40, 2)) * 10
+    spatial_neighbors_knn(adata, n_neighs=4)
+
+    blocks = _nhood_blocks(adata, hops=range(3), hop_mode="shell")
+    stacked = sparse_hstack(blocks, format="csr") if sparse else np.hstack([to_dense(b) for b in blocks])
+    assert issparse(stacked) is sparse, "a sparse input should not be densified on the way out"
+    assert stacked.shape == (40, 15)
+
+    # the pooled path keeps the container too
+    pooled = nhood_aggregate(adata, hops=range(1, 3))
+    assert issparse(pooled) is sparse
+    assert pooled.shape == (40, 5)
+
+
+@pytest.mark.parametrize("max_hop", [1, 2, 3, 4])
+@pytest.mark.parametrize("self_loops", [False, True])
+@pytest.mark.parametrize("weight", [1.0, 0.5])
+def test_bfs_shells_match_the_matmul_definition(max_hop: int, self_loops: bool, weight: float):
+    rng = np.random.default_rng(0)
+    points = np.vstack([rng.random((120, 2)) * 10, rng.random((120, 2)) * 10 + [60, 0], rng.random((4, 2)) + [30, 30]])
+    adata = AnnData(X=np.zeros((len(points), 1), dtype=np.float32))
+    adata.obsm["spatial"] = points
+    spatial_neighbors_radius(adata, radius=1.6)
+
+    adj = adata.obsp["spatial_connectivities"].astype(float) * weight
+    if self_loops:
+        adj = adj.tolil()
+        adj.setdiag(weight)
+        adj = adj.tocsr()
+
+    # the definition the search replaced: boolean matmul minus everything already reached
+    boolean = adj.astype(bool)
+    expected = [boolean]
+    visited = boolean.copy()
+    visited.setdiag(1)
+    frontier = boolean
+    for _ in range(1, max_hop):
+        frontier = (frontier @ boolean) > visited
+        visited = visited + frontier
+        expected.append(frontier)
+
+    got = _shell_adjacencies(adj, max_hop)
+    assert len(got) == max_hop
+    for hop, (want, have) in enumerate(zip(expected, got, strict=True), start=1):
+        assert (want != have).nnz == 0, f"hop {hop} differs"

@@ -4,18 +4,22 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
 from functools import partial
-from typing import Any, NamedTuple
+from typing import Any, Literal, NamedTuple
 
 import numba.types as nt
 import numpy as np
 import pandas as pd
 import rustworkx as rx
 from anndata import AnnData
-from numba import njit, prange
+from fast_array_utils.conv import to_dense
+from fast_array_utils.types import CSBase
+from fast_array_utils.types import HasArrayNamespace as Array
+from numba import get_num_threads, njit, prange
 from numpy.typing import NDArray
 from pandas import CategoricalDtype
 from scanpy import logging as logg
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_array, csr_matrix, diags, issparse, spmatrix
+from sklearn.preprocessing import normalize
 from spatialdata import SpatialData
 
 from squidpy._constants._constants import Centrality
@@ -31,7 +35,7 @@ from squidpy._utils import (
     get_n_processes,
     parallelize,
 )
-from squidpy._validators import assert_positive
+from squidpy._validators import assert_key_in_adata, assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
@@ -550,3 +554,266 @@ def _nhood_enrichment_helper(
         queue.put(Signal.FINISH)
 
     return perms
+
+
+@njit(parallel=True, cache=True)
+def _bfs_shells(
+    indptr: NDArrayA,
+    indices: NDArrayA,
+    max_hop: int,
+    n_threads: int,
+    counts: NDArrayA,
+    base: NDArrayA,
+    rowptr: NDArrayA,
+    out: NDArrayA,
+    fill: bool,
+) -> None:
+    """Breadth-first search from every observation, recording the hop each is first reached at.
+
+    Run twice: once with ``fill=False`` to size the output, once with ``fill=True`` to write
+    it. Sharing one traversal between the two passes is why the counting and filling logic
+    cannot drift apart.
+    """
+    n = indptr.shape[0] - 1
+    stamp = np.full((n_threads, n), -1, dtype=np.int64)
+    frontier = np.empty((n_threads, n), dtype=np.int64)
+    nxt = np.empty((n_threads, n), dtype=np.int64)
+    written = np.zeros((n_threads, max_hop + 1), dtype=np.int64)
+
+    for thread in prange(n_threads):
+        for src in range(thread, n, n_threads):
+            for hop in range(max_hop + 1):
+                written[thread, hop] = 0
+            # the source counts as already reached, which is what keeps an out-and-back
+            # walk from putting an observation in its own neighborhood
+            stamp[thread, src] = src
+            frontier[thread, 0] = src
+            n_frontier = 1
+
+            for hop in range(1, max_hop + 1):
+                n_next = 0
+                for f in range(n_frontier):
+                    node = frontier[thread, f]
+                    for p in range(indptr[node], indptr[node + 1]):
+                        neighbor = indices[p]
+                        if stamp[thread, neighbor] == src:
+                            continue  # a nearer hop already reached it
+                        stamp[thread, neighbor] = src
+                        nxt[thread, n_next] = neighbor
+                        n_next += 1
+                        if fill:
+                            at = base[hop - 1] + rowptr[hop - 1, src] + written[thread, hop]
+                            out[at] = neighbor
+                            written[thread, hop] += 1
+                        else:
+                            counts[hop - 1, src] += 1
+                for g in range(n_next):
+                    frontier[thread, g] = nxt[thread, g]
+                n_frontier = n_next
+                if n_frontier == 0:
+                    break
+
+
+def _shell_adjacencies(adj: spmatrix, max_hop: int) -> list[spmatrix]:
+    adj = adj.tocsr()
+    n = adj.shape[0]
+    indptr, indices = adj.indptr.astype(np.int64), adj.indices.astype(np.int64)
+
+    counts = np.zeros((max_hop, n), dtype=np.int64)
+    empty = np.zeros(1, dtype=np.int64)
+    n_threads = get_num_threads()
+    _bfs_shells(indptr, indices, max_hop, n_threads, counts, empty, counts, empty, False)
+
+    rowptr = np.zeros((max_hop, n + 1), dtype=np.int64)
+    np.cumsum(counts, axis=1, out=rowptr[:, 1:])
+    per_hop = rowptr[:, -1]
+    base = np.concatenate((np.zeros(1, dtype=np.int64), np.cumsum(per_hop)))
+
+    out = np.empty(int(base[-1]), dtype=np.int64)
+    _bfs_shells(indptr, indices, max_hop, n_threads, counts, base, rowptr, out, True)
+
+    shells: list[spmatrix] = []
+    for hop in range(max_hop):
+        lo, hi = int(base[hop]), int(base[hop + 1])
+        shell = csr_matrix(
+            (np.ones(hi - lo, dtype=bool), out[lo:hi], rowptr[hop]),
+            shape=(n, n),
+        )
+        shell.sort_indices()  # breadth-first order is not sorted order
+        shells.append(shell)
+
+    # The search marks the source visited before it starts, which is what stops an
+    # out-and-back walk from putting an observation in its own later hops. That also drops
+    # a self-loop the caller gave us, so hop 1 is taken from the graph itself: it is the
+    # direct neighborhood by definition, self-loops included.
+    shells[0] = adj.astype(bool)
+    return shells
+
+
+def _compute_hop_adjacency_matrices(
+    adjacency_matrix_orig: spmatrix | NDArrayA,
+    max_hop: int,
+) -> list[spmatrix]:
+    """Compute a sequence of 'new-connections-only' adjacency matrices for increasing hop distances.
+
+    Parameters
+    ----------
+    adjacency_matrix
+        The 1-hop (direct neighbor) adjacency matrix. Used as-is: if it has an
+        explicit self-loop (diagonal == 1), that is respected and preserved in
+        the output.
+    max_hop
+        Number of hop levels to compute (>= 1).
+
+    Returns
+    -------
+    A list ``adj_mat_list`` of length ``max_hop`` where:
+
+    - ``adj_mat_list[0]`` is ``adjacency_matrix``, as booleans.
+    - ``adj_mat_list[k]`` (k >= 1) has a 1 at ``(i, j)`` iff cell ``i`` and ``j``
+      are reachable in exactly ``k + 1`` hops *and* were not already connected
+      in any of ``adj_mat_list[0], ..., adj_mat_list[k-1]``.
+
+    Notes
+    -----
+    A breadth-first search reaches each cell once, at its shortest
+    distance, so the hops are disjoint by construction -- there is no "visited" matrix to
+    subtract, and a cell cannot reach itself via an out-and-back path.
+    """
+    if max_hop < 1:
+        raise ValueError(f"max_hop must be >= 1, got {max_hop}.")
+
+    adjacency_matrix = adjacency_matrix_orig if issparse(adjacency_matrix_orig) else csr_array(adjacency_matrix_orig)
+    return _shell_adjacencies(adjacency_matrix, max_hop)
+
+
+def _onehot(labels: pd.Series) -> csr_matrix:
+    """Indicator matrix of ``labels``, one column per category."""
+    codes = labels.astype("category").cat.codes.to_numpy()
+    keep = codes >= 0
+    return csr_matrix(
+        (np.ones(keep.sum()), (np.flatnonzero(keep), codes[keep])),
+        shape=(len(codes), len(labels.astype("category").cat.categories)),
+    )
+
+
+def _aggregate_over(
+    adj: CSBase, features: Array | CSBase, aggregation: Literal["mean", "sum", "variance"]
+) -> Array | CSBase:
+    """Aggregate *features* over the neighborhood each row of *adj* defines."""
+    if aggregation == "sum":
+        return adj @ features
+    normalized = normalize(adj, norm="l1", axis=1)
+    if aggregation == "mean":
+        return normalized @ features
+    if aggregation == "variance":
+        mean = to_dense(normalized @ features)
+        dense = to_dense(features)
+        return to_dense(normalized @ (dense * dense)) - mean * mean
+    raise ValueError(f"'aggregation' must be 'mean', 'sum' or 'variance', got {aggregation!r}")
+
+
+def _nhood_blocks(
+    adata: AnnData,
+    *,
+    groups: str | None = None,
+    use_rep: str | None = None,
+    layer: str | None = None,
+    connectivity_key: str = Key.obsp.spatial_conn(),
+    hops: Sequence[int] = (1,),
+    hop_mode: Literal["shell", "power"] = "shell",
+    aggregation: Literal["mean", "sum", "variance"] = "mean",
+) -> list[Array | CSBase]:
+    """One aggregated block per requested hop, in the order given."""
+    _assert_connectivity_key(adata, connectivity_key)
+    if not len(hops):
+        raise ValueError("'hops' must name at least one hop")
+    if any(hop < 0 for hop in hops):
+        raise ValueError(f"'hops' must be non-negative, got {list(hops)!r}")
+
+    given = [name for name, value in (("groups", groups), ("use_rep", use_rep), ("layer", layer)) if value is not None]
+    if len(given) > 1:
+        raise ValueError(f"pass at most one of 'groups', 'use_rep' and 'layer', got {given}")
+    # `has_value` says which observations have something to contribute; only a category can
+    # be unassigned, so a feature matrix leaves every row valid
+    has_value = None
+    if groups is not None:
+        assert_key_in_adata(adata, groups, attr="obs")
+        features = _onehot(adata.obs[groups])
+        has_value = np.asarray(features.sum(axis=1)).ravel() != 0
+    elif use_rep is not None:
+        assert_key_in_adata(adata, use_rep, attr="obsm")
+        features = adata.obsm[use_rep]
+    elif layer is not None:
+        assert_key_in_adata(adata, layer, attr="layers")
+        features = adata.layers[layer]
+    else:
+        features = adata.X
+
+    by_hop: dict[int, CSBase | None] = {0: None}
+    if max(hops) >= 1:
+        adj = adata.obsp[connectivity_key]
+        if hop_mode == "shell":
+            adjacencies = _compute_hop_adjacency_matrices(adj, max(hops))
+        elif hop_mode == "power":
+            # numeric on purpose: hop k counts every walk of length k, and that
+            # multiplicity is what weighs a near neighbor more in a summed profile
+            adjacencies, power = [adj], adj
+            for _ in range(1, max(hops)):
+                power = power @ adj
+                adjacencies.append(power)
+        else:
+            raise ValueError(f"'hop_mode' must be 'shell' or 'power', got {hop_mode!r}")
+        by_hop |= dict(enumerate(adjacencies, start=1))
+    if has_value is not None:
+        keep = diags(has_value.astype(float))
+        by_hop = {hop: adj if adj is None else (adj @ keep).tocsr() for hop, adj in by_hop.items()}
+
+    # hop 0 is the observation itself, so it contributes its features unaggregated
+    return [features if hop == 0 else _aggregate_over(by_hop[hop], features, aggregation) for hop in hops]
+
+
+def nhood_aggregate(
+    adata: AnnData,
+    *,
+    groups: str | None = None,
+    use_rep: str | None = None,
+    layer: str | None = None,
+    connectivity_key: str = Key.obsp.spatial_conn(),
+    hops: Sequence[int] = (1,),
+    aggregation: Literal["mean", "sum", "variance"] = "mean",
+    hop_weights: Sequence[float] | None = None,
+) -> Array | CSBase:
+    """Summarise each neighborhood into one block of ``n_features`` columns.
+
+    The hops are summed, weighted by *hop_weights*. Disjoint rings are the other way to
+    read a neighborhood and belong with the stacking path, so this one always takes
+    matrix powers; see ``_nhood_blocks``.
+    """
+    blocks = _nhood_blocks(
+        adata,
+        groups=groups,
+        use_rep=use_rep,
+        layer=layer,
+        connectivity_key=connectivity_key,
+        hops=hops,
+        # matrix powers, not disjoint rings: the hops are summed here, so a cell
+        # reachable by several short paths is meant to weigh more
+        hop_mode="power",
+        aggregation=aggregation,
+    )
+    weights = [1.0] * len(blocks) if hop_weights is None else list(hop_weights)
+    if len(weights) < len(blocks):
+        raise ValueError(
+            f"Number of weights provided is less than hops requested. n_hop_weights = {weights} "
+            f"is less than the {len(blocks)} hops"
+        )
+    if len(weights) > len(blocks):
+        raise ValueError(f"'hop_weights' has {len(weights)} values but there are {len(blocks)} hops")
+    # keep the container the features came in; `variance` has already densified, so a
+    # mixed set of blocks has to be densified whole
+    if not all(issparse(block) for block in blocks):
+        blocks = [to_dense(block) for block in blocks]
+    total = sum(weight * block for weight, block in zip(weights, blocks, strict=True))
+    # a weighted mean over the hops; counts are meant to stay counts
+    return total if aggregation == "sum" else total / sum(weights)
