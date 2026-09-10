@@ -1250,6 +1250,13 @@ def _aggregate(adata: AnnData, normalized_adjacency_matrix: sps.spmatrix, aggreg
     return aggregated_matrix
 
 
+def _as_csr(x):
+    """Return x as a CSR sparse matrix without copying if already CSR."""
+    if issparse(x):
+        return x.tocsr()
+    return csr_array(x)
+
+
 class _NicheEmbedder(ABC):
     """Base class for computing embeddings used in niche analysis.
 
@@ -1507,7 +1514,7 @@ class _NHopPCAEmbedder(_NicheEmbedder):
         adjacency_matrix = adata.obsp[self.spatial_connectivities_key]
         hop_adj_matrices = _compute_hop_adjacency_matrices(adjacency_matrix, max_hop=self.distance)
 
-        aggregated_matrices = [adata.X]  # hop 0: raw features, no aggregation
+        aggregated_matrices = [_as_csr(adata.X)]  # hop 0: raw features, no aggregation. Ensure sparse as hstack requires that
         for hop_adj in hop_adj_matrices:
             hop_adj_norm = _normalize(hop_adj)
             aggregated_matrices.append(_aggregate(adata, hop_adj_norm, self.aggregation))

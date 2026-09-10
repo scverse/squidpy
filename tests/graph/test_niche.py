@@ -62,9 +62,6 @@ def test_niche_calc_utag_dummy_adata(dummy_adata2: AnnData):
 def test_niche_calc_cellcharter_dummy_adata(dummy_adata2: AnnData):
     "Check whether niche calculation using cellcharter approach works as intended for dummy_adata2."
 
-    # since cellcharter throws an error if the object's expression matrix is not sparse, first ensure that is the case
-    dummy_adata2.X = csr_matrix(dummy_adata2.X)
-
     calculate_niche(dummy_adata2, flavor="cellcharter", distance=2, aggregation="mean", rng=np.random.default_rng(0))
 
     _assert_all_assigned(dummy_adata2, "cellcharter_niche")
@@ -94,7 +91,6 @@ def test_niche_calc_spatialleiden_dummy_adata(dummy_adata2: AnnData):
 
 def test_niche_cellcharter_rng_reproducible(dummy_adata2: AnnData):
     "The same `rng` must give the same niches, a different one must be free to differ."
-    dummy_adata2.X = csr_matrix(dummy_adata2.X)
     kwargs = {"distance": 2, "aggregation": "mean"}
 
     first = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), copy=True, **kwargs)
@@ -108,14 +104,12 @@ def test_niche_cellcharter_rng_reproducible(dummy_adata2: AnnData):
 
 def test_niche_cellcharter_rng_none_runs(dummy_adata2: AnnData):
     "`rng=None` (the default) must work: it means 'draw from OS entropy', not 'missing argument'."
-    dummy_adata2.X = csr_matrix(dummy_adata2.X)
     calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean")
     assert "cellcharter_niche" in dummy_adata2.obs.columns
 
 
 def test_niche_cellcharter_library_seeds_are_independent(dummy_adata2: AnnData, monkeypatch):
     "Each library must be fitted with its own seed, while the whole run stays reproducible."
-    dummy_adata2.X = csr_matrix(dummy_adata2.X)
     dummy_adata2.obs["batch"] = ["batch1"] * 5 + ["batch2"] * 5
     kwargs = {"distance": 2, "aggregation": "mean", "library_key": "batch", "n_components": 2}
 
