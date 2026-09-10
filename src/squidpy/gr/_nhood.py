@@ -17,7 +17,7 @@ from numba_progress import ProgressBar
 from numpy.typing import NDArray
 from pandas import CategoricalDtype
 from scanpy import logging as logg
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, issparse
 from spatialdata import SpatialData
 
 from squidpy._constants._constants import Centrality
@@ -31,6 +31,7 @@ from squidpy._utils import (
     SigQueue,
     deprecated_params,
     deprecated_randomness_param,
+    get_n_numba_threads,
     get_n_processes,
     numba_threads,
     parallelize,
@@ -97,28 +98,51 @@ def _counts_and_conditional(
 
     ``normalization='conditional'`` needs :func:`_nenrich`'s directed-edge counts *and*, per cluster
     pair ``(a, b)``, how many cluster-``a`` cells have at least one cluster-``b`` neighbor. Both are
-    row-local, so a single pass produces them: the ``seen`` flags cost one bool store per edge
-    instead of a second walk over every neighbor. That matters because the ``clustering[c]`` gather
-    is a random access into a scattered array — the expensive part, and the part a second walk
-    would repeat.
+    row-local, so a single pass produces them. ``stamp[b]`` holds the row that last touched cluster
+    ``b``, which makes "already counted for this cell" a comparison rather than a per-row array to
+    wipe and sweep — so the cost stays O(nnz) instead of growing with ``n_cls``.
 
     Returns ``(counts, cond)`` as ``(n_cls, n_cls)`` ``uint32`` / ``float64`` arrays. The counts are
     bit-identical to :func:`_nenrich`: the same additions happen in the same per-row order.
     """
     out = np.zeros((n_cls, n_cls), dtype=np.uint32)
     cond = np.zeros((n_cls, n_cls), dtype=np.float64)
-    seen = np.zeros(n_cls, dtype=np.bool_)
+    stamp = np.full(n_cls, -1, dtype=np.int64)  # -1 sits below every row index, so row 0 is correct
     for i in range(indptr.shape[0] - 1):
         a = clustering[i]
-        seen[:] = False
         for c in indices[indptr[i] : indptr[i + 1]]:
             b = clustering[c]
             out[a, b] += 1
-            seen[b] = True
-        for b in range(n_cls):
-            if seen[b]:
+            if stamp[b] != i:
+                stamp[b] = i
                 cond[a, b] += 1.0
     return out, cond
+
+
+@njit(nogil=True, cache=True)
+def _normalize_total(cnt: NDArrayA) -> NDArrayA:
+    """Row-normalize edge counts (SEA). An all-zero row divides by ``1`` and stays zero."""
+    out = np.zeros(cnt.shape, dtype=np.float64)
+    for a in range(cnt.shape[0]):
+        s = 0.0
+        for b in range(cnt.shape[1]):
+            s += cnt[a, b]
+        if s == 0.0:
+            s = 1.0
+        for b in range(cnt.shape[1]):
+            out[a, b] = cnt[a, b] / s
+    return out
+
+
+@njit(nogil=True, cache=True)
+def _normalize_conditional(cnt: NDArrayA, cond: NDArrayA) -> NDArrayA:
+    """Divide edge counts by the COZI denominator (COZI). A zero denominator divides by ``1``."""
+    out = np.zeros(cnt.shape, dtype=np.float64)
+    for a in range(cnt.shape[0]):
+        for b in range(cnt.shape[1]):
+            d = cond[a, b] if cond[a, b] != 0.0 else 1.0
+            out[a, b] = cnt[a, b] / d
+    return out
 
 
 @njit(nogil=True, cache=True)
@@ -131,9 +155,15 @@ def _shuffled_labels(
     """Shuffle cluster labels within each group, drawing once per group from ``rng``.
 
     Groups are visited in category order with ascending indices, so the draw sequence — and hence
-    the result for a given generator state — matches :func:`squidpy.gr._utils._shuffle_group`.
+    the result for a given generator state — matches the ``_ref_shuffle_group`` oracle in
+    ``tests/graph/test_nhood_correctness.py``, which the correctness tests check this against.
     """
     shuffled = int_clust.copy()
+    # one group covering every cell has ascending indices `0..n-1`, so the gather/scatter below is
+    # the identity; shuffling in place draws from ``rng`` identically and skips two passes
+    if group_offsets.shape[0] == 2 and group_offsets[1] == int_clust.shape[0]:
+        rng.shuffle(shuffled)
+        return shuffled
     for g in range(group_offsets.shape[0] - 1):
         s, e = group_offsets[g], group_offsets[g + 1]
         sub = np.empty(e - s, dtype=int_clust.dtype)
@@ -221,26 +251,11 @@ def _permutation_moments_normalized(
         rng = generators[np.int64(p)]
         shuffled = _shuffled_labels(int_clust, group_offsets, group_indices, rng)
 
-        out = np.zeros((n_cls, n_cls), dtype=np.float64)
         if norm_code == 1:  # total
-            for i in range(indptr.shape[0] - 1):
-                a = shuffled[i]
-                for c in indices[indptr[i] : indptr[i + 1]]:
-                    out[a, shuffled[c]] += 1.0
-            for a in range(n_cls):
-                s = 0.0
-                for b in range(n_cls):
-                    s += out[a, b]
-                if s == 0.0:
-                    s = 1.0
-                for b in range(n_cls):
-                    out[a, b] /= s
+            out = _normalize_total(_nenrich(indices, indptr, shuffled, n_cls))
         else:  # conditional: one fused walk yields both the numerator and its denominator
             cnt, cond = _counts_and_conditional(indices, indptr, shuffled, n_cls)
-            for a in range(n_cls):
-                for b in range(n_cls):
-                    d = cond[a, b] if cond[a, b] != 0.0 else 1.0
-                    out[a, b] = cnt[a, b] / d
+            out = _normalize_conditional(cnt, cond)
 
         local_d = np.zeros((n_cls, n_cls), dtype=np.float64)
         local_d2 = np.zeros((n_cls, n_cls), dtype=np.float64)
@@ -259,9 +274,8 @@ _NORM_CODES = {"none": 0, "total": 1, "conditional": 2}
 
 
 def _filter_clusters_by_min_cell_count(
-    adata: AnnData,
+    adj: csr_matrix,
     int_clust: NDArrayA,
-    connectivity_key: str,
     min_cell_count: int,
 ) -> tuple[NDArrayA, NDArrayA, NDArrayA]:
     clust_sizes = pd.Series(int_clust).value_counts()
@@ -271,14 +285,13 @@ def _filter_clusters_by_min_cell_count(
     valid_cells_idx = np.where(valid_mask)[0]
     int_clust = int_clust[valid_mask]
 
-    adj = adata.obsp[connectivity_key][np.ix_(valid_cells_idx, valid_cells_idx)]
-    return int_clust, adj, valid_mask
+    return int_clust, adj[np.ix_(valid_cells_idx, valid_cells_idx)], valid_mask
 
 
 @d.get_sections(base="nhood_ench", sections=["Parameters"])
 @d.dedent
 @deprecated_randomness_param
-@deprecated_params({"numba_parallel": "1.10.0", "backend": "1.10.0"})
+@deprecated_params({"numba_parallel": "1.9.0", "backend": "1.9.0"})
 def nhood_enrichment(
     adata: AnnData | SpatialData,
     cluster_key: str,
@@ -302,10 +315,12 @@ def nhood_enrichment(
 
     %(rng_versionchanged)s
 
-    .. versionchanged:: 1.10.0
+    .. versionchanged:: 1.9.0
         Every parameter after ``n_perms`` is keyword-only, and ``numba_parallel`` / ``backend`` are
         deprecated: the permutations now run in a single :func:`numba.prange` kernel whose thread
-        count is set by ``n_jobs``.
+        count is set by ``n_jobs``, which now defaults to all available threads rather than one.
+        The normalized modes accumulate in float64, so their z-scores depend on the thread count
+        to within rounding (measured ``<= 1e-14`` relative); ``'none'`` stays bit-identical.
 
     Parameters
     ----------
@@ -317,8 +332,7 @@ def nhood_enrichment(
     %(n_perms)s
     %(rng)s
     %(copy)s
-    n_jobs
-        Number of ``numba`` threads used for the permutation loop.
+    %(n_jobs_threads)s
     %(show_progress_bar)s
     normalization
         Normalization mode to use:
@@ -358,17 +372,28 @@ def nhood_enrichment(
         raise ValueError(f"Invalid `handle_nan` mode `{handle_nan}`. Choose from 'keep', 'zero'.")
 
     adj = adata.obsp[connectivity_key]
+    if not issparse(adj):
+        raise TypeError(
+            f"Expected `adata.obsp[{connectivity_key!r}]` to be a sparse matrix, found `{type(adj).__name__}`."
+        )
+    # CSC has `indices`/`indptr` too, but column-wise: without this the counts come out transposed
+    adj = adj.tocsr()
     original_clust = adata.obs[cluster_key]
-    clust_map = {v: i for i, v in enumerate(original_clust.cat.categories.values)}
-    int_clust = np.array([clust_map[c] for c in original_clust], dtype=ndt)
+    # `.cat.codes` is the same category-order mapping the dict comprehension used to build cell by
+    # cell, but it already exists on the Categorical; NaN shows up as `-1`, which `ndt` would wrap
+    # around to a huge cluster id, so reject it rather than let it index out of range.
+    codes = original_clust.cat.codes.to_numpy()
+    if (codes < 0).any():
+        raise ValueError(f"Found `NaN` values in `adata.obs[{cluster_key!r}]`; every cell needs a cluster.")
+    int_clust = codes.astype(ndt)
     n_total_cells = len(int_clust)
 
-    int_clust, adj, valid_mask = _filter_clusters_by_min_cell_count(
-        adata=adata,
-        int_clust=int_clust,
-        connectivity_key=connectivity_key,
-        min_cell_count=min_cell_count,
-    )
+    # `min_cell_count=0` keeps every cluster, so the filter would rebuild `adj` into an identical
+    # copy -- an `nnz`-sized allocation on the default path.
+    if min_cell_count > 0:
+        int_clust, adj, valid_mask = _filter_clusters_by_min_cell_count(adj, int_clust, min_cell_count)
+    else:
+        valid_mask = np.ones(n_total_cells, dtype=bool)
     if library_key is not None:
         _assert_categorical_obs(adata, key=library_key)
         # subset to the kept cells so the per-cell series stays aligned with the filtered
@@ -386,7 +411,7 @@ def nhood_enrichment(
         )
 
     indices, indptr = (adj.indices.astype(ndt), adj.indptr.astype(ndt))
-    n_cls = len(clust_map)
+    n_cls = len(original_clust.cat.categories)
     if n_cls <= 1:
         raise ValueError(f"Expected at least `2` clusters, found `{n_cls}`.")
 
@@ -400,21 +425,16 @@ def nhood_enrichment(
         nonempty = cluster_sizes > 0
         conditional_ratio[nonempty] = cond_counts[nonempty] / cluster_sizes[nonempty, None]
 
-        safe_cond_counts = cond_counts.copy()
-        safe_cond_counts[safe_cond_counts == 0] = 1.0
-
-        count_normalized = count / safe_cond_counts
+        count_normalized = _normalize_conditional(count, cond_counts)
     else:
         count = _nenrich(indices, indptr, int_clust, n_cls)
         if normalization == "total":
-            row_sums = count.sum(axis=1, keepdims=True)
-            row_sums[row_sums == 0] = 1
-            count_normalized = count / row_sums
+            count_normalized = _normalize_total(count)
         else:  # "none"
             count_normalized = count.copy()
 
-    n_jobs = get_n_processes(n_jobs)
-    start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` core(s)")
+    n_jobs = get_n_numba_threads(n_jobs)
+    start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` thread(s)")
     norm_code = _NORM_CODES[normalization]
 
     # One independent PCG64 generator per permutation, spawned from a single ``SeedSequence``, held
@@ -423,8 +443,8 @@ def nhood_enrichment(
     generators = List(np.random.default_rng(rng).spawn(n_perms))
 
     # Group structure for within-group shuffling, as a CSR-like (offsets, indices) pair in category
-    # order with ascending indices per group (matching `_shuffle_group`). Without a `library_key`,
-    # a single group spanning all cells reproduces a plain global shuffle.
+    # order with ascending indices per group. Without a `library_key` there is a single group
+    # spanning all cells, which reproduces a plain global shuffle.
     group_offsets, group_indices = _build_shuffle_groups(libraries, len(int_clust))
 
     # A single numba ``prange`` kernel shuffles + counts + normalizes per thread with the GIL
@@ -771,7 +791,7 @@ def _build_shuffle_groups(
     """Build a CSR-like ``(offsets, indices)`` description of the within-group shuffling.
 
     ``indices[offsets[g]:offsets[g + 1]]`` are the cell indices of group ``g`` in ascending order,
-    with groups in category order — matching :func:`squidpy.gr._utils._shuffle_group`. Without a
+    with groups in category order — matching the ``_ref_shuffle_group`` test oracle. Without a
     ``library_key`` there is a single group spanning all cells, which reproduces a global shuffle.
     """
     if libraries is None:

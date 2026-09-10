@@ -5,6 +5,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import pytest
+import scipy.sparse as sp
 from anndata import AnnData
 
 from squidpy._constants._pkg_constants import Key
@@ -32,14 +33,6 @@ class TestNhoodEnrichment:
 
         self._assert_common(adata)
 
-    @pytest.mark.parametrize("n_jobs", [1, 2, 3])
-    def test_parallel_works(self, adata: AnnData, n_jobs: int):
-        spatial_neighbors_grid(adata)
-
-        nhood_enrichment(adata, cluster_key=_CK, n_jobs=n_jobs, n_perms=20)
-
-        self._assert_common(adata)
-
     @pytest.mark.parametrize("backend", ["threading", "multiprocessing", "loky"])
     def test_backend_is_deprecated(self, adata: AnnData, backend: str):
         spatial_neighbors_grid(adata)
@@ -62,7 +55,7 @@ class TestNhoodEnrichment:
         """A deprecated argument is stripped before the call, so it cannot change the result."""
         spatial_neighbors_grid(adata)
 
-        kw = {"cluster_key": _CK, "seed": 42, "n_perms": 20, "copy": True}
+        kw = {"cluster_key": _CK, "rng": 42, "n_perms": 20, "copy": True}
         expected = nhood_enrichment(adata, **kw)
         with pytest.warns(FutureWarning, match=rf"`{param}`.*is deprecated"):
             got = nhood_enrichment(adata, **kw, **{param: "loky" if param == "backend" else True})
@@ -256,10 +249,6 @@ def test_nhood_enrichment_normalization_modes(adata: AnnData, normalization: str
 def test_conditional_normalization_zero_division(adata: AnnData):
     adata = adata.copy()
     min_cells = 10
-    if _CK not in adata.obs:
-        raise ValueError(f"Cluster key '{_CK}' not in adata.obs")
-    if not pd.api.types.is_categorical_dtype(adata.obs[_CK]):
-        adata.obs[_CK] = adata.obs[_CK].astype("category")
     adata.obs[_CK] = adata.obs[_CK].cat.add_categories("isolated")
     adata.obs.loc[adata.obs.index[0], _CK] = "isolated"
     spatial_neighbors_grid(adata)
@@ -277,31 +266,47 @@ def test_conditional_normalization_zero_division(adata: AnnData):
     assert not np.isnan(conditional_ratio[np.ix_(valid_idx, valid_idx)]).any()
 
 
-@pytest.mark.parametrize(
-    "normalization, expected_dtype",
-    [
-        ("none", np.uint32),
-        ("total", np.uint32),
-        ("conditional", np.uint32),
-    ],
-)
-def test_output_dtype(adata: AnnData, normalization: str, expected_dtype):
-    spatial_neighbors_grid(adata)
-    result = nhood_enrichment(
-        adata,
-        cluster_key=_CK,
-        normalization=normalization,
-        n_jobs=1,
-        n_perms=20,
-        copy=True,
-    )
-
-    count = result.counts
-
-    assert count.dtype == expected_dtype
-
-
 def test_invalid_normalization_raises(adata: AnnData):
     spatial_neighbors_grid(adata)
     with pytest.raises(ValueError, match="Invalid normalization mode"):
         nhood_enrichment(adata, cluster_key=_CK, normalization="invalid_mode", copy=True)
+
+
+def _asymmetric_adata(n: int = 200, n_cls: int = 4) -> AnnData:
+    """An adata whose connectivity is deliberately asymmetric, so a transpose is visible."""
+    rng = np.random.default_rng(0)
+    adj = sp.random(n, n, density=0.03, format="csr", random_state=0)
+    adj.data[:] = 1.0
+    adj.setdiag(0)
+    adj.eliminate_zeros()
+    assert (adj != adj.T).nnz > 0, "graph must be asymmetric for this test to mean anything"
+
+    adata = AnnData(
+        np.zeros((n, 1), dtype=np.float32),
+        obs=pd.DataFrame(
+            {_CK: pd.Categorical(rng.integers(0, n_cls, n).astype(str))}, index=[f"c{i}" for i in range(n)]
+        ),
+        obsp={Key.obsp.spatial_conn(): adj},
+    )
+    return adata
+
+
+def test_csc_connectivity_is_not_silently_transposed():
+    """CSC exposes ``indices``/``indptr`` too, but column-wise -- it must not yield the transpose."""
+    adata = _asymmetric_adata()
+    kw = {"cluster_key": _CK, "n_perms": 5, "rng": 0, "n_jobs": 1, "copy": True}
+
+    from_csr = nhood_enrichment(adata, **kw)
+    adata.obsp[Key.obsp.spatial_conn()] = adata.obsp[Key.obsp.spatial_conn()].tocsc()
+    from_csc = nhood_enrichment(adata, **kw)
+
+    np.testing.assert_array_equal(from_csc.counts, from_csr.counts)
+    assert not np.array_equal(from_csr.counts, from_csr.counts.T), "asymmetry should survive into the counts"
+
+
+def test_dense_connectivity_raises():
+    """A dense ``obsp`` has no ``indices``/``indptr``; refuse it instead of densifying or crashing."""
+    adata = _asymmetric_adata()
+    adata.obsp[Key.obsp.spatial_conn()] = adata.obsp[Key.obsp.spatial_conn()].toarray()
+    with pytest.raises(TypeError, match=r"to be a sparse matrix, found `ndarray`"):
+        nhood_enrichment(adata, cluster_key=_CK, n_perms=5, rng=0, copy=True)

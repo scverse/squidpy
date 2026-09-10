@@ -24,8 +24,9 @@ import pytest
 from anndata import AnnData
 from scipy.sparse import csr_matrix
 
+from squidpy._utils import RNGLike, SeedLike
 from squidpy.gr import nhood_enrichment, spatial_neighbors_grid
-from squidpy.gr._utils import _shuffle_group
+from squidpy.gr._nhood import _build_shuffle_groups, _shuffled_labels
 
 _CK = "leiden"
 
@@ -33,6 +34,26 @@ _CK = "leiden"
 # --------------------------------------------------------------------------- #
 # Independent reference implementations (plain Python, no numba)
 # --------------------------------------------------------------------------- #
+def _ref_shuffle_group(
+    cluster_annotation: np.ndarray,
+    libraries: pd.Series,
+    rs: np.random.Generator,
+) -> np.ndarray:
+    """Shuffle ``cluster_annotation`` within each category of ``libraries``.
+
+    Lifted verbatim from ``squidpy.gr._utils._shuffle_group``, which the production code replaced
+    with ``_build_shuffle_groups`` + ``_shuffled_labels``. It lives here because its only remaining
+    job is to be the independent oracle those two are checked against.
+    """
+    cluster_annotation_output = np.empty(libraries.shape, dtype=cluster_annotation.dtype)
+    for c in libraries.cat.categories:
+        idx = np.where(libraries == c)[0]
+        arr_group = cluster_annotation[idx].copy()
+        rs.shuffle(arr_group)  # it's done in place hence copy before
+        cluster_annotation_output[idx] = arr_group
+    return cluster_annotation_output
+
+
 def _ref_count(adj: csr_matrix, int_clust: np.ndarray, n_cls: int) -> np.ndarray:
     """``count[a, b]`` = number of directed edges from a cluster-``a`` cell to a cluster-``b`` neighbor."""
     adj = adj.tocsr()
@@ -95,13 +116,13 @@ def _reference_nhood_enrichment(
     n_cls: int,
     *,
     n_perms: int,
-    seed: int,
+    rng: SeedLike | RNGLike | None,
     normalization: str,
     libraries: pd.Series | None = None,
 ) -> np.ndarray:
     """Full z-score reference replicating the production per-permutation seeding scheme.
 
-    Permutation ``p`` uses ``np.random.default_rng(seed).spawn(n_perms)[p]`` and shuffles a private copy of the
+    Permutation ``p`` uses ``np.random.default_rng(rng).spawn(n_perms)[p]`` and shuffles a private copy of the
     original labels once. Because a permutation's stream depends only on its global index, the
     result is independent of how permutations are spread across threads (i.e. of ``n_jobs``).
     Numba's ``Generator.shuffle`` reproduces numpy's bit-for-bit, so this matches
@@ -109,15 +130,15 @@ def _reference_nhood_enrichment(
     """
     observed = _ref_normalize(adj, int_clust, n_cls, normalization)
 
-    generators = np.random.default_rng(seed).spawn(n_perms)
+    generators = np.random.default_rng(rng).spawn(n_perms)
     perms = np.empty((n_perms, n_cls, n_cls), dtype=np.float64)
     for p in range(n_perms):
-        rng = generators[p]
+        gen = generators[p]
         if libraries is not None:
-            shuffled = _shuffle_group(int_clust, libraries, rng)
+            shuffled = _ref_shuffle_group(int_clust, libraries, gen)
         else:
             shuffled = int_clust.copy()
-            rng.shuffle(shuffled)
+            gen.shuffle(shuffled)
         perms[p] = _ref_normalize(adj, shuffled, n_cls, normalization)
 
     std = perms.std(axis=0)
@@ -242,18 +263,18 @@ def test_conditional_ratio_none_for_other_modes(adata_tiny: AnnData):
 def test_zscore_matches_reference_tiny(adata_tiny: AnnData, normalization: str, n_jobs: int):
     adj = adata_tiny.obsp["spatial_connectivities"]
     int_clust = _int_clust(adata_tiny)
-    seed, n_perms = 0, 50
+    rng, n_perms = 0, 50
 
     result = nhood_enrichment(
         adata_tiny,
         cluster_key=_CK,
         normalization=normalization,
         n_perms=n_perms,
-        rng=seed,
+        rng=rng,
         n_jobs=n_jobs,
         copy=True,
     )
-    expected = _reference_nhood_enrichment(adj, int_clust, 3, n_perms=n_perms, seed=seed, normalization=normalization)
+    expected = _reference_nhood_enrichment(adj, int_clust, 3, n_perms=n_perms, rng=rng, normalization=normalization)
     np.testing.assert_allclose(result.zscore, expected, equal_nan=True)
 
 
@@ -268,10 +289,10 @@ def test_zscore_reference_holds_on_real_data(adata: AnnData, n_jobs: int):
     adj = adata.obsp["spatial_connectivities"]
     int_clust = adata.obs[_CK].cat.codes.to_numpy()
     n_cls = adata.obs[_CK].cat.categories.shape[0]
-    seed, n_perms = 7, 30
+    rng, n_perms = 7, 30
 
-    result = nhood_enrichment(adata, cluster_key=_CK, n_perms=n_perms, rng=seed, n_jobs=n_jobs, copy=True)
-    expected = _reference_nhood_enrichment(adj, int_clust, n_cls, n_perms=n_perms, seed=seed, normalization="none")
+    result = nhood_enrichment(adata, cluster_key=_CK, n_perms=n_perms, rng=rng, n_jobs=n_jobs, copy=True)
+    expected = _reference_nhood_enrichment(adj, int_clust, n_cls, n_perms=n_perms, rng=rng, normalization="none")
     np.testing.assert_allclose(result.zscore, expected, equal_nan=True)
 
 
@@ -287,7 +308,7 @@ def test_zscore_independent_of_n_jobs(adata_tiny: AnnData, normalization: str):
     headroom while staying far tighter than the O(1) discrepancy a real thread-dependent bug would
     produce. Counts are integer and always exact.
     """
-    kw = {"cluster_key": _CK, "normalization": normalization, "n_perms": 50, "seed": 0, "copy": True}
+    kw = {"cluster_key": _CK, "normalization": normalization, "n_perms": 50, "rng": 0, "copy": True}
     r1 = nhood_enrichment(adata_tiny, n_jobs=1, **kw)
     r8 = nhood_enrichment(adata_tiny, n_jobs=8, **kw)
     if normalization == "none":
@@ -300,13 +321,13 @@ def test_zscore_independent_of_n_jobs(adata_tiny: AnnData, normalization: str):
 @pytest.mark.parametrize("n_jobs", [1, 3])
 @pytest.mark.parametrize("normalization", ["none", "total", "conditional"])
 def test_zscore_library_key_matches_reference(adata_tiny: AnnData, normalization: str, n_jobs: int):
-    """The numba within-group shuffle must reproduce the ``_shuffle_group`` reference, per ``library_key``."""
+    """The numba within-group shuffle must reproduce the ``_ref_shuffle_group`` oracle, per ``library_key``."""
     adata = adata_tiny.copy()
     # two libraries over the six cells, intentionally uneven and interleaved
     adata.obs["library"] = pd.Categorical.from_codes([0, 0, 1, 1, 0, 1], categories=["s1", "s2"])
     adj = adata.obsp["spatial_connectivities"]
     int_clust = _int_clust(adata)
-    seed, n_perms = 0, 50
+    rng, n_perms = 0, 50
 
     result = nhood_enrichment(
         adata,
@@ -314,14 +335,42 @@ def test_zscore_library_key_matches_reference(adata_tiny: AnnData, normalization
         library_key="library",
         normalization=normalization,
         n_perms=n_perms,
-        rng=seed,
+        rng=rng,
         n_jobs=n_jobs,
         copy=True,
     )
     expected = _reference_nhood_enrichment(
-        adj, int_clust, 3, n_perms=n_perms, seed=seed, normalization=normalization, libraries=adata.obs["library"]
+        adj, int_clust, 3, n_perms=n_perms, rng=rng, normalization=normalization, libraries=adata.obs["library"]
     )
     np.testing.assert_allclose(result.zscore, expected, equal_nan=True)
+
+
+def test_single_group_shuffle_draws_like_numpy(adata_tiny: AnnData):
+    """The single-group fast path must consume ``rng`` exactly like a plain ``numpy`` shuffle."""
+    int_clust = (np.arange(200) % 7).astype(np.uint32)
+    offsets, indices = _build_shuffle_groups(None, len(int_clust))
+
+    # The fast path skips the gather/scatter through ``group_indices``, so it is only valid while a
+    # lone group yields identity indices. ``libraries=None`` returns ``arange`` outright; the other
+    # way in is a single-category ``library_key``, where identity rests on the stable ``argsort``.
+    one_library = pd.Series(pd.Categorical(["s1"] * len(int_clust)))
+    lib_offsets, lib_indices = _build_shuffle_groups(one_library, len(int_clust))
+    np.testing.assert_array_equal(lib_offsets, offsets)
+    np.testing.assert_array_equal(lib_indices, np.arange(len(int_clust)))
+    np.testing.assert_array_equal(indices, np.arange(len(int_clust)))
+
+    expected = int_clust.copy()
+    np.random.default_rng(0).shuffle(expected)
+    np.testing.assert_array_equal(_shuffled_labels(int_clust, offsets, indices, np.random.default_rng(0)), expected)
+
+    # and end to end: one library over every cell is the same shuffle as no ``library_key`` at all
+    adata = adata_tiny.copy()
+    adata.obs["library"] = pd.Categorical(["s1"] * adata.n_obs)
+    kw = {"cluster_key": _CK, "n_perms": 20, "rng": 0, "n_jobs": 1, "copy": True}
+    np.testing.assert_array_equal(
+        nhood_enrichment(adata, **kw).zscore,
+        nhood_enrichment(adata, library_key="library", **kw).zscore,
+    )
 
 
 @pytest.mark.parametrize("n_jobs", [1, 3])
@@ -346,7 +395,7 @@ def test_zscore_library_key_with_min_cell_count(normalization: str, n_jobs: int)
         obsp={"spatial_connectivities": adj_full},
     )
 
-    min_cell_count, seed, n_perms = 2, 0, 50
+    min_cell_count, rng, n_perms = 2, 0, 50
     result = nhood_enrichment(
         adata,
         cluster_key=_CK,
@@ -354,7 +403,7 @@ def test_zscore_library_key_with_min_cell_count(normalization: str, n_jobs: int)
         normalization=normalization,
         min_cell_count=min_cell_count,
         n_perms=n_perms,
-        rng=seed,
+        rng=rng,
         n_jobs=n_jobs,
         copy=True,
     )
@@ -370,7 +419,7 @@ def test_zscore_library_key_with_min_cell_count(normalization: str, n_jobs: int)
     lib_f = adata.obs["library"].iloc[mask]
 
     expected = _reference_nhood_enrichment(
-        adj_f, int_clust_f, 3, n_perms=n_perms, seed=seed, normalization=normalization, libraries=lib_f
+        adj_f, int_clust_f, 3, n_perms=n_perms, rng=rng, normalization=normalization, libraries=lib_f
     )
     np.testing.assert_allclose(result.zscore, expected, equal_nan=True)
 
