@@ -619,7 +619,7 @@ def calculate_niche_cellcharter(
         logg.warning(
             "CellCharter recommends to use a dimensionality reduced embedding of the data, e.g. a scVI embedding. Since 'use_rep' is not provided, PCA will be used as proxy - performance may be suboptimal."
         )
-        embedder = _NHopPCAEmbedder(distance, aggregation, spatial_connectivities_key, n_components, use_rep)
+        embedder = _NHopPCAEmbedder(distance, aggregation, spatial_connectivities_key, use_rep)
 
     clusterer = _GMMClusterer(n_components, np.random.default_rng(rng), base_colname="cellcharter_niche")
 
@@ -1488,13 +1488,11 @@ class _NHopPCAEmbedder(_NicheEmbedder):
         distance: int,
         aggregation: str,
         spatial_connectivities_key: str,
-        n_components: int,
         use_rep: str | None,
     ):
         self.distance = distance
         self.aggregation = aggregation
         self.spatial_connectivities_key = spatial_connectivities_key
-        self.n_components = n_components
         self.use_rep = use_rep
 
     # this will hold an if block checking if use_rep is not None. If not None, then it will simply
