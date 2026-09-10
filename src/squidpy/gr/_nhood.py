@@ -14,7 +14,7 @@ from anndata import AnnData
 from fast_array_utils.conv import to_dense
 from fast_array_utils.types import CSBase
 from fast_array_utils.types import HasArrayNamespace as Array
-from numba import njit, prange
+from numba import get_num_threads, njit, prange
 from numpy.typing import NDArray
 from pandas import CategoricalDtype
 from scanpy import logging as logg
@@ -641,16 +641,104 @@ def _nhood_enrichment_helper(
     return perms
 
 
-def _shell_hop(adj_hop: CSBase, adj: CSBase, adj_visited: CSBase) -> tuple[CSBase, CSBase]:
-    """One step out, dropping what earlier hops already reached.
+@njit(parallel=True, cache=True)
+def _bfs_shells(
+    indptr: NDArrayA,
+    indices: NDArrayA,
+    max_hop: int,
+    n_threads: int,
+    counts: NDArrayA,
+    base: NDArrayA,
+    rowptr: NDArrayA,
+    out: NDArrayA,
+    fill: bool,
+) -> None:
+    """Breadth-first search from every observation, recording the hop each is first reached at.
 
-    Everything here is boolean, as in CellCharter: a boolean matmul answers "is there a
-    path" rather than counting them, which is what makes ``>`` the logical and-not it
-    reads as. On numeric input it would be ``path_count > visited`` instead, so a pair
-    joined by several short paths would re-enter a later shell.
+    Run twice: once with ``fill=False`` to size the output, once with ``fill=True`` to write
+    it. Sharing one traversal between the two passes is why the counting and filling logic
+    cannot drift apart.
+
+    Scratch is one buffer per thread rather than one per source, and ``stamp`` holds the
+    source that last touched an observation, so nothing has to be cleared between searches.
+    *n_threads* is passed in rather than read here, since calling into numba's threading
+    layer from inside the kernel makes it uncacheable.
     """
-    adj_hop = (adj_hop @ adj) > adj_visited
-    return adj_hop, adj_visited + adj_hop
+    n = indptr.shape[0] - 1
+    stamp = np.full((n_threads, n), -1, dtype=np.int64)
+    frontier = np.empty((n_threads, n), dtype=np.int64)
+    nxt = np.empty((n_threads, n), dtype=np.int64)
+    written = np.zeros((n_threads, max_hop + 1), dtype=np.int64)
+
+    for thread in prange(n_threads):
+        for src in range(thread, n, n_threads):
+            for hop in range(max_hop + 1):
+                written[thread, hop] = 0
+            # the source counts as already reached, which is what keeps an out-and-back
+            # walk from putting an observation in its own neighborhood
+            stamp[thread, src] = src
+            frontier[thread, 0] = src
+            n_frontier = 1
+
+            for hop in range(1, max_hop + 1):
+                n_next = 0
+                for f in range(n_frontier):
+                    node = frontier[thread, f]
+                    for p in range(indptr[node], indptr[node + 1]):
+                        neighbor = indices[p]
+                        if stamp[thread, neighbor] == src:
+                            continue  # a nearer hop already reached it
+                        stamp[thread, neighbor] = src
+                        nxt[thread, n_next] = neighbor
+                        n_next += 1
+                        if fill:
+                            at = base[hop - 1] + rowptr[hop - 1, src] + written[thread, hop]
+                            out[at] = neighbor
+                            written[thread, hop] += 1
+                        else:
+                            counts[hop - 1, src] += 1
+                for g in range(n_next):
+                    frontier[thread, g] = nxt[thread, g]
+                n_frontier = n_next
+                if n_frontier == 0:
+                    break
+
+
+def _shell_adjacencies(adj: CSBase, max_hop: int) -> list[CSBase]:
+    """One boolean adjacency per hop, holding what that hop reaches first.
+
+    The hops are disjoint because a breadth-first search reaches each observation once, at
+    its shortest distance -- there is no ``visited`` set to subtract and so no way for the
+    subtraction to depend on how many paths connect a pair.
+    """
+    adj = adj.tocsr()
+    n = adj.shape[0]
+    indptr, indices = adj.indptr.astype(np.int64), adj.indices.astype(np.int64)
+
+    counts = np.zeros((max_hop, n), dtype=np.int64)
+    empty = np.zeros(1, dtype=np.int64)
+    n_threads = get_num_threads()
+    _bfs_shells(indptr, indices, max_hop, n_threads, counts, empty, counts, empty, False)
+
+    rowptr = np.zeros((max_hop, n + 1), dtype=np.int64)
+    np.cumsum(counts, axis=1, out=rowptr[:, 1:])
+    per_hop = rowptr[:, -1]
+    base = np.concatenate((np.zeros(1, dtype=np.int64), np.cumsum(per_hop)))
+
+    out = np.empty(int(base[-1]), dtype=np.int64)
+    _bfs_shells(indptr, indices, max_hop, n_threads, counts, base, rowptr, out, True)
+
+    shells: list[CSBase] = []
+    for hop in range(max_hop):
+        lo, hi = int(base[hop]), int(base[hop + 1])
+        shell = csr_matrix(
+            (np.ones(hi - lo, dtype=bool), out[lo:hi], rowptr[hop]),
+            shape=(n, n),
+        )
+        shell.sort_indices()  # breadth-first order is not sorted order
+        shells.append(shell)
+
+    return shells
 
 
 def _hop_adjacencies(adj: CSBase, hops: Sequence[int], hop_mode: Literal["power", "shell"]) -> dict[int, CSBase | None]:
@@ -658,9 +746,8 @@ def _hop_adjacencies(adj: CSBase, hops: Sequence[int], hop_mode: Literal["power"
 
     ``power`` takes matrix powers of *adj*, so hop *k* counts every walk of length *k* and
     a near neighbor keeps contributing to the far hops -- numeric on purpose, since that
-    multiplicity is the distance weighting. ``shell`` subtracts what earlier hops already
-    reached, as CellCharter does, making the hops disjoint rings; it casts to bool first,
-    so the subtraction holds on weighted graphs too.
+    multiplicity is the distance weighting. ``shell`` gives disjoint rings, found by a
+    breadth-first search that reaches each observation once, at its shortest distance.
     """
     if any(hop < 0 for hop in hops):
         raise ValueError(f"'hops' must be non-negative, got {list(hops)!r}")
@@ -676,19 +763,7 @@ def _hop_adjacencies(adj: CSBase, hops: Sequence[int], hop_mode: Literal["power"
             current = current @ adj
             by_hop[hop] = current
     elif hop_mode == "shell":
-        # CellCharter starts from the graph without self-loops, and counts every
-        # observation as already having visited itself. `setdiag` on the CSR directly:
-        # the diagonal of a kNN graph is empty, and filling it neither warns nor differs
-        # from the `tolil()` roundtrip it used to take.
-        adj = adj.astype(bool)
-        adj_hop, adj_visited = adj.copy(), adj.copy()
-        adj_hop.setdiag(0)
-        adj_hop.eliminate_zeros()
-        adj_visited.setdiag(1)
-        by_hop[1] = adj_hop
-        for hop in range(2, max(hops) + 1):
-            adj_hop, adj_visited = _shell_hop(adj_hop, adj, adj_visited)
-            by_hop[hop] = adj_hop
+        by_hop |= dict(enumerate(_shell_adjacencies(adj, max(hops)), start=1))
     else:
         raise ValueError(f"'hop_mode' must be 'power' or 'shell', got {hop_mode!r}")
     return by_hop

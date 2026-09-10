@@ -19,6 +19,7 @@ from squidpy.gr import (
     nhood_entropy,
     spatial_neighbors_grid,
     spatial_neighbors_knn,
+    spatial_neighbors_radius,
 )
 from squidpy.gr._nhood import (
     _hop_adjacencies,
@@ -350,3 +351,31 @@ def test_nhood_aggregate_masks_after_expanding_the_hops(aggregate_adata: AnnData
     by_hop = _hop_adjacencies(adj, hops, "power")
     expected = sum(_nhood_profile(labels, by_hop[hop], normalize=True).to_numpy() for hop in hops) / len(hops)
     np.testing.assert_allclose(to_dense(got), expected)
+
+
+@pytest.mark.parametrize("max_hop", [1, 2, 3, 4])
+@pytest.mark.parametrize("weight", [1.0, 0.5])
+def test_bfs_shells_match_the_matmul_definition(max_hop: int, weight: float):
+    rng = np.random.default_rng(0)
+    points = np.vstack([rng.random((120, 2)) * 10, rng.random((120, 2)) * 10 + [60, 0], rng.random((4, 2)) + [30, 30]])
+    adata = AnnData(X=np.zeros((len(points), 1), dtype=np.float32))
+    adata.obsm["spatial"] = points
+    spatial_neighbors_radius(adata, radius=1.6)
+    adj = adata.obsp["spatial_connectivities"].astype(float) * weight
+
+    # the definition the search replaced: boolean matmul minus everything already reached
+    boolean = adj.astype(bool)
+    hop, visited = boolean.copy(), boolean.copy()
+    hop.setdiag(0)
+    hop.eliminate_zeros()
+    visited.setdiag(1)
+    expected = {1: hop}
+    for h in range(2, max_hop + 1):
+        hop = (hop @ boolean) > visited
+        visited = visited + hop
+        expected[h] = hop
+
+    got = _hop_adjacencies(adj, range(1, max_hop + 1), "shell")
+    assert got[0] is None, "hop 0 is the observation itself, not a neighborhood"
+    for h in range(1, max_hop + 1):
+        assert (expected[h] != got[h]).nnz == 0, f"hop {h} differs"
