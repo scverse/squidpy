@@ -1,9 +1,13 @@
-"""Public ``*Params`` types for :mod:`squidpy.experimental`, and their defaults."""
+"""Public parameter bags, result schemas and the protocols they plug into."""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Annotated, TypedDict
+from typing import Annotated, NamedTuple, Protocol, Self, TypedDict, overload, runtime_checkable
+
+import numpy as np
+import pandas as pd
+from fast_array_utils.types import HasArrayNamespace as Array
 
 from squidpy._utils import RNGLike, SeedLike
 from squidpy.experimental.utils._params import Default, defaults_of
@@ -21,6 +25,9 @@ DEFAULT_LUMINOSITY_THRESHOLD: float = 0.8
 _OD_BETA: float = 0.15
 
 __all__ = [
+    "Clusterer",
+    "SweepableClusterer",
+    "ClusterAutoKResult",
     "BackgroundDetectionParams",
     "FelzenszwalbParams",
     "WekaParams",
@@ -213,3 +220,92 @@ class StitchParams(TypedDict, total=False):
 
 
 _STITCH_DEFAULTS: StitchParams = defaults_of(StitchParams)
+
+
+@runtime_checkable
+class Clusterer(Protocol):
+    """Assigns one cluster label per observation.
+
+    Structural on purpose, so that scikit-learn, cuML and hand-written estimators all
+    qualify: :class:`~sklearn.mixture.GaussianMixture` is a
+    :class:`~sklearn.base.DensityMixin` rather than a :class:`~sklearn.base.ClusterMixin`,
+    and cuML does not import scikit-learn at all, so neither would pass a check against a
+    base class.
+
+    Runtime-checkable, so ``isinstance(estimator, Clusterer)`` answers whether something
+    can be used as one -- by method *presence*, which is as far as
+    :func:`~typing.runtime_checkable` goes.
+    """
+
+    def fit_predict(self, X: Array) -> Array:
+        """Cluster *X*, observations as rows, and return one label per row."""
+        ...
+
+
+@runtime_checkable
+class SweepableClusterer(Clusterer, Protocol):
+    """A :class:`Clusterer` squidpy re-fits itself, setting the parameters of each fit.
+
+    Required wherever one clusterer is fitted repeatedly:
+    :func:`~squidpy.gr.sweep_auto_k` fits per candidate K and per run, and the niche
+    pipeline fits per library. Every fit goes to a fresh :func:`~sklearn.base.clone`, so
+    the estimator passed in is never mutated -- and cloning needs nothing beyond these two
+    methods, so inheriting from scikit-learn is not required.
+    """
+
+    def get_params(self, deep: bool = True) -> dict[str, object]:
+        """The constructor parameters, as :func:`~sklearn.base.clone` reads them.
+
+        Only the keys are read, to check up front that the parameters ``set_params`` will
+        set are accepted at all.
+        """
+        ...
+
+    @overload
+    def set_params(self, *, n_components: int, random_state: int) -> Self: ...
+
+    @overload
+    def set_params(self, *, n_clusters: int, random_state: int) -> Self: ...
+
+    @overload
+    def set_params(self, *, random_state: int) -> Self: ...
+
+    def set_params(self, **params: object) -> Self:
+        """Set the number of clusters and the seed of the next fit; returns the estimator.
+
+        The overloads are the contract on the parameters: ``random_state``, plus *one* of
+        the two number-of-clusters spellings -- :class:`~sklearn.mixture.GaussianMixture`
+        calls it ``n_components``, :class:`~sklearn.cluster.KMeans` calls it
+        ``n_clusters``. The third is a re-fit at a fixed K, as the niche pipeline does per
+        library.
+
+        Which spelling an estimator takes is a property of its parameters rather than of
+        its methods, so ``isinstance`` cannot see it and
+        :func:`~squidpy.gr.sweep_auto_k` checks it before fitting instead.
+        """
+        ...
+
+
+class ClusterAutoKResult(NamedTuple):
+    """A sweep result."""
+
+    #: Per-K diagnostics indexed by K, with the columns ``stability_mean``, ``stability_std``
+    #: and ``nll``. Every fitted K has a row, but the ``+-1`` halo is never scored, so its
+    #: stability is ``NaN``.
+    table: pd.DataFrame
+
+    #: Raw similarity values, of shape ``(n_scored_k, n_comparisons)``. Row ``i`` belongs to
+    #: the ``i``-th scored K.
+    stability: np.ndarray
+
+    #: The scored K with the highest mean stability.
+    best_k: int
+
+    #: Number of runs actually performed, below ``max_runs`` if the sweep converged.
+    n_runs: int
+
+    #: Whether the sweep stopped early because the stability curve had settled.
+    converged: bool
+
+    #: Labeling of the best fit (lowest ``nll``) per K, for every fitted K.
+    labels: dict[int, np.ndarray]

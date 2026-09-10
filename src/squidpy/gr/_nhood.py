@@ -4,18 +4,23 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
 from functools import partial
-from typing import Any, NamedTuple
+from typing import Any, Literal, NamedTuple
 
 import numba.types as nt
 import numpy as np
 import pandas as pd
 import rustworkx as rx
 from anndata import AnnData
-from numba import njit, prange
+from fast_array_utils.conv import to_dense
+from fast_array_utils.types import CSBase
+from fast_array_utils.types import HasArrayNamespace as Array
+from numba import get_num_threads, njit, prange
 from numpy.typing import NDArray
 from pandas import CategoricalDtype
 from scanpy import logging as logg
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, diags, issparse
+from scipy.stats import entropy
+from sklearn.preprocessing import normalize
 from spatialdata import SpatialData
 
 from squidpy._constants._constants import Centrality
@@ -31,7 +36,7 @@ from squidpy._utils import (
     get_n_processes,
     parallelize,
 )
-from squidpy._validators import assert_positive
+from squidpy._validators import assert_key_in_adata, assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
@@ -40,7 +45,13 @@ from squidpy.gr._utils import (
     extract_adata_if_sdata,
 )
 
-__all__ = ["nhood_enrichment", "centrality_scores", "interaction_matrix"]
+__all__ = [
+    "nhood_enrichment",
+    "centrality_scores",
+    "interaction_matrix",
+    "nhood_entropy",
+    "nhood_aggregate",
+]
 
 
 class NhoodEnrichmentResult(NamedTuple):
@@ -434,6 +445,84 @@ def _interaction_matrix(
     return output
 
 
+def _onehot(labels: pd.Series) -> csr_matrix:
+    """Indicator matrix of ``labels``, one column per category.
+
+    Observations whose label is unassigned (``NaN``) get an all-zero row, so they are
+    counted in nobody's neighborhood.
+    """
+    codes = labels.astype("category").cat.codes.to_numpy()
+    keep = codes >= 0
+    return csr_matrix(
+        (np.ones(keep.sum()), (np.flatnonzero(keep), codes[keep])),
+        shape=(len(codes), len(labels.astype("category").cat.categories)),
+    )
+
+
+def _nhood_profile(labels: pd.Series, adj: csr_matrix, *, normalize: bool = True) -> pd.DataFrame:
+    """Frequency of every ``labels`` category in each observation's neighborhood.
+
+    This is ``adj @ onehot(labels)``. Observations whose label is unassigned (``NaN``) are
+    counted in nobody's neighborhood, and with ``normalize`` an observation without neighbors
+    gets an all-zero row rather than ``NaN``.
+    """
+    labels = labels.astype("category")
+    profile = pd.DataFrame((adj @ _onehot(labels)).toarray(), index=labels.index, columns=labels.cat.categories)
+    if not normalize:
+        return profile
+    return profile.div(profile.sum(axis=1), axis=0).fillna(0.0)
+
+
+@d.dedent
+def nhood_entropy(
+    adata: AnnData | SpatialData,
+    cluster_key: str,
+    connectivity_key: str | None = None,
+    copy: bool = False,
+    *,
+    table_key: str | None = None,
+) -> pd.Series | None:
+    """
+    Compute the Shannon entropy of each observation's neighborhood composition.
+
+    High entropy marks a mixed neighborhood, low entropy a homogeneous domain; the mean over
+    all observations summarises how spatially coherent a clustering is.
+
+    Parameters
+    ----------
+    %(adata)s
+    %(table_key)s
+    %(cluster_key)s
+    %(conn_key)s
+    %(copy)s
+
+    Returns
+    -------
+    If ``copy = True``, returns a :class:`pandas.Series`. Otherwise, modifies the ``adata`` with the following key:
+
+        - :attr:`anndata.AnnData.obs` ``['{cluster_key}_nhood_entropy']`` - the per-observation entropy, in nats.
+
+    Notes
+    -----
+    The neighborhood is whatever ``connectivity_key`` holds; keep it fixed when sweeping a
+    clustering parameter.
+    """
+    adata = extract_adata_if_sdata(adata, table_key=table_key)
+    connectivity_key = Key.obsp.spatial_conn(connectivity_key)
+    _assert_categorical_obs(adata, cluster_key)
+    _assert_connectivity_key(adata, connectivity_key)
+
+    start = logg.info(f"Calculating neighborhood entropy of `{cluster_key}`")
+    profile = _nhood_profile(adata.obs[cluster_key], adata.obsp[connectivity_key])
+    # observations without neighbors give 0/0 in `entropy`
+    ent = pd.Series(np.nan_to_num(entropy(profile.to_numpy(), axis=1)), index=adata.obs_names)
+
+    if copy:
+        return ent
+    _save_data(adata, attr="obs", key=f"{cluster_key}_nhood_entropy", data=ent, time=start)
+    return None
+
+
 def _build_graph(conn: Any) -> tuple[rx.PyGraph, csr_matrix]:
     """Build the graph representations used by :func:`centrality_scores`.
 
@@ -550,3 +639,288 @@ def _nhood_enrichment_helper(
         queue.put(Signal.FINISH)
 
     return perms
+
+
+@njit(parallel=True, cache=True)
+def _bfs_shells(
+    indptr: NDArrayA,
+    indices: NDArrayA,
+    max_hop: int,
+    n_threads: int,
+    counts: NDArrayA,
+    base: NDArrayA,
+    rowptr: NDArrayA,
+    out: NDArrayA,
+    fill: bool,
+) -> None:
+    """Breadth-first search from every observation, recording the hop each is first reached at.
+
+    Run twice: once with ``fill=False`` to size the output, once with ``fill=True`` to write
+    it. Sharing one traversal between the two passes is why the counting and filling logic
+    cannot drift apart.
+
+    Scratch is one buffer per thread rather than one per source, and ``stamp`` holds the
+    source that last touched an observation, so nothing has to be cleared between searches.
+    *n_threads* is passed in rather than read here, since calling into numba's threading
+    layer from inside the kernel makes it uncacheable.
+    """
+    n = indptr.shape[0] - 1
+    stamp = np.full((n_threads, n), -1, dtype=np.int64)
+    frontier = np.empty((n_threads, n), dtype=np.int64)
+    nxt = np.empty((n_threads, n), dtype=np.int64)
+    written = np.zeros((n_threads, max_hop + 1), dtype=np.int64)
+
+    for thread in prange(n_threads):
+        for src in range(thread, n, n_threads):
+            for hop in range(max_hop + 1):
+                written[thread, hop] = 0
+            # the source counts as already reached, which is what keeps an out-and-back
+            # walk from putting an observation in its own neighborhood
+            stamp[thread, src] = src
+            frontier[thread, 0] = src
+            n_frontier = 1
+
+            for hop in range(1, max_hop + 1):
+                n_next = 0
+                for f in range(n_frontier):
+                    node = frontier[thread, f]
+                    for p in range(indptr[node], indptr[node + 1]):
+                        neighbor = indices[p]
+                        if stamp[thread, neighbor] == src:
+                            continue  # a nearer hop already reached it
+                        stamp[thread, neighbor] = src
+                        nxt[thread, n_next] = neighbor
+                        n_next += 1
+                        if fill:
+                            at = base[hop - 1] + rowptr[hop - 1, src] + written[thread, hop]
+                            out[at] = neighbor
+                            written[thread, hop] += 1
+                        else:
+                            counts[hop - 1, src] += 1
+                for g in range(n_next):
+                    frontier[thread, g] = nxt[thread, g]
+                n_frontier = n_next
+                if n_frontier == 0:
+                    break
+
+
+def _shell_adjacencies(adj: CSBase, max_hop: int) -> list[CSBase]:
+    """One boolean adjacency per hop, holding what that hop reaches first.
+
+    The hops are disjoint because a breadth-first search reaches each observation once, at
+    its shortest distance -- there is no ``visited`` set to subtract and so no way for the
+    subtraction to depend on how many paths connect a pair.
+    """
+    adj = adj.tocsr()
+    n = adj.shape[0]
+    indptr, indices = adj.indptr.astype(np.int64), adj.indices.astype(np.int64)
+
+    counts = np.zeros((max_hop, n), dtype=np.int64)
+    empty = np.zeros(1, dtype=np.int64)
+    n_threads = get_num_threads()
+    _bfs_shells(indptr, indices, max_hop, n_threads, counts, empty, counts, empty, False)
+
+    rowptr = np.zeros((max_hop, n + 1), dtype=np.int64)
+    np.cumsum(counts, axis=1, out=rowptr[:, 1:])
+    per_hop = rowptr[:, -1]
+    base = np.concatenate((np.zeros(1, dtype=np.int64), np.cumsum(per_hop)))
+
+    out = np.empty(int(base[-1]), dtype=np.int64)
+    _bfs_shells(indptr, indices, max_hop, n_threads, counts, base, rowptr, out, True)
+
+    shells: list[CSBase] = []
+    for hop in range(max_hop):
+        lo, hi = int(base[hop]), int(base[hop + 1])
+        shell = csr_matrix(
+            (np.ones(hi - lo, dtype=bool), out[lo:hi], rowptr[hop]),
+            shape=(n, n),
+        )
+        shell.sort_indices()  # breadth-first order is not sorted order
+        shells.append(shell)
+
+    return shells
+
+
+def _hop_adjacencies(adj: CSBase, hops: Sequence[int], hop_mode: Literal["power", "shell"]) -> dict[int, CSBase | None]:
+    """The adjacency of each requested hop; ``None`` for hop 0, which is no neighborhood.
+
+    ``power`` takes matrix powers of *adj*, so hop *k* counts every walk of length *k* and
+    a near neighbor keeps contributing to the far hops -- numeric on purpose, since that
+    multiplicity is the distance weighting. ``shell`` gives disjoint rings, found by a
+    breadth-first search that reaches each observation once, at its shortest distance.
+    """
+    if any(hop < 0 for hop in hops):
+        raise ValueError(f"'hops' must be non-negative, got {list(hops)!r}")
+
+    by_hop: dict[int, CSBase | None] = {0: None}
+    if max(hops, default=0) < 1:
+        return by_hop
+
+    if hop_mode == "power":
+        current = adj
+        by_hop[1] = current
+        for hop in range(2, max(hops) + 1):
+            current = current @ adj
+            by_hop[hop] = current
+    elif hop_mode == "shell":
+        by_hop |= dict(enumerate(_shell_adjacencies(adj, max(hops)), start=1))
+    else:
+        raise ValueError(f"'hop_mode' must be 'power' or 'shell', got {hop_mode!r}")
+    return by_hop
+
+
+def _aggregate_over(
+    adj: CSBase, features: Array | CSBase, aggregation: Literal["mean", "sum", "variance"]
+) -> Array | CSBase:
+    """Aggregate *features* over the neighborhood each row of *adj* defines."""
+    if aggregation == "sum":
+        return adj @ features
+    # rows sum to 1, so a high degree does not dominate the aggregate
+    normalized = normalize(adj, norm="l1", axis=1)
+    if aggregation == "mean":
+        return normalized @ features
+    if aggregation == "variance":
+        mean = to_dense(normalized @ features)
+        dense = to_dense(features)
+        return to_dense(normalized @ (dense * dense)) - mean * mean
+    raise ValueError(f"'aggregation' must be 'mean', 'sum' or 'variance', got {aggregation!r}")
+
+
+def _nhood_blocks(
+    adata: AnnData,
+    *,
+    groups: str | None = None,
+    use_rep: str | None = None,
+    layer: str | None = None,
+    connectivity_key: str = Key.obsp.spatial_conn(),
+    hops: Sequence[int] = (1,),
+    hop_mode: Literal["power", "shell"] = "power",
+    aggregation: Literal["mean", "sum", "variance"] = "mean",
+) -> list[Array | CSBase]:
+    """One aggregated block per requested hop, in the order given."""
+    _assert_connectivity_key(adata, connectivity_key)
+    if not len(hops):
+        raise ValueError("'hops' must name at least one hop")
+
+    given = [name for name, value in (("groups", groups), ("use_rep", use_rep), ("layer", layer)) if value is not None]
+    if len(given) > 1:
+        raise ValueError(f"pass at most one of 'groups', 'use_rep' and 'layer', got {given}")
+    # `has_value` says which observations have something to contribute; only a category
+    # can be unassigned, so a feature matrix leaves every row valid
+    has_value = None
+    if groups is not None:
+        # any dtype: `_onehot` coerces, as the neighborhood profile always has
+        assert_key_in_adata(adata, groups, attr="obs")
+        features = _onehot(adata.obs[groups])
+        has_value = np.asarray(features.sum(axis=1)).ravel() != 0
+    elif use_rep is not None:
+        assert_key_in_adata(adata, use_rep, attr="obsm")
+        features = adata.obsm[use_rep]
+    elif layer is not None:
+        assert_key_in_adata(adata, layer, attr="layers")
+        features = adata.layers[layer]
+    else:
+        features = adata.X
+    by_hop = _hop_adjacencies(adata.obsp[connectivity_key], hops, hop_mode)
+    if has_value is not None:
+        # An observation with nothing to contribute is not a neighbor that has a value, so
+        # it leaves the denominator -- what `mean` does with missing data anywhere else.
+        # After the hops are expanded, never before: it still relays paths through the
+        # graph, and masking first silently drops those.
+        keep = diags(has_value.astype(float))
+        by_hop = {hop: adj if adj is None else (adj @ keep).tocsr() for hop, adj in by_hop.items()}
+    # hop 0 is the observation itself, so it contributes the features unaggregated -- which
+    # is what makes `variance` over it 0 rather than meaningful
+    return [features if hop == 0 else _aggregate_over(by_hop[hop], features, aggregation) for hop in hops]
+
+
+def _nhood_aggregate(
+    adata: AnnData,
+    *,
+    hop_weights: Sequence[float] | None = None,
+    aggregation: Literal["mean", "sum", "variance"] = "mean",
+    **kwargs: Any,
+) -> NDArrayA:
+    """The summed matrix, without touching *adata*. See :func:`nhood_aggregate`.
+
+    Matrix powers, not disjoint rings: the hops are summed here, so a cell reachable by
+    several short paths is meant to weigh more.
+    """
+    blocks = _nhood_blocks(adata, hop_mode="power", aggregation=aggregation, **kwargs)
+    weights = [1.0] * len(blocks) if hop_weights is None else list(hop_weights)
+    # neither padding a short list nor ignoring a long one: both hide a mistake, see
+    # scverse/squidpy#1277
+    if len(weights) != len(blocks):
+        raise ValueError(f"'hop_weights' has {len(weights)} values but there are {len(blocks)} hops")
+    # keep the container the features came in; `variance` has already densified, so a
+    # mixed set of blocks has to be densified whole
+    if not all(issparse(block) for block in blocks):
+        blocks = [to_dense(block) for block in blocks]
+    total = sum(weight * block for weight, block in zip(weights, blocks, strict=True))
+    # a weighted mean over the hops, so the scale does not depend on how many there are.
+    # `sum` is counts, which are meant to stay counts.
+    return total if aggregation == "sum" else total / sum(weights)
+
+
+@d.dedent
+def nhood_aggregate(
+    data: AnnData | SpatialData,
+    *,
+    groups: str | None = None,
+    use_rep: str | None = None,
+    layer: str | None = None,
+    connectivity_key: str = Key.obsp.spatial_conn(),
+    hops: Sequence[int] = (1,),
+    aggregation: Literal["mean", "sum", "variance"] = "mean",
+    hop_weights: Sequence[float] | None = None,
+    key_added: str = "X_nhood",
+    copy: bool = False,
+    table_key: str | None = None,
+) -> AnnData | None:
+    """Summarise each observation's spatial neighborhood into one block of features.
+
+    The hops are summed into a single block of the same width as the features, weighted
+    by *hop_weights*. Matrix powers, so a cell reachable by several short paths weighs
+    more; disjoint rings are the other reading and belong with the stacking path.
+
+    Parameters
+    ----------
+    %(adata)s
+    %(table_key)s
+    %(nhood_feature_args)s
+    hop_weights
+        One weight per hop. Defaults to equal weights.
+    key_added
+        Key in :attr:`~anndata.AnnData.obsm` to write the matrix to.
+    %(copy)s
+
+    Returns
+    -------
+    If ``copy = True``, returns a copy of ``adata``. Otherwise, modifies the ``adata``
+    with the following key:
+
+        - :attr:`anndata.AnnData.obsm` ``['{key_added}']`` - the aggregated matrix, of
+          shape ``(n_obs, n_features)``.
+
+    Notes
+    -----
+    Two of the three niche flavors are one call of this followed by a scaling step:
+    ``neighborhood`` is ``groups=...``, ``hops=range(1, k + 1)`` then
+    :func:`~scanpy.pp.scale`; ``utag`` is the defaults then :func:`~scanpy.tl.pca`.
+    """
+    adata = extract_adata_if_sdata(data, table_key=table_key)
+    adata = adata.copy() if copy else adata
+
+    start = logg.info(f"Aggregating neighborhoods over hops `{list(hops)}`")
+    aggregated = _nhood_aggregate(
+        adata,
+        groups=groups,
+        use_rep=use_rep,
+        layer=layer,
+        connectivity_key=connectivity_key,
+        hops=hops,
+        aggregation=aggregation,
+        hop_weights=hop_weights,
+    )
+    _save_data(adata, attr="obsm", key=key_added, data=aggregated, time=start)
+    return adata if copy else None

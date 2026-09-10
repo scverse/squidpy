@@ -4,13 +4,26 @@ import numpy as np
 import pandas as pd
 import pytest
 from anndata import AnnData
+from fast_array_utils.conv import to_dense
+from sklearn.preprocessing import normalize
 
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import (
+    _niche,
     centrality_scores,
     interaction_matrix,
     nhood_enrichment,
+    nhood_entropy,
     spatial_neighbors_grid,
+    spatial_neighbors_knn,
+    spatial_neighbors_radius,
+)
+from squidpy.gr._nhood import (
+    _hop_adjacencies,
+    _nhood_aggregate,
+    _nhood_blocks,
+    _nhood_profile,
+    nhood_aggregate,
 )
 
 _CK = "leiden"
@@ -65,7 +78,6 @@ class TestNhoodEnrichment:
         np.testing.assert_array_equal(res3.counts, res2.counts)
 
     def test_n_jobs_invariance(self, adata: AnnData):
-        """The number of workers must not change the result (one seed is spawned per permutation)."""
         spatial_neighbors_grid(adata)
 
         kw = {"cluster_key": _CK, "rng": 42, "n_perms": 20, "copy": True}
@@ -177,3 +189,188 @@ def test_interaction_matrix_nan_values(adata_intmat: AnnData):
 
     np.testing.assert_array_equal(expected_weighted, result_weighted)
     np.testing.assert_array_equal(expected_unweighted, result_unweighted)
+
+
+class TestNhoodEntropy:
+    @staticmethod
+    def _grid(labels: list[str]) -> AnnData:
+        side = int(round(len(labels) ** 0.5))
+        assert side * side == len(labels)
+        coords = np.array([(x, y) for y in range(side) for x in range(side)], dtype=float)
+        adata = AnnData(np.zeros((len(labels), 2), dtype=np.float32), obsm={"spatial": coords})
+        adata.obs["ct"] = pd.Categorical(labels)
+        spatial_neighbors_grid(adata, n_neighs=8)
+        return adata
+
+    def test_homogeneous_neighborhood_scores_zero(self):
+        adata = self._grid(["a"] * 36)
+        np.testing.assert_allclose(nhood_entropy(adata, "ct", copy=True), 0.0)
+        assert "ct_nhood_entropy" not in adata.obs
+
+    def test_segregated_scores_below_scattered(self):
+        labels = ["a"] * 50 + ["b"] * 50
+        segregated = nhood_entropy(self._grid(labels), "ct", copy=True)
+        scattered = nhood_entropy(self._grid(list(np.random.default_rng(0).permutation(labels))), "ct", copy=True)
+        assert segregated.mean() < scattered.mean()
+
+        # vertical stripes: an interior cell sees 2 of its own type and 6 of the other
+        stripes = nhood_entropy(self._grid(["a", "b"] * 18), "ct", copy=True).to_numpy().reshape(6, 6)
+        h = -0.25 * np.log(0.25) - 0.75 * np.log(0.75)
+        np.testing.assert_allclose(stripes[1:-1, 1:-1], h)
+
+    def test_isolated_observation_is_zero_not_nan(self):
+        adata = self._grid(["a", "b"] * 18)
+        conn = adata.obsp["spatial_connectivities"].tolil()
+        conn[0, :] = 0
+        adata.obsp["spatial_connectivities"] = conn.tocsr()
+
+        ent = nhood_entropy(adata, "ct", copy=True)
+        assert not ent.isna().any()
+        assert ent.iloc[0] == 0.0
+
+    def test_writes_to_obs(self):
+        adata = self._grid(["a", "b"] * 18)
+        assert nhood_entropy(adata, "ct") is None
+        np.testing.assert_allclose(adata.obs["ct_nhood_entropy"], nhood_entropy(adata, "ct", copy=True))
+
+
+# `nhood_aggregate` is the one primitive the three niche embedders are built on; these pin
+# each derivation to the embedder it replaced, since the flavors' output depends on it.
+
+
+@pytest.fixture
+def aggregate_adata() -> AnnData:
+    rng = np.random.default_rng(0)
+    adata = AnnData(X=rng.random((80, 7)))
+    adata.obsm["spatial"] = rng.random((80, 2)) * 10
+    adata.obs["celltype"] = pd.Categorical(rng.choice(list("abcd"), 80))
+    spatial_neighbors_knn(adata, n_neighs=6)
+    return adata
+
+
+@pytest.mark.parametrize(
+    ("distance", "hop_weights", "abs_nhood"),
+    [(1, None, False), (3, None, False), (3, [1.0, 0.5, 0.25], False), (2, None, True)],
+)
+def test_nhood_aggregate_derives_the_neighborhood_profile(
+    aggregate_adata: AnnData, distance: int, hop_weights: list[float] | None, abs_nhood: bool
+):
+    """Categories summed over the matrix powers of the graph."""
+    expected = _niche._nhood_profile_embedding(
+        aggregate_adata,
+        groups="celltype",
+        spatial_connectivities_key="spatial_connectivities",
+        scale=False,
+        distance=distance,
+        abs_nhood=abs_nhood,
+        n_hop_weights=hop_weights,
+    )
+
+    got = _nhood_aggregate(
+        aggregate_adata,
+        groups="celltype",
+        hops=range(1, distance + 1),
+        hop_weights=hop_weights,
+        aggregation="sum" if abs_nhood else "mean",
+    )
+    np.testing.assert_allclose(to_dense(got), expected)
+
+
+def test_nhood_aggregate_derives_utag(aggregate_adata: AnnData):
+    """One hop, mean-aggregated: a row-normalized graph times the features."""
+    expected = normalize(aggregate_adata.obsp["spatial_connectivities"], norm="l1", axis=1) @ aggregate_adata.X
+    np.testing.assert_allclose(to_dense(_nhood_aggregate(aggregate_adata, hops=(1,))), expected)
+
+
+@pytest.mark.parametrize(("distance", "aggregation"), [(1, "mean"), (3, "mean"), (2, "variance")])
+def test_nhood_aggregate_derives_cellcharter(aggregate_adata: AnnData, distance: int, aggregation: str):
+    """Disjoint hop rings, concatenated, with the observation's own features as hop 0."""
+    blocks = _nhood_blocks(aggregate_adata, hops=range(distance + 1), hop_mode="shell", aggregation=aggregation)
+    got = np.hstack([to_dense(block) for block in blocks])
+    assert got.shape == (aggregate_adata.n_obs, aggregate_adata.n_vars * (distance + 1))
+    # hop 0 is the features themselves, not an aggregate of them
+    np.testing.assert_allclose(got[:, : aggregate_adata.n_vars], aggregate_adata.X)
+
+
+def test_nhood_aggregate_writes_obsm(aggregate_adata: AnnData):
+    assert nhood_aggregate(aggregate_adata, groups="celltype", key_added="X_profile") is None
+    assert aggregate_adata.obsm["X_profile"].shape == (aggregate_adata.n_obs, 4)
+
+
+def test_nhood_aggregate_rejects_conflicting_features(aggregate_adata: AnnData):
+    with pytest.raises(ValueError, match=r"at most one of 'groups', 'use_rep' and 'layer'"):
+        nhood_aggregate(aggregate_adata, groups="celltype", layer="counts")
+
+
+def test_nhood_aggregate_rejects_too_few_hop_weights(aggregate_adata: AnnData):
+    """A short list is more likely a mistake than an intention; see scverse/squidpy#1277."""
+    with pytest.raises(ValueError, match=r"'hop_weights' has 1 values but there are 3 hops"):
+        _nhood_aggregate(aggregate_adata, groups="celltype", hops=(1, 2, 3), hop_weights=[1.0])
+
+
+def test_nhood_aggregate_rejects_too_many_hop_weights(aggregate_adata: AnnData):
+    with pytest.raises(ValueError, match=r"'hop_weights' has 4 values but there are 2 hops"):
+        _nhood_aggregate(aggregate_adata, groups="celltype", hops=(1, 2), hop_weights=[1.0, 1.0, 1.0, 1.0])
+
+
+def test_nhood_aggregate_excludes_unassigned_neighbours(aggregate_adata: AnnData):
+    """An observation with no category is missing data, not a neighbor of no type.
+
+    It leaves each neighborhood's denominator, so the shares still sum to 1. Every
+    observation being labeled makes the two denominators equal, so this needs unassigned
+    ones to test anything at all.
+    """
+    labels = aggregate_adata.obs["celltype"].copy()
+    labels.iloc[[3, 17, 42]] = np.nan
+    aggregate_adata.obs["celltype"] = labels
+
+    got = _nhood_aggregate(aggregate_adata, groups="celltype", aggregation="mean")
+    expected = _nhood_profile(labels, aggregate_adata.obsp["spatial_connectivities"], normalize=True)
+    np.testing.assert_allclose(to_dense(got), expected.to_numpy())
+    np.testing.assert_allclose(np.asarray(to_dense(got)).sum(axis=1), 1.0)
+
+
+def test_nhood_aggregate_masks_after_expanding_the_hops(aggregate_adata: AnnData):
+    """An unassigned observation still relays paths; it only stops being counted.
+
+    Masking the graph up front instead would drop it as a stepping stone too, which shows
+    up from two hops out.
+    """
+    labels = aggregate_adata.obs["celltype"].copy()
+    labels.iloc[[3, 17, 42]] = np.nan
+    aggregate_adata.obs["celltype"] = labels
+    adj = aggregate_adata.obsp["spatial_connectivities"]
+
+    hops = (1, 2, 3)
+    got = _nhood_aggregate(aggregate_adata, groups="celltype", hops=hops)
+    by_hop = _hop_adjacencies(adj, hops, "power")
+    expected = sum(_nhood_profile(labels, by_hop[hop], normalize=True).to_numpy() for hop in hops) / len(hops)
+    np.testing.assert_allclose(to_dense(got), expected)
+
+
+@pytest.mark.parametrize("max_hop", [1, 2, 3, 4])
+@pytest.mark.parametrize("weight", [1.0, 0.5])
+def test_bfs_shells_match_the_matmul_definition(max_hop: int, weight: float):
+    rng = np.random.default_rng(0)
+    points = np.vstack([rng.random((120, 2)) * 10, rng.random((120, 2)) * 10 + [60, 0], rng.random((4, 2)) + [30, 30]])
+    adata = AnnData(X=np.zeros((len(points), 1), dtype=np.float32))
+    adata.obsm["spatial"] = points
+    spatial_neighbors_radius(adata, radius=1.6)
+    adj = adata.obsp["spatial_connectivities"].astype(float) * weight
+
+    # the definition the search replaced: boolean matmul minus everything already reached
+    boolean = adj.astype(bool)
+    hop, visited = boolean.copy(), boolean.copy()
+    hop.setdiag(0)
+    hop.eliminate_zeros()
+    visited.setdiag(1)
+    expected = {1: hop}
+    for h in range(2, max_hop + 1):
+        hop = (hop @ boolean) > visited
+        visited = visited + hop
+        expected[h] = hop
+
+    got = _hop_adjacencies(adj, range(1, max_hop + 1), "shell")
+    assert got[0] is None, "hop 0 is the observation itself, not a neighborhood"
+    for h in range(1, max_hop + 1):
+        assert (expected[h] != got[h]).nnz == 0, f"hop {h} differs"

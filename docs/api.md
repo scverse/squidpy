@@ -28,6 +28,7 @@ import squidpy as sq
     gr.mask_graph
     gr.nhood_enrichment
     gr.NhoodEnrichmentResult
+    gr.nhood_entropy
     gr.co_occurrence
     gr.centrality_scores
     gr.interaction_matrix
@@ -40,6 +41,8 @@ import squidpy as sq
     gr.calculate_niche_utag
     gr.calculate_niche_cellcharter
     gr.calculate_niche_spatialleiden
+    gr.cluster_auto_k
+    gr.cluster_stability
 ```
 
 ## Image
@@ -165,8 +168,7 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
 
 ## Types
 
-The public parameter bags. Every key is optional and falls back to the default shown with
-it.
+The public parameter bags or result schemas.
 
 ```{eval-rst}
 .. automodule:: squidpy.types
