@@ -16,7 +16,7 @@ from numba import njit, prange
 from numpy.typing import NDArray
 from pandas import CategoricalDtype
 from scanpy import logging as logg
-from scipy.sparse import csr_matrix, spmatrix
+from scipy.sparse import csr_matrix, diags, spmatrix
 from scipy.stats import entropy
 from sklearn.preprocessing import normalize
 from spatialdata import SpatialData
@@ -680,10 +680,16 @@ def _hop_adjacencies(
     return by_hop
 
 
-def _aggregate_over(adj: spmatrix, features: Any, aggregation: Literal["mean", "sum", "variance"]) -> Any:
+def _aggregate_over(adj: spmatrix, features: Any, aggregation: Literal["mean", "sum", "proportion", "variance"]) -> Any:
     """Aggregate *features* over the neighborhood each row of *adj* defines."""
     if aggregation == "sum":
         return adj @ features
+    if aggregation == "proportion":
+        # the aggregate's own row sum, not the degree: an observation whose label is
+        # unassigned contributes an all-zero row to a one-hot, and is meant to be left out
+        # of the denominator rather than counted as a neighbor with no type
+        counts = to_dense(adj @ features)
+        return normalize(counts, norm="l1", axis=1)
     # rows sum to 1, so a high degree does not dominate the aggregate
     normalized = normalize(adj, norm="l1", axis=1)
     if aggregation == "mean":
@@ -709,22 +715,31 @@ def _resolve_hop_weights(hop_weights: Sequence[float] | None, n_hops: int) -> li
     return weights
 
 
-def _nhood_features(adata: AnnData, groups: str | None, use_rep: str | None, layer: str | None) -> Any:
-    """The matrix the neighborhoods are aggregated over."""
+def _nhood_features(
+    adata: AnnData, groups: str | None, use_rep: str | None, layer: str | None
+) -> tuple[Any, NDArrayA | None]:
+    """The matrix the neighborhoods are aggregated over, and which rows have a value.
+
+    The mask is ``None`` wherever every observation has one, which is every source but
+    *groups*: a feature matrix has numbers in all its rows, while a category can be
+    unassigned. See :func:`_nhood_aggregate` for what the mask is then used for.
+    """
     given = [name for name, value in (("groups", groups), ("use_rep", use_rep), ("layer", layer)) if value is not None]
     if len(given) > 1:
         raise ValueError(f"pass at most one of 'groups', 'use_rep' and 'layer', got {given}")
     if groups is not None:
         # any dtype: `_onehot` coerces, as the neighborhood profile always has
         assert_key_in_adata(adata, groups, attr="obs")
-        return _onehot(adata.obs[groups])
+        onehot = _onehot(adata.obs[groups])
+        # an unassigned category leaves an all-zero row
+        return onehot, np.asarray(onehot.sum(axis=1)).ravel() != 0
     if use_rep is not None:
         assert_key_in_adata(adata, use_rep, attr="obsm")
-        return adata.obsm[use_rep]
+        return adata.obsm[use_rep], None
     if layer is not None:
         assert_key_in_adata(adata, layer, attr="layers")
-        return adata.layers[layer]
-    return adata.X
+        return adata.layers[layer], None
+    return adata.X, None
 
 
 def _nhood_aggregate(
@@ -745,8 +760,15 @@ def _nhood_aggregate(
     if not len(hops):
         raise ValueError("'hops' must name at least one hop")
 
-    features = _nhood_features(adata, groups, use_rep, layer)
+    features, has_value = _nhood_features(adata, groups, use_rep, layer)
     by_hop = _hop_adjacencies(adata.obsp[connectivity_key], hops, hop_mode)
+    if has_value is not None:
+        # An observation with nothing to contribute is not a neighbor that has a value, so
+        # it leaves the denominator -- what `mean` does with missing data anywhere else.
+        # After the hops are expanded, never before: it still relays paths through the
+        # graph, and masking first silently drops those.
+        keep = diags(has_value.astype(float))
+        by_hop = {hop: adj if adj is None else (adj @ keep).tocsr() for hop, adj in by_hop.items()}
     # hop 0 is the observation itself, so it contributes the features unaggregated -- which
     # is what makes `variance` over it 0 rather than meaningful
     blocks = [features if hop == 0 else _aggregate_over(by_hop[hop], features, aggregation) for hop in hops]
@@ -816,7 +838,8 @@ def nhood_aggregate(
         value, and defaults to equal weights.
     aggregation
         How the neighbors' features are combined: ``'mean'``, ``'sum'`` (counts), or the
-        ``'variance'`` over the neighborhood.
+        ``'variance'`` over the neighborhood. With *groups*, ``'mean'`` is each category's
+        share of the neighborhood and ``'sum'`` its raw count.
     key_added
         Key in :attr:`~anndata.AnnData.obsm` to write the matrix to.
     %(copy)s

@@ -20,7 +20,7 @@ from squidpy.gr import (
     spatial_neighbors_grid,
     spatial_neighbors_knn,
 )
-from squidpy.gr._nhood import _nhood_aggregate
+from squidpy.gr._nhood import _hop_adjacencies, _nhood_aggregate, _nhood_profile
 
 _CK = "leiden"
 
@@ -314,3 +314,38 @@ def test_nhood_aggregate_rejects_too_many_hop_weights(aggregate_adata: AnnData):
         _nhood_aggregate(
             aggregate_adata, groups="celltype", hops=(1, 2), combine="sum", hop_weights=[1.0, 1.0, 1.0, 1.0]
         )
+
+
+def test_nhood_aggregate_excludes_unassigned_neighbours(aggregate_adata: AnnData):
+    """An observation with no category is missing data, not a neighbor of no type.
+
+    It leaves each neighborhood's denominator, so the shares still sum to 1. Every
+    observation being labeled makes the two denominators equal, so this needs unassigned
+    ones to test anything at all.
+    """
+    labels = aggregate_adata.obs["celltype"].copy()
+    labels.iloc[[3, 17, 42]] = np.nan
+    aggregate_adata.obs["celltype"] = labels
+
+    got = _nhood_aggregate(aggregate_adata, groups="celltype", aggregation="mean")
+    expected = _nhood_profile(labels, aggregate_adata.obsp["spatial_connectivities"], normalize=True)
+    np.testing.assert_allclose(got, expected.to_numpy())
+    np.testing.assert_allclose(got.sum(axis=1), 1.0)
+
+
+def test_nhood_aggregate_masks_after_expanding_the_hops(aggregate_adata: AnnData):
+    """An unassigned observation still relays paths; it only stops being counted.
+
+    Masking the graph up front instead would drop it as a stepping stone too, which shows
+    up from two hops out.
+    """
+    labels = aggregate_adata.obs["celltype"].copy()
+    labels.iloc[[3, 17, 42]] = np.nan
+    aggregate_adata.obs["celltype"] = labels
+    adj = aggregate_adata.obsp["spatial_connectivities"]
+
+    hops = (1, 2, 3)
+    got = _nhood_aggregate(aggregate_adata, groups="celltype", hops=hops, hop_mode="power", combine="sum")
+    by_hop = _hop_adjacencies(adj, hops, "power")
+    expected = sum(_nhood_profile(labels, by_hop[hop], normalize=True).to_numpy() for hop in hops) / len(hops)
+    np.testing.assert_allclose(got, expected)
