@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-import sys
-
 import numpy as np
 import pandas as pd
 import pytest
 from anndata import AnnData
 from fast_array_utils.conv import to_dense
-from scanpy import settings
 from sklearn.preprocessing import normalize
 
 from squidpy._constants._pkg_constants import Key
@@ -305,12 +302,10 @@ def test_nhood_aggregate_rejects_conflicting_features(aggregate_adata: AnnData):
         nhood_aggregate(aggregate_adata, groups="celltype", layer="counts")
 
 
-def test_nhood_aggregate_warns_on_short_hop_weights(aggregate_adata: AnnData, capsys):
+def test_nhood_aggregate_rejects_too_few_hop_weights(aggregate_adata: AnnData):
     """A short list is more likely a mistake than an intention; see scverse/squidpy#1277."""
-    # scanpy's logger needs pointing at the captured stream, as in `test_ligrec.py`
-    settings.logfile = sys.stderr
-    _nhood_aggregate(aggregate_adata, groups="celltype", hops=(1, 2, 3), hop_weights=[1.0])
-    assert "padding with 1.0" in capsys.readouterr().err
+    with pytest.raises(ValueError, match=r"'hop_weights' has 1 values but there are 3 hops"):
+        _nhood_aggregate(aggregate_adata, groups="celltype", hops=(1, 2, 3), hop_weights=[1.0])
 
 
 def test_nhood_aggregate_rejects_too_many_hop_weights(aggregate_adata: AnnData):

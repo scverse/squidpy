@@ -786,47 +786,6 @@ def _aggregate_over(
     raise ValueError(f"'aggregation' must be 'mean', 'sum' or 'variance', got {aggregation!r}")
 
 
-def _resolve_hop_weights(hop_weights: Sequence[float] | None, n_hops: int) -> list[float]:
-    """One weight per hop, padding a short list with its last value."""
-    if hop_weights is None:
-        return [1.0] * n_hops
-    weights = list(hop_weights)
-    if len(weights) > n_hops:
-        raise ValueError(f"'hop_weights' has {len(weights)} values but there are {n_hops} hops")
-    if len(weights) < n_hops:
-        # a short list is more likely a mistake than an intention, so say so out loud
-        logg.warning(f"'hop_weights' has {len(weights)} values for {n_hops} hops; padding with {weights[-1]}")
-        weights += [weights[-1]] * (n_hops - len(weights))
-    return weights
-
-
-def _nhood_features(
-    adata: AnnData, groups: str | None, use_rep: str | None, layer: str | None
-) -> tuple[Array | CSBase, NDArrayA | None]:
-    """The matrix the neighborhoods are aggregated over, and which rows have a value.
-
-    The mask is ``None`` wherever every observation has one, which is every source but
-    *groups*: a feature matrix has numbers in all its rows, while a category can be
-    unassigned. See :func:`_nhood_aggregate` for what the mask is then used for.
-    """
-    given = [name for name, value in (("groups", groups), ("use_rep", use_rep), ("layer", layer)) if value is not None]
-    if len(given) > 1:
-        raise ValueError(f"pass at most one of 'groups', 'use_rep' and 'layer', got {given}")
-    if groups is not None:
-        # any dtype: `_onehot` coerces, as the neighborhood profile always has
-        assert_key_in_adata(adata, groups, attr="obs")
-        onehot = _onehot(adata.obs[groups])
-        # an unassigned category leaves an all-zero row
-        return onehot, np.asarray(onehot.sum(axis=1)).ravel() != 0
-    if use_rep is not None:
-        assert_key_in_adata(adata, use_rep, attr="obsm")
-        return adata.obsm[use_rep], None
-    if layer is not None:
-        assert_key_in_adata(adata, layer, attr="layers")
-        return adata.layers[layer], None
-    return adata.X, None
-
-
 def _nhood_blocks(
     adata: AnnData,
     *,
@@ -843,7 +802,25 @@ def _nhood_blocks(
     if not len(hops):
         raise ValueError("'hops' must name at least one hop")
 
-    features, has_value = _nhood_features(adata, groups, use_rep, layer)
+    given = [name for name, value in (("groups", groups), ("use_rep", use_rep), ("layer", layer)) if value is not None]
+    if len(given) > 1:
+        raise ValueError(f"pass at most one of 'groups', 'use_rep' and 'layer', got {given}")
+    # `has_value` says which observations have something to contribute; only a category
+    # can be unassigned, so a feature matrix leaves every row valid
+    has_value = None
+    if groups is not None:
+        # any dtype: `_onehot` coerces, as the neighborhood profile always has
+        assert_key_in_adata(adata, groups, attr="obs")
+        features = _onehot(adata.obs[groups])
+        has_value = np.asarray(features.sum(axis=1)).ravel() != 0
+    elif use_rep is not None:
+        assert_key_in_adata(adata, use_rep, attr="obsm")
+        features = adata.obsm[use_rep]
+    elif layer is not None:
+        assert_key_in_adata(adata, layer, attr="layers")
+        features = adata.layers[layer]
+    else:
+        features = adata.X
     by_hop = _hop_adjacencies(adata.obsp[connectivity_key], hops, hop_mode)
     if has_value is not None:
         # An observation with nothing to contribute is not a neighbor that has a value, so
@@ -861,13 +838,20 @@ def _nhood_aggregate(
     adata: AnnData,
     *,
     hop_weights: Sequence[float] | None = None,
-    hop_mode: Literal["power", "shell"] = "power",
     aggregation: Literal["mean", "sum", "variance"] = "mean",
     **kwargs: Any,
 ) -> NDArrayA:
-    """The summed matrix, without touching *adata*. See :func:`nhood_aggregate`."""
-    blocks = _nhood_blocks(adata, hop_mode=hop_mode, aggregation=aggregation, **kwargs)
-    weights = _resolve_hop_weights(hop_weights, len(blocks))
+    """The summed matrix, without touching *adata*. See :func:`nhood_aggregate`.
+
+    Matrix powers, not disjoint rings: the hops are summed here, so a cell reachable by
+    several short paths is meant to weigh more.
+    """
+    blocks = _nhood_blocks(adata, hop_mode="power", aggregation=aggregation, **kwargs)
+    weights = [1.0] * len(blocks) if hop_weights is None else list(hop_weights)
+    # neither padding a short list nor ignoring a long one: both hide a mistake, see
+    # scverse/squidpy#1277
+    if len(weights) != len(blocks):
+        raise ValueError(f"'hop_weights' has {len(weights)} values but there are {len(blocks)} hops")
     # keep the container the features came in; `variance` has already densified, so a
     # mixed set of blocks has to be densified whole
     if not all(issparse(block) for block in blocks):
@@ -887,7 +871,6 @@ def nhood_aggregate(
     layer: str | None = None,
     connectivity_key: str = Key.obsp.spatial_conn(),
     hops: Sequence[int] = (1,),
-    hop_mode: Literal["power", "shell"] = "power",
     aggregation: Literal["mean", "sum", "variance"] = "mean",
     hop_weights: Sequence[float] | None = None,
     key_added: str = "X_nhood",
@@ -896,11 +879,9 @@ def nhood_aggregate(
 ) -> AnnData | None:
     """Summarise each observation's spatial neighborhood into one block of features.
 
-    The hops are summed into a single block of the same width as the features. Weighting
-    them by distance is what *hop_weights* is for, and why *hop_mode* defaults to
-    ``'power'``: a cell reachable by several short paths then contributes more.
-
-    Use :func:`~squidpy.gr.nhood_concat` to keep the hops as separate columns instead.
+    The hops are summed into a single block of the same width as the features, weighted
+    by *hop_weights*. Matrix powers, so a cell reachable by several short paths weighs
+    more; disjoint rings are the other reading and belong with the stacking path.
 
     Parameters
     ----------
@@ -926,10 +907,6 @@ def nhood_aggregate(
     Two of the three niche flavors are one call of this followed by a scaling step:
     ``neighborhood`` is ``groups=...``, ``hops=range(1, k + 1)`` then
     :func:`~scanpy.pp.scale`; ``utag`` is the defaults then :func:`~scanpy.tl.pca`.
-
-    See Also
-    --------
-    nhood_concat : The same aggregation, with the hops side by side.
     """
     adata = extract_adata_if_sdata(data, table_key=table_key)
     adata = adata.copy() if copy else adata
@@ -942,7 +919,6 @@ def nhood_aggregate(
         layer=layer,
         connectivity_key=connectivity_key,
         hops=hops,
-        hop_mode=hop_mode,
         aggregation=aggregation,
         hop_weights=hop_weights,
     )
