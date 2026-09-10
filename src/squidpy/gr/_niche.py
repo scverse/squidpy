@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from abc import ABC, abstractmethod
 from typing import Any, Literal
 
@@ -10,7 +9,7 @@ import pandas as pd
 import scanpy as sc
 import scipy.sparse as sps
 from anndata import AnnData
-from scipy.sparse import coo_matrix, hstack, issparse, lil_matrix, spdiags
+from scipy.sparse import coo_matrix, csr_array, hstack, issparse, spdiags
 from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import normalize
 from spatialdata import SpatialData, sanitize_table
@@ -157,12 +156,10 @@ def calculate_niche(
         If 'False', return a new AnnData object with the niche labels.
     """
 
-    warnings.warn(
+    logg.warning(
         "Calling `calculate_niche` is deprecated and will be removed in squidpy "
         "v1.9.0. Use `calculate_niche_neighborhood`, `calculate_niche_utag`, "
         "`calculate_niche_cellcharter`, or `calculate_niche_spatialleiden` instead.",
-        FutureWarning,
-        stacklevel=2,
     )
 
     # cellcharter-only defaults stay guarded: filling them for other flavors would trip
@@ -206,16 +203,17 @@ def calculate_niche(
     if flavor == "neighborhood":
         return calculate_niche_neighborhood(
             data,
-            groups,
-            resolutions,
-            n_neighbors,
-            spatial_connectivities_key,
-            scale,
-            distance,
-            abs_nhood,
-            n_hop_weights,
-            min_niche_size,
-            mask,
+            groups=groups,
+            resolutions=resolutions,
+            n_neighbors=n_neighbors,
+            spatial_connectivities_key=spatial_connectivities_key,
+            scale=scale,
+            distance=distance,
+            abs_nhood=abs_nhood,
+            n_hop_weights=n_hop_weights,
+            embedding_key_added="niche_embedding",
+            min_niche_size=min_niche_size,
+            mask=mask,
             library_key=library_key,
             copy=not inplace,
             table_key=table_key,
@@ -226,11 +224,13 @@ def calculate_niche(
     elif flavor == "utag":
         return calculate_niche_utag(
             data,
-            resolutions,
-            n_neighbors,
-            spatial_connectivities_key,
-            min_niche_size,
-            mask,
+            resolutions=resolutions,
+            n_neighbors=n_neighbors,
+            use_layer=None,
+            spatial_connectivities_key=spatial_connectivities_key,
+            embedding_key_added="niche_embedding",
+            min_niche_size=min_niche_size,
+            mask=mask,
             library_key=library_key,
             copy=not inplace,
             table_key=table_key,
@@ -241,14 +241,15 @@ def calculate_niche(
     elif flavor == "cellcharter":
         return calculate_niche_cellcharter(
             data,
-            distance,
-            aggregation,
-            rng,
-            spatial_connectivities_key,
-            n_components,
-            use_rep,
-            min_niche_size,
-            mask,
+            distance=distance,
+            aggregation=aggregation,
+            rng=rng,
+            spatial_connectivities_key=spatial_connectivities_key,
+            n_components=n_components,
+            use_rep=use_rep,
+            embedding_key_added="niche_embedding",
+            min_niche_size=min_niche_size,
+            mask=mask,
             library_key=library_key,
             copy=not inplace,
             table_key=table_key,
@@ -257,15 +258,15 @@ def calculate_niche(
     elif flavor == "spatialleiden":
         return calculate_niche_spatialleiden(
             data,
-            resolutions,
-            latent_connectivities_key,
-            spatial_connectivities_key,
-            layer_ratio,
-            n_iterations,
-            use_weights,
-            rng,
-            min_niche_size,
-            mask,
+            resolutions=resolutions,
+            latent_connectivities_key=latent_connectivities_key,
+            spatial_connectivities_key=spatial_connectivities_key,
+            layer_ratio=layer_ratio,
+            n_iterations=n_iterations,
+            use_weights=use_weights,
+            rng=rng,
+            min_niche_size=min_niche_size,
+            mask=mask,
             prefix=None,
             library_key=library_key,
             copy=not inplace,
@@ -278,6 +279,7 @@ def calculate_niche(
 @d.dedent
 def calculate_niche_neighborhood(
     data: AnnData | SpatialData,
+    *,
     groups: str,
     resolutions: float | list[float],
     n_neighbors: int = 15,
@@ -286,49 +288,103 @@ def calculate_niche_neighborhood(
     distance: int = 1,
     abs_nhood: bool = False,
     n_hop_weights: list[float] | None = None,
+    embedding_key_added: str = "niche_embedding",
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     library_key: str | None = None,
     copy: bool = False,
     table_key: str | None = None,
-    *,
     flavor: Literal["igraph", "leidenalg"] = "igraph",
     n_iterations: int = -1,
     rng: SeedLike | RNGLike | None = None,
 ) -> AnnData | None:
-    """Compute niche neighborhoods using a neighborhood profile embedding and Leiden clustering.
+    """Compute spatial niches from local cell-type composition.
 
-    Each observation is represented by the frequency of ``groups`` labels in its
-    spatial neighborhood, which is then clustered with the Leiden algorithm.
+    This method represents every observation by a **neighborhood composition
+    profile**: a vector describing the cell-type labels observed in its local
+    spatial neighborhood. Observations with similar surrounding cell-type
+    compositions are then grouped into niches using Leiden clustering.
+
+    A spatial connectivity graph must already be available in
+    ``adata.obsp[spatial_connectivities_key]``. The graph defines which
+    observations are spatial neighbors; this function does not construct the
+    graph itself.
+
+    For each observation ``i``, the method:
+
+    1. Retrieves observations reachable from ``i`` in the spatial graph up to
+       ``distance`` hops away.
+    2. Counts the values of ``groups`` among those neighboring observations.
+    3. Optionally combines profiles from different graph-hop distances using
+       ``n_hop_weights``.
+    4. Uses either raw counts or normalized cell-type proportions as the
+       neighborhood profile.
+    5. Optionally z-scores the resulting profile across observations (scale
+       argument).
+    6. Constructs a k-nearest-neighbor graph from the profile embedding and
+       applies Leiden clustering at each requested resolution.
+
+    Thus, a niche is defined by a recurring **local cellular composition**,
+    rather than by the expression profile of an individual observation. For
+    example, cells surrounded by many immune cells and fibroblasts may be
+    assigned to one niche even when those cells themselves have different
+    expression profiles or cell-type labels.
 
     Parameters
     ----------
     %(adata)s
     groups
-        Column in ``adata.obs`` defining categorical groups (e.g. cell types)
-        used to compute neighborhood composition profiles.
-    n_neighbors
-        Number of neighbors used when constructing the graph for Leiden clustering.
+        Column in ``adata.obs`` containing categorical labels used to define
+        neighborhood composition, such as cell types, cell states, clusters,
+        or anatomical annotations.
     resolutions
-        Resolution parameter(s) for Leiden clustering. Can be a single float or a list.
+        Resolution parameter(s) for Leiden clustering. A single value produces
+        one niche annotation. Supplying multiple values performs Leiden
+        clustering separately for each resolution and adds one niche column per
+        resolution to ``adata.obs``.
+    n_neighbors
+        Number of nearest neighbors used to construct the k-nearest-neighbor
+        graph on the neighborhood composition embedding before Leiden
+        clustering.
     %(niche_spatial_conn_key)s
     scale
-        Whether to z-score the neighborhood profile prior to clustering.
+        Whether to z-score each neighborhood-profile feature across
+        observations before constructing the clustering graph.
     distance
-        Number of hops to consider when constructing neighborhood profiles.
-        Values greater than ``1`` incorporate higher-order neighbors.
+        Maximum number of graph hops used to construct each neighborhood
+        profile. ``distance=1`` uses direct spatial neighbors. Larger values
+        incorporate increasingly distal observations in the spatial graph.
     abs_nhood
-        If ``True``, use absolute counts; otherwise normalize to proportions.
+        Whether to use absolute group counts in the neighborhood profile.
+
+        If ``False`` (the default), counts are normalized to proportions, so
+        each profile captures relative neighborhood composition and is less
+        sensitive to differences in neighborhood size.
+
+        If ``True``, raw counts are retained, so both composition and the
+        total number of reachable neighbors can influence the embedding.
     n_hop_weights
-        Weights for combining neighborhood profiles across hops.
+        Optional weights used when combining contributions from successive
+        graph-hop distances. If provided, the weights determine the relative
+        contribution of direct and higher-order neighbors to the final
+        neighborhood profile. If not provided, equal weights are used.
     %(niche_common_params)s
     %(table_key)s
     %(niche_leiden_params)s
 
     Returns
     -------
-    If ``copy = True``, returns a copy of ``adata`` with niche annotations added to ``.obs``.
-    Otherwise, modifies ``adata`` in place and returns ``None``.
+    If ``copy=True``, returns a copy of ``adata`` with the neighborhood profile
+    stored in ``.obsm[embedding_key_added]`` and niche assignments added to
+    ``.obs``. Otherwise, modifies ``adata`` in place and returns ``None``.
+
+    Notes
+    -----
+    This approach is most appropriate when niches are expected to differ
+    primarily in local **cellular composition**. In contrast,
+    :func:`calculate_niche_utag` and :func:`calculate_niche_cellcharter`
+    derive niche embeddings from spatially aggregated molecular or latent
+    features rather than from categorical group frequencies.
 
     """
 
@@ -351,6 +407,7 @@ def calculate_niche_neighborhood(
         data,
         embedder,
         clusterer,
+        embedding_key_added,
         min_niche_size=min_niche_size,
         mask=mask,
         library_key=library_key,
@@ -362,31 +419,75 @@ def calculate_niche_neighborhood(
 @d.dedent
 def calculate_niche_utag(
     data: AnnData | SpatialData,
+    *,
     resolutions: float | list[float],
     n_neighbors: int = 15,
+    use_layer: str | None = None,
     spatial_connectivities_key: str = "spatial_connectivities",
+    embedding_key_added: str = "niche_embedding",
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     library_key: str | None = None,
     copy: bool = False,
     table_key: str | None = None,
-    *,
     flavor: Literal["igraph", "leidenalg"] = "igraph",
     n_iterations: int = -1,
     rng: SeedLike | RNGLike | None = None,
 ) -> AnnData | None:
-    """Compute niche assignments using a UTAG-style neighborhood embedding.
+    """Compute spatial niches from UTAG-style feature aggregation.
 
-    Features are propagated over the spatial graph so each observation inherits
-    information from its immediate neighbors, then clustered with the Leiden algorithm.
+    Originally adapted from https://github.com/ElementoLab/utag/blob/main/utag/segmentation.py
+    This method computes a spatially aggregated feature representation for each
+    observation and clusters that representation with Leiden. The resulting
+    niches group observations that occur in similar local molecular
+    environments.
+
+    A spatial connectivity graph must already be available in
+    ``adata.obsp[spatial_connectivities_key]``. The graph determines how
+    features are propagated or aggregated across spatially neighboring
+    observations; this function does not construct the graph itself.
+
+    The method proceeds as follows:
+
+    1. Selects an input feature matrix from ``adata.X`` or from
+       ``adata.layers[use_layer]``.
+    2. Performs a normalized (by number of cell-neighbors) aggregation of
+       features over the spatial connectivity graph, producing a new feature
+       matrix in which each observation reflects information from its local
+       spatial neighborhood.
+    3. Treats this spatially aggregated matrix as the niche embedding.
+    4. Constructs a k-nearest-neighbor graph in the embedding space.
+    5. Applies Leiden clustering at each requested resolution.
+
+    If the input contains gene expression values, the embedding describes
+    local expression programs rather than merely the categorical composition
+    of neighboring cells.
+
+    This differs from :func:`calculate_niche_neighborhood`, which uses counts
+    or proportions of a categorical ``groups`` annotation. UTAG-style
+    aggregation can identify niches that have similar local expression
+    patterns even when their neighborhoods contain different annotated cell
+    types, or when cell-type labels are unavailable.
 
     Parameters
     ----------
     %(adata)s
-    n_neighbors
-        Number of neighbors used when constructing the graph for Leiden clustering.
     resolutions
-        Resolution parameter(s) for Leiden clustering. Can be a single float or a list.
+        Resolution parameter(s) for Leiden clustering. A single value produces
+        one niche annotation. Supplying multiple values runs Leiden clustering
+        independently at each resolution and adds one niche column per
+        resolution to ``adata.obs``.
+    n_neighbors
+        Number of nearest neighbors used to construct the k-nearest-neighbor
+        graph on the spatially aggregated embedding before Leiden clustering.
+    use_layer
+        Key in ``adata.layers`` containing the feature matrix to aggregate. If
+        ``None``, uses ``adata.X``.
+
+        Typically, this should contain a normalized expression matrix or
+        another observation-by-feature representation appropriate for local
+        aggregation. The selected matrix determines what biological signal is
+        used to define niches.
     %(niche_spatial_conn_key)s
     %(niche_common_params)s
     %(table_key)s
@@ -394,12 +495,14 @@ def calculate_niche_utag(
 
     Returns
     -------
-    If ``copy = True``, returns a copy of ``adata`` with niche annotations added to ``.obs``.
-    Otherwise, modifies ``adata`` in place and returns ``None``.
+    If ``copy=True``, returns a copy of ``adata`` with the spatially aggregated
+    embedding stored in ``.obsm[embedding_key_added]`` and niche assignments
+    added to ``.obs``. Otherwise, modifies ``adata`` in place and returns
+    ``None``.
 
     """
 
-    embedder = _UtagEmbedder(spatial_connectivities_key)
+    embedder = _UtagEmbedder(spatial_connectivities_key, use_layer)
 
     clusterer = _LeidenClusterer(
         n_neighbors, resolutions, "utag_niche", flavor=flavor, n_iterations=n_iterations, rng=rng
@@ -409,6 +512,7 @@ def calculate_niche_utag(
         data,
         embedder,
         clusterer,
+        embedding_key_added,
         min_niche_size=min_niche_size,
         mask=mask,
         library_key=library_key,
@@ -420,52 +524,102 @@ def calculate_niche_utag(
 @d.dedent
 def calculate_niche_cellcharter(
     data: AnnData | SpatialData,
+    *,
     distance: int = 3,
     aggregation: str = "mean",
     rng: SeedLike | RNGLike | None = None,
     spatial_connectivities_key: str = "spatial_connectivities",
     n_components: int = 10,
     use_rep: str | None = None,
+    embedding_key_added: str = "niche_embedding",
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     library_key: str | None = None,
     copy: bool = False,
     table_key: str | None = None,
 ) -> AnnData | None:
-    """Compute niche assignments using a CellCharter-style aggregation embedding.
+    """Compute spatial niches using a CellCharter-style embedding and GMM.
 
-    Features are aggregated across multi-hop spatial neighborhoods, then clustered
-    with a Gaussian mixture model.
+    This method identifies niches by clustering an embedding that represents
+    each observation together with information from its surrounding spatial
+    neighborhood. Unlike :func:`calculate_niche_neighborhood`, which builds
+    an embedding from categorical cell-type composition, this approach uses a
+    continuous feature representation and a Gaussian mixture model (GMM) for
+    clustering.
+
+    Two input modes are supported:
+
+    - If ``use_rep`` is provided, ``adata.obsm[use_rep]`` is used as the input
+      representation for niche clustering.
+    - If ``use_rep`` is ``None``, a CellCharter-style spatial embedding is
+      computed by aggregating features over the precomputed spatial graph,
+      including information from multi-hop neighborhoods up to ``distance``.
+
+    A spatial connectivity graph must already be present in
+    ``adata.obsp[spatial_connectivities_key]`` when spatial aggregation is
+    required. This function does not construct the graph itself.
+
+    When an embedding is computed internally, the method:
+
+    1. Starts from the available observation-level feature representation.
+    2. Aggregates neighborhood features over the spatial graph from direct
+       neighbors through ``distance`` graph hops.
+    3. Combines the aggregated features according to ``aggregation`` to create
+       a spatial-context embedding for every observation.
+    4. Fits a Gaussian mixture model with ``n_components`` mixture components.
+    5. Uses the GMM component assignments as niche labels.
+
+    Consequently, each niche corresponds to a probabilistic cluster in a
+    feature space that encodes both an observation's features and its broader
+    spatial context. Increasing ``distance`` allows the embedding to reflect
+    larger tissue-scale neighborhoods, whereas smaller values emphasize local
+    microenvironments.
 
     Parameters
     ----------
     %(adata)s
     distance
-        Number of neighborhood hops to aggregate when building the embedding.
+        Maximum number of graph hops included when constructing the
+        CellCharter-style spatial embedding. ``distance=1`` emphasizes direct
+        neighbors; larger values incorporate progressively more distal
+        observations in the spatial graph.
     aggregation
-        Aggregation mode used for neighborhood features, typically ``"mean"`` or
-        ``"variance"``.
+        Aggregation statistic used to summarize features across spatial
+        neighborhoods. Typical options include ``"mean"`` and ``"variance"``.
+
+        ``"mean"`` emphasizes the average local feature state, such as the
+        average local expression program. ``"variance"`` emphasizes local
+        heterogeneity in the feature representation.
     %(rng)s
         Seeds the Gaussian mixture clustering step. When stratifying by ``library_key``,
         every library is fitted with an independent rng derived from it.
     %(niche_spatial_conn_key)s
     n_components
-        Number of embedding components to retain when ``use_rep`` is provided,
-        or number of mixture components used by the clusterer.
+        Number of Gaussian mixture components used to assign niches.
+        Therefore, this parameter directly determines the number of niche
+        labels produced per library or dataset.
     use_rep
-        Key in ``adata.obsm`` pointing to a precomputed representation to use
-        instead of deriving a spatially aggregated embedding.
+        Key in ``adata.obsm`` containing a precomputed observation-level
+        representation to cluster. When provided, this representation is used
+        instead of deriving a new spatially aggregated embedding.
     %(niche_common_params)s
     %(table_key)s
 
     Returns
     -------
-    If ``copy = True``, returns a copy of ``adata`` with niche annotations added to ``.obs``.
-    Otherwise, modifies ``adata`` in place and returns ``None``.
+    If ``copy=True``, returns a copy of ``adata`` with the embedding stored in
+    ``.obsm[embedding_key_added]`` and GMM-based niche assignments added to
+    ``.obs``. Otherwise, modifies ``adata`` in place and returns ``None``.
 
     """
 
-    embedder = _CellcharterEmbedder(distance, aggregation, spatial_connectivities_key, n_components, use_rep)
+    if use_rep is not None:
+        embedder = _PrecomputedEmbedder(use_rep)
+    else:
+        logg.warning(
+            "CellCharter recommends to use a dimensionality reduced embedding of the data, e.g. a scVI embedding. Since 'use_rep' is not provided, PCA will be used as proxy - performance may be suboptimal."
+        )
+        embedder = _NHopPCAEmbedder(distance, aggregation, spatial_connectivities_key, use_rep)
 
     clusterer = _GMMClusterer(n_components, np.random.default_rng(rng), base_colname="cellcharter_niche")
 
@@ -473,6 +627,7 @@ def calculate_niche_cellcharter(
         data,
         embedder,
         clusterer,
+        embedding_key_added,
         min_niche_size=min_niche_size,
         mask=mask,
         library_key=library_key,
@@ -484,6 +639,7 @@ def calculate_niche_cellcharter(
 @d.dedent
 def calculate_niche_spatialleiden(
     data: AnnData | SpatialData,
+    *,
     resolutions: float | tuple[float, float] | list[float | tuple[float, float]],
     latent_connectivities_key: str = "connectivities",
     spatial_connectivities_key: str = "spatial_connectivities",
@@ -584,15 +740,15 @@ def calculate_niche_spatialleiden(
             # give prefix appropriate value so that the niche values indicate lib id.
             calculate_niche_spatialleiden(
                 lib_adata,
-                resolutions,
-                latent_connectivities_key,
-                spatial_connectivities_key,
-                layer_ratio,
-                n_iterations,
-                use_weights,
-                library_rngs[itr],
-                min_niche_size,
-                mask,
+                resolutions=resolutions,
+                latent_connectivities_key=latent_connectivities_key,
+                spatial_connectivities_key=spatial_connectivities_key,
+                layer_ratio=layer_ratio,
+                n_iterations=n_iterations,
+                use_weights=use_weights,
+                rng=library_rngs[itr],
+                min_niche_size=min_niche_size,
+                mask=mask,
                 prefix=f"lib={lib_id}_",
                 library_key=None,
                 copy=False,  # to save memory
@@ -650,6 +806,7 @@ def _calculate_niche_custom(
     data: AnnData | SpatialData,
     embedder: _NicheEmbedder,
     clusterer: _NicheClusterer,
+    embedding_key_added: str = "niche_embedding",
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
     library_key: str | None = None,
@@ -696,6 +853,9 @@ def _calculate_niche_custom(
 
     adata = orig_adata.copy() if copy else orig_adata
 
+    embedding = embedder.get_embedding(adata)
+    adata.obsm[embedding_key_added] = embedding
+
     if library_key is not None:
         assert_key_in_adata(adata, library_key, attr="obs")
         logg.info(f"Stratifying by library_key '{library_key}'")
@@ -712,9 +872,9 @@ def _calculate_niche_custom(
 
             lib_adata = adata[lib_indices].copy()
 
-            _run_niche_pipeline(
-                lib_adata, embedder, clusterer, mask=mask, min_niche_size=min_niche_size, prefix=f"lib={lib_id}_"
-            )
+            lib_embedding = lib_adata.obsm[embedding_key_added]
+            result_columns = clusterer.cluster(lib_adata, lib_embedding)
+            _postprocess_niche_results(lib_adata, result_columns, mask, min_niche_size, prefix=f"lib={lib_id}_")
 
             # from itr==1 onwards, adata will hold the columns that are being added hence,
             # added_columns will be empty. Hence only obtain added_columns when itr==0
@@ -728,7 +888,8 @@ def _calculate_niche_custom(
                 adata.obs.loc[lib_indices, col] = list(lib_adata.obs[col].astype("str"))
 
     else:
-        _run_niche_pipeline(adata, embedder, clusterer, mask=mask, min_niche_size=min_niche_size)
+        result_columns = clusterer.cluster(adata, embedding)
+        _postprocess_niche_results(adata, result_columns, mask, min_niche_size)
 
     # For SpatialData, the column names shouldn't have = sign. Hence, run sanitize_table.
     # TODO: In future, change the naming standard of any niche columns added to not have '=' to be compatible with spatialdata naming
@@ -736,20 +897,6 @@ def _calculate_niche_custom(
         sanitize_table(adata)
 
     return adata if copy else None
-
-
-def _run_niche_pipeline(
-    adata: AnnData,
-    embedder: _NicheEmbedder,
-    clusterer: _NicheClusterer,
-    mask: pd.Series | None,
-    min_niche_size: int | None,
-    prefix: str | None = None,
-) -> None:
-    """Embed, cluster, and postprocess ``adata`` in place."""
-    embedding = embedder.get_embedding(adata)
-    result_columns = clusterer.cluster(adata, embedding)
-    _postprocess_niche_results(adata, result_columns, mask, min_niche_size, prefix)
 
 
 def _validate_niche_args(
@@ -1014,32 +1161,66 @@ def _check_unnecessary_args(flavor: str, param_dict: dict[str, Any], param_specs
 ############
 
 
-def _setdiag(adjacency_matrix: sps.spmatrix, value: int) -> sps.spmatrix:
-    """remove self-loops"""
+def _compute_hop_adjacency_matrices(
+    adjacency_matrix_orig: sps.spmatrix | NDArrayA,
+    max_hop: int,
+) -> list[sps.spmatrix]:
+    """Compute a sequence of 'new-connections-only' adjacency matrices for increasing hop distances.
 
-    if issparse(adjacency_matrix):
-        adjacency_matrix = adjacency_matrix.tolil()
-    adjacency_matrix.setdiag(value)
-    adjacency_matrix = adjacency_matrix.tocsr()
-    if value == 0:
-        adjacency_matrix.eliminate_zeros()
-    return adjacency_matrix
+    Parameters
+    ----------
+    adjacency_matrix
+        The 1-hop (direct neighbor) adjacency matrix. Used as-is: if it has an
+        explicit self-loop (diagonal == 1), that is respected and preserved in
+        the output; it is never forced to 0 or 1 by this function.
+    max_hop
+        Number of hop levels to compute (>= 1).
 
+    Returns
+    -------
+    A list ``adj_mat_list`` of length ``max_hop`` where:
 
-def _hop(
-    adj_hop: sps.spmatrix,
-    adj: sps.spmatrix,
-    adj_visited: sps.spmatrix = None,
-) -> tuple[sps.spmatrix, sps.spmatrix]:
-    """get nearest neighbor of neighbors"""
+    - ``adj_mat_list[0]`` is exactly ``adjacency_matrix`` (unmodified).
+    - ``adj_mat_list[k]`` (k >= 1) has a 1 at ``(i, j)`` iff cell ``i`` and ``j``
+      are reachable in exactly ``k + 1`` hops *and* were not already connected
+      in any of ``adj_mat_list[0], ..., adj_mat_list[k-1]``.
 
-    adj_hop = adj_hop @ adj
+    Notes
+    -----
+    Internally, a "visited" matrix tracks all pairs already accounted for
+    (including the diagonal, which is always treated as visited here to avoid
+    counting a cell reaching itself via an out-and-back path as a genuine new
+    hop-connection).
+    """
+    if max_hop < 1:
+        raise ValueError(f"max_hop must be >= 1, got {max_hop}.")
 
-    if adj_visited is not None:
-        adj_hop = adj_hop > adj_visited
-        adj_visited = adj_visited + adj_hop
+    if not issparse(adjacency_matrix_orig):
+        adjacency_matrix = csr_array(adjacency_matrix_orig)
+    else:
+        adjacency_matrix = adjacency_matrix_orig
 
-    return adj_hop, adj_visited
+    adj_mat_list = [adjacency_matrix]
+
+    # force diagonal to 1 here so self-returns during BFS expansion are filtered
+    # out, regardless of whether the input matrix itself has self-loops.
+    adj_visited = adjacency_matrix.copy()
+    adj_visited.setdiag(1)
+
+    # frontier holds only the newest layer of connections discovered so far
+    # Multiplying just the frontier (not everything visited) forward
+    # keeps the sparse matrices small.
+    frontier = adjacency_matrix  # even though initially assigning adjacency_matrix,
+    # after entering below loop, frontier is instantly assigned another array.
+    # Hence adjacency_matrix is not modified
+    for _ in range(1, max_hop):
+        frontier = frontier @ adjacency_matrix
+        frontier.data[:] = 1
+        frontier = frontier > adj_visited  # keep only newly-discovered pairs
+        adj_visited = adj_visited + frontier
+        adj_mat_list.append(frontier)
+
+    return adj_mat_list
 
 
 def _normalize(adj: sps.spmatrix) -> sps.spmatrix:
@@ -1067,6 +1248,13 @@ def _aggregate(adata: AnnData, normalized_adjacency_matrix: sps.spmatrix, aggreg
         raise ValueError(f"Invalid aggregation method '{aggregation}'. Please choose either 'mean' or 'variance'.")
 
     return aggregated_matrix
+
+
+def _as_csr(x):
+    """Return x as a CSR sparse matrix without copying if already CSR."""
+    if issparse(x):
+        return x.tocsr()
+    return csr_array(x)
 
 
 class _NicheEmbedder(ABC):
@@ -1133,55 +1321,30 @@ class _NhoodProfileEmbedder(_NicheEmbedder):
         self,
         adata: AnnData,
         matrix: coo_matrix,
-    ) -> pd.DataFrame:
+    ) -> NDArrayA:
         """
         Returns an obs x category matrix where each column is the absolute/relative frequency of a category in the neighborhood
         """
 
-        # ensure that adata.obs[group] is of categorical type, as that makes it explicit, which cols of the returned profile_df
-        # correspond to which categories in group
-        if adata.obs[self.groups].dtype.name != "category":
-            warnings.warn(
-                "Since adata.obs[groups] does not already have categorical dtype, converting it into categorical type.",
-                stacklevel=2,
-            )
-            adata.obs[self.groups] = adata.obs[self.groups].astype("category")
+        one_hot = pd.get_dummies(
+            adata.obs[self.groups],
+            dtype=np.float64,
+        ).to_numpy()
 
-        # ensure matrix is in csc format for efficient column slicing
-        if matrix.format != "csc":
-            matrix = matrix.tocsc()
-
-        # get cell categories in order
-        categories_order = adata.obs[self.groups].cat.categories
-        n_categories = len(categories_order)
-
-        # map category to column index
-        category_to_idx = {ct: i for i, ct in enumerate(categories_order)}
-
-        # pre allocate sparse LIL matrix for efficient assignment (n_cells x n_categories)
-        profile_sparse = lil_matrix((matrix.shape[0], n_categories), dtype=np.float64)
-
-        # for each category, sum over cells of that category
-        for ct in categories_order:
-            ct_mask = adata.obs[self.groups] == ct  # boolean mask for cells of this category
-            col_indices = np.where(ct_mask)[0]  # indices of those cells
-            if len(col_indices) > 0:
-                col_slice = matrix[:, col_indices]  # sparse submatrix
-                profile_sparse[:, category_to_idx[ct]] = col_slice.sum(axis=1).A1
-
-        # convert to dataframe (csr for final storage, dense for pandas)
-        profile_df = pd.DataFrame(
-            profile_sparse.tocsr().todense(), index=adata.obs[self.groups].index, columns=categories_order
-        )
+        profile = matrix.tocsr() @ one_hot  # returns a np array
 
         # now according to parameter abs_nhood, make raw counts into proportions or not
         if not self.abs_nhood:
-            total_neighs = profile_df.sum(axis=1)
-            profile_df = profile_df.div(total_neighs, axis=0)
-            # this may lead to some values being nan, as some cells might have had no neighbors. Make those values as 0
-            profile_df = profile_df.fillna(0.0)
+            total_neighs = profile.sum(axis=1)[:, None]
+            # Some cells might have no neighbors. Make corresponding proportions as 0
+            profile = np.divide(
+                profile,
+                total_neighs,
+                out=np.zeros_like(profile),
+                where=total_neighs != 0,
+            )
 
-        return profile_df
+        return profile
 
     def get_embedding(self, adata: AnnData) -> NDArrayA:
         """
@@ -1200,9 +1363,9 @@ class _NhoodProfileEmbedder(_NicheEmbedder):
             if self.n_hop_weights is None:
                 weights = [1.0] * self.distance
             elif len(self.n_hop_weights) < self.distance:
-                # Extend weights if too few provided
-                weights = self.n_hop_weights + [self.n_hop_weights[-1]] * (self.distance - len(self.n_hop_weights))
-                logg.debug(f"Extended weights to match distance: {weights}")
+                logg.error(
+                    f"Number of weights provided is less than hops requested. n_hop_weights = {self.n_hop_weights} is less than distance = {self.distance}"
+                )
             else:
                 weights = self.n_hop_weights
 
@@ -1210,13 +1373,14 @@ class _NhoodProfileEmbedder(_NicheEmbedder):
             weighted_profile = weights[0] * nhood_profile
 
             # Calculate higher-order hop profiles
-            n_hop_adjacency_matrix = adata.obsp[self.spatial_connectivities_key].copy()
+            hop_adj_matrices = _compute_hop_adjacency_matrices(
+                adata.obsp[self.spatial_connectivities_key], max_hop=self.distance
+            )
 
             # get n_hop neighbor adjacency matrices by multiplying the original adjacency matrix with itself n times and get corresponding neighborhood profiles.
             for n_hop in range(1, self.distance):
-                logg.debug(f"Calculating {n_hop + 1}-hop neighbors")
-                # Multiply adjacency matrix by itself to get n+1 hop adjacency
-                n_hop_adjacency_matrix = n_hop_adjacency_matrix @ adata.obsp[self.spatial_connectivities_key]
+                logg.debug(f"Obtaining {n_hop + 1}-hop neighbors")
+                n_hop_adjacency_matrix = hop_adj_matrices[n_hop]
                 matrix = n_hop_adjacency_matrix.tocoo()
 
                 # Calculate and add weighted profile
@@ -1228,17 +1392,10 @@ class _NhoodProfileEmbedder(_NicheEmbedder):
 
             nhood_profile = weighted_profile
 
-        # create AnnData object from neighborhood profile to perform scanpy functions
-        # Use .to_numpy(copy=True) to ensure the array is writeable (required for pandas CoW compatibility)
-        # Preserve the DataFrame index for later matching with adata_masked
-        adata_neighborhood = ad.AnnData(
-            X=nhood_profile.to_numpy(copy=True), obs=pd.DataFrame(index=nhood_profile.index)
-        )
-
         # reason for scaling see https://monkeybread.readthedocs.io/en/latest/notebooks/tutorial.html#niche-analysis
         if self.scale:
-            sc.pp.scale(adata_neighborhood, zero_center=True)
-        return adata_neighborhood.X
+            sc.pp.scale(nhood_profile, zero_center=True)
+        return nhood_profile
 
 
 @d.dedent
@@ -1246,12 +1403,15 @@ class _UtagEmbedder(_NicheEmbedder):
     """Compute a UTAG-style embedding by propagating features over spatial neighbors.
 
     The embedding is constructed by normalizing the spatial connectivity matrix,
-    multiplying it by ``adata.X``, and then applying PCA to the propagated
-    feature matrix.
+    multiplying it by ``adata.X`` (or a different layer if passed), and then applying
+    PCA to the propagated feature matrix.
 
     Parameters
     ----------
     %(niche_spatial_conn_key)s
+    use_layer
+        Which key from `adata.layers` to use to aggregate features from. If None,
+        uses ``adata.X``.
 
     Notes
     -----
@@ -1262,8 +1422,10 @@ class _UtagEmbedder(_NicheEmbedder):
     def __init__(
         self,
         spatial_connectivities_key: str,
+        use_layer: str | None,
     ):
         self.spatial_connectivities_key = spatial_connectivities_key
+        self.use_layer = use_layer
 
     def get_embedding(self, adata: AnnData) -> NDArrayA:
         """
@@ -1272,17 +1434,35 @@ class _UtagEmbedder(_NicheEmbedder):
         """
 
         adjacency_matrix = adata.obsp[self.spatial_connectivities_key]
-        new_feature_matrix = normalize(adjacency_matrix, norm="l1", axis=1) @ adata.X
-        adata_utag = ad.AnnData(X=new_feature_matrix)
-        sc.tl.pca(adata_utag)  # note: unlike with flavor 'neighborhood' dim reduction is performed here
-        return adata_utag.obsm["X_pca"]
+        if self.use_layer is not None:
+            new_feature_matrix = normalize(adjacency_matrix, norm="l1", axis=1) @ adata.layers[self.use_layer]
+        else:
+            new_feature_matrix = normalize(adjacency_matrix, norm="l1", axis=1) @ adata.X
+        pca = sc.pp.pca(new_feature_matrix)  # note: unlike with flavor 'neighborhood' dim reduction is performed here
+        return pca
+
+
+@d.dedent
+class _PrecomputedEmbedder(_NicheEmbedder):
+    """
+    Placeholder embedder to use when a precomputed embedding already exists
+    """
+
+    def __init__(self, obsm_key: str):
+        self.obsm_key = obsm_key
+
+    def get_embedding(self, adata: AnnData) -> NDArrayA:
+        # Use provided embedding from adata.obsm
+        assert_key_in_adata(adata, self.obsm_key, attr="obsm")
+        embedding = adata.obsm[self.obsm_key]
+        return embedding
 
 
 # TODO: This function requires some work later on. Right now keeping the implementation just like how
 # it was before the refactor, and in that case, when use_rep was provided, then it simply returned
 # that as the embedding, so no cellcharter algorithm used in that case
 @d.dedent
-class _CellcharterEmbedder(_NicheEmbedder):
+class _NHopPCAEmbedder(_NicheEmbedder):
     """Compute a CellCharter-style embedding from spatially aggregated features.
 
     The embedding can either be derived from a precomputed representation in
@@ -1315,13 +1495,11 @@ class _CellcharterEmbedder(_NicheEmbedder):
         distance: int,
         aggregation: str,
         spatial_connectivities_key: str,
-        n_components: int,
         use_rep: str | None,
     ):
         self.distance = distance
         self.aggregation = aggregation
         self.spatial_connectivities_key = spatial_connectivities_key
-        self.n_components = n_components
         self.use_rep = use_rep
 
     # this will hold an if block checking if use_rep is not None. If not None, then it will simply
@@ -1333,45 +1511,20 @@ class _CellcharterEmbedder(_NicheEmbedder):
         """adapted from https://github.com/CSOgroup/cellcharter/blob/main/src/cellcharter/gr/_aggr.py
         and https://github.com/CSOgroup/cellcharter/blob/main/src/cellcharter/tl/_gmm.py"""
 
-        if self.use_rep is not None:
-            # Use provided embedding from adata.obsm
-            assert_key_in_adata(adata, self.use_rep, attr="obsm")
-            embedding = adata.obsm[self.use_rep]
-            # Ensure embedding has the right number of components
-            if embedding.shape[1] < self.n_components:
-                raise ValueError(
-                    f"Embedding has {embedding.shape[1]} components, but n_components={self.n_components}. Please provide an embedding with at least {self.n_components} components."
-                )
-            # Use only the first n_components
-            embedding = embedding[:, : self.n_components]
-        else:
-            logg.warning(
-                "CellCharter recommends to use a dimensionality reduced embedding of the data, e.g. a scVI embedding. Since 'use_rep' is not provided, PCA will be used as proxy - performance may be suboptimal."
-            )
-            adjacency_matrix = adata.obsp[self.spatial_connectivities_key]
-            layers = list(range(self.distance + 1))
+        adjacency_matrix = adata.obsp[self.spatial_connectivities_key]
+        hop_adj_matrices = _compute_hop_adjacency_matrices(adjacency_matrix, max_hop=self.distance)
 
-            aggregated_matrices = []
-            adj_hop = _setdiag(adjacency_matrix, 0)  # Remove self-loops, set diagonal to 0
-            adj_visited = _setdiag(adjacency_matrix.copy(), 1)  # Track visited neighbors
-            for k in layers:
-                if k == 0:
-                    # get original count matrix (not aggregated)
-                    aggregated_matrices.append(adata.X)
-                else:
-                    # get count and adjacency matrix for k-hop (neighbor of neighbor of neighbor ...) and aggregate them
-                    if k > 1:
-                        adj_hop, adj_visited = _hop(adj_hop, adjacency_matrix, adj_visited)
-                    adj_hop_norm = _normalize(adj_hop)
-                    aggregated_matrix = _aggregate(adata, adj_hop_norm, self.aggregation)
-                    aggregated_matrices.append(aggregated_matrix)
+        aggregated_matrices = [
+            _as_csr(adata.X)
+        ]  # hop 0: raw features, no aggregation. Ensure sparse as hstack requires that
+        for hop_adj in hop_adj_matrices:
+            hop_adj_norm = _normalize(hop_adj)
+            aggregated_matrices.append(_aggregate(adata, hop_adj_norm, self.aggregation))
 
-            concatenated_matrix = hstack(aggregated_matrices)  # Stack all matrices horizontally
-            arr = concatenated_matrix.toarray()  # Densify
+        concatenated_matrix = hstack(aggregated_matrices)  # Stack all matrices horizontally
+        arr = concatenated_matrix.toarray()  # Densify
 
-            arr_ad = ad.AnnData(X=arr)
-            sc.tl.pca(arr_ad)
-            embedding = arr_ad.obsm["X_pca"]
+        embedding = sc.pp.pca(arr)
 
         return embedding
 
@@ -1576,4 +1729,4 @@ def _postprocess_niche_results(
         if prefix is not None:
             labels = prefix + labels
 
-        adata.obs[col] = labels
+        adata.obs[col] = labels.astype("category")
