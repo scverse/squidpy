@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 import scanpy as sc
 from anndata import AnnData
+from PIL import Image
 
 from squidpy import gr, pl
 from tests.conftest import DPI, PlotTester, PlotTesterMeta
@@ -214,3 +215,52 @@ class TestLigrec(PlotTester, metaclass=PlotTesterMeta):
 
     def test_plot_remove_nonsig_interactions(self, ligrec_result: Mapping[str, pd.DataFrame]):
         pl.ligrec(ligrec_result, remove_nonsig_interactions=True, alpha=1e-4)
+
+
+# --------------------------------------------------------------------------- #
+# nhood_enrichment_dotplot: behaviour, not appearance (no `test_plot_` prefix, so
+# these are not image comparisons)
+# --------------------------------------------------------------------------- #
+@pytest.fixture()
+def dotplot_adata(adata: AnnData) -> AnnData:
+    gr.spatial_neighbors_grid(adata)
+    gr.nhood_enrichment(adata, cluster_key=C_KEY, normalization="conditional", n_perms=20, rng=0)
+    return adata
+
+
+def test_dotplot_dpi_reaches_the_saved_file(dotplot_adata: AnnData, tmp_path):
+    """``Figure.set_dpi`` alone does not survive ``savefig``; the value has to be passed through."""
+    sizes = {}
+    for dpi in (None, 200):
+        path = tmp_path / f"dp_{dpi}.png"
+        pl.nhood_enrichment_dotplot(dotplot_adata, cluster_key=C_KEY, dpi=dpi, save=path)
+        sizes[dpi] = Image.open(path).size
+        plt.close("all")
+
+    assert sizes[200][0] > sizes[None][0] and sizes[200][1] > sizes[None][1], sizes
+
+
+@pytest.mark.parametrize("annotate", [False, True])
+def test_dotplot_without_conditional_ratio(adata: AnnData, annotate: bool):
+    """Without a CCR the dot sizes are a placeholder, so no value may be printed as if measured."""
+    gr.spatial_neighbors_grid(adata)
+    gr.nhood_enrichment(adata, cluster_key=C_KEY, n_perms=20, rng=0)  # no conditional_ratio
+
+    with pytest.warns(UserWarning, match="conditional_ratio"):
+        pl.nhood_enrichment_dotplot(adata, cluster_key=C_KEY, annotate=annotate)
+
+    drawn = [t.get_text() for ax in plt.gcf().axes for t in ax.texts]
+    assert "1.00" not in drawn, drawn
+    plt.close("all")
+
+
+def test_dotplot_size_range(dotplot_adata: AnnData):
+    size_range = (12.0, 90.0)
+    pl.nhood_enrichment_dotplot(dotplot_adata, cluster_key=C_KEY, size_range=size_range)
+
+    # the main grid and the size legend are PathCollections; the colorbar draws Line/QuadMesh
+    dots = [c for ax in plt.gcf().axes for c in ax.collections if hasattr(c, "get_sizes")]
+    drawn = np.concatenate([c.get_sizes() for c in dots if len(c.get_sizes())])
+    assert drawn.min() >= size_range[0] - 1e-6
+    assert drawn.max() <= size_range[1] + 1e-6
+    plt.close("all")

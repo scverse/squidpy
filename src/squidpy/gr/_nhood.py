@@ -44,7 +44,7 @@ from squidpy.gr._utils import (
     extract_adata_if_sdata,
 )
 
-__all__ = ["nhood_enrichment", "centrality_scores", "interaction_matrix"]
+__all__ = ["nhood_enrichment", "NhoodEnrichmentResult", "centrality_scores", "interaction_matrix"]
 
 
 class NhoodEnrichmentResult(NamedTuple):
@@ -120,15 +120,16 @@ def _counts_and_conditional(
 
 
 @njit(nogil=True, cache=True)
-def _normalize_total(cnt: NDArrayA) -> NDArrayA:
-    """Row-normalize edge counts (SEA). An all-zero row divides by ``1`` and stays zero."""
+def _normalize_total(cnt: NDArrayA, sizes: NDArrayA) -> NDArrayA:
+    """Divide edge counts by the number of index cells (SEA), i.e. neighbors per cell of type ``a``.
+
+    ``sizes[a]`` is the number of cluster-``a`` cells, which label permutation leaves unchanged --
+    so unlike the conditional denominator this one is a constant of the null. An empty cluster
+    divides by ``1`` and stays zero.
+    """
     out = np.zeros(cnt.shape, dtype=np.float64)
     for a in range(cnt.shape[0]):
-        s = 0.0
-        for b in range(cnt.shape[1]):
-            s += cnt[a, b]
-        if s == 0.0:
-            s = 1.0
+        s = sizes[a] if sizes[a] != 0.0 else 1.0
         for b in range(cnt.shape[1]):
             out[a, b] = cnt[a, b] / s
     return out
@@ -154,9 +155,8 @@ def _shuffled_labels(
 ) -> NDArrayA:
     """Shuffle cluster labels within each group, drawing once per group from ``rng``.
 
-    Groups are visited in category order with ascending indices, so the draw sequence — and hence
-    the result for a given generator state — matches the ``_ref_shuffle_group`` oracle in
-    ``tests/graph/test_nhood_correctness.py``, which the correctness tests check this against.
+    Groups are visited in category order with ascending indices, so for a given generator state
+    the draw sequence, and hence the result, is fully determined.
     """
     shuffled = int_clust.copy()
     # one group covering every cell has ascending indices `0..n-1`, so the gather/scatter below is
@@ -207,7 +207,8 @@ def _permutation_moments_counts(
         shuffled = _shuffled_labels(int_clust, group_offsets, group_indices, rng)
         out = _nenrich(indices, indptr, shuffled, n_cls)
 
-        # per-iteration locals folded into the accumulators, so numba recognises the array reduction
+        # the temporaries are needed because numba only recognizes whole-array in-place updates as
+        # a reduction -- `sum_d[a, b] += dev` here would race instead
         local_d = np.zeros((n_cls, n_cls), dtype=np.int64)
         local_d2 = np.zeros((n_cls, n_cls), dtype=np.int64)
         for a in range(n_cls):
@@ -230,6 +231,7 @@ def _permutation_moments_normalized(
     group_indices: NDArrayA,
     n_cls: int,
     norm_code: int,
+    sizes: NDArrayA,
     observed: NDArrayA,
     generators: Any,
     progress: Any,
@@ -252,7 +254,7 @@ def _permutation_moments_normalized(
         shuffled = _shuffled_labels(int_clust, group_offsets, group_indices, rng)
 
         if norm_code == 1:  # total
-            out = _normalize_total(_nenrich(indices, indptr, shuffled, n_cls))
+            out = _normalize_total(_nenrich(indices, indptr, shuffled, n_cls), sizes)
         else:  # conditional: one fused walk yields both the numerator and its denominator
             cnt, cond = _counts_and_conditional(indices, indptr, shuffled, n_cls)
             out = _normalize_conditional(cnt, cond)
@@ -328,14 +330,19 @@ def nhood_enrichment(
     %(n_jobs_threads)s
     %(show_progress_bar)s
     normalization
-        Normalization mode to use:
+        Normalization mode to use, as compared in :cite:`schiller2025`:
 
-        - ``'none'``: No normalization of neighbor counts
-        - ``'total'``: Normalize neighbor counts by total number of cells per cluster (SEA)
-        - ``'conditional'``: Normalize neighbor counts by number of cells with at least one neighbor of given type (COZI)
+        - ``'none'``: No normalization of neighbor counts.
+        - ``'total'``: Divide by the number of cells of the index cluster (SEA). Cluster sizes are
+          unchanged by the permutation, so this rescales the statistic without changing the z-score.
+        - ``'conditional'``: Divide by the number of index-cluster cells having at least one
+          neighbor of the given type (COZI).
     min_cell_count
         Minimum number of cells a cluster must contain to be included. Clusters with fewer cells are
-        dropped before counting (default ``0`` keeps all clusters).
+        dropped before counting (default ``0`` keeps all clusters) and their z-scores are `NaN`
+        whatever ``handle_nan`` says. Worth raising: a cluster too small to give the permutation
+        null a spread of values yields an unreliable z-score, and in ``'conditional'`` mode a rare
+        cluster pair can leave the denominator at zero, which is reported as ``0``.
     handle_nan
         How to handle NaN values in z-scores:
 
@@ -371,10 +378,19 @@ def nhood_enrichment(
         )
     # CSC has `indices`/`indptr` too, but column-wise: without this the counts come out transposed
     adj = adj.tocsr()
+    # The kernels read `indices`/`indptr` only, so anything the CSR stores is counted as an edge:
+    # a stored zero (what pruning in place, `adj.data[mask] = 0`, leaves behind) and each half of a
+    # duplicated `(i, j)` entry, which scipy defines as one edge whose value is the sum. Copy before
+    # canonicalizing -- `tocsr()` hands back the caller's own matrix when it is already CSR, and
+    # `count_nonzero()` cannot be used to test for this because it sums duplicates in place.
+    if not adj.has_canonical_format or (adj.data == 0).any():
+        adj = adj.copy()
+        adj.sum_duplicates()
+        adj.eliminate_zeros()
     original_clust = adata.obs[cluster_key]
-    # `.cat.codes` is the same category-order mapping the dict comprehension used to build cell by
-    # cell, but it already exists on the Categorical; NaN shows up as `-1`, which `ndt` would wrap
-    # around to a huge cluster id, so reject it rather than let it index out of range.
+    # `.cat.codes` already holds each cell's index into `cat.categories`. NaN shows up as `-1`,
+    # which `ndt` would wrap into a huge cluster id, so reject it rather than let it index out of
+    # range.
     codes = original_clust.cat.codes.to_numpy()
     if (codes < 0).any():
         raise ValueError(f"Found `NaN` values in `adata.obs[{cluster_key!r}]`; every cell needs a cluster.")
@@ -389,6 +405,8 @@ def nhood_enrichment(
         valid_mask = np.ones(n_total_cells, dtype=bool)
     if library_key is not None:
         _assert_categorical_obs(adata, key=library_key)
+        if (adata.obs[library_key].cat.codes.to_numpy() < 0).any():
+            raise ValueError(f"Found `NaN` values in `adata.obs[{library_key!r}]`; every cell needs a library.")
         # subset to the kept cells so the per-cell series stays aligned with the filtered
         libraries: pd.Series | None = adata.obs[library_key].iloc[valid_mask].cat.remove_unused_categories()
     else:
@@ -400,7 +418,8 @@ def nhood_enrichment(
             f"{n_filtered / n_total_cells * 100:.3f}% of cells were excluded because their clusters "
             f"had fewer than {min_cell_count} cells.",
             UserWarning,
-            stacklevel=2,
+            # +2 for the `deprecated_randomness_param` and `deprecated_params` wrappers
+            stacklevel=4,
         )
 
     indices, indptr = (adj.indices.astype(ndt), adj.indptr.astype(ndt))
@@ -410,11 +429,13 @@ def nhood_enrichment(
 
     conditional_ratio = np.full((n_cls, n_cls), np.nan, dtype=np.float64)
 
+    # label permutation preserves cluster sizes, so this is a constant of the null
+    cluster_sizes = np.bincount(int_clust, minlength=n_cls).astype(np.float64)
+
     if normalization == "conditional":
         # one fused walk: this mode is the only one that needs the conditional denominator too
         count, cond_counts = _counts_and_conditional(indices, indptr, int_clust, n_cls)
 
-        cluster_sizes = np.bincount(int_clust, minlength=n_cls).astype(np.float64)
         nonempty = cluster_sizes > 0
         conditional_ratio[nonempty] = cond_counts[nonempty] / cluster_sizes[nonempty, None]
 
@@ -422,7 +443,7 @@ def nhood_enrichment(
     else:
         count = _nenrich(indices, indptr, int_clust, n_cls)
         if normalization == "total":
-            count_normalized = _normalize_total(count)
+            count_normalized = _normalize_total(count, cluster_sizes)
         else:  # "none"
             count_normalized = count.copy()
 
@@ -465,6 +486,7 @@ def nhood_enrichment(
                 group_indices,
                 n_cls,
                 norm_code,
+                cluster_sizes,
                 np.ascontiguousarray(count_normalized, dtype=np.float64),
                 generators,
                 progress,
@@ -475,13 +497,21 @@ def nhood_enrichment(
     # sums are exact, so converting here is a single deterministic rounding, not an accumulated one.
     n = float(n_perms)
     mean_d = sum_d / n
-    var = (sum_d2 - sum_d * mean_d) / n  # population variance, matching the previous ddof=0
+    var = (sum_d2 - sum_d * mean_d) / n  # population variance, i.e. ddof=0
     std = np.sqrt(np.maximum(var, 0.0))  # clamp: rounding can push an all-equal column just below 0
     std[std == 0] = np.nan
     zscore = -mean_d / std
 
     if handle_nan == "zero":
         zscore = np.nan_to_num(zscore, nan=0.0)
+
+    # `handle_nan` governs enrichments the permutation test leaves undefined. A cluster dropped by
+    # `min_cell_count` was never measured at all, so it stays NaN either way -- otherwise `'zero'`
+    # would render "excluded" and "no enrichment" as the same number.
+    dropped = cluster_sizes == 0
+    if dropped.any():
+        zscore[dropped, :] = np.nan
+        zscore[:, dropped] = np.nan
 
     result_kwargs = {"zscore": zscore, "count": count}
     if normalization == "conditional":
@@ -781,8 +811,8 @@ def _build_shuffle_groups(
     """Build a CSR-like ``(offsets, indices)`` description of the within-group shuffling.
 
     ``indices[offsets[g]:offsets[g + 1]]`` are the cell indices of group ``g`` in ascending order,
-    with groups in category order — matching the ``_ref_shuffle_group`` test oracle. Without a
-    ``library_key`` there is a single group spanning all cells, which reproduces a global shuffle.
+    with groups in category order. Without a ``library_key`` there is a single group spanning all
+    cells, which reproduces a global shuffle.
     """
     if libraries is None:
         return np.array([0, n_cells], dtype=np.int64), np.arange(n_cells, dtype=np.int64)

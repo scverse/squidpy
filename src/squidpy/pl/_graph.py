@@ -303,6 +303,7 @@ def nhood_enrichment_dotplot(
             stacklevel=2,
         )
         ccr = np.ones_like(zscore)
+        annotate = False  # the values are a placeholder; printing them would look like real data
 
     cats = list(adata.obs[cluster_key].cat.categories)
     # `DotPlot` reads its values from ``dot_color_df``/``dot_size_df``, so this stand-in only has to
@@ -351,7 +352,8 @@ def nhood_enrichment_dotplot(
     if dpi is not None:
         fig.set_dpi(dpi)
     if save is not None:
-        save_fig(fig, path=save)
+        # `set_dpi` is not honoured by `savefig`, so the saved file needs it passed through
+        save_fig(fig, path=save, **({} if dpi is None else {"dpi": dpi}))
 
 
 @d.dedent

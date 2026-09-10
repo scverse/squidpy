@@ -41,9 +41,8 @@ def _ref_shuffle_group(
 ) -> np.ndarray:
     """Shuffle ``cluster_annotation`` within each category of ``libraries``.
 
-    Lifted verbatim from ``squidpy.gr._utils._shuffle_group``, which the production code replaced
-    with ``_build_shuffle_groups`` + ``_shuffled_labels``. It lives here because its only remaining
-    job is to be the independent oracle those two are checked against.
+    An independent statement of within-group shuffling, deliberately sharing no code with
+    ``_build_shuffle_groups`` + ``_shuffled_labels``, which it exists to check.
     """
     cluster_annotation_output = np.empty(libraries.shape, dtype=cluster_annotation.dtype)
     for c in libraries.cat.categories:
@@ -65,10 +64,16 @@ def _ref_count(adj: csr_matrix, int_clust: np.ndarray, n_cls: int) -> np.ndarray
     return count
 
 
-def _ref_total(count: np.ndarray) -> np.ndarray:
-    row_sums = count.sum(axis=1, keepdims=True).astype(np.float64)
-    row_sums[row_sums == 0] = 1
-    return count / row_sums
+def _ref_total(count: np.ndarray, int_clust: np.ndarray, n_cls: int) -> np.ndarray:
+    """SEA: interactions between ``a`` and ``b`` divided by the number of cells of type ``a``.
+
+    Counted straight from ``int_clust`` rather than from ``count``, so this stays an independent
+    statement of the definition -- dividing by the row sum of ``count`` would merely restate the
+    implementation and could not catch a wrong denominator.
+    """
+    sizes = np.array([(int_clust == a).sum() for a in range(n_cls)], dtype=np.float64)
+    sizes[sizes == 0] = 1.0
+    return count / sizes[:, None]
 
 
 def _ref_conditional(adj: csr_matrix, int_clust: np.ndarray, n_cls: int) -> tuple[np.ndarray, np.ndarray]:
@@ -104,7 +109,7 @@ def _ref_normalize(adj: csr_matrix, int_clust: np.ndarray, n_cls: int, normaliza
     if normalization == "none":
         return count.astype(np.float64)
     if normalization == "total":
-        return _ref_total(count)
+        return _ref_total(count, int_clust, n_cls)
     if normalization == "conditional":
         return _ref_conditional(adj, int_clust, n_cls)[0]
     raise ValueError(normalization)
@@ -238,21 +243,14 @@ def test_conditional_ratio_matches_reference_tiny(adata_tiny: AnnData):
 
     result = nhood_enrichment(adata_tiny, cluster_key=_CK, normalization="conditional", n_perms=20, rng=0, copy=True)
     np.testing.assert_allclose(result.conditional_ratio, expected_ratio)
+    # a fraction of cells, so bounded -- checked here rather than as its own test, since it follows
+    assert np.all((result.conditional_ratio >= 0) & (result.conditional_ratio <= 1))
 
 
-def test_conditional_ratio_is_a_fraction(adata_tiny: AnnData):
-    """Conditional ratios are fractions of cells, so they live in ``[0, 1]``."""
-    result = nhood_enrichment(adata_tiny, cluster_key=_CK, normalization="conditional", n_perms=20, rng=0, copy=True)
-    ratio = result.conditional_ratio
-    assert np.all((ratio >= 0) & (ratio <= 1))
-
-
-def test_conditional_ratio_none_for_other_modes(adata_tiny: AnnData):
-    for normalization in ("none", "total"):
-        result = nhood_enrichment(
-            adata_tiny, cluster_key=_CK, normalization=normalization, n_perms=20, rng=0, copy=True
-        )
-        assert result.conditional_ratio is None
+@pytest.mark.parametrize("normalization", ["none", "total"])
+def test_conditional_ratio_none_for_other_modes(adata_tiny: AnnData, normalization: str):
+    result = nhood_enrichment(adata_tiny, cluster_key=_CK, normalization=normalization, n_perms=20, rng=0, copy=True)
+    assert result.conditional_ratio is None
 
 
 # --------------------------------------------------------------------------- #
@@ -396,17 +394,18 @@ def test_zscore_library_key_with_min_cell_count(normalization: str, n_jobs: int)
     )
 
     min_cell_count, rng, n_perms = 2, 0, 50
-    result = nhood_enrichment(
-        adata,
-        cluster_key=_CK,
-        library_key="library",
-        normalization=normalization,
-        min_cell_count=min_cell_count,
-        n_perms=n_perms,
-        rng=rng,
-        n_jobs=n_jobs,
-        copy=True,
-    )
+    with pytest.warns(UserWarning, match="were excluded"):
+        result = nhood_enrichment(
+            adata,
+            cluster_key=_CK,
+            library_key="library",
+            normalization=normalization,
+            min_cell_count=min_cell_count,
+            n_perms=n_perms,
+            rng=rng,
+            n_jobs=n_jobs,
+            copy=True,
+        )
 
     # Replicate the production filtering: drop cells of clusters below ``min_cell_count``,
     # keeping the full category count (``n_cls = 3``) and the filtered per-cell arrays aligned.

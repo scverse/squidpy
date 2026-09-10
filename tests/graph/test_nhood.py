@@ -33,23 +33,6 @@ class TestNhoodEnrichment:
 
         self._assert_common(adata)
 
-    @pytest.mark.parametrize("backend", ["threading", "multiprocessing", "loky"])
-    def test_backend_is_deprecated(self, adata: AnnData, backend: str):
-        spatial_neighbors_grid(adata)
-
-        with pytest.warns(FutureWarning, match=r"`backend`.*is deprecated"):
-            nhood_enrichment(adata, cluster_key=_CK, n_jobs=2, n_perms=20, backend=backend)
-
-        self._assert_common(adata)
-
-    def test_numba_parallel_is_deprecated(self, adata: AnnData):
-        spatial_neighbors_grid(adata)
-
-        with pytest.warns(FutureWarning, match=r"`numba_parallel`.*is deprecated"):
-            nhood_enrichment(adata, cluster_key=_CK, n_perms=20, numba_parallel=True)
-
-        self._assert_common(adata)
-
     @pytest.mark.parametrize("param", ["numba_parallel", "backend"])
     def test_deprecated_params_are_ignored(self, adata: AnnData, param: str):
         """A deprecated argument is stripped before the call, so it cannot change the result."""
@@ -125,7 +108,7 @@ def test_centrality_scores(nhood_data: AnnData):
 
     key = Key.uns.centrality_scores(_CK)
 
-    assert key in adata.uns_keys()
+    assert key in adata.uns
     assert isinstance(adata.uns[key], pd.DataFrame)
     assert len(adata.obs[_CK].unique()) == adata.uns[key].shape[0]
     assert adata.uns[key]["degree_centrality"].dtype == np.dtype("float64")
@@ -165,10 +148,10 @@ def test_interaction_matrix_copy(nhood_data: AnnData, copy: bool):
 
     if not copy:
         assert res is None
-        assert key in adata.uns_keys()
+        assert key in adata.uns
         res = adata.uns[key]
     else:
-        assert key not in adata.uns_keys()
+        assert key not in adata.uns
 
     assert isinstance(res, np.ndarray)
     assert res.shape == (n_cls, n_cls)
@@ -255,12 +238,6 @@ def test_conditional_normalization_zero_division(adata: AnnData):
     assert not np.isnan(conditional_ratio[np.ix_(valid_idx, valid_idx)]).any()
 
 
-def test_invalid_normalization_raises(adata: AnnData):
-    spatial_neighbors_grid(adata)
-    with pytest.raises(ValueError, match="Invalid normalization mode"):
-        nhood_enrichment(adata, cluster_key=_CK, normalization="invalid_mode", copy=True)
-
-
 def _asymmetric_adata(n: int = 200, n_cls: int = 4) -> AnnData:
     """An adata whose connectivity is deliberately asymmetric, so a transpose is visible."""
     rng = np.random.default_rng(0)
@@ -280,22 +257,169 @@ def _asymmetric_adata(n: int = 200, n_cls: int = 4) -> AnnData:
     return adata
 
 
-def test_csc_connectivity_is_not_silently_transposed():
+@pytest.mark.parametrize(
+    "convert",
+    [sp.csr_matrix, sp.csr_array, sp.csc_matrix, sp.csc_array],
+    ids=["csr_matrix", "csr_array", "csc_matrix", "csc_array"],
+)
+def test_sparse_formats_agree(convert):
     """CSC exposes ``indices``/``indptr`` too, but column-wise -- it must not yield the transpose."""
     adata = _asymmetric_adata()
     kw = {"cluster_key": _CK, "n_perms": 5, "rng": 0, "n_jobs": 1, "copy": True}
+    reference = nhood_enrichment(adata, **kw)
+    assert not np.array_equal(reference.counts, reference.counts.T), "asymmetry must reach the counts"
 
-    from_csr = nhood_enrichment(adata, **kw)
-    adata.obsp[Key.obsp.spatial_conn()] = adata.obsp[Key.obsp.spatial_conn()].tocsc()
-    from_csc = nhood_enrichment(adata, **kw)
-
-    np.testing.assert_array_equal(from_csc.counts, from_csr.counts)
-    assert not np.array_equal(from_csr.counts, from_csr.counts.T), "asymmetry should survive into the counts"
+    adata.obsp[Key.obsp.spatial_conn()] = convert(adata.obsp[Key.obsp.spatial_conn()])
+    np.testing.assert_array_equal(nhood_enrichment(adata, **kw).counts, reference.counts)
 
 
-def test_dense_connectivity_raises():
+@pytest.mark.parametrize("densify", [np.asarray, np.asmatrix], ids=["ndarray", "matrix"])
+def test_dense_connectivity_raises(densify):
     """A dense ``obsp`` has no ``indices``/``indptr``; refuse it instead of densifying or crashing."""
     adata = _asymmetric_adata()
-    adata.obsp[Key.obsp.spatial_conn()] = adata.obsp[Key.obsp.spatial_conn()].toarray()
-    with pytest.raises(TypeError, match=r"to be a sparse matrix, found `ndarray`"):
+    adata.obsp[Key.obsp.spatial_conn()] = densify(adata.obsp[Key.obsp.spatial_conn()].toarray())
+    with pytest.raises(TypeError, match=r"to be a sparse matrix, found"):
         nhood_enrichment(adata, cluster_key=_CK, n_perms=5, rng=0, copy=True)
+
+
+def _nan_cluster(adata: AnnData) -> None:
+    adata.obs[_CK] = adata.obs[_CK].cat.add_categories("tmp")
+    adata.obs.loc[adata.obs.index[0], _CK] = "tmp"
+    adata.obs[_CK] = adata.obs[_CK].replace("tmp", np.nan).astype("category")
+
+
+def _one_cluster(adata: AnnData) -> None:
+    adata.obs[_CK] = pd.Categorical(["only"] * adata.n_obs)
+
+
+@pytest.mark.parametrize(
+    ("mutate", "kwargs", "match"),
+    [
+        (None, {"handle_nan": "nonsense"}, "Invalid `handle_nan` mode"),
+        (None, {"normalization": "invalid_mode"}, "Invalid normalization mode"),
+        (_nan_cluster, {}, "Found `NaN` values"),
+        (_one_cluster, {}, "Expected at least `2` clusters"),
+    ],
+    ids=["handle_nan", "normalization", "nan_cluster", "one_cluster"],
+)
+def test_nhood_enrichment_rejects(adata: AnnData, mutate, kwargs, match: str):
+    adata = adata.copy()
+    spatial_neighbors_grid(adata)
+    if mutate is not None:
+        mutate(adata)
+
+    with pytest.raises(ValueError, match=match):
+        nhood_enrichment(adata, cluster_key=_CK, n_perms=5, copy=True, **kwargs)
+
+
+def test_handle_nan_zero_replaces_undefined_zscores(adata: AnnData):
+    """``'keep'`` leaves undefined enrichments as NaN; ``'zero'`` replaces them and nothing else."""
+    spatial_neighbors_grid(adata)
+    kw = {"cluster_key": _CK, "n_perms": 20, "rng": 0, "copy": True}
+
+    kept = nhood_enrichment(adata, handle_nan="keep", **kw)
+    assert np.isnan(kept.zscore).any(), "fixture should produce at least one undefined z-score"
+
+    zeroed = nhood_enrichment(adata, handle_nan="zero", **kw)
+    assert not np.isnan(zeroed.zscore).any()
+    defined = ~np.isnan(kept.zscore)
+    np.testing.assert_array_equal(zeroed.zscore[defined], kept.zscore[defined])
+
+
+def test_interaction_matrix_all_nan_raises(adata: AnnData):
+    adata = adata.copy()
+    spatial_neighbors_grid(adata)
+    adata.obs[_CK] = pd.Categorical([np.nan] * adata.n_obs, categories=["a", "b"])
+
+    with pytest.raises(RuntimeError, match="none remain"):
+        interaction_matrix(adata, cluster_key=_CK, copy=True)
+
+
+@pytest.mark.parametrize("show_progress_bar", [False, True])
+def test_centrality_scores_single_score(nhood_data: AnnData, show_progress_bar: bool):
+    """A bare string selects one measure; ``show_progress_bar`` is what builds parallelize's queue."""
+    df = centrality_scores(
+        nhood_data, cluster_key=_CK, score="degree_centrality", show_progress_bar=show_progress_bar, copy=True
+    )
+    assert list(df.columns) == ["degree_centrality"]
+
+
+def test_duplicate_entries_count_once():
+    """scipy defines a repeated ``(i, j)`` as one edge whose value is the sum, not two edges."""
+    adj = sp.csr_matrix((np.array([1.0, 1.0, 1.0, 1.0]), np.array([1, 1, 2, 0]), np.array([0, 3, 4, 4])), shape=(3, 3))
+    before = (adj.nnz, adj.indices.copy(), adj.data.copy())
+    adata = AnnData(
+        np.zeros((3, 1), dtype=np.float32),
+        obs=pd.DataFrame({_CK: pd.Categorical(["a", "b", "b"], categories=["a", "b"])}, index=list("xyz")),
+        obsp={Key.obsp.spatial_conn(): adj},
+    )
+
+    result = nhood_enrichment(adata, cluster_key=_CK, n_perms=5, rng=0, copy=True)
+    np.testing.assert_array_equal(result.counts, [[0, 2], [1, 0]])
+
+    # canonicalizing must happen on a copy: `count_nonzero()` would have summed these in place
+    stored = adata.obsp[Key.obsp.spatial_conn()]
+    assert (stored.nnz, stored.indices.tolist(), stored.data.tolist()) == (
+        before[0],
+        before[1].tolist(),
+        before[2].tolist(),
+    )
+
+
+def test_stored_zeros_are_not_edges():
+    """Pruning a graph in place leaves explicit zeros behind; they must not count as neighbors."""
+    adata = _asymmetric_adata(n=120, n_cls=3)
+    adj = adata.obsp[Key.obsp.spatial_conn()].copy()
+
+    rng = np.random.default_rng(0)
+    adj.data[rng.random(adj.nnz) < 0.4] = 0.0  # prune, sparse-safe: structure and nnz unchanged
+    adata.obsp[Key.obsp.spatial_conn()] = adj
+    assert adj.nnz != adj.count_nonzero(), "the fixture must actually contain stored zeros"
+
+    pruned = adj.copy()
+    pruned.eliminate_zeros()
+    expected = adata.copy()
+    expected.obsp[Key.obsp.spatial_conn()] = pruned
+
+    kw = {"cluster_key": _CK, "n_perms": 20, "rng": 0, "n_jobs": 1, "copy": True}
+    np.testing.assert_array_equal(nhood_enrichment(adata, **kw).counts, nhood_enrichment(expected, **kw).counts)
+    # and the caller's matrix is left as they gave it
+    assert adata.obsp[Key.obsp.spatial_conn()].nnz == adj.nnz
+
+
+def test_nan_library_key_raises():
+    adata = _asymmetric_adata(n=60, n_cls=3)
+    adata.obs["lib"] = pd.Categorical([np.nan] + ["s1"] * (adata.n_obs - 1), categories=["s1"])
+
+    with pytest.raises(ValueError, match="Found `NaN` values"):
+        nhood_enrichment(adata, cluster_key=_CK, library_key="lib", n_perms=5, copy=True)
+
+
+@pytest.mark.parametrize("handle_nan", ["keep", "zero"])
+def test_min_cell_count_excludes_clusters(adata: AnnData, handle_nan: str):
+    """Dropped clusters are excluded, not measured: NaN whatever ``handle_nan`` says, and the
+    clusters that survive must see exactly the graph they would if the dropped cells never existed.
+    """
+    adata = adata.copy()
+    spatial_neighbors_grid(adata)
+    cats = list(adata.obs[_CK].cat.categories)
+    sizes = adata.obs[_CK].value_counts()
+    threshold = 10
+
+    dropped = [i for i, c in enumerate(cats) if sizes[c] < threshold]
+    kept = [i for i, c in enumerate(cats) if sizes[c] >= threshold]
+    assert dropped and len(kept) >= 2, f"fixture needs both sides of the threshold: {sizes.to_dict()}"
+
+    with pytest.warns(UserWarning, match="were excluded"):
+        got = nhood_enrichment(
+            adata, cluster_key=_CK, min_cell_count=threshold, handle_nan=handle_nan, n_perms=20, rng=0, copy=True
+        )
+
+    for i in dropped:
+        assert np.isnan(got.zscore[i, :]).all() and np.isnan(got.zscore[:, i]).all()
+        assert (got.counts[i, :] == 0).all() and (got.counts[:, i] == 0).all()
+
+    subset = adata[adata.obs[_CK].isin([cats[i] for i in kept])].copy()
+    subset.obs[_CK] = subset.obs[_CK].cat.remove_unused_categories()
+    expected = nhood_enrichment(subset, cluster_key=_CK, n_perms=20, rng=0, copy=True)
+    np.testing.assert_array_equal(got.counts[np.ix_(kept, kept)], expected.counts)
