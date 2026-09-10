@@ -252,6 +252,28 @@ _niche_common_params = f"""\
 {_niche_mask}
 {_library_key}
 {_copy}"""
+_nhood_feature_args = """\
+groups
+    Column in :attr:`~anndata.AnnData.obs` whose categories are counted in each
+    neighborhood -- cell types, typically. Mutually exclusive with *use_rep* and *layer*;
+    the features default to :attr:`~anndata.AnnData.X`.
+use_rep
+    Key in :attr:`~anndata.AnnData.obsm` holding the features to aggregate.
+layer
+    Key in :attr:`~anndata.AnnData.layers` holding the features to aggregate.
+connectivity_key
+    Key in :attr:`~anndata.AnnData.obsp` holding the spatial graph.
+hops
+    Which neighborhood hops to use. ``0`` is the observation itself, and contributes its
+    own features unaggregated.
+hop_mode
+    ``'power'`` takes matrix powers of the graph, so hop *k* counts every walk of length
+    *k* and a cell reachable by several short paths contributes more. ``'shell'``
+    subtracts what nearer hops already reached, so the hops are disjoint rings.
+aggregation
+    How the neighbors' features are combined: ``'mean'``, ``'sum'`` (counts), or the
+    ``'variance'`` over the neighborhood."""
+
 _niche_leiden_backend = """\
 flavor
     Leiden backend passed to :func:`scanpy.tl.leiden`. Defaults to ``'igraph'``
@@ -521,6 +543,7 @@ d = DocstringProcessor(
     niche_min_niche_size=_niche_min_niche_size,
     niche_common_params=_niche_common_params,
     niche_leiden_params=_niche_leiden_params,
+    nhood_feature_args=_nhood_feature_args,
     niche_leiden_backend=_niche_leiden_backend,
     sdata_params=_sdata_params,
     graph_common_params=_graph_common_params,

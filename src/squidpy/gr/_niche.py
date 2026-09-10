@@ -22,7 +22,7 @@ from squidpy._utils import RNGLike, SeedLike, deprecated_randomness_param, legac
 from squidpy._validators import assert_isinstance, assert_key_in_adata, assert_one_of
 from squidpy.gr._autok import _gmm, check_model_params
 from squidpy.gr._clusterers import _AutoKClusterer, _LeidenClusterer
-from squidpy.gr._nhood import _nhood_aggregate
+from squidpy.gr._nhood import _nhood_aggregate, _nhood_concat
 from squidpy.gr._utils import extract_adata_if_sdata
 from squidpy.types import Clusterer, SweepableClusterer
 
@@ -1208,8 +1208,6 @@ def _nhood_profile_embedding(
         # every hop counts walks of every length up to it, and the hops are summed into one
         # profile rather than concatenated
         hops=range(1, distance + 1),
-        hop_mode="power",
-        combine="sum",
         hop_weights=n_hop_weights,
         aggregation="sum" if abs_nhood else "mean",
     )
@@ -1238,14 +1236,12 @@ def _cellcharter_embedding(
     Adapted from https://github.com/CSOgroup/cellcharter/blob/main/src/cellcharter/gr/_aggr.py
     and https://github.com/CSOgroup/cellcharter/blob/main/src/cellcharter/tl/_gmm.py
     """
-    aggregated = _nhood_aggregate(
+    # hop 0 is the observation's own counts; the rings are disjoint, and each keeps its
+    # own columns
+    aggregated = _nhood_concat(
         adata,
         connectivity_key=spatial_connectivities_key,
-        # hop 0 is the observation's own counts; the rings are disjoint, and are concatenated
-        # so that each keeps its own columns
         hops=range(distance + 1),
-        hop_mode="shell",
-        combine="concat",
         aggregation=aggregation,
     )
     return sc.tl.pca(aggregated, random_state=legacy_random(rng))

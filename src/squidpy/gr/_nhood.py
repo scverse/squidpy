@@ -43,7 +43,14 @@ from squidpy.gr._utils import (
     extract_adata_if_sdata,
 )
 
-__all__ = ["nhood_enrichment", "centrality_scores", "interaction_matrix", "nhood_entropy", "nhood_aggregate"]
+__all__ = [
+    "nhood_enrichment",
+    "centrality_scores",
+    "interaction_matrix",
+    "nhood_entropy",
+    "nhood_aggregate",
+    "nhood_concat",
+]
 
 
 class NhoodEnrichmentResult(NamedTuple):
@@ -742,7 +749,7 @@ def _nhood_features(
     return adata.X, None
 
 
-def _nhood_aggregate(
+def _nhood_blocks(
     adata: AnnData,
     *,
     groups: str | None = None,
@@ -751,11 +758,9 @@ def _nhood_aggregate(
     connectivity_key: str = Key.obsp.spatial_conn(),
     hops: Sequence[int] = (1,),
     hop_mode: Literal["power", "shell"] = "power",
-    combine: Literal["concat", "sum"] = "concat",
-    hop_weights: Sequence[float] | None = None,
     aggregation: Literal["mean", "sum", "variance"] = "mean",
-) -> NDArrayA:
-    """The aggregated matrix, without touching *adata*. See :func:`nhood_aggregate`."""
+) -> list[Any]:
+    """One aggregated block per requested hop, in the order given."""
     _assert_connectivity_key(adata, connectivity_key)
     if not len(hops):
         raise ValueError("'hops' must name at least one hop")
@@ -771,18 +776,29 @@ def _nhood_aggregate(
         by_hop = {hop: adj if adj is None else (adj @ keep).tocsr() for hop, adj in by_hop.items()}
     # hop 0 is the observation itself, so it contributes the features unaggregated -- which
     # is what makes `variance` over it 0 rather than meaningful
-    blocks = [features if hop == 0 else _aggregate_over(by_hop[hop], features, aggregation) for hop in hops]
+    return [features if hop == 0 else _aggregate_over(by_hop[hop], features, aggregation) for hop in hops]
 
-    if combine == "concat":
-        return np.hstack([to_dense(block) for block in blocks])
-    if combine != "sum":
-        raise ValueError(f"'combine' must be 'concat' or 'sum', got {combine!r}")
 
+def _nhood_aggregate(
+    adata: AnnData,
+    *,
+    hop_weights: Sequence[float] | None = None,
+    hop_mode: Literal["power", "shell"] = "power",
+    aggregation: Literal["mean", "sum", "variance"] = "mean",
+    **kwargs: Any,
+) -> NDArrayA:
+    """The summed matrix, without touching *adata*. See :func:`nhood_aggregate`."""
+    blocks = _nhood_blocks(adata, hop_mode=hop_mode, aggregation=aggregation, **kwargs)
     weights = _resolve_hop_weights(hop_weights, len(blocks))
     total = sum(weight * to_dense(block) for weight, block in zip(weights, blocks, strict=True))
     # a weighted mean over the hops, so the scale does not depend on how many there are.
     # `sum` is counts, which are meant to stay counts.
     return total if aggregation == "sum" else total / sum(weights)
+
+
+def _nhood_concat(adata: AnnData, *, hop_mode: Literal["power", "shell"] = "shell", **kwargs: Any) -> NDArrayA:
+    """The concatenated matrix, without touching *adata*. See :func:`nhood_concat`."""
+    return np.hstack([to_dense(block) for block in _nhood_blocks(adata, hop_mode=hop_mode, **kwargs)])
 
 
 @d.dedent
@@ -795,51 +811,27 @@ def nhood_aggregate(
     connectivity_key: str = Key.obsp.spatial_conn(),
     hops: Sequence[int] = (1,),
     hop_mode: Literal["power", "shell"] = "power",
-    combine: Literal["concat", "sum"] = "concat",
-    hop_weights: Sequence[float] | None = None,
     aggregation: Literal["mean", "sum", "variance"] = "mean",
+    hop_weights: Sequence[float] | None = None,
     key_added: str = "X_nhood",
     copy: bool = False,
     table_key: str | None = None,
 ) -> AnnData | None:
-    """Summarise each observation's spatial neighborhood into a feature matrix.
+    """Summarise each observation's spatial neighborhood into one block of features.
 
-    The step every niche-calling method starts from: what is around an observation,
-    expressed as numbers it can be clustered on. The flavors of
-    :func:`~squidpy.gr.calculate_niche` differ in how they answer that, and each is a
-    choice of the arguments below.
+    The hops are summed into a single block of the same width as the features. Weighting
+    them by distance is what *hop_weights* is for, and why *hop_mode* defaults to
+    ``'power'``: a cell reachable by several short paths then contributes more.
+
+    Use :func:`~squidpy.gr.nhood_concat` to keep the hops as separate columns instead.
 
     Parameters
     ----------
     %(adata)s
     %(table_key)s
-    groups
-        Column in :attr:`~anndata.AnnData.obs` whose categories are counted in each
-        neighborhood -- cell types, typically. Mutually exclusive with *use_rep* and
-        *layer*; the features default to :attr:`~anndata.AnnData.X`.
-    use_rep
-        Key in :attr:`~anndata.AnnData.obsm` holding the features to aggregate.
-    layer
-        Key in :attr:`~anndata.AnnData.layers` holding the features to aggregate.
-    connectivity_key
-        Key in :attr:`~anndata.AnnData.obsp` holding the spatial graph.
-    hops
-        Which neighborhood hops to aggregate. ``0`` is the observation itself, and
-        contributes its own features unaggregated.
-    hop_mode
-        ``'power'`` takes matrix powers of the graph, so hop *k* counts every walk of
-        length *k*. ``'shell'`` subtracts what nearer hops already reached, so the hops are
-        disjoint rings.
-    combine
-        ``'concat'`` puts the hops side by side, giving one block of columns each;
-        ``'sum'`` adds them into one block, weighted by *hop_weights*.
+    %(nhood_feature_args)s
     hop_weights
-        One weight per hop for ``combine='sum'``. A short list is padded with its last
-        value, and defaults to equal weights.
-    aggregation
-        How the neighbors' features are combined: ``'mean'``, ``'sum'`` (counts), or the
-        ``'variance'`` over the neighborhood. With *groups*, ``'mean'`` is each category's
-        share of the neighborhood and ``'sum'`` its raw count.
+        One weight per hop. Defaults to equal weights.
     key_added
         Key in :attr:`~anndata.AnnData.obsm` to write the matrix to.
     %(copy)s
@@ -849,20 +841,18 @@ def nhood_aggregate(
     If ``copy = True``, returns a copy of ``adata``. Otherwise, modifies the ``adata``
     with the following key:
 
-        - :attr:`anndata.AnnData.obsm` ``['{key_added}']`` - the aggregated matrix, one
-          row per observation.
+        - :attr:`anndata.AnnData.obsm` ``['{key_added}']`` - the aggregated matrix, of
+          shape ``(n_obs, n_features)``.
 
     Notes
     -----
-    The three built-in niche flavors are each one call of this function followed by a
-    scaling step:
+    Two of the three niche flavors are one call of this followed by a scaling step:
+    ``neighborhood`` is ``groups=...``, ``hops=range(1, k + 1)`` then
+    :func:`~scanpy.pp.scale`; ``utag`` is the defaults then :func:`~scanpy.tl.pca`.
 
-    - ``neighborhood``: ``groups=...``, ``hops=range(1, k + 1)``, ``combine='sum'``,
-      then :func:`~scanpy.pp.scale`.
-    - ``utag``: the defaults, then :func:`~scanpy.tl.pca`.
-    - ``cellcharter``: ``hops=range(0, k + 1)``, ``hop_mode='shell'``, then
-      :func:`~scanpy.tl.pca`.
-
+    See Also
+    --------
+    nhood_concat : The same aggregation, with the hops side by side.
     """
     adata = extract_adata_if_sdata(data, table_key=table_key)
     adata = adata.copy() if copy else adata
@@ -876,9 +866,75 @@ def nhood_aggregate(
         connectivity_key=connectivity_key,
         hops=hops,
         hop_mode=hop_mode,
-        combine=combine,
-        hop_weights=hop_weights,
         aggregation=aggregation,
+        hop_weights=hop_weights,
     )
     _save_data(adata, attr="obsm", key=key_added, data=aggregated, time=start)
+    return adata if copy else None
+
+
+@d.dedent
+def nhood_concat(
+    data: AnnData | SpatialData,
+    *,
+    groups: str | None = None,
+    use_rep: str | None = None,
+    layer: str | None = None,
+    connectivity_key: str = Key.obsp.spatial_conn(),
+    hops: Sequence[int] = (1,),
+    hop_mode: Literal["power", "shell"] = "shell",
+    aggregation: Literal["mean", "sum", "variance"] = "mean",
+    key_added: str = "X_nhood",
+    copy: bool = False,
+    table_key: str | None = None,
+) -> AnnData | None:
+    """Summarise each observation's spatial neighborhood, one block of features per hop.
+
+    The hops are placed side by side, so each keeps its own columns and describes its own
+    spatial scale. That is why *hop_mode* defaults to ``'shell'``: overlapping hops would
+    make each block partly restate the one before it.
+
+    Use :func:`~squidpy.gr.nhood_aggregate` to sum the hops into one block instead.
+
+    Parameters
+    ----------
+    %(adata)s
+    %(table_key)s
+    %(nhood_feature_args)s
+    key_added
+        Key in :attr:`~anndata.AnnData.obsm` to write the matrix to.
+    %(copy)s
+
+    Returns
+    -------
+    If ``copy = True``, returns a copy of ``adata``. Otherwise, modifies the ``adata``
+    with the following key:
+
+        - :attr:`anndata.AnnData.obsm` ``['{key_added}']`` - the concatenated matrix, of
+          shape ``(n_obs, n_features * len(hops))``.
+
+    Notes
+    -----
+    The ``cellcharter`` niche flavor is one call of this -- ``hops=range(0, k + 1)``,
+    keeping the observation's own features as hop 0 -- followed by :func:`~scanpy.tl.pca`.
+
+    See Also
+    --------
+    nhood_aggregate : The same aggregation, summed into one block.
+    """
+    adata = extract_adata_if_sdata(data, table_key=table_key)
+    adata = adata.copy() if copy else adata
+
+    start = logg.info(f"Concatenating neighborhoods over hops `{list(hops)}`")
+    concatenated = _nhood_concat(
+        adata,
+        groups=groups,
+        use_rep=use_rep,
+        layer=layer,
+        connectivity_key=connectivity_key,
+        hops=hops,
+        hop_mode=hop_mode,
+        aggregation=aggregation,
+    )
+    _save_data(adata, attr="obsm", key=key_added, data=concatenated, time=start)
     return adata if copy else None

@@ -19,7 +19,6 @@ from squidpy.gr._nhood import (
     NhoodEnrichmentResult,
     centrality_scores,
     interaction_matrix,
-    nhood_aggregate,
     nhood_enrichment,
     nhood_entropy,
 )
@@ -58,7 +57,6 @@ __all__ = [
     "centrality_scores",
     "interaction_matrix",
     "nhood_enrichment",
-    "nhood_aggregate",
     "nhood_entropy",
     "co_occurrence",
     "spatial_autocorr",

@@ -14,13 +14,18 @@ from squidpy.gr import (
     _niche,
     centrality_scores,
     interaction_matrix,
-    nhood_aggregate,
     nhood_enrichment,
     nhood_entropy,
     spatial_neighbors_grid,
     spatial_neighbors_knn,
 )
-from squidpy.gr._nhood import _hop_adjacencies, _nhood_aggregate, _nhood_profile
+from squidpy.gr._nhood import (
+    _hop_adjacencies,
+    _nhood_aggregate,
+    _nhood_concat,
+    _nhood_profile,
+    nhood_aggregate,
+)
 
 _CK = "leiden"
 
@@ -266,8 +271,6 @@ def test_nhood_aggregate_derives_the_neighborhood_profile(
         aggregate_adata,
         groups="celltype",
         hops=range(1, distance + 1),
-        hop_mode="power",
-        combine="sum",
         hop_weights=hop_weights,
         aggregation="sum" if abs_nhood else "mean",
     )
@@ -283,9 +286,7 @@ def test_nhood_aggregate_derives_utag(aggregate_adata: AnnData):
 @pytest.mark.parametrize(("distance", "aggregation"), [(1, "mean"), (3, "mean"), (2, "variance")])
 def test_nhood_aggregate_derives_cellcharter(aggregate_adata: AnnData, distance: int, aggregation: str):
     """Disjoint hop rings, concatenated, with the observation's own features as hop 0."""
-    got = _nhood_aggregate(
-        aggregate_adata, hops=range(distance + 1), hop_mode="shell", combine="concat", aggregation=aggregation
-    )
+    got = _nhood_concat(aggregate_adata, hops=range(distance + 1), aggregation=aggregation)
     assert got.shape == (aggregate_adata.n_obs, aggregate_adata.n_vars * (distance + 1))
     # hop 0 is the features themselves, not an aggregate of them
     np.testing.assert_allclose(got[:, : aggregate_adata.n_vars], aggregate_adata.X)
@@ -305,15 +306,13 @@ def test_nhood_aggregate_warns_on_short_hop_weights(aggregate_adata: AnnData, ca
     """A short list is more likely a mistake than an intention; see scverse/squidpy#1277."""
     # scanpy's logger needs pointing at the captured stream, as in `test_ligrec.py`
     settings.logfile = sys.stderr
-    _nhood_aggregate(aggregate_adata, groups="celltype", hops=(1, 2, 3), combine="sum", hop_weights=[1.0])
+    _nhood_aggregate(aggregate_adata, groups="celltype", hops=(1, 2, 3), hop_weights=[1.0])
     assert "padding with 1.0" in capsys.readouterr().err
 
 
 def test_nhood_aggregate_rejects_too_many_hop_weights(aggregate_adata: AnnData):
     with pytest.raises(ValueError, match=r"'hop_weights' has 4 values but there are 2 hops"):
-        _nhood_aggregate(
-            aggregate_adata, groups="celltype", hops=(1, 2), combine="sum", hop_weights=[1.0, 1.0, 1.0, 1.0]
-        )
+        _nhood_aggregate(aggregate_adata, groups="celltype", hops=(1, 2), hop_weights=[1.0, 1.0, 1.0, 1.0])
 
 
 def test_nhood_aggregate_excludes_unassigned_neighbours(aggregate_adata: AnnData):
@@ -345,7 +344,7 @@ def test_nhood_aggregate_masks_after_expanding_the_hops(aggregate_adata: AnnData
     adj = aggregate_adata.obsp["spatial_connectivities"]
 
     hops = (1, 2, 3)
-    got = _nhood_aggregate(aggregate_adata, groups="celltype", hops=hops, hop_mode="power", combine="sum")
+    got = _nhood_aggregate(aggregate_adata, groups="celltype", hops=hops)
     by_hop = _hop_adjacencies(adj, hops, "power")
     expected = sum(_nhood_profile(labels, by_hop[hop], normalize=True).to_numpy() for hop in hops) / len(hops)
     np.testing.assert_allclose(got, expected)
