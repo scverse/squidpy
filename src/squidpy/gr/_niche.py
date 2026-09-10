@@ -613,7 +613,13 @@ def calculate_niche_cellcharter(
 
     """
 
-    embedder = _CellcharterEmbedder(distance, aggregation, spatial_connectivities_key, n_components, use_rep)
+    if use_rep is not None:
+        embedder = _PrecomputedEmbedder(use_rep)
+    else:
+        logg.warning(
+            "CellCharter recommends to use a dimensionality reduced embedding of the data, e.g. a scVI embedding. Since 'use_rep' is not provided, PCA will be used as proxy - performance may be suboptimal."
+        )
+        embedder = _NHopPCAEmbedder(distance, aggregation, spatial_connectivities_key, n_components, use_rep)
 
     clusterer = _GMMClusterer(n_components, np.random.default_rng(rng), base_colname="cellcharter_niche")
 
@@ -1429,11 +1435,27 @@ class _UtagEmbedder(_NicheEmbedder):
         return pca
 
 
+@d.dedent
+class _PrecomputedEmbedder(_NicheEmbedder):
+    """
+    Placeholder embedder to use when a precomputed embedding already exists
+    """
+
+    def __init__(self, obsm_key: str):
+        self.obsm_key = obsm_key
+
+    def get_embedding(self, adata: AnnData) -> NDArrayA:
+        # Use provided embedding from adata.obsm
+        assert_key_in_adata(adata, self.obsm_key, attr="obsm")
+        embedding = adata.obsm[self.obsm_key]
+        return embedding
+
+
 # TODO: This function requires some work later on. Right now keeping the implementation just like how
 # it was before the refactor, and in that case, when use_rep was provided, then it simply returned
 # that as the embedding, so no cellcharter algorithm used in that case
 @d.dedent
-class _CellcharterEmbedder(_NicheEmbedder):
+class _NHopPCAEmbedder(_NicheEmbedder):
     """Compute a CellCharter-style embedding from spatially aggregated features.
 
     The embedding can either be derived from a precomputed representation in
@@ -1484,33 +1506,18 @@ class _CellcharterEmbedder(_NicheEmbedder):
         """adapted from https://github.com/CSOgroup/cellcharter/blob/main/src/cellcharter/gr/_aggr.py
         and https://github.com/CSOgroup/cellcharter/blob/main/src/cellcharter/tl/_gmm.py"""
 
-        if self.use_rep is not None:
-            # Use provided embedding from adata.obsm
-            assert_key_in_adata(adata, self.use_rep, attr="obsm")
-            embedding = adata.obsm[self.use_rep]
-            # Ensure embedding has the right number of components
-            if embedding.shape[1] < self.n_components:
-                raise ValueError(
-                    f"Embedding has {embedding.shape[1]} components, but n_components={self.n_components}. Please provide an embedding with at least {self.n_components} components."
-                )
-            # Use only the first n_components
-            embedding = embedding[:, : self.n_components]
-        else:
-            logg.warning(
-                "CellCharter recommends to use a dimensionality reduced embedding of the data, e.g. a scVI embedding. Since 'use_rep' is not provided, PCA will be used as proxy - performance may be suboptimal."
-            )
-            adjacency_matrix = adata.obsp[self.spatial_connectivities_key]
-            hop_adj_matrices = _compute_hop_adjacency_matrices(adjacency_matrix, max_hop=self.distance)
+        adjacency_matrix = adata.obsp[self.spatial_connectivities_key]
+        hop_adj_matrices = _compute_hop_adjacency_matrices(adjacency_matrix, max_hop=self.distance)
 
-            aggregated_matrices = [adata.X]  # hop 0: raw features, no aggregation
-            for hop_adj in hop_adj_matrices:
-                hop_adj_norm = _normalize(hop_adj)
-                aggregated_matrices.append(_aggregate(adata, hop_adj_norm, self.aggregation))
+        aggregated_matrices = [adata.X]  # hop 0: raw features, no aggregation
+        for hop_adj in hop_adj_matrices:
+            hop_adj_norm = _normalize(hop_adj)
+            aggregated_matrices.append(_aggregate(adata, hop_adj_norm, self.aggregation))
 
-            concatenated_matrix = hstack(aggregated_matrices)  # Stack all matrices horizontally
-            arr = concatenated_matrix.toarray()  # Densify
+        concatenated_matrix = hstack(aggregated_matrices)  # Stack all matrices horizontally
+        arr = concatenated_matrix.toarray()  # Densify
 
-            embedding = sc.tl.pca(arr)
+        embedding = sc.tl.pca(arr)
 
         return embedding
 
