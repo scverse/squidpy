@@ -65,6 +65,7 @@ import squidpy as sq
     pl.spatial_scatter
     pl.spatial_segment
     pl.nhood_enrichment
+    pl.nhood_enrichment_dotplot
     pl.centrality_scores
     pl.interaction_matrix
     pl.ligrec
