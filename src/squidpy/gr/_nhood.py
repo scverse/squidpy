@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Iterable, Sequence
 from functools import partial
 from typing import Any, Literal, NamedTuple
 
@@ -23,6 +23,7 @@ from pandas import CategoricalDtype
 from scanpy import logging as logg
 from scipy.sparse import csr_array, csr_matrix, issparse
 from spatialdata import SpatialData
+from tqdm.auto import tqdm
 
 from squidpy._compat import old_positionals
 from squidpy._constants._constants import Centrality
@@ -32,14 +33,10 @@ from squidpy._utils import (
     NDArrayA,
     RNGLike,
     SeedLike,
-    Signal,
-    SigQueue,
     deprecated_params,
     deprecated_randomness_param,
     get_n_numba_threads,
-    get_n_processes,
     numba_threads,
-    parallelize,
 )
 from squidpy._validators import assert_key_in_adata, assert_positive
 from squidpy.gr._utils import (
@@ -554,7 +551,8 @@ def nhood_enrichment(
 
 @d.dedent
 @inject_docs(c=Centrality)
-@old_positionals("cluster_key", "score", "connectivity_key", "copy", "n_jobs", "backend", "show_progress_bar")
+@deprecated_params({"backend": "1.10.0"})
+@old_positionals("cluster_key", "score", "connectivity_key", "copy", "n_jobs", "show_progress_bar")
 def centrality_scores(
     adata: AnnData | SpatialData,
     *,
@@ -563,7 +561,6 @@ def centrality_scores(
     connectivity_key: str | None = None,
     copy: bool = False,
     n_jobs: int | None = None,
-    backend: str = "loky",
     show_progress_bar: bool = False,
     table_key: str | None = None,
 ) -> pd.DataFrame | None:
@@ -587,7 +584,8 @@ def centrality_scores(
 
     %(conn_key)s
     %(copy)s
-    %(parallelize)s
+    %(n_jobs_threads)s
+    %(show_progress_bar)s
 
     Returns
     -------
@@ -613,7 +611,9 @@ def centrality_scores(
     graph, adj = _build_graph(adata.obsp[connectivity_key])
 
     cat = adata.obs[cluster_key].cat.categories.values
-    clusters = adata.obs[cluster_key].values
+
+    n_jobs = get_n_numba_threads(n_jobs)
+    start = logg.info(f"Calculating centralities `{centralities}` using `{n_jobs}` thread(s)")
 
     fun_dict = {}
     for c in centralities:
@@ -623,27 +623,20 @@ def centrality_scores(
             fun_dict[c.s] = partial(rx.group_degree_centrality, graph)
         elif c == Centrality.CLUSTERING:
             # average the per-node clustering coefficients over the group (0 if the group is empty).
-            node_clustering = _local_clustering(adj.indptr, adj.indices, adj.shape[0])
+            with numba_threads(n_jobs):
+                node_clustering = _local_clustering(adj.indptr, adj.indices, adj.shape[0])
             fun_dict[c.s] = lambda idx, cc=node_clustering: float(cc[idx].mean()) if len(idx) else 0.0
         else:
             raise NotImplementedError(f"Centrality `{c}` is not yet implemented.")
 
-    n_jobs = get_n_processes(n_jobs)
-    start = logg.info(f"Calculating centralities `{centralities}` using `{n_jobs}` core(s)")
+    group_idx = adata.obs.groupby(cluster_key, observed=False).indices
+    idxs = [group_idx.get(c, np.empty(0, dtype=np.int64)) for c in cat]
+    groups = [(k, fun, idx) for k, fun in fun_dict.items() for idx in idxs]
+    scores: dict[str, list[float]] = {k: [] for k in fun_dict}
+    for k, fun, idx in tqdm(groups, unit="group", disable=not show_progress_bar):
+        scores[k].append(fun(idx))
 
-    res_list = []
-    for k, v in fun_dict.items():
-        df = parallelize(
-            _centrality_scores_helper,
-            collection=cat,
-            extractor=pd.concat,
-            n_jobs=n_jobs,
-            backend=backend,
-            show_progress_bar=show_progress_bar,
-        )(clusters=clusters, fun=v, method=k)
-        res_list.append(df)
-
-    df = pd.concat(res_list, axis=1)
+    df = pd.DataFrame(scores, index=cat)
 
     if copy:
         return df
@@ -762,7 +755,10 @@ def _build_graph(conn: Any) -> tuple[rx.PyGraph, csr_matrix]:
     graph.add_nodes_from(range(n))
     # the strict upper triangle lists each undirected edge exactly once.
     rows, cols = triu(adj, k=1).nonzero()
-    graph.add_edges_from_no_data([(int(i), int(j)) for i, j in zip(rows, cols, strict=True)])
+    # ``tolist()`` boxes the indices in C and ``zip`` builds the tuples in C, which is ~2x faster
+    # than a python-level comprehension. rustworkx has no sparse ingestion path (its
+    # ``from_adjacency_matrix`` is dense-only) and rejects lists and arrays, so tuples it is.
+    graph.extend_from_edge_list(list(zip(rows.tolist(), cols.tolist(), strict=True)))
     return graph, adj
 
 
@@ -801,28 +797,6 @@ def _local_clustering(indptr: NDArrayA, indices: NDArrayA, n: int) -> NDArrayA:
                     j += 1
         out[v] = two_triangles / (k * (k - 1))
     return out
-
-
-def _centrality_scores_helper(
-    cat: Iterable[Any],
-    clusters: Sequence[str],
-    fun: Callable[..., float],
-    method: str,
-    queue: SigQueue | None = None,
-) -> pd.DataFrame:
-    res_list = []
-    for c in cat:
-        idx = np.where(clusters == c)[0]
-        res = fun(idx)
-        res_list.append(res)
-
-        if queue is not None:
-            queue.put(Signal.UPDATE)
-
-    if queue is not None:
-        queue.put(Signal.FINISH)
-
-    return pd.DataFrame(res_list, columns=[method], index=cat)
 
 
 def _build_shuffle_groups(
