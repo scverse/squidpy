@@ -319,7 +319,7 @@ def calculate_niche_neighborhood(
        ``n_hop_weights``.
     4. Uses either raw counts or normalized cell-type proportions as the
        neighborhood profile.
-    5. Optionally z-scores the resulting profile across observations (scale 
+    5. Optionally z-scores the resulting profile across observations (scale
        argument).
     6. Constructs a k-nearest-neighbor graph from the profile embedding and
        applies Leiden clustering at each requested resolution.
@@ -385,7 +385,7 @@ def calculate_niche_neighborhood(
     :func:`calculate_niche_utag` and :func:`calculate_niche_cellcharter`
     derive niche embeddings from spatially aggregated molecular or latent
     features rather than from categorical group frequencies.
-    
+
     """
 
     # Create instance of _NhoodProfileEmbedder using provided inputs
@@ -451,9 +451,9 @@ def calculate_niche_utag(
 
     1. Selects an input feature matrix from ``adata.X`` or from
        ``adata.layers[use_layer]``.
-    2. Performs a normalized (by number of cell-neighbors) aggregation of 
-       features over the spatial connectivity graph, producing a new feature 
-       matrix in which each observation reflects information from its local 
+    2. Performs a normalized (by number of cell-neighbors) aggregation of
+       features over the spatial connectivity graph, producing a new feature
+       matrix in which each observation reflects information from its local
        spatial neighborhood.
     3. Treats this spatially aggregated matrix as the niche embedding.
     4. Constructs a k-nearest-neighbor graph in the embedding space.
@@ -596,7 +596,7 @@ def calculate_niche_cellcharter(
     %(niche_spatial_conn_key)s
     n_components
         Number of Gaussian mixture components used to assign niches.
-        Therefore, this parameter directly determines the number of niche 
+        Therefore, this parameter directly determines the number of niche
         labels produced per library or dataset.
     use_rep
         Key in ``adata.obsm`` containing a precomputed observation-level
@@ -1514,7 +1514,9 @@ class _NHopPCAEmbedder(_NicheEmbedder):
         adjacency_matrix = adata.obsp[self.spatial_connectivities_key]
         hop_adj_matrices = _compute_hop_adjacency_matrices(adjacency_matrix, max_hop=self.distance)
 
-        aggregated_matrices = [_as_csr(adata.X)]  # hop 0: raw features, no aggregation. Ensure sparse as hstack requires that
+        aggregated_matrices = [
+            _as_csr(adata.X)
+        ]  # hop 0: raw features, no aggregation. Ensure sparse as hstack requires that
         for hop_adj in hop_adj_matrices:
             hop_adj_norm = _normalize(hop_adj)
             aggregated_matrices.append(_aggregate(adata, hop_adj_norm, self.aggregation))
