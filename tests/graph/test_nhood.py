@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from anndata import AnnData
+from fast_array_utils.conv import to_dense
 from scanpy import settings
 from sklearn.preprocessing import normalize
 
@@ -22,7 +23,7 @@ from squidpy.gr import (
 from squidpy.gr._nhood import (
     _hop_adjacencies,
     _nhood_aggregate,
-    _nhood_concat,
+    _nhood_blocks,
     _nhood_profile,
     nhood_aggregate,
 )
@@ -274,19 +275,20 @@ def test_nhood_aggregate_derives_the_neighborhood_profile(
         hop_weights=hop_weights,
         aggregation="sum" if abs_nhood else "mean",
     )
-    np.testing.assert_allclose(got, expected)
+    np.testing.assert_allclose(to_dense(got), expected)
 
 
 def test_nhood_aggregate_derives_utag(aggregate_adata: AnnData):
     """One hop, mean-aggregated: a row-normalized graph times the features."""
     expected = normalize(aggregate_adata.obsp["spatial_connectivities"], norm="l1", axis=1) @ aggregate_adata.X
-    np.testing.assert_allclose(_nhood_aggregate(aggregate_adata, hops=(1,)), expected)
+    np.testing.assert_allclose(to_dense(_nhood_aggregate(aggregate_adata, hops=(1,))), expected)
 
 
 @pytest.mark.parametrize(("distance", "aggregation"), [(1, "mean"), (3, "mean"), (2, "variance")])
 def test_nhood_aggregate_derives_cellcharter(aggregate_adata: AnnData, distance: int, aggregation: str):
     """Disjoint hop rings, concatenated, with the observation's own features as hop 0."""
-    got = _nhood_concat(aggregate_adata, hops=range(distance + 1), aggregation=aggregation)
+    blocks = _nhood_blocks(aggregate_adata, hops=range(distance + 1), hop_mode="shell", aggregation=aggregation)
+    got = np.hstack([to_dense(block) for block in blocks])
     assert got.shape == (aggregate_adata.n_obs, aggregate_adata.n_vars * (distance + 1))
     # hop 0 is the features themselves, not an aggregate of them
     np.testing.assert_allclose(got[:, : aggregate_adata.n_vars], aggregate_adata.X)
@@ -328,8 +330,8 @@ def test_nhood_aggregate_excludes_unassigned_neighbours(aggregate_adata: AnnData
 
     got = _nhood_aggregate(aggregate_adata, groups="celltype", aggregation="mean")
     expected = _nhood_profile(labels, aggregate_adata.obsp["spatial_connectivities"], normalize=True)
-    np.testing.assert_allclose(got, expected.to_numpy())
-    np.testing.assert_allclose(got.sum(axis=1), 1.0)
+    np.testing.assert_allclose(to_dense(got), expected.to_numpy())
+    np.testing.assert_allclose(np.asarray(to_dense(got)).sum(axis=1), 1.0)
 
 
 def test_nhood_aggregate_masks_after_expanding_the_hops(aggregate_adata: AnnData):
@@ -347,4 +349,4 @@ def test_nhood_aggregate_masks_after_expanding_the_hops(aggregate_adata: AnnData
     got = _nhood_aggregate(aggregate_adata, groups="celltype", hops=hops)
     by_hop = _hop_adjacencies(adj, hops, "power")
     expected = sum(_nhood_profile(labels, by_hop[hop], normalize=True).to_numpy() for hop in hops) / len(hops)
-    np.testing.assert_allclose(got, expected)
+    np.testing.assert_allclose(to_dense(got), expected)

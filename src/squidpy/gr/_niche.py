@@ -11,7 +11,10 @@ import pandas as pd
 import scanpy as sc
 import scipy.sparse as sps
 from anndata import AnnData
+from fast_array_utils.conv import to_dense
 from fast_array_utils.types import HasArrayNamespace as Array
+from scipy.sparse import hstack as sparse_hstack
+from scipy.sparse import issparse
 from sklearn.base import clone
 from spatialdata import SpatialData, sanitize_table
 from spatialdata._logging import logger as logg
@@ -22,7 +25,7 @@ from squidpy._utils import RNGLike, SeedLike, deprecated_randomness_param, legac
 from squidpy._validators import assert_isinstance, assert_key_in_adata, assert_one_of
 from squidpy.gr._autok import _gmm, check_model_params
 from squidpy.gr._clusterers import _AutoKClusterer, _LeidenClusterer
-from squidpy.gr._nhood import _nhood_aggregate, _nhood_concat
+from squidpy.gr._nhood import _nhood_aggregate, _nhood_blocks
 from squidpy.gr._utils import extract_adata_if_sdata
 from squidpy.types import Clusterer, SweepableClusterer
 
@@ -1212,6 +1215,9 @@ def _nhood_profile_embedding(
         aggregation="sum" if abs_nhood else "mean",
     )
     # reason for scaling see https://monkeybread.readthedocs.io/en/latest/notebooks/tutorial.html#niche-analysis
+    # narrow -- one column per category -- and `sc.pp.scale` densifies anyway, so the
+    # one-hot's sparseness is not worth carrying past here
+    profile = to_dense(profile)
     return sc.pp.scale(profile, zero_center=True) if scale else profile
 
 
@@ -1238,12 +1244,21 @@ def _cellcharter_embedding(
     """
     # hop 0 is the observation's own counts; the rings are disjoint, and each keeps its
     # own columns
-    aggregated = _nhood_concat(
+    # hop 0 is the observation's own features; the rings are disjoint and each keeps its
+    # own columns, so this stays sparse when the features are
+    blocks = _nhood_blocks(
         adata,
         connectivity_key=spatial_connectivities_key,
         hops=range(distance + 1),
+        hop_mode="shell",
         aggregation=aggregation,
     )
+    # this is `distance + 1` times the width of the features, so it is the one place
+    # densifying costs; keep the container they came in, as CellCharter does
+    if all(issparse(block) for block in blocks):
+        aggregated = sparse_hstack(blocks, format="csr")
+    else:
+        aggregated = np.hstack([to_dense(block) for block in blocks])
     return sc.tl.pca(aggregated, random_state=legacy_random(rng))
 
 

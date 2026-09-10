@@ -12,11 +12,13 @@ import pandas as pd
 import rustworkx as rx
 from anndata import AnnData
 from fast_array_utils.conv import to_dense
+from fast_array_utils.types import CSBase
+from fast_array_utils.types import HasArrayNamespace as Array
 from numba import njit, prange
 from numpy.typing import NDArray
 from pandas import CategoricalDtype
 from scanpy import logging as logg
-from scipy.sparse import csr_matrix, diags, spmatrix
+from scipy.sparse import csr_matrix, diags, issparse
 from scipy.stats import entropy
 from sklearn.preprocessing import normalize
 from spatialdata import SpatialData
@@ -49,7 +51,6 @@ __all__ = [
     "interaction_matrix",
     "nhood_entropy",
     "nhood_aggregate",
-    "nhood_concat",
 ]
 
 
@@ -640,26 +641,31 @@ def _nhood_enrichment_helper(
     return perms
 
 
-def _shell_hop(adj_hop: spmatrix, adj: spmatrix, adj_visited: spmatrix) -> tuple[spmatrix, spmatrix]:
-    """One step out, dropping what earlier hops already reached."""
-    adj_hop = adj_hop @ adj
-    adj_hop = adj_hop > adj_visited
+def _shell_hop(adj_hop: CSBase, adj: CSBase, adj_visited: CSBase) -> tuple[CSBase, CSBase]:
+    """One step out, dropping what earlier hops already reached.
+
+    Everything here is boolean, as in CellCharter: a boolean matmul answers "is there a
+    path" rather than counting them, which is what makes ``>`` the logical and-not it
+    reads as. On numeric input it would be ``path_count > visited`` instead, so a pair
+    joined by several short paths would re-enter a later shell.
+    """
+    adj_hop = (adj_hop @ adj) > adj_visited
     return adj_hop, adj_visited + adj_hop
 
 
-def _hop_adjacencies(
-    adj: spmatrix, hops: Sequence[int], hop_mode: Literal["power", "shell"]
-) -> dict[int, spmatrix | None]:
+def _hop_adjacencies(adj: CSBase, hops: Sequence[int], hop_mode: Literal["power", "shell"]) -> dict[int, CSBase | None]:
     """The adjacency of each requested hop; ``None`` for hop 0, which is no neighborhood.
 
     ``power`` takes matrix powers of *adj*, so hop *k* counts every walk of length *k* and
-    a near neighbor keeps contributing to the far hops. ``shell`` subtracts what earlier
-    hops already reached, as CellCharter does, making the hops disjoint rings.
+    a near neighbor keeps contributing to the far hops -- numeric on purpose, since that
+    multiplicity is the distance weighting. ``shell`` subtracts what earlier hops already
+    reached, as CellCharter does, making the hops disjoint rings; it casts to bool first,
+    so the subtraction holds on weighted graphs too.
     """
     if any(hop < 0 for hop in hops):
         raise ValueError(f"'hops' must be non-negative, got {list(hops)!r}")
 
-    by_hop: dict[int, spmatrix | None] = {0: None}
+    by_hop: dict[int, CSBase | None] = {0: None}
     if max(hops, default=0) < 1:
         return by_hop
 
@@ -674,6 +680,7 @@ def _hop_adjacencies(
         # observation as already having visited itself. `setdiag` on the CSR directly:
         # the diagonal of a kNN graph is empty, and filling it neither warns nor differs
         # from the `tolil()` roundtrip it used to take.
+        adj = adj.astype(bool)
         adj_hop, adj_visited = adj.copy(), adj.copy()
         adj_hop.setdiag(0)
         adj_hop.eliminate_zeros()
@@ -687,16 +694,12 @@ def _hop_adjacencies(
     return by_hop
 
 
-def _aggregate_over(adj: spmatrix, features: Any, aggregation: Literal["mean", "sum", "proportion", "variance"]) -> Any:
+def _aggregate_over(
+    adj: CSBase, features: Array | CSBase, aggregation: Literal["mean", "sum", "variance"]
+) -> Array | CSBase:
     """Aggregate *features* over the neighborhood each row of *adj* defines."""
     if aggregation == "sum":
         return adj @ features
-    if aggregation == "proportion":
-        # the aggregate's own row sum, not the degree: an observation whose label is
-        # unassigned contributes an all-zero row to a one-hot, and is meant to be left out
-        # of the denominator rather than counted as a neighbor with no type
-        counts = to_dense(adj @ features)
-        return normalize(counts, norm="l1", axis=1)
     # rows sum to 1, so a high degree does not dominate the aggregate
     normalized = normalize(adj, norm="l1", axis=1)
     if aggregation == "mean":
@@ -724,7 +727,7 @@ def _resolve_hop_weights(hop_weights: Sequence[float] | None, n_hops: int) -> li
 
 def _nhood_features(
     adata: AnnData, groups: str | None, use_rep: str | None, layer: str | None
-) -> tuple[Any, NDArrayA | None]:
+) -> tuple[Array | CSBase, NDArrayA | None]:
     """The matrix the neighborhoods are aggregated over, and which rows have a value.
 
     The mask is ``None`` wherever every observation has one, which is every source but
@@ -759,7 +762,7 @@ def _nhood_blocks(
     hops: Sequence[int] = (1,),
     hop_mode: Literal["power", "shell"] = "power",
     aggregation: Literal["mean", "sum", "variance"] = "mean",
-) -> list[Any]:
+) -> list[Array | CSBase]:
     """One aggregated block per requested hop, in the order given."""
     _assert_connectivity_key(adata, connectivity_key)
     if not len(hops):
@@ -790,15 +793,14 @@ def _nhood_aggregate(
     """The summed matrix, without touching *adata*. See :func:`nhood_aggregate`."""
     blocks = _nhood_blocks(adata, hop_mode=hop_mode, aggregation=aggregation, **kwargs)
     weights = _resolve_hop_weights(hop_weights, len(blocks))
-    total = sum(weight * to_dense(block) for weight, block in zip(weights, blocks, strict=True))
+    # keep the container the features came in; `variance` has already densified, so a
+    # mixed set of blocks has to be densified whole
+    if not all(issparse(block) for block in blocks):
+        blocks = [to_dense(block) for block in blocks]
+    total = sum(weight * block for weight, block in zip(weights, blocks, strict=True))
     # a weighted mean over the hops, so the scale does not depend on how many there are.
     # `sum` is counts, which are meant to stay counts.
     return total if aggregation == "sum" else total / sum(weights)
-
-
-def _nhood_concat(adata: AnnData, *, hop_mode: Literal["power", "shell"] = "shell", **kwargs: Any) -> NDArrayA:
-    """The concatenated matrix, without touching *adata*. See :func:`nhood_concat`."""
-    return np.hstack([to_dense(block) for block in _nhood_blocks(adata, hop_mode=hop_mode, **kwargs)])
 
 
 @d.dedent
@@ -870,71 +872,4 @@ def nhood_aggregate(
         hop_weights=hop_weights,
     )
     _save_data(adata, attr="obsm", key=key_added, data=aggregated, time=start)
-    return adata if copy else None
-
-
-@d.dedent
-def nhood_concat(
-    data: AnnData | SpatialData,
-    *,
-    groups: str | None = None,
-    use_rep: str | None = None,
-    layer: str | None = None,
-    connectivity_key: str = Key.obsp.spatial_conn(),
-    hops: Sequence[int] = (1,),
-    hop_mode: Literal["power", "shell"] = "shell",
-    aggregation: Literal["mean", "sum", "variance"] = "mean",
-    key_added: str = "X_nhood",
-    copy: bool = False,
-    table_key: str | None = None,
-) -> AnnData | None:
-    """Summarise each observation's spatial neighborhood, one block of features per hop.
-
-    The hops are placed side by side, so each keeps its own columns and describes its own
-    spatial scale. That is why *hop_mode* defaults to ``'shell'``: overlapping hops would
-    make each block partly restate the one before it.
-
-    Use :func:`~squidpy.gr.nhood_aggregate` to sum the hops into one block instead.
-
-    Parameters
-    ----------
-    %(adata)s
-    %(table_key)s
-    %(nhood_feature_args)s
-    key_added
-        Key in :attr:`~anndata.AnnData.obsm` to write the matrix to.
-    %(copy)s
-
-    Returns
-    -------
-    If ``copy = True``, returns a copy of ``adata``. Otherwise, modifies the ``adata``
-    with the following key:
-
-        - :attr:`anndata.AnnData.obsm` ``['{key_added}']`` - the concatenated matrix, of
-          shape ``(n_obs, n_features * len(hops))``.
-
-    Notes
-    -----
-    The ``cellcharter`` niche flavor is one call of this -- ``hops=range(0, k + 1)``,
-    keeping the observation's own features as hop 0 -- followed by :func:`~scanpy.tl.pca`.
-
-    See Also
-    --------
-    nhood_aggregate : The same aggregation, summed into one block.
-    """
-    adata = extract_adata_if_sdata(data, table_key=table_key)
-    adata = adata.copy() if copy else adata
-
-    start = logg.info(f"Concatenating neighborhoods over hops `{list(hops)}`")
-    concatenated = _nhood_concat(
-        adata,
-        groups=groups,
-        use_rep=use_rep,
-        layer=layer,
-        connectivity_key=connectivity_key,
-        hops=hops,
-        hop_mode=hop_mode,
-        aggregation=aggregation,
-    )
-    _save_data(adata, attr="obsm", key=key_added, data=concatenated, time=start)
     return adata if copy else None
