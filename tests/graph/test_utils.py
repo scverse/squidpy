@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
 import pytest
 import spatialdata as sd
 from anndata import AnnData
@@ -9,7 +8,7 @@ from pandas.testing import assert_frame_equal
 
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import spatial_autocorr
-from squidpy.gr._utils import _shuffle_group, extract_adata_if_sdata
+from squidpy.gr._utils import extract_adata_if_sdata
 
 
 class TestExtractAdata:
@@ -68,27 +67,6 @@ class TestObspSpatialKey:
     def test_spatial_key_suffix_not_partial_match(self):
         assert Key.obsp.spatial_conn("my_conn") == "my_conn_connectivities"
         assert Key.obsp.spatial_dist("my_dist") == "my_dist_distances"
-
-
-class TestUtils:
-    @pytest.mark.parametrize("cluster_annotations_type", [int, str])
-    @pytest.mark.parametrize("library_annotations_type", [int, str])
-    @pytest.mark.parametrize("seed", [422, 422222])
-    def test_shuffle_group(self, cluster_annotations_type: type, library_annotations_type: type, seed: int):
-        size = 6
-        rng = np.random.default_rng(seed)
-        if isinstance(cluster_annotations_type, int):
-            libraries = pd.Series(rng.choice([1, 2, 3, 4], size=(size,)), dtype="category")
-        else:
-            libraries = pd.Series(rng.choice(["a", "b", "c"], size=(size,)), dtype="category")
-
-        if isinstance(library_annotations_type, int):
-            cluster_annotations = rng.choice([1, 2, 3, 4], size=(size,))
-        else:
-            cluster_annotations = rng.choice(["X", "Y", "Z"], size=(size,))
-        out = _shuffle_group(cluster_annotations, libraries, rng)
-        for c in libraries.cat.categories:
-            assert set(out[libraries == c]) == set(cluster_annotations[libraries == c])
 
 
 class TestRngParam:

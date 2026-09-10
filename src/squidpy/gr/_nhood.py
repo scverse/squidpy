@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable, Iterable, Sequence
 from functools import partial
-from typing import Any, NamedTuple
+from typing import Any, Literal, NamedTuple
 
-import numba.types as nt
 import numpy as np
 import pandas as pd
 import rustworkx as rx
 from anndata import AnnData
 from numba import njit, prange
+from numba.typed import List
+from numba_progress import ProgressBar
 from numpy.typing import NDArray
 from pandas import CategoricalDtype
 from scanpy import logging as logg
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, issparse
 from spatialdata import SpatialData
 
 from squidpy._constants._constants import Centrality
@@ -27,8 +29,11 @@ from squidpy._utils import (
     SeedLike,
     Signal,
     SigQueue,
+    deprecated_params,
     deprecated_randomness_param,
+    get_n_numba_threads,
     get_n_processes,
+    numba_threads,
     parallelize,
 )
 from squidpy._validators import assert_positive
@@ -36,33 +41,30 @@ from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
     _save_data,
-    _shuffle_group,
     extract_adata_if_sdata,
 )
 
-__all__ = ["nhood_enrichment", "centrality_scores", "interaction_matrix"]
+__all__ = ["nhood_enrichment", "NhoodEnrichmentResult", "centrality_scores", "interaction_matrix"]
 
 
 class NhoodEnrichmentResult(NamedTuple):
     """Result of nhood_enrichment function."""
 
     zscore: NDArray[np.number]
+    """Z-score values of enrichment statistic."""
     counts: NDArray[np.number]  # NamedTuple inherits from tuple so cannot use 'count' as attribute name
+    """Enrichment count."""
+    conditional_ratio: NDArray[np.number] | None = None
+    """Conditional ratio. Only present if ``normalization='conditional'``."""
 
 
-# data type aliases (both for numpy and numba should match)
-dt = nt.uint32
+# integer dtype used for cluster labels and CSR index arrays (numpy/numba must match)
 ndt = np.uint32
-_template = """
-from __future__ import annotations
 
-from numba import njit, prange
-import numpy as np
 
-@njit(dt[:, :](dt[:], dt[:], dt[:]), parallel={parallel}, fastmath=True)
-def _nenrich_{n_cls}_{parallel}(indices: NDArrayA, indptr: NDArrayA, clustering: NDArrayA) -> np.ndarray:
-    '''
-    Count how many times clusters :math:`i` and :math:`j` are connected.
+@njit(nogil=True, cache=True)
+def _nenrich(indices: NDArrayA, indptr: NDArrayA, clustering: NDArrayA, n_cls: int) -> NDArrayA:
+    """Count how many times clusters are connected.
 
     Parameters
     ----------
@@ -71,93 +73,240 @@ def _nenrich_{n_cls}_{parallel}(indices: NDArrayA, indptr: NDArrayA, clustering:
     indptr
         :attr:`scipy.sparse.csr_matrix.indptr`.
     clustering
-        Array of shape ``(n_cells,)`` containig cluster labels ranging from `0` to `n_clusters - 1` inclusive.
-
-    Returns
-    -------
-    :class:`numpy.ndarray`
-        Array of shape ``(n_clusters, n_clusters)`` containing the pairwise counts.
-    '''
-    res = np.zeros((indptr.shape[0] - 1, {n_cls}), dtype=ndt)
-
-    for i in prange(res.shape[0]):
-        xs, xe = indptr[i], indptr[i + 1]
-        cols = indices[xs:xe]
-        for c in cols:
-            res[i, clustering[c]] += 1
-    {init}
-    {loop}
-    {finalize}
-"""
-
-
-def _create_function(n_cls: int, parallel: bool = False) -> Callable[[NDArrayA, NDArrayA, NDArrayA], NDArrayA]:
-    """
-    Create a :mod:`numba` function which counts the number of connections between clusters.
-
-    Parameters
-    ----------
+        Array of shape ``(n_cells,)`` containing cluster labels ranging from ``0`` to ``n_cls - 1`` inclusive.
     n_cls
-        Number of clusters. We're assuming that cluster labels are `0`, `1`, ..., `n_cls - 1`.
-    parallel
-        Whether to enable :mod:`numba` parallelization.
+        Number of clusters.
 
     Returns
     -------
-    The aforementioned function.
+    Array of shape ``(n_cls, n_cls)`` where entry ``(a, b)`` is the number of directed edges
+    from a cluster-``a`` cell to a cluster-``b`` neighbor.
     """
-    if n_cls <= 1:
-        raise ValueError(f"Expected at least `2` clusters, found `{n_cls}`.")
+    out = np.zeros((n_cls, n_cls), dtype=np.uint32)
+    for i in range(indptr.shape[0] - 1):
+        a = clustering[i]
+        for c in indices[indptr[i] : indptr[i + 1]]:
+            out[a, clustering[c]] += 1
+    return out
 
-    rng = range(n_cls)
-    init = "".join(
-        f"""
-    g{i} = np.zeros(({n_cls},), dtype=ndt)"""
-        for i in rng
-    )
 
-    loop_body = """
-        if cl == 0:
-            g0 += res[row]"""
-    loop_body = loop_body + "".join(
-        f"""
-        elif cl == {i}:
-            g{i} += res[row]"""
-        for i in range(1, n_cls)
-    )
-    loop = f"""
-    for row in prange(res.shape[0]):
-        cl = clustering[row]
-        {loop_body}
-        else:
-            assert False, "Unhandled case."
+@njit(nogil=True, cache=True)
+def _counts_and_conditional(
+    indices: NDArrayA, indptr: NDArrayA, clustering: NDArrayA, n_cls: int
+) -> tuple[NDArrayA, NDArrayA]:
+    """One traversal yielding both the edge counts and the COZI conditional denominator.
+
+    ``normalization='conditional'`` needs :func:`_nenrich`'s directed-edge counts *and*, per cluster
+    pair ``(a, b)``, how many cluster-``a`` cells have at least one cluster-``b`` neighbor. Both are
+    row-local, so a single pass produces them. ``stamp[b]`` holds the row that last touched cluster
+    ``b``, which makes "already counted for this cell" a comparison rather than a per-row array to
+    wipe and sweep — so the cost stays O(nnz) instead of growing with ``n_cls``.
+
+    Returns ``(counts, cond)`` as ``(n_cls, n_cls)`` ``uint32`` / ``float64`` arrays. The counts are
+    bit-identical to :func:`_nenrich`: the same additions happen in the same per-row order.
     """
-    finalize = ", ".join(f"g{i}" for i in rng)
-    finalize = f"return np.stack(({finalize}))"  # must really be a tuple
+    out = np.zeros((n_cls, n_cls), dtype=np.uint32)
+    cond = np.zeros((n_cls, n_cls), dtype=np.float64)
+    stamp = np.full(n_cls, -1, dtype=np.int64)  # -1 sits below every row index, so row 0 is correct
+    for i in range(indptr.shape[0] - 1):
+        a = clustering[i]
+        for c in indices[indptr[i] : indptr[i + 1]]:
+            b = clustering[c]
+            out[a, b] += 1
+            if stamp[b] != i:
+                stamp[b] = i
+                cond[a, b] += 1.0
+    return out, cond
 
-    fn_key = f"_nenrich_{n_cls}_{parallel}"
-    if fn_key not in globals():
-        template = _template.format(init=init, loop=loop, finalize=finalize, n_cls=n_cls, parallel=parallel)
-        exec(compile(template, "", "exec"), globals())
 
-    return globals()[fn_key]  # type: ignore[no-any-return]
+@njit(nogil=True, cache=True)
+def _normalize_total(cnt: NDArrayA, sizes: NDArrayA) -> NDArrayA:
+    """Divide edge counts by the number of index cells (SEA), i.e. neighbors per cell of type ``a``.
+
+    ``sizes[a]`` is the number of cluster-``a`` cells, which label permutation leaves unchanged --
+    so unlike the conditional denominator this one is a constant of the null. An empty cluster
+    divides by ``1`` and stays zero.
+    """
+    out = np.zeros(cnt.shape, dtype=np.float64)
+    for a in range(cnt.shape[0]):
+        s = sizes[a] if sizes[a] != 0.0 else 1.0
+        for b in range(cnt.shape[1]):
+            out[a, b] = cnt[a, b] / s
+    return out
+
+
+@njit(nogil=True, cache=True)
+def _normalize_conditional(cnt: NDArrayA, cond: NDArrayA) -> NDArrayA:
+    """Divide edge counts by the COZI denominator (COZI). A zero denominator divides by ``1``."""
+    out = np.zeros(cnt.shape, dtype=np.float64)
+    for a in range(cnt.shape[0]):
+        for b in range(cnt.shape[1]):
+            d = cond[a, b] if cond[a, b] != 0.0 else 1.0
+            out[a, b] = cnt[a, b] / d
+    return out
+
+
+@njit(nogil=True, cache=True)
+def _shuffled_labels(
+    int_clust: NDArrayA,
+    group_offsets: NDArrayA,
+    group_indices: NDArrayA,
+    rng: Any,
+) -> NDArrayA:
+    """Shuffle cluster labels within each group, drawing once per group from ``rng``.
+
+    Groups are visited in category order with ascending indices, so for a given generator state
+    the draw sequence, and hence the result, is fully determined.
+    """
+    shuffled = int_clust.copy()
+    # one group covering every cell has ascending indices `0..n-1`, so the gather/scatter below is
+    # the identity; shuffling in place draws from ``rng`` identically and skips two passes
+    if group_offsets.shape[0] == 2 and group_offsets[1] == int_clust.shape[0]:
+        rng.shuffle(shuffled)
+        return shuffled
+    for g in range(group_offsets.shape[0] - 1):
+        s, e = group_offsets[g], group_offsets[g + 1]
+        sub = np.empty(e - s, dtype=int_clust.dtype)
+        for t in range(e - s):
+            sub[t] = int_clust[group_indices[s + t]]
+        rng.shuffle(sub)
+        for t in range(e - s):
+            shuffled[group_indices[s + t]] = sub[t]
+    return shuffled
+
+
+@njit(parallel=True, nogil=True, cache=True)
+def _permutation_moments_counts(
+    indices: NDArrayA,
+    indptr: NDArrayA,
+    int_clust: NDArrayA,
+    group_offsets: NDArrayA,
+    group_indices: NDArrayA,
+    n_cls: int,
+    observed: NDArrayA,
+    generators: Any,
+    progress: Any,
+) -> tuple[NDArrayA, NDArrayA]:
+    """Exact integer moments of the permutation distribution for ``normalization='none'``.
+
+    The unnormalized statistic is a directed-edge count, so every ``d = permuted - observed`` is a
+    whole number. Accumulating in :obj:`numpy.int64` makes the ``prange`` reduction exactly
+    order-independent — the result is bit-identical for any thread count by construction rather
+    than by luck — and keeps ``sum(d * d)`` exact up to ``2**63`` instead of float64's ``2**53``,
+    which a large graph can genuinely exceed.
+
+    Returns ``(sum_d, sum_d2)``; the caller turns these into the mean, std and z-score.
+    """
+    n_perms = len(generators)
+    sum_d = np.zeros((n_cls, n_cls), dtype=np.int64)
+    sum_d2 = np.zeros((n_cls, n_cls), dtype=np.int64)
+    for p in prange(n_perms):
+        # explicit int64 index: under prange the loop var is uint64 and indexing the typed list
+        # would otherwise trigger a (harmless) uint64->int64 NumbaTypeSafetyWarning
+        rng = generators[np.int64(p)]
+        shuffled = _shuffled_labels(int_clust, group_offsets, group_indices, rng)
+        out = _nenrich(indices, indptr, shuffled, n_cls)
+
+        # the temporaries are needed because numba only recognizes whole-array in-place updates as
+        # a reduction -- `sum_d[a, b] += dev` here would race instead
+        local_d = np.zeros((n_cls, n_cls), dtype=np.int64)
+        local_d2 = np.zeros((n_cls, n_cls), dtype=np.int64)
+        for a in range(n_cls):
+            for b in range(n_cls):
+                dev = np.int64(out[a, b]) - observed[a, b]
+                local_d[a, b] = dev
+                local_d2[a, b] = dev * dev
+        sum_d += local_d
+        sum_d2 += local_d2
+        progress.update(1)
+    return sum_d, sum_d2
+
+
+@njit(parallel=True, nogil=True, cache=True)
+def _permutation_moments_normalized(
+    indices: NDArrayA,
+    indptr: NDArrayA,
+    int_clust: NDArrayA,
+    group_offsets: NDArrayA,
+    group_indices: NDArrayA,
+    n_cls: int,
+    norm_code: int,
+    sizes: NDArrayA,
+    observed: NDArrayA,
+    generators: Any,
+    progress: Any,
+) -> tuple[NDArrayA, NDArrayA]:
+    """Moments of the permutation distribution for the ``'total'`` / ``'conditional'`` modes.
+
+    Normalizing divides by a row sum or a conditional denominator, so the statistic is fractional
+    and has to be accumulated in float64. Deviations are still taken against ``observed``, which
+    sits on the same scale as the null distribution: a raw sum-of-squares would cancel badly.
+    The summation order depends on the thread count, so the result matches to rounding rather than
+    bit-for-bit (measured at <= 1e-14 relative).
+
+    Returns ``(sum_d, sum_d2)``; the caller turns these into the mean, std and z-score.
+    """
+    n_perms = len(generators)
+    sum_d = np.zeros((n_cls, n_cls), dtype=np.float64)
+    sum_d2 = np.zeros((n_cls, n_cls), dtype=np.float64)
+    for p in prange(n_perms):
+        rng = generators[np.int64(p)]
+        shuffled = _shuffled_labels(int_clust, group_offsets, group_indices, rng)
+
+        if norm_code == 1:  # total
+            out = _normalize_total(_nenrich(indices, indptr, shuffled, n_cls), sizes)
+        else:  # conditional: one fused walk yields both the numerator and its denominator
+            cnt, cond = _counts_and_conditional(indices, indptr, shuffled, n_cls)
+            out = _normalize_conditional(cnt, cond)
+
+        local_d = np.zeros((n_cls, n_cls), dtype=np.float64)
+        local_d2 = np.zeros((n_cls, n_cls), dtype=np.float64)
+        for a in range(n_cls):
+            for b in range(n_cls):
+                dev = out[a, b] - observed[a, b]
+                local_d[a, b] = dev
+                local_d2[a, b] = dev * dev
+        sum_d += local_d
+        sum_d2 += local_d2
+        progress.update(1)
+    return sum_d, sum_d2
+
+
+_NORM_CODES = {"none": 0, "total": 1, "conditional": 2}
+
+
+def _filter_clusters_by_min_cell_count(
+    adj: csr_matrix,
+    int_clust: NDArrayA,
+    min_cell_count: int,
+) -> tuple[NDArrayA, NDArrayA, NDArrayA]:
+    clust_sizes = pd.Series(int_clust).value_counts()
+    valid_clusters = clust_sizes[clust_sizes >= min_cell_count].index.to_numpy()
+
+    valid_mask = np.isin(int_clust, valid_clusters)
+    valid_cells_idx = np.where(valid_mask)[0]
+    int_clust = int_clust[valid_mask]
+
+    return int_clust, adj[np.ix_(valid_cells_idx, valid_cells_idx)], valid_mask
 
 
 @d.get_sections(base="nhood_ench", sections=["Parameters"])
 @d.dedent
 @deprecated_randomness_param
+@deprecated_params({"numba_parallel": "1.10.0", "backend": "1.10.0"})
 def nhood_enrichment(
     adata: AnnData | SpatialData,
     cluster_key: str,
     library_key: str | None = None,
     connectivity_key: str | None = None,
     n_perms: int = 1000,
-    numba_parallel: bool = False,
     rng: SeedLike | RNGLike | None = None,
     copy: bool = False,
     n_jobs: int | None = None,
-    backend: str = "loky",
     show_progress_bar: bool = True,
+    normalization: str = "none",
+    min_cell_count: int = 0,
+    handle_nan: Literal["keep", "zero"] = "keep",
     *,
     table_key: str | None = None,
 ) -> NhoodEnrichmentResult | None:
@@ -176,19 +325,40 @@ def nhood_enrichment(
     %(library_key)s
     %(conn_key)s
     %(n_perms)s
-    %(numba_parallel)s
     %(rng)s
     %(copy)s
-    %(parallelize)s
+    %(n_jobs_threads)s
+    %(show_progress_bar)s
+    normalization
+        Normalization mode to use, as compared in :cite:`schiller2025`:
+
+        - ``'none'``: No normalization of neighbor counts.
+        - ``'total'``: Divide by the number of cells of the index cluster (SEA). Cluster sizes are
+          unchanged by the permutation, so this rescales the statistic without changing the z-score.
+        - ``'conditional'``: Divide by the number of index-cluster cells having at least one
+          neighbor of the given type (COZI).
+    min_cell_count
+        Minimum number of cells a cluster must contain to be included. Clusters with fewer cells are
+        dropped before counting (default ``0`` keeps all clusters) and their z-scores are `NaN`
+        whatever ``handle_nan`` says. Worth raising: a cluster too small to give the permutation
+        null a spread of values yields an unreliable z-score, and in ``'conditional'`` mode a rare
+        cluster pair can leave the denominator at zero, which is reported as ``0``.
+    handle_nan
+        How to handle NaN values in z-scores:
+
+        - ``'zero'``: Replace NaN values with 0
+        - ``'keep'``: Keep NaN values (undefined enrichment)
 
     Returns
     -------
     If ``copy = True``, returns a :class:`~squidpy.gr.NhoodEnrichmentResult` with the z-score and the enrichment count.
+    If normalization = "conditional", also contains the conditional ratio, otherwise it is None.
 
     Otherwise, modifies the ``adata`` with the following keys:
 
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['zscore']`` - the enrichment z-score.
         - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['count']`` - the enrichment count.
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_nhood_enrichment']['conditional_ratio']`` - the ratio of cells of type A that neighbor type B.
     """
     adata = extract_adata_if_sdata(adata, table_key=table_key)
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
@@ -196,53 +366,169 @@ def nhood_enrichment(
     _assert_connectivity_key(adata, connectivity_key)
     assert_positive(n_perms, name="n_perms")
 
-    adj = adata.obsp[connectivity_key]
-    original_clust = adata.obs[cluster_key]
-    clust_map = {v: i for i, v in enumerate(original_clust.cat.categories.values)}  # map categories
-    int_clust = np.array([clust_map[c] for c in original_clust], dtype=ndt)
+    if normalization not in _NORM_CODES:
+        raise ValueError(f"Invalid normalization mode `{normalization}`. Choose from {sorted(_NORM_CODES)}.")
+    if handle_nan not in ("keep", "zero"):
+        raise ValueError(f"Invalid `handle_nan` mode `{handle_nan}`. Choose from 'keep', 'zero'.")
 
+    adj = adata.obsp[connectivity_key]
+    if not issparse(adj):
+        raise TypeError(
+            f"Expected `adata.obsp[{connectivity_key!r}]` to be a sparse matrix, found `{type(adj).__name__}`."
+        )
+    # CSC has `indices`/`indptr` too, but column-wise: without this the counts come out transposed
+    adj = adj.tocsr()
+    # The kernels read `indices`/`indptr` only, so anything the CSR stores is counted as an edge:
+    # a stored zero (what pruning in place, `adj.data[mask] = 0`, leaves behind) and each half of a
+    # duplicated `(i, j)` entry, which scipy defines as one edge whose value is the sum. Copy before
+    # canonicalizing -- `tocsr()` hands back the caller's own matrix when it is already CSR, and
+    # `count_nonzero()` cannot be used to test for this because it sums duplicates in place.
+    if not adj.has_canonical_format or (adj.data == 0).any():
+        adj = adj.copy()
+        adj.sum_duplicates()
+        adj.eliminate_zeros()
+    original_clust = adata.obs[cluster_key]
+    # `.cat.codes` already holds each cell's index into `cat.categories`. NaN shows up as `-1`,
+    # which `ndt` would wrap into a huge cluster id, so reject it rather than let it index out of
+    # range.
+    codes = original_clust.cat.codes.to_numpy()
+    if (codes < 0).any():
+        raise ValueError(f"Found `NaN` values in `adata.obs[{cluster_key!r}]`; every cell needs a cluster.")
+    int_clust = codes.astype(ndt)
+    n_total_cells = len(int_clust)
+
+    # `min_cell_count=0` keeps every cluster, so the filter would rebuild `adj` into an identical
+    # copy -- an `nnz`-sized allocation on the default path.
+    if min_cell_count > 0:
+        int_clust, adj, valid_mask = _filter_clusters_by_min_cell_count(adj, int_clust, min_cell_count)
+    else:
+        valid_mask = np.ones(n_total_cells, dtype=bool)
     if library_key is not None:
         _assert_categorical_obs(adata, key=library_key)
-        libraries: pd.Series | None = adata.obs[library_key]
+        if (adata.obs[library_key].cat.codes.to_numpy() < 0).any():
+            raise ValueError(f"Found `NaN` values in `adata.obs[{library_key!r}]`; every cell needs a library.")
+        # subset to the kept cells so the per-cell series stays aligned with the filtered
+        libraries: pd.Series | None = adata.obs[library_key].iloc[valid_mask].cat.remove_unused_categories()
     else:
         libraries = None
 
+    n_filtered = n_total_cells - len(int_clust)
+    if n_filtered > 0:
+        warnings.warn(
+            f"{n_filtered / n_total_cells * 100:.3f}% of cells were excluded because their clusters "
+            f"had fewer than {min_cell_count} cells.",
+            UserWarning,
+            # +2 for the `deprecated_randomness_param` and `deprecated_params` wrappers
+            stacklevel=4,
+        )
+
     indices, indptr = (adj.indices.astype(ndt), adj.indptr.astype(ndt))
-    n_cls = len(clust_map)
+    n_cls = len(original_clust.cat.categories)
+    if n_cls <= 1:
+        raise ValueError(f"Expected at least `2` clusters, found `{n_cls}`.")
 
-    _test = _create_function(n_cls, parallel=numba_parallel)
-    count = _test(indices, indptr, int_clust)
+    conditional_ratio = np.full((n_cls, n_cls), np.nan, dtype=np.float64)
 
-    n_jobs = get_n_processes(n_jobs)
-    start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` core(s)")
-    generators = np.random.default_rng(rng).spawn(n_perms)
+    # label permutation preserves cluster sizes, so this is a constant of the null
+    cluster_sizes = np.bincount(int_clust, minlength=n_cls).astype(np.float64)
 
-    perms = parallelize(
-        _nhood_enrichment_helper,
-        collection=np.arange(n_perms).tolist(),
-        extractor=np.vstack,
-        n_jobs=n_jobs,
-        backend=backend,
-        show_progress_bar=show_progress_bar,
-    )(
-        callback=_test,
-        indices=indices,
-        indptr=indptr,
-        int_clust=int_clust,
-        libraries=libraries,
-        n_cls=n_cls,
-        generators=generators,
-    )
-    zscore = (count - perms.mean(axis=0)) / perms.std(axis=0)
+    if normalization == "conditional":
+        # one fused walk: this mode is the only one that needs the conditional denominator too
+        count, cond_counts = _counts_and_conditional(indices, indptr, int_clust, n_cls)
+
+        nonempty = cluster_sizes > 0
+        conditional_ratio[nonempty] = cond_counts[nonempty] / cluster_sizes[nonempty, None]
+
+        count_normalized = _normalize_conditional(count, cond_counts)
+    else:
+        count = _nenrich(indices, indptr, int_clust, n_cls)
+        if normalization == "total":
+            count_normalized = _normalize_total(count, cluster_sizes)
+        else:  # "none"
+            count_normalized = count.copy()
+
+    n_jobs = get_n_numba_threads(n_jobs)
+    start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` thread(s)")
+    norm_code = _NORM_CODES[normalization]
+
+    generators = List(np.random.default_rng(rng).spawn(n_perms))
+
+    # Group structure for within-group shuffling, as a CSR-like (offsets, indices) pair in category
+    # order with ascending indices per group. Without a `library_key` there is a single group
+    # spanning all cells, which reproduces a plain global shuffle.
+    group_offsets, group_indices = _build_shuffle_groups(libraries, len(int_clust))
+
+    # A single numba ``prange`` kernel shuffles + counts + normalizes per thread with the GIL
+    # released, and ticks the progress bar from inside the loop; numba owns the parallelism.
+    # Unnormalized counts go through the integer kernel, which is exactly order-independent.
+    with (
+        numba_threads(n_jobs),
+        ProgressBar(total=n_perms, unit="perm", desc="nhood_enrichment", disable=not show_progress_bar) as progress,
+    ):
+        if norm_code == 0:
+            sum_d, sum_d2 = _permutation_moments_counts(
+                indices,
+                indptr,
+                int_clust,
+                group_offsets,
+                group_indices,
+                n_cls,
+                np.ascontiguousarray(count_normalized, dtype=np.int64),
+                generators,
+                progress,
+            )
+        else:
+            sum_d, sum_d2 = _permutation_moments_normalized(
+                indices,
+                indptr,
+                int_clust,
+                group_offsets,
+                group_indices,
+                n_cls,
+                norm_code,
+                cluster_sizes,
+                np.ascontiguousarray(count_normalized, dtype=np.float64),
+                generators,
+                progress,
+            )
+
+    # ``sum_d``/``sum_d2`` are moments of ``permuted - observed``, so the mean deviation *is* the
+    # (negated) numerator of the z-score and no permutation ever has to be kept around. The int64
+    # sums are exact, so converting here is a single deterministic rounding, not an accumulated one.
+    n = float(n_perms)
+    mean_d = sum_d / n
+    var = (sum_d2 - sum_d * mean_d) / n  # population variance, i.e. ddof=0
+    std = np.sqrt(np.maximum(var, 0.0))  # clamp: rounding can push an all-equal column just below 0
+    std[std == 0] = np.nan
+    zscore = -mean_d / std
+
+    if handle_nan == "zero":
+        zscore = np.nan_to_num(zscore, nan=0.0)
+
+    # `handle_nan` governs enrichments the permutation test leaves undefined. A cluster dropped by
+    # `min_cell_count` was never measured at all, so it stays NaN either way -- otherwise `'zero'`
+    # would render "excluded" and "no enrichment" as the same number.
+    dropped = cluster_sizes == 0
+    if dropped.any():
+        zscore[dropped, :] = np.nan
+        zscore[:, dropped] = np.nan
+
+    result_kwargs = {"zscore": zscore, "count": count}
+    if normalization == "conditional":
+        result_kwargs["conditional_ratio"] = conditional_ratio
 
     if copy:
-        return NhoodEnrichmentResult(zscore=zscore, counts=count)
+        return NhoodEnrichmentResult(
+            zscore=result_kwargs["zscore"],
+            counts=result_kwargs["count"],
+            conditional_ratio=result_kwargs.get("conditional_ratio"),
+        )
 
     _save_data(
         adata,
         attr="uns",
         key=Key.uns.nhood_enrichment(cluster_key),
-        data={"zscore": zscore, "count": count},
+        data=result_kwargs,
         time=start,
     )
 
@@ -518,35 +804,21 @@ def _centrality_scores_helper(
     return pd.DataFrame(res_list, columns=[method], index=cat)
 
 
-def _nhood_enrichment_helper(
-    ixs: NDArrayA,
-    callback: Callable[[NDArrayA, NDArrayA, NDArrayA], NDArrayA],
-    indices: NDArrayA,
-    indptr: NDArrayA,
-    int_clust: NDArrayA,
+def _build_shuffle_groups(
     libraries: pd.Series[CategoricalDtype] | None,
-    n_cls: int,
-    generators: Sequence[np.random.Generator],
-    queue: SigQueue | None = None,
-) -> NDArrayA:
-    perms = np.empty((len(ixs), n_cls, n_cls), dtype=np.float64)
-    int_clust = int_clust.copy()  # threading; used as a read-only base for each permutation
+    n_cells: int,
+) -> tuple[NDArrayA, NDArrayA]:
+    """Build a CSR-like ``(offsets, indices)`` description of the within-group shuffling.
 
-    for i, ix in enumerate(ixs):
-        # shuffle from the same base with a per-permutation generator, so each permutation is
-        # independent of the others and of how the permutations are split across jobs
-        rng = generators[ix]
-        if libraries is not None:
-            shuffled = _shuffle_group(int_clust, libraries, rng)
-        else:
-            shuffled = int_clust.copy()
-            rng.shuffle(shuffled)
-        perms[i, ...] = callback(indices, indptr, shuffled)
+    ``indices[offsets[g]:offsets[g + 1]]`` are the cell indices of group ``g`` in ascending order,
+    with groups in category order. Without a ``library_key`` there is a single group spanning all
+    cells, which reproduces a global shuffle.
+    """
+    if libraries is None:
+        return np.array([0, n_cells], dtype=np.int64), np.arange(n_cells, dtype=np.int64)
 
-        if queue is not None:
-            queue.put(Signal.UPDATE)
-
-    if queue is not None:
-        queue.put(Signal.FINISH)
-
-    return perms
+    codes = libraries.cat.codes.to_numpy()
+    n_groups = len(libraries.cat.categories)
+    group_indices = np.argsort(codes, kind="stable").astype(np.int64)
+    group_offsets = np.concatenate(([0], np.cumsum(np.bincount(codes, minlength=n_groups)))).astype(np.int64)
+    return group_offsets, group_indices
