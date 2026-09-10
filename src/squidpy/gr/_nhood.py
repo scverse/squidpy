@@ -5,7 +5,7 @@ from __future__ import annotations
 import warnings
 from collections.abc import Callable, Iterable, Sequence
 from functools import partial
-from typing import Any, NamedTuple
+from typing import Any, Literal, NamedTuple
 
 import numpy as np
 import pandas as pd
@@ -291,21 +291,21 @@ def _filter_clusters_by_min_cell_count(
 @d.get_sections(base="nhood_ench", sections=["Parameters"])
 @d.dedent
 @deprecated_randomness_param
-@deprecated_params({"numba_parallel": "1.9.0", "backend": "1.9.0"})
+@deprecated_params({"numba_parallel": "1.10.0", "backend": "1.10.0"})
 def nhood_enrichment(
     adata: AnnData | SpatialData,
     cluster_key: str,
     library_key: str | None = None,
     connectivity_key: str | None = None,
     n_perms: int = 1000,
-    *,
     rng: SeedLike | RNGLike | None = None,
     copy: bool = False,
     n_jobs: int | None = None,
+    show_progress_bar: bool = True,
     normalization: str = "none",
     min_cell_count: int = 0,
-    handle_nan: str = "keep",
-    show_progress_bar: bool = True,
+    handle_nan: Literal["keep", "zero"] = "keep",
+    *,
     table_key: str | None = None,
 ) -> NhoodEnrichmentResult | None:
     """
@@ -314,13 +314,6 @@ def nhood_enrichment(
     %(seed_versionchanged)s
 
     %(rng_versionchanged)s
-
-    .. versionchanged:: 1.9.0
-        Every parameter after ``n_perms`` is keyword-only, and ``numba_parallel`` / ``backend`` are
-        deprecated: the permutations now run in a single :func:`numba.prange` kernel whose thread
-        count is set by ``n_jobs``, which now defaults to all available threads rather than one.
-        The normalized modes accumulate in float64, so their z-scores depend on the thread count
-        to within rounding (measured ``<= 1e-14`` relative); ``'none'`` stays bit-identical.
 
     Parameters
     ----------
@@ -437,9 +430,6 @@ def nhood_enrichment(
     start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` thread(s)")
     norm_code = _NORM_CODES[normalization]
 
-    # One independent PCG64 generator per permutation, spawned from a single ``SeedSequence``, held
-    # in a numba typed list so the kernel can index it under ``prange``. Because a permutation's
-    # stream depends only on its global index, the result is independent of the thread count.
     generators = List(np.random.default_rng(rng).spawn(n_perms))
 
     # Group structure for within-group shuffling, as a CSR-like (offsets, indices) pair in category

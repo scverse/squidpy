@@ -63,17 +63,6 @@ class TestNhoodEnrichment:
         np.testing.assert_array_equal(got.zscore, expected.zscore)
         np.testing.assert_array_equal(got.counts, expected.counts)
 
-    def test_params_after_n_perms_are_keyword_only(self, adata: AnnData):
-        """Positional args past ``n_perms`` are rejected rather than silently rebound.
-
-        ``numba_parallel``/``backend`` used to sit at positions 6 and 10; removing them would have
-        shifted every later positional argument, so they are keyword-only now.
-        """
-        spatial_neighbors_grid(adata)
-
-        with pytest.raises(TypeError, match="positional argument"):
-            nhood_enrichment(adata, _CK, None, None, 20, 42)
-
     def test_no_deprecation_warning_by_default(self, adata: AnnData):
         spatial_neighbors_grid(adata)
 
