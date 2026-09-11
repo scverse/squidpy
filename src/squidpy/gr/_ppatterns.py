@@ -425,8 +425,7 @@ def co_occurrence(
 
     spatial = adata.obsm[spatial_key].astype(fp)
     original_clust = adata.obs[cluster_key]
-    clust_map = {v: i for i, v in enumerate(original_clust.cat.categories.values)}
-    labs = np.array([clust_map[c] for c in original_clust], dtype=ip)
+    labs = original_clust.cat.codes.to_numpy().astype(ip)  # same mapping, without a per-cell loop
 
     # create intervals thresholds
     if isinstance(interval, int):
