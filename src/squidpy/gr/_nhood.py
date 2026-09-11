@@ -755,12 +755,6 @@ def _build_graph(conn: Any) -> tuple[rx.PyGraph, csr_matrix]:
     graph.add_nodes_from(range(n))
     # the strict upper triangle lists each undirected edge exactly once.
     rows, cols = triu(adj, k=1).nonzero()
-    # rustworkx has no sparse ingestion path (its ``from_adjacency_matrix`` is dense-only) and needs
-    # actual tuples, so the edges go in as tuples: ``tolist()`` boxes the indices in C and ``zip``
-    # builds the pairs in C. The ``zip`` is consumed lazily -- rustworkx pulls from any iterator, so
-    # each tuple is freed right after insertion instead of a full list of them being held at once,
-    # which is both ~1.4x faster and one fewer copy of the edge list in memory. Feeding the arrays
-    # to ``zip`` directly is slower again: unboxing numpy scalars costs more than ``tolist()``.
     graph.extend_from_edge_list(zip(rows.tolist(), cols.tolist(), strict=True))
     return graph, adj
 
