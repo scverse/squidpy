@@ -21,7 +21,7 @@ from squidpy.experimental.im._stain._conversion import (
     rgb_to_lab_ruderman,
 )
 from squidpy.experimental.im._stain._mask import as_spatial_mask, foreground_mask_from_lab
-from squidpy.experimental.im._stain._reference import StainReference
+from squidpy.experimental.im._stain._reference import StainFit
 from squidpy.experimental.utils._params import resolve_params
 from squidpy.types import _REINHARD_DEFAULTS, ReinhardParams
 
@@ -97,13 +97,11 @@ def _reinhard_mask(lab: xr.DataArray, params: ReinhardParams, tissue_mask: np.nd
     return None
 
 
-def fit_reinhard(
-    image_rgb: xr.DataArray, params: ReinhardParams, *, tissue_mask: np.ndarray | None = None
-) -> StainReference:
+def fit_reinhard(image_rgb: xr.DataArray, params: ReinhardParams, *, tissue_mask: np.ndarray | None = None) -> StainFit:
     """Fit Reinhard channel statistics on a reference image.
 
     Converts to Ruderman Lab, computes per-channel ``mu``/``sigma`` over
-    tissue pixels, and packs them into a ``StainReference(method="reinhard")``.
+    tissue pixels, and packs them into a ``StainFit(method="reinhard")``.
     ``tissue_mask`` (a ``(y, x)`` boolean aligned to ``image_rgb``) selects the
     tissue pixels when given; otherwise the ``mask_background`` /
     ``luminosity_threshold`` params drive the mask.
@@ -111,12 +109,12 @@ def fit_reinhard(
     _check_channel_dim(image_rgb)
     lab = rgb_to_lab_ruderman(image_rgb)
     mu, sigma = _masked_channel_stats(lab, _reinhard_mask(lab, params, tissue_mask))
-    return StainReference(method="reinhard", mu=mu, sigma=sigma)
+    return StainFit(method="reinhard", mu=mu, sigma=sigma)
 
 
 def apply_reinhard(
     image_rgb: xr.DataArray,
-    reference: StainReference,
+    reference: StainFit,
     params: ReinhardParams,
     *,
     fit_rgb: xr.DataArray | None = None,

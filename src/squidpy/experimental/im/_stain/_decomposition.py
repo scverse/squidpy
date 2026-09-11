@@ -24,7 +24,7 @@ from squidpy.experimental.im._stain._conversion import (
     sda_to_rgb,
 )
 from squidpy.experimental.im._stain._mask import as_spatial_mask, foreground_mask_from_sda
-from squidpy.experimental.im._stain._reference import StainMethod, StainReference
+from squidpy.experimental.im._stain._reference import StainFit, StainMethod
 from squidpy.experimental.im._stain._validation import (
     StainFittingError,
     _unit_columns,
@@ -179,13 +179,13 @@ def fit_decomposition(
     image_key: str | None = None,
     reference: dict[str, np.ndarray] = RUIFROK_HE,
     max_angle_deg: float = 45.0,
-) -> StainReference:
-    """Fit a decomposition :class:`~squidpy.experimental.im.StainReference` (stain matrix + max concentrations)."""
+) -> StainFit:
+    """Fit a decomposition :class:`~squidpy.experimental.im.StainFit` (stain matrix + max concentrations)."""
     # `params` is `total=False`, so resolve rather than assume every key is present.
     params = _resolve_macenko_params(params) if method == "macenko" else _resolve_vahadane_params(params)
     od = _tissue_od(image_rgb, white_point, params["beta"], tissue_mask=tissue_mask, image_key=image_key)
     matrix = _stain_matrix(od, method, params, image_key=image_key, reference=reference, max_angle_deg=max_angle_deg)
-    return StainReference(
+    return StainFit(
         method=method,
         stain_matrix=matrix,
         white_point=np.asarray(white_point, dtype=np.float64),
@@ -199,7 +199,7 @@ def _matmul_kernel(x: np.ndarray, *, matrix: np.ndarray, dtype: np.dtype) -> np.
 
 def apply_decomposition(
     image_rgb: xr.DataArray,
-    reference: StainReference,
+    reference: StainFit,
     params: Any,
     *,
     fit_rgb: xr.DataArray | None = None,
