@@ -45,6 +45,7 @@ from squidpy._validators import assert_key_in_adata, assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
+    _group_offsets,
     _save_data,
     extract_adata_if_sdata,
 )
@@ -837,11 +838,7 @@ def _build_shuffle_groups(
     if libraries is None:
         return np.array([0, n_cells], dtype=np.int64), np.arange(n_cells, dtype=np.int64)
 
-    codes = libraries.cat.codes.to_numpy()
-    n_groups = len(libraries.cat.categories)
-    group_indices = np.argsort(codes, kind="stable").astype(np.int64)
-    group_offsets = np.concatenate(([0], np.cumsum(np.bincount(codes, minlength=n_groups)))).astype(np.int64)
-    return group_offsets, group_indices
+    return _group_offsets(libraries)
 
 
 @njit(inline="always", cache=True)
