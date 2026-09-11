@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Iterable, Sequence
-from functools import partial
 from typing import Any, Literal, NamedTuple
 
 import numpy as np
 import pandas as pd
-import rustworkx as rx
 from anndata import AnnData
 from fast_array_utils import stats as fau_stats
 from fast_array_utils.conv import to_dense
@@ -23,7 +21,6 @@ from pandas import CategoricalDtype
 from scanpy import logging as logg
 from scipy.sparse import csr_array, csr_matrix, issparse
 from spatialdata import SpatialData
-from tqdm.auto import tqdm
 
 from squidpy._compat import old_positionals
 from squidpy._constants._constants import Centrality
@@ -575,7 +572,7 @@ def centrality_scores(
     %(table_key)s
     %(cluster_key)s
     score
-        Group centrality measures as implemented in ``rustworkx`` :cite:`rustworkx`.
+        Group centrality measures, matching the definitions in ``rustworkx`` :cite:`rustworkx`.
         If `None`, use all the options below. Valid options are:
 
             - `{c.CLOSENESS.s!r}` - measure of how close the group is to other nodes.
@@ -606,37 +603,49 @@ def centrality_scores(
 
     centralities = [Centrality(c) for c in centrality]
 
-    # a rustworkx graph mirrors the undirected connectivity graph for the group closeness/degree
-    # measures; a symmetric, self-loop-free CSR feeds the clustering-coefficient kernel.
-    graph, adj = _build_graph(adata.obsp[connectivity_key])
+    for c in centralities:
+        if c not in (Centrality.CLOSENESS, Centrality.DEGREE, Centrality.CLUSTERING):
+            raise NotImplementedError(f"Centrality `{c}` is not yet implemented.")
 
+    # every measure reads the same symmetric, self-loop-free, index-sorted CSR.
+    adj = _symmetric_adjacency(adata.obsp[connectivity_key])
+    n_cells = adj.shape[0]
     cat = adata.obs[cluster_key].cat.categories.values
 
     n_jobs = get_n_numba_threads(n_jobs)
     start = logg.info(f"Calculating centralities `{centralities}` using `{n_jobs}` thread(s)")
 
-    fun_dict = {}
-    for c in centralities:
-        if c == Centrality.CLOSENESS:
-            fun_dict[c.s] = partial(rx.group_closeness_centrality, graph)
-        elif c == Centrality.DEGREE:
-            fun_dict[c.s] = partial(rx.group_degree_centrality, graph)
-        elif c == Centrality.CLUSTERING:
+    # cells with a missing label join no group but stay in the graph, so they still count as non-group
+    offsets, members = _group_offsets(adata.obs[cluster_key])
+
+    scores: dict[str, NDArrayA] = {}
+    with numba_threads(n_jobs):
+        if Centrality.CLOSENESS in centralities or Centrality.DEGREE in centralities:
+            # one BFS per group yields both measures, so it runs even if only one was asked for
+            with ProgressBar(
+                total=len(cat), unit="group", desc="centrality_scores", disable=not show_progress_bar
+            ) as progress:
+                degree, closeness = _group_degree_closeness(
+                    adj.indptr, adj.indices, offsets, members, n_cells, progress
+                )
+            if Centrality.DEGREE in centralities:
+                scores[Centrality.DEGREE.s] = degree
+            if Centrality.CLOSENESS in centralities:
+                scores[Centrality.CLOSENESS.s] = closeness
+        if Centrality.CLUSTERING in centralities:
             # average the per-node clustering coefficients over the group (0 if the group is empty).
-            with numba_threads(n_jobs):
-                node_clustering = _local_clustering(adj.indptr, adj.indices, adj.shape[0])
-            fun_dict[c.s] = lambda idx, cc=node_clustering: float(cc[idx].mean()) if len(idx) else 0.0
-        else:
-            raise NotImplementedError(f"Centrality `{c}` is not yet implemented.")
+            node_clustering = _local_clustering(adj.indptr, adj.indices, n_cells)
+            scores[Centrality.CLUSTERING.s] = np.array(
+                [
+                    float(node_clustering[members[offsets[g] : offsets[g + 1]]].mean())
+                    if offsets[g + 1] > offsets[g]
+                    else 0.0
+                    for g in range(len(cat))
+                ]
+            )
 
-    group_idx = adata.obs.groupby(cluster_key, observed=False).indices
-    idxs = [group_idx.get(c, np.empty(0, dtype=np.int64)) for c in cat]
-    groups = [(k, fun, idx) for k, fun in fun_dict.items() for idx in idxs]
-    scores: dict[str, list[float]] = {k: [] for k in fun_dict}
-    for k, fun, idx in tqdm(groups, unit="group", disable=not show_progress_bar):
-        scores[k].append(fun(idx))
-
-    df = pd.DataFrame(scores, index=cat)
+    # keep the column order the caller asked for, which the measure-by-measure dict above loses.
+    df = pd.DataFrame({c.s: scores[c.s] for c in centralities}, index=cat)
 
     if copy:
         return df
@@ -734,29 +743,82 @@ def _interaction_matrix(
     return output
 
 
-def _build_graph(conn: Any) -> tuple[rx.PyGraph, csr_matrix]:
-    """Build the graph representations used by :func:`centrality_scores`.
+def _symmetric_adjacency(conn: Any) -> csr_matrix:
+    """Symmetric, self-loop-free, index-sorted CSR view of a connectivity graph.
 
-    Returns a :class:`rustworkx.PyGraph` mirroring the undirected connectivity graph
-    (used by the group closeness/degree measures) and a symmetric, self-loop-free,
-    index-sorted CSR matrix feeding the clustering-coefficient kernel.
+    Matches :class:`networkx.Graph` topology, which is what the centrality kernels assume.
     """
-    from scipy.sparse import triu
-
     adj = csr_matrix(conn)
-    # undirected, unweighted, no self-loops: matches ``networkx.Graph(conn)`` topology.
     adj = (adj + adj.T).tocsr()
     adj.setdiag(0)
     adj.eliminate_zeros()
-    adj.sort_indices()  # the clustering kernel merges neighbor lists, which must be sorted.
+    adj.sort_indices()  # both kernels walk neighbor lists that must be sorted.
+    return adj
 
-    n = adj.shape[0]
-    graph = rx.PyGraph(multigraph=False)
-    graph.add_nodes_from(range(n))
-    # the strict upper triangle lists each undirected edge exactly once.
-    rows, cols = triu(adj, k=1).nonzero()
-    graph.extend_from_edge_list(zip(rows.tolist(), cols.tolist(), strict=True))
-    return graph, adj
+
+@njit(parallel=True, nogil=True, cache=True)
+def _group_degree_closeness(  # noqa: PLR0917, numba requires positional arguments
+    indptr: NDArrayA,
+    indices: NDArrayA,
+    offsets: NDArrayA,
+    members: NDArrayA,
+    n: int,
+    progress: Any,
+) -> tuple[NDArrayA, NDArrayA]:
+    """Group degree and group closeness per group, over a symmetric CSR graph.
+
+    ``members[offsets[g]:offsets[g + 1]]`` holds group ``g``'s nodes. One multi-source BFS per group
+    gives both: its distance-1 nodes are the group's non-member neighbours, its distance sum is the
+    closeness denominator.
+
+        ``degree = |non-group nodes adjacent to the group| / (n - |S|)``
+        ``closeness = (n - |S|) / sum_v d(S, v)``, or 0 when that sum is 0
+
+    Unreachable nodes count towards ``n - |S|`` but add no distance, matching :mod:`networkx` and
+    :mod:`rustworkx`, which is why a disconnected graph can score above 1.
+    """
+    n_groups = len(offsets) - 1
+    degree = np.zeros(n_groups, dtype=np.float64)
+    closeness = np.zeros(n_groups, dtype=np.float64)
+
+    for g in prange(n_groups):
+        start, end = offsets[g], offsets[g + 1]
+        size = end - start
+        if size == 0 or size >= n:
+            progress.update(1)
+            continue
+
+        # private per iteration, so nothing is shared; int32 halves the bytes touched for ~1.35x
+        dist = np.full(n, -1, dtype=np.int32)
+        queue = np.empty(n, dtype=np.int32)
+        tail = 0
+        for t in range(start, end):
+            dist[members[t]] = 0
+            queue[tail] = members[t]
+            tail += 1
+
+        adjacent = 0  # nodes at distance 1, i.e. the group's non-member neighbors
+        dist_sum = 0
+        head = 0
+        while head < tail:
+            v = queue[head]
+            head += 1
+            d = dist[v] + 1
+            for e in range(indptr[v], indptr[v + 1]):
+                u = indices[e]
+                if dist[u] < 0:
+                    dist[u] = d
+                    dist_sum += d
+                    if d == 1:
+                        adjacent += 1
+                    queue[tail] = u
+                    tail += 1
+
+        degree[g] = adjacent / (n - size)
+        closeness[g] = 0.0 if dist_sum == 0 else (n - size) / dist_sum
+        progress.update(1)
+
+    return degree, closeness
 
 
 @njit(parallel=True, cache=True)
