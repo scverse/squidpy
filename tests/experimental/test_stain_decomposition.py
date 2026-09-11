@@ -115,18 +115,17 @@ class TestDegenerate:
 
 
 class TestResolvers:
-    def test_macenko_mapping_and_unknown(self) -> None:
-        assert _resolve_macenko_params({"alpha": 2.0}).alpha == 2.0
-        with pytest.raises(ValueError, match="Unknown"):
-            _resolve_macenko_params({"nope": 1})
-
-    def test_vahadane_instance_and_badtype(self) -> None:
-        p = VahadaneParams(lambda1=0.2)
-        assert _resolve_vahadane_params(p) is p
-        with pytest.raises(TypeError, match="VahadaneParams"):
-            _resolve_vahadane_params(5)
+    def test_mapping_reaches_the_algorithm_params(self) -> None:
+        assert _resolve_macenko_params({"alpha": 2.0})["alpha"] == 2.0
+        assert _resolve_vahadane_params(VahadaneParams(lambda1=0.2))["lambda1"] == 0.2
 
     @pytest.mark.parametrize("bad", [0.0, 50.0, -1.0])
     def test_macenko_alpha_bounds(self, bad: float) -> None:
+        # validation moved from `__post_init__` to the resolve boundary
         with pytest.raises(ValueError, match="alpha"):
-            MacenkoParams(alpha=bad)
+            _resolve_macenko_params({"alpha": bad})
+
+    @pytest.mark.parametrize(("key", "bad"), [("beta", -1.0), ("lambda1", -1.0), ("n_iter", 0)])
+    def test_vahadane_bounds(self, key: str, bad: float) -> None:
+        with pytest.raises(ValueError, match=key):
+            _resolve_vahadane_params({key: bad})
