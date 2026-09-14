@@ -323,6 +323,7 @@ def spatial_neighbors(
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
+        copy=copy,
     )
     builder = _resolve_graph_builder(
         coord_type=coord_type,
@@ -354,6 +355,7 @@ def _resolve_data(
     table_key: str | None = None,
     spatial_key: str = Key.obsm.spatial,
     library_key: str | None = None,
+    copy: bool = False,
 ) -> tuple[AnnData, str | None]:
     if not isinstance(data, SpatialData):
         return data, library_key
@@ -400,6 +402,10 @@ def _resolve_data(
             centroid = centroid[1:].copy()
         centroids.append(centroid)
 
+    if copy:
+        # Graph construction only needs observations, coordinates and the uns keys
+        # used by legacy graph dispatch. Do not copy or load expression matrices.
+        table = AnnData(obs=table.obs.copy(), uns=table.uns.copy())
     table.obsm[spatial_key] = np.concatenate(centroids)
     return table, region_key
 
@@ -469,6 +475,7 @@ def spatial_neighbors_from_builder(
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
+        copy=copy,
     )
     return _run_spatial_neighbors(
         adata,
@@ -488,6 +495,7 @@ def _prepare_spatial_neighbors_input(
     elements_to_coordinate_systems: dict[str, str] | None,
     table_key: str | None,
     library_key: str | None,
+    copy: bool,
 ) -> tuple[AnnData, str | None]:
     """Resolve input data and validate the requested spatial basis."""
     adata, library_key = _resolve_data(
@@ -496,6 +504,7 @@ def _prepare_spatial_neighbors_input(
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
+        copy=copy,
     )
     _assert_spatial_basis(adata, key=spatial_key)
     return adata, library_key
@@ -558,6 +567,7 @@ def spatial_neighbors_knn(
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
+        copy=copy,
     )
     return _run_spatial_neighbors(
         adata,
@@ -630,6 +640,7 @@ def spatial_neighbors_radius(
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
+        copy=copy,
     )
     return _run_spatial_neighbors(
         adata,
@@ -706,6 +717,7 @@ def spatial_neighbors_delaunay(
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
+        copy=copy,
     )
     return _run_spatial_neighbors(
         adata,
@@ -795,6 +807,7 @@ def spatial_neighbors_grid(
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
+        copy=copy,
     )
     return _run_spatial_neighbors(
         adata,
