@@ -7,3 +7,7 @@
 - Update :attr:`squidpy.pl.var_by_distance` to show multiple variables on same plot.
   [@LLehner](https://github.com/LLehner)
   [#929](https://github.com/scverse/squidpy/pull/929)
+
+## Bug fixes
+
+- Preserve the input `SpatialData` table when building spatial neighbor graphs with `copy=True`, including when graph construction fails.
