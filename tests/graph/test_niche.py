@@ -321,22 +321,18 @@ def _hub_graph(weight=1.0):
     return csr_matrix(adjacency)
 
 
-HOP_RING_CASES = [
-    ("path, second ring is the far pair", _PATH3, 2, [_PATH3, _PATH3_RING2]),
-    ("path, nothing past the diameter", _PATH3, 3, [_PATH3, _PATH3_RING2, np.zeros((3, 3))]),
-    ("stored zeros are not edges", _stored_zero_path3(), 2, [_PATH3, _PATH3_RING2]),
-    ("triangle has no second ring", _TRIANGLE, 2, [_TRIANGLE, np.zeros((3, 3))]),
-    ("hop 1 keeps a self-loop", _SELF_LOOPED, 1, [_SELF_LOOPED]),
-    ("self-loops never propagate", np.eye(3), 3, [np.eye(3), np.zeros((3, 3)), np.zeros((3, 3))]),
-    ("an isolated node stays isolated", np.zeros((1, 1)), 3, [np.zeros((1, 1))] * 3),
-    ("rings are binary, not path counts", _CYCLE4, 2, [_CYCLE4, np.roll(np.eye(4), 2, axis=1)]),
-]
-
-
 @pytest.mark.parametrize(
     ("adjacency", "max_hop", "expected"),
-    [case[1:] for case in HOP_RING_CASES],
-    ids=[case[0] for case in HOP_RING_CASES],
+    [
+        pytest.param(_PATH3, 2, [_PATH3, _PATH3_RING2], id="path, second ring is the far pair"),
+        pytest.param(_PATH3, 3, [_PATH3, _PATH3_RING2, np.zeros((3, 3))], id="path, nothing past the diameter"),
+        pytest.param(_stored_zero_path3(), 2, [_PATH3, _PATH3_RING2], id="stored zeros are not edges"),
+        pytest.param(_TRIANGLE, 2, [_TRIANGLE, np.zeros((3, 3))], id="triangle has no second ring"),
+        pytest.param(_SELF_LOOPED, 1, [_SELF_LOOPED], id="hop 1 keeps a self-loop"),
+        pytest.param(np.eye(3), 3, [np.eye(3), np.zeros((3, 3)), np.zeros((3, 3))], id="self-loops never propagate"),
+        pytest.param(np.zeros((1, 1)), 3, [np.zeros((1, 1))] * 3, id="an isolated node stays isolated"),
+        pytest.param(_CYCLE4, 2, [_CYCLE4, np.roll(np.eye(4), 2, axis=1)], id="rings are binary, not path counts"),
+    ],
 )
 def test_hop_rings(adjacency, max_hop, expected):
     rings = compute_hop_adjacency_matrices(csr_matrix(adjacency), max_hop=max_hop)
