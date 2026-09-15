@@ -262,7 +262,7 @@ def test_calculate_niche_deprecation_is_a_future_warning(dummy_adata2: AnnData):
 def test_cellcharter_rejects_a_distance_below_one(dummy_adata2: AnnData, distance: int):
     spatial_neighbors_knn(dummy_adata2, n_neighs=3)
     with pytest.raises(ValueError, match=r"'distance' must be >= 1"):
-        calculate_niche_cellcharter(dummy_adata2, distance=distance, n_components=2, rng=0)
+        calculate_niche_cellcharter(dummy_adata2, distance=distance, n_clusters=2, rng=0)
 
 
 def test_neighborhood_profile_weights_by_path_count(dummy_adata2: AnnData):
@@ -428,7 +428,7 @@ def test_nhood_aggregate_sums_cancelling_weights():
 def test_niche_rejects_an_unusable_embedding_key(key):
     "`obsm[None]` is accepted by AnnData and only fails later, at write_h5ad."
     with pytest.raises(ValueError, match=r"'embedding_key_added' must be a non-empty string"):
-        calculate_niche_cellcharter(_tiny(), distance=2, n_components=2, rng=0, embedding_key_added=key)
+        calculate_niche_cellcharter(_tiny(), distance=2, n_clusters=2, rng=0, embedding_key_added=key)
 
 
 def test_niche_library_key_with_a_skipped_first_library_still_writes_labels():
@@ -450,9 +450,9 @@ def test_niche_library_key_with_no_usable_library_raises():
 def test_niche_library_key_rerun_overwrites_labels():
     "A second in-place call must not keep the first run's labels."
     adata = _tiny(n=40, libraries=["a"] * 20 + ["b"] * 20)
-    calculate_niche_cellcharter(adata, distance=2, n_components=2, rng=0, library_key="library")
+    calculate_niche_cellcharter(adata, distance=2, n_clusters=2, rng=0, library_key="library")
     first = np.asarray(adata.obs["cellcharter_niche"].astype(str)).copy()
-    calculate_niche_cellcharter(adata, distance=2, n_components=4, rng=99, library_key="library")
+    calculate_niche_cellcharter(adata, distance=2, n_clusters=4, rng=99, library_key="library")
     second = np.asarray(adata.obs["cellcharter_niche"].astype(str))
     assert not (first == second).all(), "the re-run silently kept the previous labels"
 
@@ -462,7 +462,7 @@ def test_weighted_graph_warning_points_at_the_caller():
     adata = _tiny()
     spatial_neighbors_knn(adata, n_neighs=4, transform="spectral")
     with pytest.warns(UserWarning, match="non-binary") as caught:
-        calculate_niche_cellcharter(adata, distance=2, n_components=2, rng=0)
+        calculate_niche_cellcharter(adata, distance=2, n_clusters=2, rng=0)
     assert caught[0].filename == __file__, f"attributed to {caught[0].filename}"
 
 
@@ -529,15 +529,15 @@ def test_use_rep_narrower_than_n_clusters_is_accepted():
     assert adata.obs["cellcharter_niche"].nunique() <= 5
 
 
-def test_n_components_sizes_the_pca():
+def test_n_pca_components_sizes_the_pca():
     adata = _tiny(n=60)
-    calculate_niche_cellcharter(adata, n_clusters=3, n_components=4, distance=1, rng=0)
+    calculate_niche_cellcharter(adata, n_clusters=3, n_pca_components=4, distance=1, rng=0)
     assert adata.obsm["niche_embedding"].shape[1] == 4
 
 
-def test_n_components_is_rejected_with_use_rep():
-    with pytest.raises(ValueError, match=r"'n_components' sizes the PCA, which 'use_rep' replaces"):
-        calculate_niche_cellcharter(_tiny(embedding_cols=6), use_rep="emb", n_components=3, rng=0)
+def test_n_pca_components_is_rejected_with_use_rep():
+    with pytest.raises(ValueError, match=r"'n_pca_components' sizes the PCA, which 'use_rep' replaces"):
+        calculate_niche_cellcharter(_tiny(embedding_cols=6), use_rep="emb", n_pca_components=3, rng=0)
 
 
 # ---------------------------------------------------------------- oracles and scale
@@ -616,7 +616,7 @@ def test_cellcharter_concatenates_hop_zero_with_every_ring(monkeypatch, distance
         return original(matrix, *args, **kwargs)
 
     monkeypatch.setattr(sc.pp, "pca", spy)
-    calculate_niche_cellcharter(adata, distance=distance, n_components=2, rng=0)
+    calculate_niche_cellcharter(adata, distance=distance, n_clusters=2, rng=0)
     assert seen == [(distance + 1) * adata.n_vars], f"PCA was handed {seen} columns"
 
 
@@ -629,7 +629,7 @@ def test_cellcharter_keeps_the_container_through_the_embedding(sparse: bool):
     adata.obsm["spatial"] = rng.random((50, 2)) * 10
     spatial_neighbors_knn(adata, n_neighs=4)
 
-    calculate_niche_cellcharter(adata, distance=2, n_components=3, rng=0)
+    calculate_niche_cellcharter(adata, distance=2, n_clusters=3, rng=0)
     assert "cellcharter_niche" in adata.obs
     assert str(adata.obs["cellcharter_niche"].dtype) == "category"
 
@@ -637,7 +637,7 @@ def test_cellcharter_keeps_the_container_through_the_embedding(sparse: bool):
 def test_cellcharter_with_a_library_key():
     "The stratified GMM path had no test at all once the seeding test was removed."
     adata = _tiny(n=60, libraries=["s1"] * 30 + ["s2"] * 30)
-    calculate_niche_cellcharter(adata, distance=2, n_components=2, rng=0, library_key="library")
+    calculate_niche_cellcharter(adata, distance=2, n_clusters=2, rng=0, library_key="library")
 
     labels = adata.obs["cellcharter_niche"].astype(str)
     assert str(adata.obs["cellcharter_niche"].dtype) == "category"
