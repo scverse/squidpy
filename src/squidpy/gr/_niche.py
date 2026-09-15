@@ -793,16 +793,13 @@ def calculate_niche_spatialleiden(
                 table_key=table_key,
             )
 
-            # from itr==1 onwards, adata will hold the columns that are being added hence,
-            # added_columns will be empty. Hence only obtain added_columns when itr==0
             if itr == 0:
                 added_columns = list(set(lib_adata.obs.columns) - set(adata.obs.columns))
+            _merge_library_columns(adata, lib_adata, lib_indices, added_columns)
 
-            for col in added_columns:
-                # ensure that adata has the columns in which we are adding the information
-                if col not in adata.obs:
-                    adata.obs[col] = "not_a_niche"
-                adata.obs.loc[lib_indices, col] = list(lib_adata.obs[col].astype("str"))
+        # the per-library labels go in as strings, so cast once every library has been seen
+        for col in added_columns:
+            adata.obs[col] = adata.obs[col].astype("category")
 
     else:
         # Simply call sl.spatialleiden with the provided arguments
@@ -915,16 +912,13 @@ def _calculate_niche_custom(
             result_columns = _fit_clusterers(lib_adata, lib_embedding, clusterers, rng)
             _postprocess_niche_results(lib_adata, result_columns, mask, min_niche_size, prefix=f"lib={lib_id}_")
 
-            # from itr==1 onwards, adata will hold the columns that are being added hence,
-            # added_columns will be empty. Hence only obtain added_columns when itr==0
             if itr == 0:
                 added_columns = list(set(lib_adata.obs.columns) - set(adata.obs.columns))
+            _merge_library_columns(adata, lib_adata, lib_indices, added_columns)
 
-            for col in added_columns:
-                # ensure that adata has the columns in which we are adding the information
-                if col not in adata.obs:
-                    adata.obs[col] = "not_a_niche"
-                adata.obs.loc[lib_indices, col] = list(lib_adata.obs[col].astype("str"))
+        # the per-library labels go in as strings, so cast once every library has been seen
+        for col in added_columns:
+            adata.obs[col] = adata.obs[col].astype("category")
 
     else:
         result_columns = _fit_clusterers(adata, embedding, clusterers, rng)
@@ -1327,6 +1321,19 @@ def _fit_clusterers(
 ############
 ### postprocessing
 ############
+
+
+def _merge_library_columns(
+    adata: AnnData,
+    lib_adata: AnnData,
+    lib_indices: pd.Index,
+    columns: list[str],
+) -> None:
+    """Write one library's niche columns back into *adata*, seeding absent ones."""
+    for col in columns:
+        if col not in adata.obs:
+            adata.obs[col] = "not_a_niche"
+        adata.obs.loc[lib_indices, col] = list(lib_adata.obs[col].astype("str"))
 
 
 def _postprocess_niche_results(
