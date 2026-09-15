@@ -899,33 +899,10 @@ def compute_hop_adjacency_matrices(
     max_hop: int,
     n_jobs: int | None = None,
 ) -> list[CSBase]:
-    """Compute a sequence of 'new-connections-only' adjacency matrices for increasing hop distances.
+    """Disjoint adjacency rings, one per hop up to *max_hop*.
 
-    Parameters
-    ----------
-    adjacency_matrix
-        The 1-hop (direct neighbor) adjacency matrix. Used as-is: if it has an
-        explicit self-loop (diagonal == 1), that is respected and preserved in
-        the output.
-    max_hop
-        Number of hop levels to compute (>= 1).
-    n_jobs
-        Threads for the search. Also caps its scratch, which is one buffer per thread.
-
-    Returns
-    -------
-    A list ``adj_mat_list`` of length ``max_hop`` where:
-
-    - ``adj_mat_list[0]`` is ``adjacency_matrix``, as booleans.
-    - ``adj_mat_list[k]`` (k >= 1) has a 1 at ``(i, j)`` iff cell ``i`` and ``j``
-      are reachable in exactly ``k + 1`` hops *and* were not already connected
-      in any of ``adj_mat_list[0], ..., adj_mat_list[k-1]``.
-
-    Notes
-    -----
-    A breadth-first search reaches each cell once, at its shortest
-    distance, so the hops are disjoint by construction: there is no "visited" matrix to
-    subtract, and a cell cannot reach itself via an out-and-back path.
+    Ring ``k`` holds the pairs first reached at hop ``k + 1``, so the rings never restate
+    each other. Ring 0 is the input as booleans, self-loops included.
     """
     if max_hop < 1:
         raise ValueError(f"max_hop must be >= 1, got {max_hop}.")
