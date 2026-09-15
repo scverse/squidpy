@@ -868,17 +868,6 @@ def _bfs_shells(
     out: NDArrayA,
     fill: bool,
 ) -> None:
-    """Breadth-first search from every observation, recording the hop each is first reached at.
-
-    Run twice: once with ``fill=False`` to size the output, once with ``fill=True`` to write
-    it. Sharing one traversal between the two passes is why the counting and filling logic
-    cannot drift apart.
-
-    Scratch is one buffer per thread rather than one per source, and ``stamp`` holds the
-    source that last touched an observation, so nothing has to be cleared between searches.
-    *n_threads* is passed in rather than read here, since calling into numba's threading
-    layer from inside the kernel makes it uncacheable.
-    """
     n = indptr.shape[0] - 1
     stamp = np.full((n_threads, n), -1, dtype=indices.dtype)
     queue = np.empty((n_threads, n), dtype=indices.dtype)
