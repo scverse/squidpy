@@ -371,14 +371,28 @@ def test_hop_rings_are_not_matrix_powers():
 # of them, so each of these fails if its guard is removed.
 
 
-def _tiny(n: int = 40, libraries: list[str] | None = None) -> AnnData:
+def _tiny(n: int = 40, libraries: list[str] | None = None, *, embedding_cols: int | None = None) -> AnnData:
     rng = np.random.default_rng(0)
     adata = AnnData(X=csr_matrix(rng.random((n, 6)).astype(np.float32)))
     adata.obsm["spatial"] = rng.random((n, 2)) * 10
     adata.obs["ct"] = pd.Categorical([f"t{k}" for k in rng.integers(0, 3, n)])
     if libraries is not None:
         adata.obs["library"] = libraries
+    if embedding_cols is not None:
+        adata.obsm["emb"] = rng.random((n, embedding_cols))
     spatial_neighbors_knn(adata, n_neighs=4)
+    return adata
+
+
+def _two_sections(sizes: tuple[int, int] = (60, 60), *, n_vars: int = 12, ct: list[str] | None = None, seed: int = 0):
+    "Two spatially disjoint sections in one object, for the `library_key` path."
+    rng = np.random.default_rng(seed)
+    n = sum(sizes)
+    adata = AnnData(X=csr_matrix(rng.random((n, n_vars)).astype(np.float32)))
+    adata.obsm["spatial"] = np.vstack([rng.random((sizes[0], 2)) * 10, rng.random((sizes[1], 2)) * 10 + 100])
+    adata.obs["ct"] = pd.Categorical(ct if ct is not None else [f"t{k}" for k in rng.integers(0, 3, n)])
+    adata.obs["section"] = pd.Categorical(["s1"] * sizes[0] + ["s2"] * sizes[1])
+    spatial_neighbors_knn(adata, n_neighs=4, library_key="section")
     return adata
 
 
@@ -393,27 +407,25 @@ def test_hop_adjacency_accepts_an_array_like():
     assert np.array_equal(_toarray(rings[1]).astype(float), _PATH3_RING2)
 
 
-@pytest.mark.parametrize("hops", [(0,), (1,)])
-def test_nhood_aggregate_rejects_an_unknown_aggregation(hops):
-    "hop 0 returns the features unaggregated, so it never reaches the per-hop check."
-    adata = _tiny()
-    with pytest.raises(ValueError, match=r"'aggregation' must be"):
-        nhood_aggregate(adata, hops=hops, aggregation="median")
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        # hop 0 returns the features unaggregated, so it never reaches the per-hop check
+        ({"hops": (0,), "aggregation": "median"}, r"'aggregation' must be"),
+        ({"hops": (1,), "aggregation": "median"}, r"'aggregation' must be"),
+        ({"hops": (1, 2), "hop_weights": [1.0]}, r"'hop_weights' has 1 value"),
+        # averaging over a zero total used to return an all-NaN matrix silently
+        ({"hops": (1, 2), "hop_weights": [1.0, -1.0], "aggregation": "mean"}, r"must not sum to zero"),
+    ],
+)
+def test_nhood_aggregate_rejects(kwargs, match):
+    with pytest.raises(ValueError, match=match):
+        nhood_aggregate(_tiny(), **kwargs)
 
 
-def test_nhood_aggregate_rejects_a_weight_count_mismatch():
-    adata = _tiny()
-    with pytest.raises(ValueError, match=r"'hop_weights' has 1 value"):
-        nhood_aggregate(adata, hops=(1, 2), hop_weights=[1.0])
-
-
-def test_nhood_aggregate_rejects_weights_summing_to_zero():
-    "Averaging over a zero total used to return an all-NaN matrix silently."
-    adata = _tiny()
-    with pytest.raises(ValueError, match=r"must not sum to zero"):
-        nhood_aggregate(adata, hops=(1, 2), hop_weights=[1.0, -1.0], aggregation="mean")
-    # counts stay counts, so `sum` never divides and the weights may cancel
-    assert nhood_aggregate(adata, hops=(1, 2), hop_weights=[1.0, -1.0], aggregation="sum") is not None
+def test_nhood_aggregate_sums_cancelling_weights():
+    "Counts stay counts, so `sum` never divides and the weights may cancel."
+    assert nhood_aggregate(_tiny(), hops=(1, 2), hop_weights=[1.0, -1.0], aggregation="sum") is not None
 
 
 @pytest.mark.parametrize("key", [None, "", 5])
@@ -469,13 +481,9 @@ def test_clusterer_without_a_random_state_is_rejected():
 
 def test_library_key_embeds_each_library_on_its_own(monkeypatch):
     "Stratifying exists to fit the embedding per library, not once on the pooled object."
-    rng = np.random.default_rng(0)
     half = 60
-    adata = AnnData(X=csr_matrix(rng.random((2 * half, 12)).astype(np.float32)))
-    adata.obsm["spatial"] = np.vstack([rng.random((half, 2)) * 10, rng.random((half, 2)) * 10 + 100])
-    adata.obs["ct"] = pd.Categorical(["a"] * 50 + ["b"] * 10 + ["a"] * 10 + ["b"] * 50)
-    adata.obs["section"] = pd.Categorical(["s1"] * half + ["s2"] * half)
-    spatial_neighbors_knn(adata, n_neighs=6, library_key="section")
+    # opposite composition per section, so a pooled fit leaves each one's offset in the rows
+    adata = _two_sections((half, half), ct=["a"] * 50 + ["b"] * 10 + ["a"] * 10 + ["b"] * 50)
 
     seen: list[int] = []
     original = _niche._nhood_profile_embedding
@@ -494,37 +502,23 @@ def test_library_key_embeds_each_library_on_its_own(monkeypatch):
 
 def test_library_key_writes_no_pooled_embedding():
     "Fitted per library, the blocks are in different spaces, so there is no one array to store."
-    rng = np.random.default_rng(1)
-    adata = AnnData(X=csr_matrix(rng.random((70, 20)).astype(np.float32)))
-    adata.obsm["spatial"] = np.vstack([rng.random((15, 2)) * 10, rng.random((55, 2)) * 10 + 100])
-    adata.obs["ct"] = pd.Categorical([f"t{k}" for k in rng.integers(0, 3, 70)])
-    adata.obs["section"] = pd.Categorical(["s1"] * 15 + ["s2"] * 55)
-    spatial_neighbors_knn(adata, n_neighs=4, library_key="section")
+    # PCA caps components at min(n_obs, n_vars) - 1, so these two blocks cannot even share a width
+    adata = _two_sections((15, 55), n_vars=20, seed=1)
 
     calculate_niche_utag(adata, resolutions=1.0, n_neighbors=8, rng=0, library_key="section")
     assert "niche_embedding" not in adata.obsm
     assert "utag_niche_res=1.0" in adata.obs, "the labels must still be written"
 
 
-def _with_embedding(cols: int, n: int = 60) -> AnnData:
-    rng = np.random.default_rng(0)
-    adata = AnnData(X=csr_matrix(rng.random((n, 10)).astype(np.float32)))
-    adata.obsm["spatial"] = rng.random((n, 2)) * 12
-    adata.obsm["emb"] = rng.random((n, cols))
-    spatial_neighbors_knn(adata, n_neighs=5)
-    return adata
-
-
 def test_use_rep_is_truncated_to_n_components():
     "v1.8.3 and main both clustered only the first `n_components` columns of `use_rep`."
-    adata = _with_embedding(cols=20)
+    adata = _tiny(embedding_cols=20)
     assert _precomputed_embedding(adata, obsm_key="emb", n_components=10).shape[1] == 10
 
 
 def test_use_rep_narrower_than_n_components_is_rejected():
-    adata = _with_embedding(cols=5)
     with pytest.raises(ValueError, match=r"Embedding has 5 components, but n_components=10"):
-        calculate_niche_cellcharter(adata, use_rep="emb", n_components=10, rng=0)
+        calculate_niche_cellcharter(_tiny(embedding_cols=5), use_rep="emb", n_components=10, rng=0)
 
 
 # ---------------------------------------------------------------- oracles and scale
@@ -632,26 +626,27 @@ def test_cellcharter_with_a_library_key():
     assert {label.split("_")[0] for label in labels} == {"lib=s1", "lib=s2"}
 
 
-@pytest.mark.parametrize("flavor_fn", [calculate_niche_utag, calculate_niche_neighborhood])
-def test_resolutions_reject_a_pair_outside_spatialleiden(flavor_fn):
-    "A (latent, spatial) pair used to reach scanpy as `must be real number, not tuple`."
-    adata = _tiny()
-    kwargs = {"groups": "ct"} if flavor_fn is calculate_niche_neighborhood else {}
+@pytest.mark.parametrize(
+    ("resolutions", "exc", "match"),
+    [
+        # a pair is the spatialleiden (latent, spatial) argument; elsewhere it reached scanpy
+        # as `must be real number, not tuple`
+        ((0.5, 1.0), TypeError, r"only the 'spatialleiden' flavor takes"),
+        # repeats collided on the column name and silently produced one clustering, not two
+        ([0.5, 0.5], ValueError, r"'resolutions' repeats 0.5"),
+        ([], ValueError, r"'resolutions' is empty"),
+        ("high", TypeError, r"'resolutions' must be numbers"),
+    ],
+)
+def test_resolutions_are_rejected(resolutions, exc, match):
+    with pytest.raises(exc, match=match):
+        calculate_niche_utag(_tiny(), resolutions=resolutions, n_neighbors=4, rng=0)
+
+
+def test_a_resolution_pair_is_rejected_by_every_leiden_flavor():
+    "Both flavors funnel through `_leiden_clusterers`, which is where the check lives."
     with pytest.raises(TypeError, match=r"only the 'spatialleiden' flavor takes"):
-        flavor_fn(adata, resolutions=(0.5, 1.0), n_neighbors=4, rng=0, **kwargs)
-
-
-def test_resolutions_reject_repeated_values():
-    "Repeats collided on the column name and silently produced one clustering, not two."
-    adata = _tiny()
-    with pytest.raises(ValueError, match=r"'resolutions' repeats 0.5"):
-        calculate_niche_utag(adata, resolutions=[0.5, 0.5], n_neighbors=4, rng=0)
-
-
-def test_resolutions_reject_an_empty_sequence():
-    adata = _tiny()
-    with pytest.raises(ValueError, match=r"'resolutions' is empty"):
-        calculate_niche_utag(adata, resolutions=[], n_neighbors=4, rng=0)
+        calculate_niche_neighborhood(_tiny(), groups="ct", resolutions=(0.5, 1.0), n_neighbors=4, rng=0)
 
 
 def test_resolutions_accept_a_numpy_array():
