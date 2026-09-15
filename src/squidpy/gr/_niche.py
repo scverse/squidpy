@@ -428,7 +428,7 @@ def calculate_niche_neighborhood(
         n_iterations=n_iterations,
     )
 
-    return _calculate_niche_custom(
+    return calculate_niche_custom(
         data,
         embedder,
         clusterers,
@@ -540,7 +540,7 @@ def calculate_niche_utag(
         n_iterations=n_iterations,
     )
 
-    return _calculate_niche_custom(
+    return calculate_niche_custom(
         data,
         embedder,
         clusterers,
@@ -672,7 +672,7 @@ def calculate_niche_cellcharter(
     # `GaussianMixture` is a `Clusterer` as it stands, so this flavor needs no wrapper
     clusterers = {"cellcharter_niche": GaussianMixture(n_components=n_components, init_params="random_from_data")}
 
-    return _calculate_niche_custom(
+    return calculate_niche_custom(
         data,
         embedder,
         clusterers,
@@ -810,7 +810,7 @@ def calculate_niche_spatialleiden(
 
 
 @d.dedent
-def _calculate_niche_custom(
+def calculate_niche_custom(
     data: AnnData | SpatialData,
     embedder: NicheEmbedder,
     clusterers: Mapping[str, Clusterer],
