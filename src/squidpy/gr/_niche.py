@@ -287,7 +287,6 @@ def calculate_niche(
             rng=rng,
             min_niche_size=min_niche_size,
             mask=mask,
-            prefix=None,
             library_key=library_key,
             copy=not inplace,
             table_key=table_key,
@@ -691,7 +690,6 @@ def calculate_niche_spatialleiden(
     rng: SeedLike | RNGLike | None = None,
     min_niche_size: int | None = None,
     mask: pd.Series | None = None,
-    prefix: str | None = None,
     library_key: str | None = None,
     copy: bool = False,
     table_key: str | None = None,
@@ -723,10 +721,6 @@ def calculate_niche_spatialleiden(
         clustered with an independent rng derived from it.
     %(niche_min_niche_size)s
     %(niche_mask)s
-    prefix
-        Prefix added to niche labels produced by SpatialLeiden.
-        When stratifying by ``library_key``, a library-specific prefix is added
-        automatically (something like "lib=").
     %(library_key)s
     %(copy)s
     %(table_key)s
@@ -742,12 +736,6 @@ def calculate_niche_spatialleiden(
     each library and the results are merged back into the parent object.
     """
 
-    try:
-        import spatialleiden as sl
-    except ImportError as e:
-        msg = "Please install the spatialleiden algorithm: `pip install squidpy[leiden]` or `conda install bioconda::spatialleiden` or `pip install spatialleiden`."
-        raise ImportError(msg) from e
-
     # obtain adata if data was of sdata type
     orig_adata = extract_adata_if_sdata(data, table_key=table_key)
 
@@ -756,10 +744,19 @@ def calculate_niche_spatialleiden(
     # normalise once here; everything below this point works with rngs only
     rng = np.random.default_rng(rng)
     resolution_list = _resolution_values(resolutions, pairs_ok=True)
+    run = partial(
+        _spatialleiden_once,
+        resolution_list=resolution_list,
+        latent_connectivities_key=latent_connectivities_key,
+        spatial_connectivities_key=spatial_connectivities_key,
+        layer_ratio=layer_ratio,
+        n_iterations=n_iterations,
+        use_weights=use_weights,
+        mask=mask,
+        min_niche_size=min_niche_size,
+    )
 
     if library_key is not None:
-        # first assert that library_key was there in adata.obs, and then, stratify the object according to that library_key and
-        # then re-call calculate_niche_spatialleiden for each subpart, with library_key = None and prefix with appropriate information like "lib="
         assert_key_in_adata(adata, library_key, attr="obs")
         logg.info(f"Stratifying by library_key '{library_key}'")
 
@@ -782,26 +779,7 @@ def calculate_niche_spatialleiden(
                 continue
 
             lib_adata = adata[lib_indices].copy()
-
-            # give prefix appropriate value so that the niche values indicate lib id.
-            calculate_niche_spatialleiden(
-                lib_adata,
-                resolutions=resolutions,
-                latent_connectivities_key=latent_connectivities_key,
-                spatial_connectivities_key=spatial_connectivities_key,
-                layer_ratio=layer_ratio,
-                n_iterations=n_iterations,
-                use_weights=use_weights,
-                rng=library_rngs[itr],
-                min_niche_size=min_niche_size,
-                mask=mask,
-                prefix=f"lib={lib_id}_",
-                library_key=None,
-                copy=False,  # to save memory
-                table_key=table_key,
-            )
-
-            result_columns = [f"spatialleiden_res={res}" for res in resolution_list]
+            result_columns = run(lib_adata, rng=library_rngs[itr], prefix=f"lib={lib_id}_")
             _merge_library_columns(adata, lib_adata, lib_indices, result_columns, seeded)
             added_columns = result_columns
 
@@ -813,26 +791,7 @@ def calculate_niche_spatialleiden(
             adata.obs[col] = adata.obs[col].astype("category")
 
     else:
-        # every resolution is a separate clustering run, so seed each one independently
-        resolution_rngs = rng.spawn(len(resolution_list))
-
-        for res, res_rng in zip(resolution_list, resolution_rngs, strict=True):
-            sl.spatialleiden(
-                adata,
-                resolution=res,
-                use_weights=use_weights,
-                n_iterations=n_iterations,
-                layer_ratio=layer_ratio,
-                latent_neighbors_key=latent_connectivities_key,
-                spatial_neighbors_key=spatial_connectivities_key,
-                random_state=legacy_random(res_rng),
-                directed=False,
-                key_added=f"spatialleiden_res={res}",
-            )
-
-        result_columns = [f"spatialleiden_res={res}" for res in resolution_list]
-
-        _postprocess_niche_results(adata, result_columns, mask, min_niche_size, prefix)
+        run(adata, rng=rng, prefix=None)
 
     # For SpatialData, the column names shouldn't have = sign. Hence, run sanitize_table.
     # TODO: In future, change the naming standard of any niche columns added to not have '=' to be compatible with spatialdata naming
@@ -1381,6 +1340,48 @@ def _merge_library_columns(
             adata.obs[col] = "not_a_niche"
             seeded.add(col)
         adata.obs.loc[lib_indices, col] = list(lib_adata.obs[col].astype("str"))
+
+
+def _spatialleiden_once(
+    adata: AnnData,
+    *,
+    resolution_list: list[Any],
+    rng: np.random.Generator,
+    latent_connectivities_key: str,
+    spatial_connectivities_key: str,
+    layer_ratio: float,
+    n_iterations: int,
+    use_weights: bool | tuple[bool, bool],
+    mask: pd.Series | None,
+    min_niche_size: int | None,
+    prefix: str | None,
+) -> list[str]:
+    """One SpatialLeiden run per resolution, in place; returns the columns written."""
+    try:
+        import spatialleiden as sl
+    except ImportError as e:
+        msg = "Please install the spatialleiden algorithm: `pip install squidpy[leiden]` or `conda install bioconda::spatialleiden` or `pip install spatialleiden`."
+        raise ImportError(msg) from e
+
+    # every resolution is a separate clustering run, so seed each one independently
+    resolution_rngs = rng.spawn(len(resolution_list))
+    for res, res_rng in zip(resolution_list, resolution_rngs, strict=True):
+        sl.spatialleiden(
+            adata,
+            resolution=res,
+            use_weights=use_weights,
+            n_iterations=n_iterations,
+            layer_ratio=layer_ratio,
+            latent_neighbors_key=latent_connectivities_key,
+            spatial_neighbors_key=spatial_connectivities_key,
+            random_state=legacy_random(res_rng),
+            directed=False,
+            key_added=f"spatialleiden_res={res}",
+        )
+
+    result_columns = [f"spatialleiden_res={res}" for res in resolution_list]
+    _postprocess_niche_results(adata, result_columns, mask, min_niche_size, prefix)
+    return result_columns
 
 
 def _postprocess_niche_results(
