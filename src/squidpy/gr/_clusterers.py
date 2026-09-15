@@ -8,8 +8,6 @@ import scanpy as sc
 from fast_array_utils.types import HasArrayNamespace as Array
 from sklearn.base import BaseEstimator, ClusterMixin
 
-__all__ = ["Clusterer", "LeidenClusterer"]
-
 
 @runtime_checkable
 class Clusterer(Protocol):

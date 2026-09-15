@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from anndata import AnnData
+from fast_array_utils.conv import to_dense
 from pandas import Series
 from scanpy.pp import neighbors
 from scipy.sparse import csr_matrix
@@ -11,12 +12,15 @@ from spatialdata import SpatialData
 from spatialdata.models import TableModel
 
 from squidpy.gr import (
+    _niche,
     calculate_niche,
     calculate_niche_cellcharter,
     calculate_niche_neighborhood,
+    calculate_niche_utag,
     spatial_neighbors_knn,
 )
-from squidpy.gr._niche import compute_hop_adjacency_matrices
+from squidpy.gr._nhood import nhood_aggregate
+from squidpy.gr._niche import _fit_clusterers, _precomputed_embedding, compute_hop_adjacency_matrices
 
 N_NEIGHBORS = 20
 
@@ -230,7 +234,7 @@ def test_niche_calc_utag(adata_seqfish: AnnData):
 def test_niche_copy_semantics(dummy_adata2: AnnData):
     "copy=True returns an annotated copy and leaves the input untouched; copy=False mutates and returns None."
     key = "nhood_niche_res=1.0"
-    kwargs = {"groups": "celltype", "n_neighbors": 3, "resolutions": 1.0}
+    kwargs = {"groups": "celltype", "n_neighbors": 3, "resolutions": 1.0, "rng": 0}
 
     out = calculate_niche_neighborhood(dummy_adata2, copy=True, **kwargs)
     assert key in out.obs.columns
@@ -358,3 +362,164 @@ def test_hop_rings_are_not_matrix_powers():
     assert (rings[0] != powers[0]).nnz == 0, "hop 1 is the graph itself either way"
     assert powers[1][0, 1] == 3, "0 and 1 are joined by three 2-step paths"
     assert not rings[1][0, 1], "0 and 1 were already joined at one hop"
+
+
+# ---------------------------------------------------------------- guards
+# One test per guard added in response to review. A mutation run showed the suite caught none
+# of them, so each of these fails if its guard is removed.
+
+
+def _tiny(n: int = 40, libraries: list[str] | None = None) -> AnnData:
+    rng = np.random.default_rng(0)
+    adata = AnnData(X=csr_matrix(rng.random((n, 6)).astype(np.float32)))
+    adata.obsm["spatial"] = rng.random((n, 2)) * 10
+    adata.obs["ct"] = pd.Categorical([f"t{k}" for k in rng.integers(0, 3, n)])
+    if libraries is not None:
+        adata.obs["library"] = libraries
+    spatial_neighbors_knn(adata, n_neighs=4)
+    return adata
+
+
+def test_hop_adjacency_rejects_a_non_square_matrix():
+    with pytest.raises(ValueError, match=r"must be square"):
+        compute_hop_adjacency_matrices(csr_matrix(np.ones((3, 5), dtype=float)), max_hop=2)
+
+
+def test_hop_adjacency_accepts_an_array_like():
+    "A plain nested list still works; the square check must not read `.shape` off it."
+    rings = compute_hop_adjacency_matrices([[0, 1, 0], [1, 0, 1], [0, 1, 0]], max_hop=2)
+    assert np.array_equal(_toarray(rings[1]).astype(float), _PATH3_RING2)
+
+
+@pytest.mark.parametrize("hops", [(0,), (1,)])
+def test_nhood_aggregate_rejects_an_unknown_aggregation(hops):
+    "hop 0 returns the features unaggregated, so it never reaches the per-hop check."
+    adata = _tiny()
+    with pytest.raises(ValueError, match=r"'aggregation' must be"):
+        nhood_aggregate(adata, hops=hops, aggregation="median")
+
+
+def test_nhood_aggregate_rejects_a_weight_count_mismatch():
+    adata = _tiny()
+    with pytest.raises(ValueError, match=r"'hop_weights' has 1 value"):
+        nhood_aggregate(adata, hops=(1, 2), hop_weights=[1.0])
+
+
+def test_nhood_aggregate_rejects_weights_summing_to_zero():
+    "Averaging over a zero total used to return an all-NaN matrix silently."
+    adata = _tiny()
+    with pytest.raises(ValueError, match=r"must not sum to zero"):
+        nhood_aggregate(adata, hops=(1, 2), hop_weights=[1.0, -1.0], aggregation="mean")
+    # counts stay counts, so `sum` never divides and the weights may cancel
+    assert nhood_aggregate(adata, hops=(1, 2), hop_weights=[1.0, -1.0], aggregation="sum") is not None
+
+
+@pytest.mark.parametrize("key", [None, "", 5])
+def test_niche_rejects_an_unusable_embedding_key(key):
+    "`obsm[None]` is accepted by AnnData and only fails later, at write_h5ad."
+    with pytest.raises(ValueError, match=r"'embedding_key_added' must be a non-empty string"):
+        calculate_niche_cellcharter(_tiny(), distance=2, n_components=2, rng=0, embedding_key_added=key)
+
+
+def test_niche_library_key_with_a_skipped_first_library_still_writes_labels():
+    "An empty first library must not silently drop every later library's labels."
+    adata = _tiny(n=40, libraries=[None] * 8 + ["a"] * 16 + ["b"] * 16)
+    calculate_niche_neighborhood(adata, groups="ct", resolutions=1.0, n_neighbors=4, rng=0, library_key="library")
+    col = "nhood_niche_res=1.0"
+    assert col in adata.obs, "the labels of the non-empty libraries were dropped"
+    assert str(adata.obs[col].dtype) == "category"
+    assert (adata.obs[col][8:] != "not_a_niche").any()
+
+
+def test_niche_library_key_with_no_usable_library_raises():
+    adata = _tiny(n=20, libraries=[None] * 20)
+    with pytest.raises(ValueError, match=r"no observation has a 'library'"):
+        calculate_niche_neighborhood(adata, groups="ct", resolutions=1.0, n_neighbors=4, rng=0, library_key="library")
+
+
+def test_niche_library_key_rerun_overwrites_labels():
+    "A second in-place call must not keep the first run's labels."
+    adata = _tiny(n=40, libraries=["a"] * 20 + ["b"] * 20)
+    calculate_niche_cellcharter(adata, distance=2, n_components=2, rng=0, library_key="library")
+    first = np.asarray(adata.obs["cellcharter_niche"].astype(str)).copy()
+    calculate_niche_cellcharter(adata, distance=2, n_components=4, rng=99, library_key="library")
+    second = np.asarray(adata.obs["cellcharter_niche"].astype(str))
+    assert not (first == second).all(), "the re-run silently kept the previous labels"
+
+
+def test_weighted_graph_warning_points_at_the_caller():
+    "`stacklevel` must skip squidpy's own frames, including the `functools.partial` hop."
+    adata = _tiny()
+    spatial_neighbors_knn(adata, n_neighs=4, transform="spectral")
+    with pytest.warns(UserWarning, match="non-binary") as caught:
+        calculate_niche_cellcharter(adata, distance=2, n_components=2, rng=0)
+    assert caught[0].filename == __file__, f"attributed to {caught[0].filename}"
+
+
+def test_clusterer_without_a_random_state_is_rejected():
+    "A deterministic estimator satisfies the protocol and then rejects the seed the pipeline sets."
+    from sklearn.cluster import DBSCAN
+
+    adata = _tiny()
+    with pytest.raises(TypeError, match=r"no 'random_state'"):
+        _fit_clusterers(adata, np.asarray(to_dense(adata.X)), {"c": DBSCAN(eps=3.0)}, np.random.default_rng(0))
+
+
+def test_library_key_embeds_each_library_on_its_own(monkeypatch):
+    "Stratifying exists to fit the embedding per library, not once on the pooled object."
+    rng = np.random.default_rng(0)
+    half = 60
+    adata = AnnData(X=csr_matrix(rng.random((2 * half, 12)).astype(np.float32)))
+    adata.obsm["spatial"] = np.vstack([rng.random((half, 2)) * 10, rng.random((half, 2)) * 10 + 100])
+    adata.obs["ct"] = pd.Categorical(["a"] * 50 + ["b"] * 10 + ["a"] * 10 + ["b"] * 50)
+    adata.obs["section"] = pd.Categorical(["s1"] * half + ["s2"] * half)
+    spatial_neighbors_knn(adata, n_neighs=6, library_key="section")
+
+    seen: list[int] = []
+    original = _niche._nhood_profile_embedding
+
+    def spy(adata_arg, **kwargs):
+        seen.append(adata_arg.n_obs)
+        return original(adata_arg, **kwargs)
+
+    monkeypatch.setattr(_niche, "_nhood_profile_embedding", spy)
+    calculate_niche_neighborhood(
+        adata, groups="ct", resolutions=1.0, n_neighbors=10, rng=0, library_key="section", scale=True
+    )
+    # one fit per library, on that library's own observations; a pooled fit is a single 2 * half
+    assert seen == [half, half], f"embedder was handed {seen} observations"
+
+
+def test_library_key_writes_no_pooled_embedding():
+    "Fitted per library, the blocks are in different spaces, so there is no one array to store."
+    rng = np.random.default_rng(1)
+    adata = AnnData(X=csr_matrix(rng.random((70, 20)).astype(np.float32)))
+    adata.obsm["spatial"] = np.vstack([rng.random((15, 2)) * 10, rng.random((55, 2)) * 10 + 100])
+    adata.obs["ct"] = pd.Categorical([f"t{k}" for k in rng.integers(0, 3, 70)])
+    adata.obs["section"] = pd.Categorical(["s1"] * 15 + ["s2"] * 55)
+    spatial_neighbors_knn(adata, n_neighs=4, library_key="section")
+
+    calculate_niche_utag(adata, resolutions=1.0, n_neighbors=8, rng=0, library_key="section")
+    assert "niche_embedding" not in adata.obsm
+    assert "utag_niche_res=1.0" in adata.obs, "the labels must still be written"
+
+
+def _with_embedding(cols: int, n: int = 60) -> AnnData:
+    rng = np.random.default_rng(0)
+    adata = AnnData(X=csr_matrix(rng.random((n, 10)).astype(np.float32)))
+    adata.obsm["spatial"] = rng.random((n, 2)) * 12
+    adata.obsm["emb"] = rng.random((n, cols))
+    spatial_neighbors_knn(adata, n_neighs=5)
+    return adata
+
+
+def test_use_rep_is_truncated_to_n_components():
+    "v1.8.3 and main both clustered only the first `n_components` columns of `use_rep`."
+    adata = _with_embedding(cols=20)
+    assert _precomputed_embedding(adata, obsm_key="emb", n_components=10).shape[1] == 10
+
+
+def test_use_rep_narrower_than_n_components_is_rejected():
+    adata = _with_embedding(cols=5)
+    with pytest.raises(ValueError, match=r"Embedding has 5 components, but n_components=10"):
+        calculate_niche_cellcharter(adata, use_rep="emb", n_components=10, rng=0)

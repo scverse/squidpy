@@ -626,7 +626,12 @@ def calculate_niche_cellcharter(
     n_components
         Number of Gaussian mixture components used to assign niches.
         Therefore, this parameter directly determines the number of niche
-        labels produced per library or dataset.
+        labels produced per library or dataset. When ``use_rep`` is given, the
+        embedding is also truncated to its first ``n_components`` columns, and a
+        narrower embedding is rejected.
+    n_jobs
+        Threads for the hop search behind the spatial embedding. Also caps its scratch,
+        which is two buffers per thread.
     use_rep
         Key in ``adata.obsm`` containing a precomputed observation-level
         representation to cluster. When provided, this representation is used
@@ -644,7 +649,7 @@ def calculate_niche_cellcharter(
 
     embedder: NicheEmbedder
     if use_rep is not None:
-        embedder = partial(_precomputed_embedding, obsm_key=use_rep)
+        embedder = partial(_precomputed_embedding, obsm_key=use_rep, n_components=n_components)
     else:
         logg.warning(
             "CellCharter recommends to use a dimensionality reduced embedding of the data, e.g. a scVI embedding. Since 'use_rep' is not provided, PCA will be used as proxy - performance may be suboptimal."
@@ -763,6 +768,11 @@ def calculate_niche_spatialleiden(
         library_ids = adata.obs[library_key].unique()
         library_rngs = rng.spawn(len(library_ids))
 
+        # bound even when every library is empty and the loop body never runs
+        added_columns: list[str] = []
+        seeded: set[str] = set()
+        resolution_list = resolutions if isinstance(resolutions, list) else [resolutions]
+
         # go through each library_id and process the corresponding adata subset
         for itr, lib_id in enumerate(library_ids):
             logg.info(f"Processing library '{lib_id}'")
@@ -793,9 +803,12 @@ def calculate_niche_spatialleiden(
                 table_key=table_key,
             )
 
-            if itr == 0:
-                added_columns = list(set(lib_adata.obs.columns) - set(adata.obs.columns))
-            _merge_library_columns(adata, lib_adata, lib_indices, added_columns)
+            result_columns = [f"spatialleiden_res={res}" for res in resolution_list]
+            _merge_library_columns(adata, lib_adata, lib_indices, result_columns, seeded)
+            added_columns = result_columns
+
+        if library_ids.size and not added_columns:
+            raise ValueError(f"no observation has a '{library_key}', so no niche could be assigned")
 
         # the per-library labels go in as strings, so cast once every library has been seen
         for col in added_columns:
@@ -859,8 +872,10 @@ def _calculate_niche_custom(
     %(adata)s
     embedder
         Any ``(AnnData) -> Array`` callable returning one row per observation.
-    clusterer
+    clusterers
         The clusterer labelling each ``adata.obs`` column, keyed by name.
+    rng
+        Seeds every fit.
     %(niche_common_params)s
     %(table_key)s
 
@@ -887,8 +902,8 @@ def _calculate_niche_custom(
 
     adata = orig_adata.copy() if copy else orig_adata
 
-    embedding = embedder(adata)
-    adata.obsm[embedding_key_added] = embedding
+    if not isinstance(embedding_key_added, str) or not embedding_key_added:
+        raise ValueError(f"'embedding_key_added' must be a non-empty string, got {embedding_key_added!r}")
 
     rng = np.random.default_rng(rng)
 
@@ -896,8 +911,13 @@ def _calculate_niche_custom(
         assert_key_in_adata(adata, library_key, attr="obs")
         logg.info(f"Stratifying by library_key '{library_key}'")
 
+        # bound even when every library is empty and the loop body never runs
+        added_columns: list[str] = []
+        seeded: set[str] = set()
+        library_ids = adata.obs[library_key].unique()
+
         # go through each library_id and process the corresponding adata subset
-        for itr, lib_id in enumerate(adata.obs[library_key].unique()):
+        for lib_id in library_ids:
             logg.info(f"Processing library '{lib_id}'")
 
             lib_indices = adata.obs[adata.obs[library_key] == lib_id].index
@@ -908,19 +928,24 @@ def _calculate_niche_custom(
 
             lib_adata = adata[lib_indices].copy()
 
-            lib_embedding = lib_adata.obsm[embedding_key_added]
+            lib_embedding = embedder(lib_adata)
+            lib_adata.obsm[embedding_key_added] = lib_embedding
             result_columns = _fit_clusterers(lib_adata, lib_embedding, clusterers, rng)
             _postprocess_niche_results(lib_adata, result_columns, mask, min_niche_size, prefix=f"lib={lib_id}_")
 
-            if itr == 0:
-                added_columns = list(set(lib_adata.obs.columns) - set(adata.obs.columns))
-            _merge_library_columns(adata, lib_adata, lib_indices, added_columns)
+            _merge_library_columns(adata, lib_adata, lib_indices, result_columns, seeded)
+            added_columns = result_columns
+
+        if library_ids.size and not added_columns:
+            raise ValueError(f"no observation has a '{library_key}', so no niche could be assigned")
 
         # the per-library labels go in as strings, so cast once every library has been seen
         for col in added_columns:
             adata.obs[col] = adata.obs[col].astype("category")
 
     else:
+        embedding = embedder(adata)
+        adata.obsm[embedding_key_added] = embedding
         result_columns = _fit_clusterers(adata, embedding, clusterers, rng)
         _postprocess_niche_results(adata, result_columns, mask, min_niche_size)
 
@@ -1254,7 +1279,8 @@ def _nhop_pca_embedding(
             "ignores: the hop rings are boolean, as in CellCharter. Use the 'neighborhood' flavor "
             "if the weights should count.",
             UserWarning,
-            stacklevel=3,
+            # the embedder is reached through `functools.partial`, so 3 lands in this module
+            stacklevel=4,
         )
 
     # hops are contiguous from 0, so hop 0 is just the first element and no lookup is needed
@@ -1271,10 +1297,16 @@ def _nhop_pca_embedding(
     return sc.pp.pca(aggregated)
 
 
-def _precomputed_embedding(adata: AnnData, *, obsm_key: str) -> Array:
-    """An embedding that already exists in ``adata.obsm``."""
+def _precomputed_embedding(adata: AnnData, *, obsm_key: str, n_components: int) -> Array:
+    """The first *n_components* columns of an embedding that already exists in ``adata.obsm``."""
     assert_key_in_adata(adata, obsm_key, attr="obsm")
-    return adata.obsm[obsm_key]
+    embedding = adata.obsm[obsm_key]
+    if embedding.shape[1] < n_components:
+        raise ValueError(
+            f"Embedding has {embedding.shape[1]} components, but n_components={n_components}. "
+            f"Please provide an embedding with at least {n_components} components."
+        )
+    return embedding[:, :n_components]
 
 
 ############
@@ -1307,9 +1339,16 @@ def _fit_clusterers(
     rng: np.random.Generator,
 ) -> list[str]:
     """Fit each clusterer on *embedding* and write its labels, returning the column names."""
-    # one generator per clusterer, so a resolution sweep is seeded independently of its length
-    generators = rng.spawn(len(clusterers))
-    for (column, clusterer), rng in zip(clusterers.items(), generators, strict=True):
+    for column, clusterer in clusterers.items():
+        # `isinstance` sees method presence only, so check the one parameter the pipeline sets:
+        # a deterministic estimator such as DBSCAN satisfies the protocol and then rejects it
+        if not isinstance(clusterer, Clusterer):
+            raise TypeError(f"clusterer for '{column}' must implement fit_predict, get_params and set_params")
+        if "random_state" not in clusterer.get_params():
+            raise TypeError(f"clusterer for '{column}' has no 'random_state', so the pipeline cannot seed its fits")
+    # one rng per clusterer, so a resolution sweep is seeded independently of its length
+    rngs = rng.spawn(len(clusterers))
+    for (column, clusterer), rng in zip(clusterers.items(), rngs, strict=True):
         if column in adata.obs.columns:
             logg.info(f"Overwriting existing column '{column}'")
         # a fresh clone per fit, so the estimator handed in is never mutated
@@ -1328,11 +1367,15 @@ def _merge_library_columns(
     lib_adata: AnnData,
     lib_indices: pd.Index,
     columns: list[str],
+    seeded: set[str],
 ) -> None:
-    """Write one library's niche columns back into *adata*, seeding absent ones."""
+    """Write one library's niche columns back into *adata*, seeding each once per run."""
     for col in columns:
-        if col not in adata.obs:
+        if col not in seeded:
+            # a fresh object column: a previous run leaves a categorical here, which would
+            # reject this run's unseen labels and silently keep the old ones
             adata.obs[col] = "not_a_niche"
+            seeded.add(col)
         adata.obs.loc[lib_indices, col] = list(lib_adata.obs[col].astype("str"))
 
 

@@ -907,6 +907,10 @@ def compute_hop_adjacency_matrices(
     if max_hop < 1:
         raise ValueError(f"max_hop must be >= 1, got {max_hop}.")
 
+    shape = np.shape(adjacency_matrix_orig)
+    if len(shape) != 2 or shape[0] != shape[1]:
+        raise ValueError(f"'adjacency_matrix' must be square, got {shape}")
+
     adj = (adjacency_matrix_orig if issparse(adjacency_matrix_orig) else csr_array(adjacency_matrix_orig)).tocsr()
     adj = adj.astype(bool)
     adj.eliminate_zeros()
@@ -914,10 +918,13 @@ def compute_hop_adjacency_matrices(
     indptr, indices = adj.indptr, adj.indices
 
     counts = np.zeros((max_hop, n), dtype=np.int64)
-    empty = np.zeros(1, dtype=np.int64)
+    # each dummy matches the dtype of the argument it stands in for; a mismatch compiles a
+    # second specialization of this `parallel=True` kernel, measured 1077 -> 660 ms cold
+    no_base = np.zeros(1, dtype=np.int64)
+    no_out = np.zeros(1, dtype=indices.dtype)
     n_jobs = get_n_numba_threads(n_jobs)
     with numba_threads(n_jobs):
-        _bfs_shells(indptr, indices, max_hop, n_jobs, counts, empty, counts, empty, False)
+        _bfs_shells(indptr, indices, max_hop, n_jobs, counts, no_base, counts, no_out, False)
 
         rowptr = np.zeros((max_hop, n + 1), dtype=np.int64)
         np.cumsum(counts, axis=1, out=rowptr[:, 1:])
@@ -933,7 +940,7 @@ def compute_hop_adjacency_matrices(
         shell.sort_indices()  # breadth-first order is not sorted order
         shells.append(shell)
 
-    shells[0] = adj
+    shells[0] = csr_matrix(adj)
     return shells
 
 
@@ -1000,6 +1007,16 @@ def nhood_aggregate(
     neighbor more.
     """
     _assert_hop_request(adata, connectivity_key, hops)
+    # up front, so a typo does not cost the whole aggregation first, and so `hops=(0,)` is
+    # checked too: hop 0 returns the features unaggregated and never reaches `_aggregate_over`
+    if aggregation not in ("mean", "sum", "variance"):
+        raise ValueError(f"'aggregation' must be 'mean', 'sum' or 'variance', got {aggregation!r}")
+    weights = [1.0] * len(hops) if hop_weights is None else list(hop_weights)
+    if len(weights) != len(hops):
+        raise ValueError(f"'hop_weights' has {len(weights)} value(s) but there are {len(hops)} hop(s)")
+    if aggregation != "sum" and sum(weights) == 0:
+        raise ValueError("'hop_weights' must not sum to zero, since the hops are averaged over it")
+
     given = [name for name, value in (("groups", groups), ("use_rep", use_rep), ("layer", layer)) if value is not None]
     if len(given) > 1:
         raise ValueError(f"pass at most one of 'groups', 'use_rep' and 'layer', got {given}")
@@ -1029,14 +1046,6 @@ def nhood_aggregate(
     # hop 0 is the observation itself, so it contributes its features unaggregated
     blocks = [features if hop == 0 else _aggregate_over(by_hop[hop], features, aggregation) for hop in hops]
 
-    weights = [1.0] * len(blocks) if hop_weights is None else list(hop_weights)
-    if len(weights) < len(blocks):
-        raise ValueError(
-            f"Number of weights provided is less than hops requested. n_hop_weights = {weights} "
-            f"is less than the {len(blocks)} hops"
-        )
-    if len(weights) > len(blocks):
-        raise ValueError(f"'hop_weights' has {len(weights)} values but there are {len(blocks)} hops")
     # keep the container the features came in; `variance` has already densified, so a
     # mixed set of blocks has to be densified whole
     if not all(issparse(block) for block in blocks):
