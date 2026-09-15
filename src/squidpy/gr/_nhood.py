@@ -918,8 +918,6 @@ def compute_hop_adjacency_matrices(
     indptr, indices = adj.indptr, adj.indices
 
     counts = np.zeros((max_hop, n), dtype=np.int64)
-    # each dummy matches the dtype of the argument it stands in for; a mismatch compiles a
-    # second specialization of this `parallel=True` kernel, measured 1077 -> 660 ms cold
     no_base = np.zeros(1, dtype=np.int64)
     no_out = np.zeros(1, dtype=indices.dtype)
     n_jobs = get_n_numba_threads(n_jobs)
@@ -1007,8 +1005,6 @@ def nhood_aggregate(
     neighbor more.
     """
     _assert_hop_request(adata, connectivity_key, hops)
-    # up front, so a typo does not cost the whole aggregation first, and so `hops=(0,)` is
-    # checked too: hop 0 returns the features unaggregated and never reaches `_aggregate_over`
     if aggregation not in ("mean", "sum", "variance"):
         raise ValueError(f"'aggregation' must be 'mean', 'sum' or 'variance', got {aggregation!r}")
     weights = [1.0] * len(hops) if hop_weights is None else list(hop_weights)

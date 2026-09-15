@@ -768,7 +768,6 @@ def calculate_niche_spatialleiden(
         library_ids = adata.obs[library_key].unique()
         library_rngs = rng.spawn(len(library_ids))
 
-        # bound even when every library is empty and the loop body never runs
         added_columns: list[str] = []
         seeded: set[str] = set()
 
@@ -905,7 +904,6 @@ def _calculate_niche_custom(
         assert_key_in_adata(adata, library_key, attr="obs")
         logg.info(f"Stratifying by library_key '{library_key}'")
 
-        # bound even when every library is empty and the loop body never runs
         added_columns: list[str] = []
         seeded: set[str] = set()
         library_ids = adata.obs[library_key].unique()
