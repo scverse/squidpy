@@ -479,8 +479,8 @@ def calculate_niche_utag(
        features over the spatial connectivity graph, producing a new feature
        matrix in which each observation reflects information from its local
        spatial neighborhood.
-    3. Treats this spatially aggregated matrix as the niche embedding.
-    4. Constructs a k-nearest-neighbor graph in the embedding space.
+    3. Reduces that matrix with PCA; the scores are the niche embedding.
+    4. Constructs a k-nearest-neighbor graph in that embedding space.
     5. Applies Leiden clustering at each requested resolution.
 
     If the input contains gene expression values, the embedding describes
@@ -519,8 +519,8 @@ def calculate_niche_utag(
 
     Returns
     -------
-    If ``copy=True``, returns a copy of ``adata`` with the spatially aggregated
-    embedding stored in ``.obsm[embedding_key_added]`` and niche assignments
+    If ``copy=True``, returns a copy of ``adata`` with the PCA of the spatially
+    aggregated features in ``.obsm[embedding_key_added]`` and niche assignments
     added to ``.obs``. Otherwise, modifies ``adata`` in place and returns
     ``None``.
 
