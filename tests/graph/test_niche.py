@@ -630,3 +630,40 @@ def test_cellcharter_with_a_library_key():
     assert str(adata.obs["cellcharter_niche"].dtype) == "category"
     # every label carries its own library's prefix, and both libraries produced some
     assert {label.split("_")[0] for label in labels} == {"lib=s1", "lib=s2"}
+
+
+@pytest.mark.parametrize("flavor_fn", [calculate_niche_utag, calculate_niche_neighborhood])
+def test_resolutions_reject_a_pair_outside_spatialleiden(flavor_fn):
+    "A (latent, spatial) pair used to reach scanpy as `must be real number, not tuple`."
+    adata = _tiny()
+    kwargs = {"groups": "ct"} if flavor_fn is calculate_niche_neighborhood else {}
+    with pytest.raises(TypeError, match=r"only the 'spatialleiden' flavor takes"):
+        flavor_fn(adata, resolutions=(0.5, 1.0), n_neighbors=4, rng=0, **kwargs)
+
+
+def test_resolutions_reject_repeated_values():
+    "Repeats collided on the column name and silently produced one clustering, not two."
+    adata = _tiny()
+    with pytest.raises(ValueError, match=r"'resolutions' repeats 0.5"):
+        calculate_niche_utag(adata, resolutions=[0.5, 0.5], n_neighbors=4, rng=0)
+
+
+def test_resolutions_reject_an_empty_sequence():
+    adata = _tiny()
+    with pytest.raises(ValueError, match=r"'resolutions' is empty"):
+        calculate_niche_utag(adata, resolutions=[], n_neighbors=4, rng=0)
+
+
+def test_resolutions_accept_a_numpy_array():
+    "Only `list` was unpacked, so an ndarray was clustered as a single resolution."
+    adata = _tiny()
+    calculate_niche_utag(adata, resolutions=np.array([0.5, 1.0]), n_neighbors=4, rng=0)
+    assert {"utag_niche_res=0.5", "utag_niche_res=1.0"} <= set(adata.obs.columns)
+
+
+def test_the_new_entry_points_validate_resolutions_too(dummy_adata2: AnnData):
+    "The checks lived in `_validate_niche_args`, which only `calculate_niche` ever called."
+    with pytest.raises(TypeError, match=r"'resolutions' must be numbers"):
+        calculate_niche_utag(dummy_adata2, resolutions="high", n_neighbors=3, rng=0)
+    with pytest.warns(FutureWarning), pytest.raises(TypeError, match=r"'resolutions' must be numbers"):
+        calculate_niche(dummy_adata2, flavor="utag", resolutions="high", n_neighbors=3, rng=0)

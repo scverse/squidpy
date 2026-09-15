@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from functools import partial
+from numbers import Real
 from typing import Any, Literal
 
 import numpy as np
@@ -754,6 +755,7 @@ def calculate_niche_spatialleiden(
 
     # normalise once here; everything below this point works with rngs only
     rng = np.random.default_rng(rng)
+    resolution_list = _resolution_values(resolutions, pairs_ok=True)
 
     if library_key is not None:
         # first assert that library_key was there in adata.obs, and then, stratify the object according to that library_key and
@@ -769,7 +771,6 @@ def calculate_niche_spatialleiden(
         # bound even when every library is empty and the loop body never runs
         added_columns: list[str] = []
         seeded: set[str] = set()
-        resolution_list = resolutions if isinstance(resolutions, list) else [resolutions]
 
         # go through each library_id and process the corresponding adata subset
         for itr, lib_id in enumerate(library_ids):
@@ -813,14 +814,10 @@ def calculate_niche_spatialleiden(
             adata.obs[col] = adata.obs[col].astype("category")
 
     else:
-        # Simply call sl.spatialleiden with the provided arguments
-        if not isinstance(resolutions, list):
-            resolutions = [resolutions]
-
         # every resolution is a separate clustering run, so seed each one independently
-        resolution_rngs = rng.spawn(len(resolutions))
+        resolution_rngs = rng.spawn(len(resolution_list))
 
-        for res, res_rng in zip(resolutions, resolution_rngs, strict=True):
+        for res, res_rng in zip(resolution_list, resolution_rngs, strict=True):
             sl.spatialleiden(
                 adata,
                 resolution=res,
@@ -834,8 +831,7 @@ def calculate_niche_spatialleiden(
                 key_added=f"spatialleiden_res={res}",
             )
 
-        # obtain the result_columns, which are basically the difference in columns in orig_adata and adata
-        result_columns = [f"spatialleiden_res={res}" for res in resolutions]
+        result_columns = [f"spatialleiden_res={res}" for res in resolution_list]
 
         _postprocess_niche_results(adata, result_columns, mask, min_niche_size, prefix)
 
@@ -1007,22 +1003,6 @@ def _validate_niche_args(
 
     if n_neighbors is not None:
         assert_isinstance(n_neighbors, int, name="n_neighbors")
-
-    if resolutions is not None:
-        if not isinstance(resolutions, float | tuple | list):
-            raise TypeError(
-                f"'resolutions' must be a float, a tuple of floats, a list of floats, or a list containing floats and/or tuples of floats, got {type(resolutions).__name__}"
-            )
-
-        if isinstance(resolutions, tuple):
-            if not all(isinstance(x, float) for x in resolutions):
-                raise TypeError("All elements in the tuple 'resolutions' must be floats.")
-        elif isinstance(resolutions, list):
-            for item in resolutions:
-                if not (
-                    isinstance(item, float) or (isinstance(item, tuple) and all(isinstance(i, float) for i in item))
-                ):
-                    raise TypeError("Each item in the list 'resolutions' must be a float or a tuple of floats.")
 
     if n_hop_weights is not None:
         assert_isinstance(n_hop_weights, list, name="n_hop_weights")
@@ -1312,6 +1292,34 @@ def _precomputed_embedding(adata: AnnData, *, obsm_key: str, n_components: int) 
 ############
 
 
+def _resolution_values(resolutions: Any, *, pairs_ok: bool) -> list[Any]:
+    """The resolution values, one per clustering run and one per labelled column.
+
+    *pairs_ok* admits the ``(latent, spatial)`` pair that only SpatialLeiden takes.
+    """
+    if isinstance(resolutions, str | tuple) or not isinstance(resolutions, Iterable):
+        values = [resolutions]
+    else:
+        values = list(resolutions)
+
+    expected = "numbers or (latent, spatial) pairs of numbers" if pairs_ok else "numbers"
+    for value in values:
+        if isinstance(value, tuple):
+            if not pairs_ok:
+                raise TypeError(f"'resolutions' got the pair {value}, which only the 'spatialleiden' flavor takes")
+            if len(value) != 2 or not all(isinstance(x, Real) for x in value):
+                raise TypeError(f"'resolutions' got {value!r}, which is not a pair of numbers")
+        elif not isinstance(value, Real):
+            raise TypeError(f"'resolutions' must be {expected}, got {value!r}")
+
+    if len(values) == 0:
+        raise ValueError("'resolutions' is empty, so there is nothing to cluster")
+    repeated = sorted({str(v) for v in values if values.count(v) > 1})
+    if len(repeated) > 0:
+        raise ValueError(f"'resolutions' repeats {', '.join(repeated)}, but each value labels its own column")
+    return values
+
+
 def _leiden_clusterers(
     *,
     base_colname: str,
@@ -1321,7 +1329,7 @@ def _leiden_clusterers(
     n_iterations: int,
 ) -> dict[str, Clusterer]:
     """One Leiden clusterer per requested resolution, keyed by the column it labels."""
-    values = resolutions if isinstance(resolutions, list) else [resolutions]
+    values = _resolution_values(resolutions, pairs_ok=False)
     return {
         f"{base_colname}_res={res}": LeidenClusterer(
             n_neighbors=n_neighbors, resolution=res, flavor=flavor, n_iterations=n_iterations
