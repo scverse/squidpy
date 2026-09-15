@@ -904,6 +904,10 @@ def compute_hop_adjacency_matrices(
     Ring ``k`` holds the pairs first reached at hop ``k + 1``, so the rings never restate
     each other. Ring 0 is the input as booleans, self-loops included.
     """
+    # CellCharter builds these as iterated products masked by a visited set (`adj_hop @ adj`,
+    # then `adj_hop > adj_visited`) in scipy; a numba BFS gives the same disjoint rings without
+    # that comparison, which is degree-dependent on a weighted graph. See
+    # https://github.com/CSOgroup/cellcharter/blob/main/src/cellcharter/gr/_aggr.py
     if max_hop < 1:
         raise ValueError(f"max_hop must be >= 1, got {max_hop}.")
 

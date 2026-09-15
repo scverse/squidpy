@@ -319,6 +319,9 @@ def calculate_niche_neighborhood(
 ) -> AnnData | None:
     """Compute spatial niches from local cell-type composition.
 
+    Follows monkeybread's
+    https://github.com/immunitastx/monkeybread/blob/main/src/monkeybread/calc/_neighborhood_profile.py
+
     This method represents every observation by a **neighborhood composition
     profile**: a vector describing the cell-type labels observed in its local
     spatial neighborhood. Observations with similar surrounding cell-type
@@ -459,7 +462,9 @@ def calculate_niche_utag(
 ) -> AnnData | None:
     """Compute spatial niches from UTAG-style feature aggregation.
 
-    Originally adapted from https://github.com/ElementoLab/utag/blob/main/utag/segmentation.py
+    UTAG :cite:`kim2022`, adapted from
+    https://github.com/ElementoLab/utag/blob/main/utag/segmentation.py
+
     This method computes a spatially aggregated feature representation for each
     observation and clusters that representation with Leiden. The resulting
     niches group observations that occur in similar local molecular
@@ -567,7 +572,11 @@ def calculate_niche_cellcharter(
     copy: bool = False,
     table_key: str | None = None,
 ) -> AnnData | None:
-    """Compute spatial niches using a CellCharter-style embedding and GMM.
+    """Compute spatial niches using a CellCharter-style embedding and GMM :cite:`varrone2023`.
+
+    CellCharter recommends a dimensionality-reduced embedding such as scVI, passed as
+    ``use_rep``; PCA of the hop-ring features is the fallback when it is not given. The mixture
+    model is scikit-learn's, not CellCharter's torchgmm, so partitions will not match theirs.
 
     This method identifies niches by clustering an embedding that represents
     each observation together with information from its surrounding spatial
@@ -696,10 +705,9 @@ def calculate_niche_spatialleiden(
 ) -> AnnData | None:
     """Compute niche assignments using the SpatialLeiden algorithm.
 
-    This is a wrapper around the `SpatialLeiden <https://github.com/HiDiHlabs/SpatialLeiden>`_
-    algorithm that uses :class:`~anndata.AnnData` as input and works with two layers; one latent
-    space and one spatial layer.
-    Adapted from https://github.com/HiDiHlabs/SpatialLeiden/.
+    This is a wrapper around SpatialLeiden :cite:`muellerboetticher2025`, which takes
+    :class:`~anndata.AnnData` as input and works with two layers; one latent space and one
+    spatial layer. Adapted from https://github.com/HiDiHlabs/SpatialLeiden/.
 
     Parameters
     ----------
@@ -1186,6 +1194,9 @@ def _nhood_profile_embedding(
     )
     # one column per category, and `sc.pp.scale` densifies anyway
     profile = to_dense(profile)
+    # monkeybread counts per cell with a `Counter`; this is the same profile as a one-hot
+    # product. Scaling follows theirs, see
+    # https://monkeybread.readthedocs.io/en/latest/notebooks/tutorial.html#niche-analysis
     return sc.pp.scale(profile, zero_center=True) if scale else profile
 
 
