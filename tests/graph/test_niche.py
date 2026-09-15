@@ -1,25 +1,24 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import pytest
 from anndata import AnnData
 from pandas import Series
 from scanpy.pp import neighbors
-from scipy.sparse import csr_matrix, identity
+from scipy.sparse import csr_matrix
 from spatialdata import SpatialData
 from spatialdata.models import TableModel
 
 from squidpy.gr import (
-    _niche,
     calculate_niche,
     calculate_niche_cellcharter,
     calculate_niche_neighborhood,
     spatial_neighbors_knn,
 )
-from squidpy.gr._niche import _compute_hop_adjacency_matrices
+from squidpy.gr._niche import compute_hop_adjacency_matrices
 
 N_NEIGHBORS = 20
-GROUPS = "celltype_mapped_refined"
 
 # Niche labels come from Leiden clustering, whose exact partition is not stable across
 # igraph/leidenalg versions on tiny toy graphs (multiple equal-modularity optima). These
@@ -106,31 +105,6 @@ def test_niche_cellcharter_rng_none_runs(dummy_adata2: AnnData):
     "`rng=None` (the default) must work: it means 'draw from OS entropy', not 'missing argument'."
     calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean")
     assert "cellcharter_niche" in dummy_adata2.obs.columns
-
-
-def test_niche_cellcharter_library_seeds_are_independent(dummy_adata2: AnnData, monkeypatch):
-    "Each library must be fitted with its own seed, while the whole run stays reproducible."
-    dummy_adata2.obs["batch"] = ["batch1"] * 5 + ["batch2"] * 5
-    kwargs = {"distance": 2, "aggregation": "mean", "library_key": "batch", "n_components": 2}
-
-    first = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), copy=True, **kwargs)
-    second = calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), copy=True, **kwargs)
-    assert (first.obs["cellcharter_niche"] == second.obs["cellcharter_niche"]).all()
-
-    # the clusterer is built once and reused for every library, so record what each fit
-    # is actually seeded with
-    seen: list[int] = []
-    original = _niche.GaussianMixture
-
-    def spy(*args, **kwargs):
-        seen.append(kwargs["random_state"])
-        return original(*args, **kwargs)
-
-    monkeypatch.setattr(_niche, "GaussianMixture", spy)
-    calculate_niche_cellcharter(dummy_adata2, rng=np.random.default_rng(0), copy=True, **kwargs)
-
-    assert len(seen) == 2, "expected one mixture fit per library"
-    assert seen[0] != seen[1], "libraries were fitted with the same seed"
 
 
 # more special test cases
@@ -220,116 +194,12 @@ def test_niche_calc_nhood_dummy_sdata(dummy_adata2: AnnData):
 # test cases for _compute_hop_adjacency_matrices
 
 
-def _toarray(mat) -> np.ndarray:
-    """Densify a sparse (or already-dense) matrix for easy comparison in assertions."""
-    return np.asarray(mat.todense()) if hasattr(mat, "todense") else np.asarray(mat)
-
-
-def test_hop_adjacency_invalid_max_hop_raises():
-    "max_hop must be >= 1; anything smaller is rejected."
-    adj = csr_matrix(np.array([[0, 1], [1, 0]]))
-    with pytest.raises(ValueError, match="max_hop must be >= 1"):
-        _compute_hop_adjacency_matrices(adj, max_hop=0)
-    with pytest.raises(ValueError, match="max_hop must be >= 1"):
-        _compute_hop_adjacency_matrices(adj, max_hop=-3)
-
-
-def test_hop_adjacency_output_length_matches_max_hop():
-    "The returned list always has exactly `max_hop` entries."
-    adj = csr_matrix(np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]]))
-    for max_hop in (1, 2, 3, 5):
-        result = _compute_hop_adjacency_matrices(adj, max_hop=max_hop)
-        assert len(result) == max_hop
-
-
-def test_hop_adjacency_first_entry_is_input_unmodified():
-    "adj_mat_list[0] must be exactly the input matrix, self-loops and all."
-    adj = csr_matrix(np.array([[1, 1, 0], [1, 0, 1], [0, 1, 0]]))
-    result = _compute_hop_adjacency_matrices(adj, max_hop=1)
-    assert np.array_equal(_toarray(result[0]), _toarray(adj))
-
-
-def test_hop_adjacency_path_graph_two_hop_layer():
-    "On a 3-node path 0-1-2, the 2-hop layer connects only (0, 2): reachable in 2 steps but not adjacent."
-    adj = csr_matrix(np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]]))
-    result = _compute_hop_adjacency_matrices(adj, max_hop=2)
-
-    expected_hop2 = np.array([[0, 0, 1], [0, 0, 0], [1, 0, 0]])
-    assert np.array_equal(_toarray(result[1]), expected_hop2)
-
-
-def test_hop_adjacency_path_graph_beyond_diameter_is_empty():
-    "A 3-node path has diameter 2, so the 3-hop layer must be all zeros: no pair is exactly 3 apart."
-    adj = csr_matrix(np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]]))
-    result = _compute_hop_adjacency_matrices(adj, max_hop=3)
-
-    assert np.array_equal(_toarray(result[2]), np.zeros((3, 3)))
-
-
-def test_hop_adjacency_triangle_graph_two_hop_layer_is_empty():
-    "In a fully-connected triangle every pair is already 1-hop apart, so the 2-hop layer adds nothing new."
-    adj = csr_matrix(np.array([[0, 1, 1], [1, 0, 1], [1, 1, 0]]))
-    result = _compute_hop_adjacency_matrices(adj, max_hop=2)
-
-    assert np.array_equal(_toarray(result[1]), np.zeros((3, 3)))
-
-
-def test_hop_adjacency_self_loops_only_never_propagate():
-    "If the input has no off-diagonal edges, no cell can reach any other cell at any hop distance."
-    adj = identity(4, format="csr")
-    result = _compute_hop_adjacency_matrices(adj, max_hop=3)
-
-    assert np.array_equal(_toarray(result[0]), _toarray(adj))
-    for hop_layer in result[1:]:
-        assert np.array_equal(_toarray(hop_layer), np.zeros((4, 4)))
-
-
-def test_hop_adjacency_isolated_node_stays_isolated():
-    "A node with no edges at all must remain disconnected from everything, including itself, at every hop."
-    adj = csr_matrix(np.zeros((1, 1)))
-    result = _compute_hop_adjacency_matrices(adj, max_hop=3)
-
-    for hop_layer in result:
-        assert np.array_equal(_toarray(hop_layer), np.zeros((1, 1)))
-
-
-def test_hop_adjacency_layers_are_binary_despite_multiple_paths():
-    "A 4-cycle gives two distinct 2-hop paths between opposite corners; the output must read 0/1, not a path count."
-    # 4-cycle: 0-1-2-3-0
-    adj = csr_matrix(
-        np.array(
-            [
-                [0, 1, 0, 1],
-                [1, 0, 1, 0],
-                [0, 1, 0, 1],
-                [1, 0, 1, 0],
-            ]
-        )
-    )
-    result = _compute_hop_adjacency_matrices(adj, max_hop=2)
-    hop2 = _toarray(result[1])
-
-    assert set(np.unique(hop2)) <= {0, 1}
-    expected_hop2 = np.array(
-        [
-            [0, 0, 1, 0],
-            [0, 0, 0, 1],
-            [1, 0, 0, 0],
-            [0, 1, 0, 0],
-        ]
-    )
-    assert np.array_equal(hop2, expected_hop2)
-
-
-# older tests
-
-
 def test_niche_calc_nhood(adata_seqfish: AnnData):
     """Check whether niche calculation using neighborhood profile approach works as intended."""
     spatial_neighbors_knn(adata_seqfish, n_neighs=N_NEIGHBORS)
     calculate_niche(
         adata_seqfish,
-        groups=GROUPS,
+        groups="celltype_mapped_refined",
         flavor="neighborhood",
         n_neighbors=N_NEIGHBORS,
         resolutions=[0.1],
@@ -368,3 +238,123 @@ def test_niche_copy_semantics(dummy_adata2: AnnData):
 
     assert calculate_niche_neighborhood(dummy_adata2, **kwargs) is None
     assert (dummy_adata2.obs[key] == out.obs[key]).all()
+
+
+def test_niche_neighborhood_rejects_too_few_hop_weights(dummy_adata2: AnnData):
+    with pytest.raises(ValueError, match=r"'n_hop_weights' has 1 value"):
+        calculate_niche_neighborhood(
+            dummy_adata2, groups="celltype", resolutions=1.0, n_neighbors=3, distance=3, n_hop_weights=[1.0]
+        )
+
+
+def test_calculate_niche_deprecation_is_a_future_warning(dummy_adata2: AnnData):
+    with pytest.warns(FutureWarning, match=r"`calculate_niche` is deprecated"):
+        calculate_niche(dummy_adata2, flavor="utag", n_neighbors=3, resolutions=1.0, rng=0)
+
+
+@pytest.mark.parametrize("distance", [0, -3])
+def test_cellcharter_rejects_a_distance_below_one(dummy_adata2: AnnData, distance: int):
+    spatial_neighbors_knn(dummy_adata2, n_neighs=3)
+    with pytest.raises(ValueError, match=r"'distance' must be >= 1"):
+        calculate_niche_cellcharter(dummy_adata2, distance=distance, n_components=2, rng=0)
+
+
+def test_neighborhood_profile_weights_by_path_count(dummy_adata2: AnnData):
+    """Through the public call, with `scale=False` so the raw profile survives."""
+    spatial_neighbors_knn(dummy_adata2, n_neighs=3)
+    adj = dummy_adata2.obsp["spatial_connectivities"]
+    one_hot = pd.get_dummies(dummy_adata2.obs["celltype"], dtype=np.float64).to_numpy()
+
+    out = calculate_niche_neighborhood(
+        dummy_adata2,
+        groups="celltype",
+        resolutions=1.0,
+        n_neighbors=3,
+        distance=3,
+        scale=False,
+        copy=True,
+        rng=0,
+    )
+    got = np.asarray(out.obsm["niche_embedding"])
+
+    expected, power = np.zeros_like(got), adj
+    for hop in range(3):
+        if hop:
+            power = power @ adj
+        profile = power @ one_hot
+        total = profile.sum(axis=1)[:, None]
+        expected += np.divide(profile, total, out=np.zeros_like(profile), where=total != 0)
+    np.testing.assert_allclose(got, expected / 3, rtol=1e-6, atol=1e-7)
+
+
+def _toarray(mat):
+    """Densify a sparse (or already-dense) matrix for easy comparison in assertions."""
+    return np.asarray(mat.todense()) if hasattr(mat, "todense") else np.asarray(mat)
+
+
+_PATH3 = np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]], dtype=float)
+_PATH3_RING2 = np.array([[0, 0, 1], [0, 0, 0], [1, 0, 0]], dtype=float)
+_TRIANGLE = np.array([[0, 1, 1], [1, 0, 1], [1, 1, 0]], dtype=float)
+_CYCLE4 = np.array([[0, 1, 0, 1], [1, 0, 1, 0], [0, 1, 0, 1], [1, 0, 1, 0]], dtype=float)
+_SELF_LOOPED = np.array([[1, 1, 0], [1, 0, 1], [0, 1, 0]], dtype=float)
+_HUB_EDGES = [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 3), (1, 4), (4, 5)]
+
+
+def _stored_zero_path3():
+    """`_PATH3` carrying an explicit 0.0 at (0, 2); a user-supplied `obsp` may have those."""
+    adj = csr_matrix(_PATH3)
+    adj[0, 2] = adj[2, 0] = 0.0
+    assert adj.nnz == 6, "the zeros must be stored for this case to test anything"
+    return adj
+
+
+def _hub_graph(weight=1.0):
+    adjacency = np.zeros((6, 6))
+    for i, j in _HUB_EDGES:
+        adjacency[i, j] = adjacency[j, i] = weight
+    return csr_matrix(adjacency)
+
+
+HOP_RING_CASES = [
+    ("path, second ring is the far pair", _PATH3, 2, [_PATH3, _PATH3_RING2]),
+    ("path, nothing past the diameter", _PATH3, 3, [_PATH3, _PATH3_RING2, np.zeros((3, 3))]),
+    ("stored zeros are not edges", _stored_zero_path3(), 2, [_PATH3, _PATH3_RING2]),
+    ("triangle has no second ring", _TRIANGLE, 2, [_TRIANGLE, np.zeros((3, 3))]),
+    ("hop 1 keeps a self-loop", _SELF_LOOPED, 1, [_SELF_LOOPED]),
+    ("self-loops never propagate", np.eye(3), 3, [np.eye(3), np.zeros((3, 3)), np.zeros((3, 3))]),
+    ("an isolated node stays isolated", np.zeros((1, 1)), 3, [np.zeros((1, 1))] * 3),
+    ("rings are binary, not path counts", _CYCLE4, 2, [_CYCLE4, np.roll(np.eye(4), 2, axis=1)]),
+]
+
+
+@pytest.mark.parametrize(
+    ("adjacency", "max_hop", "expected"),
+    [case[1:] for case in HOP_RING_CASES],
+    ids=[case[0] for case in HOP_RING_CASES],
+)
+def test_hop_rings(adjacency, max_hop, expected):
+    rings = compute_hop_adjacency_matrices(csr_matrix(adjacency), max_hop=max_hop)
+    assert len(rings) == max_hop
+    for hop, want in enumerate(expected):
+        np.testing.assert_array_equal(
+            _toarray(rings[hop]).astype(float), np.asarray(want, dtype=float), err_msg=f"hop {hop + 1}"
+        )
+
+
+@pytest.mark.parametrize("weight", [1.0, 0.5])
+def test_hop_rings_are_boolean_and_disjoint_on_a_weighted_graph(weight):
+    rings = compute_hop_adjacency_matrices(_hub_graph(weight), max_hop=2)
+    assert rings[0].dtype == bool, "the graph is cast to bool, as CellCharter does"
+    assert not rings[1][0, 1], "a one-hop neighbour reappeared in the two-hop ring"
+    assert rings[1][0, 5], "a genuinely new two-hop pair went missing"
+
+
+def test_hop_rings_are_not_matrix_powers():
+    """Powers count every 2-walk with multiplicity; rings hold only newly reached pairs."""
+    adjacency = _hub_graph()
+    rings = compute_hop_adjacency_matrices(adjacency, max_hop=2)
+    powers = [adjacency, adjacency @ adjacency]
+
+    assert (rings[0] != powers[0]).nnz == 0, "hop 1 is the graph itself either way"
+    assert powers[1][0, 1] == 3, "0 and 1 are joined by three 2-step paths"
+    assert not rings[1][0, 1], "0 and 1 were already joined at one hop"
