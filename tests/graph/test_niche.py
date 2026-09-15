@@ -3,11 +3,13 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
+import scanpy as sc
 from anndata import AnnData
 from fast_array_utils.conv import to_dense
 from pandas import Series
 from scanpy.pp import neighbors
 from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import dijkstra
 from spatialdata import SpatialData
 from spatialdata.models import TableModel
 
@@ -19,7 +21,7 @@ from squidpy.gr import (
     calculate_niche_utag,
     spatial_neighbors_knn,
 )
-from squidpy.gr._nhood import nhood_aggregate
+from squidpy.gr._nhood import _aggregate_over, nhood_aggregate
 from squidpy.gr._niche import _fit_clusterers, _precomputed_embedding, compute_hop_adjacency_matrices
 
 N_NEIGHBORS = 20
@@ -523,3 +525,108 @@ def test_use_rep_narrower_than_n_components_is_rejected():
     adata = _with_embedding(cols=5)
     with pytest.raises(ValueError, match=r"Embedding has 5 components, but n_components=10"):
         calculate_niche_cellcharter(adata, use_rep="emb", n_components=10, rng=0)
+
+
+# ---------------------------------------------------------------- oracles and scale
+# Every case above runs on a handful of nodes, which is fewer than NUMBA_NUM_THREADS, so the
+# BFS kernel's thread striping is a no-op there. These run past that.
+
+
+def _random_graph(n: int, seed: int, *, directed: bool = False, self_loops: bool = False):
+    rng = np.random.default_rng(seed)
+    dense = (rng.random((n, n)) < 0.06).astype(float)
+    np.fill_diagonal(dense, 1.0 if self_loops else 0.0)
+    if not directed:
+        dense = np.maximum(dense, dense.T)
+        if not self_loops:
+            np.fill_diagonal(dense, 0.0)
+    return csr_matrix(dense)
+
+
+@pytest.mark.parametrize("n", [50, 137, 200])
+@pytest.mark.parametrize("directed", [False, True])
+def test_hop_rings_match_dijkstra(n: int, directed: bool):
+    """Ring k must hold exactly the pairs at shortest-path distance k + 1.
+
+    An independent oracle, and at an `n` well past the thread count, so the kernel's
+    `range(thread, n, n_threads)` striping is actually exercised.
+    """
+    adjacency = _random_graph(n, seed=n, directed=directed)
+    max_hop = 4
+    rings = compute_hop_adjacency_matrices(adjacency, max_hop=max_hop)
+
+    distances = dijkstra(adjacency, directed=directed, unweighted=True)
+    for hop in range(1, max_hop):  # ring 0 is the graph itself, self-loops included
+        expected = (distances == hop + 1).astype(float)
+        np.testing.assert_array_equal(
+            _toarray(rings[hop]).astype(float), expected, err_msg=f"ring {hop} (hop {hop + 1})"
+        )
+
+
+@pytest.mark.parametrize("n_jobs", [1, 2, 3, 8])
+def test_hop_rings_do_not_depend_on_the_thread_count(n_jobs: int):
+    "The striping partitions sources across threads; the result must not depend on how."
+    adjacency = _random_graph(157, seed=3)
+    reference = compute_hop_adjacency_matrices(adjacency, max_hop=3, n_jobs=1)
+    rings = compute_hop_adjacency_matrices(adjacency, max_hop=3, n_jobs=n_jobs)
+    for hop, (got, want) in enumerate(zip(rings, reference, strict=True)):
+        assert (got != want).nnz == 0, f"ring {hop} differs at n_jobs={n_jobs}"
+
+
+# ---------------------------------------------------------------- cellcharter numerics
+
+
+def test_aggregate_over_variance_matches_the_definition():
+    "E[x^2] - E[x]^2 over each neighborhood; a sign slip here is invisible to the flavor tests."
+    adjacency = csr_matrix(np.array([[0, 1, 1], [1, 0, 0], [1, 1, 0]], dtype=float))
+    features = np.array([[1.0, 4.0], [3.0, 0.0], [5.0, 2.0]])
+
+    got = to_dense(_aggregate_over(adjacency, features, "variance"))
+
+    # row i averages over the neighbors adjacency[i] selects
+    expected = np.empty_like(got)
+    for i in range(3):
+        neighbors = features[np.asarray(adjacency[i].todense()).ravel() > 0]
+        expected[i] = neighbors.mean(axis=0) ** 2 * -1 + (neighbors**2).mean(axis=0)
+    np.testing.assert_allclose(got, expected, rtol=1e-10)
+
+
+@pytest.mark.parametrize("distance", [1, 2])
+def test_cellcharter_concatenates_hop_zero_with_every_ring(monkeypatch, distance: int):
+    "The embedding is the raw features plus one block per ring; dropping hop 0 must be visible."
+    adata = _tiny(n=60)
+    seen: list[int] = []
+    original = sc.pp.pca
+
+    def spy(matrix, *args, **kwargs):
+        seen.append(matrix.shape[1])
+        return original(matrix, *args, **kwargs)
+
+    monkeypatch.setattr(sc.pp, "pca", spy)
+    calculate_niche_cellcharter(adata, distance=distance, n_components=2, rng=0)
+    assert seen == [(distance + 1) * adata.n_vars], f"PCA was handed {seen} columns"
+
+
+@pytest.mark.parametrize("sparse", [True, False])
+def test_cellcharter_keeps_the_container_through_the_embedding(sparse: bool):
+    "A sparse X must reach PCA through `sparse_hstack`, not be densified on the way."
+    rng = np.random.default_rng(0)
+    X = rng.random((50, 6)).astype(np.float32)
+    adata = AnnData(X=csr_matrix(X) if sparse else X)
+    adata.obsm["spatial"] = rng.random((50, 2)) * 10
+    spatial_neighbors_knn(adata, n_neighs=4)
+
+    calculate_niche_cellcharter(adata, distance=2, n_components=3, rng=0)
+    assert "cellcharter_niche" in adata.obs
+    assert str(adata.obs["cellcharter_niche"].dtype) == "category"
+
+
+def test_cellcharter_with_a_library_key():
+    "The stratified GMM path had no test at all once the seeding test was removed."
+    adata = _tiny(n=60, libraries=["s1"] * 30 + ["s2"] * 30)
+    calculate_niche_cellcharter(adata, distance=2, n_components=2, rng=0, library_key="library")
+
+    labels = adata.obs["cellcharter_niche"].astype(str)
+    assert str(adata.obs["cellcharter_niche"].dtype) == "category"
+    # every label carries its own library's prefix, and both libraries produced some
+    assert {label.split("_")[0] for label in labels} == {"lib=s1", "lib=s2"}

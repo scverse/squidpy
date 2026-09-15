@@ -984,7 +984,7 @@ def _aggregate_over(
 def _assert_hop_request(adata: AnnData, connectivity_key: str, hops: Sequence[int]) -> None:
     """Verify a hop request against the graph it is about to run on."""
     _assert_connectivity_key(adata, connectivity_key)
-    if not len(hops):
+    if len(hops) == 0:
         raise ValueError("'hops' must name at least one hop")
     if any(hop < 0 for hop in hops):
         raise ValueError(f"'hops' must be non-negative, got {list(hops)!r}")

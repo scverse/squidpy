@@ -629,9 +629,7 @@ def calculate_niche_cellcharter(
         labels produced per library or dataset. When ``use_rep`` is given, the
         embedding is also truncated to its first ``n_components`` columns, and a
         narrower embedding is rejected.
-    n_jobs
-        Threads for the hop search behind the spatial embedding. Also caps its scratch,
-        which is two buffers per thread.
+    %(n_jobs_threads)s
     use_rep
         Key in ``adata.obsm`` containing a precomputed observation-level
         representation to cluster. When provided, this representation is used
@@ -807,7 +805,7 @@ def calculate_niche_spatialleiden(
             _merge_library_columns(adata, lib_adata, lib_indices, result_columns, seeded)
             added_columns = result_columns
 
-        if library_ids.size and not added_columns:
+        if len(library_ids) > 0 and len(added_columns) == 0:
             raise ValueError(f"no observation has a '{library_key}', so no niche could be assigned")
 
         # the per-library labels go in as strings, so cast once every library has been seen
@@ -902,7 +900,7 @@ def _calculate_niche_custom(
 
     adata = orig_adata.copy() if copy else orig_adata
 
-    if not isinstance(embedding_key_added, str) or not embedding_key_added:
+    if not isinstance(embedding_key_added, str) or len(embedding_key_added) == 0:
         raise ValueError(f"'embedding_key_added' must be a non-empty string, got {embedding_key_added!r}")
 
     rng = np.random.default_rng(rng)
@@ -936,7 +934,7 @@ def _calculate_niche_custom(
             _merge_library_columns(adata, lib_adata, lib_indices, result_columns, seeded)
             added_columns = result_columns
 
-        if library_ids.size and not added_columns:
+        if len(library_ids) > 0 and len(added_columns) == 0:
             raise ValueError(f"no observation has a '{library_key}', so no niche could be assigned")
 
         # the per-library labels go in as strings, so cast once every library has been seen
