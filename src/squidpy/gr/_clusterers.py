@@ -36,21 +36,8 @@ class Clusterer(Protocol):
 class LeidenClusterer(ClusterMixin, BaseEstimator):
     """Leiden partition of an embedding, at one resolution.
 
-    One resolution per clusterer, so a resolution sweep is a mapping of them rather than a
-    loop inside one. ``X`` is the embedding; the neighborhood graph is built here.
-
-    Parameters
-    ----------
-    n_neighbors
-        Neighbors used to build the graph the partition runs on.
-    resolution
-        Resolution of the partition. Higher gives more, smaller niches.
-    flavor
-        Leiden backend.
-    n_iterations
-        Iterations passed to the backend.
-    random_state
-        Seeds the partition.
+    ``X`` is the embedding and the neighborhood graph is built here, from *n_neighbors*.
+    One resolution per clusterer, so a sweep is a mapping of them.
     """
 
     def __init__(
