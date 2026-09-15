@@ -265,7 +265,7 @@ def calculate_niche(
             aggregation=aggregation,
             rng=rng,
             spatial_connectivities_key=spatial_connectivities_key,
-            n_components=n_components,
+            n_clusters=n_components,
             use_rep=use_rep,
             embedding_key_added="niche_embedding",
             min_niche_size=min_niche_size,
@@ -562,7 +562,8 @@ def calculate_niche_cellcharter(
     aggregation: str = "mean",
     rng: SeedLike | RNGLike | None = None,
     spatial_connectivities_key: str = "spatial_connectivities",
-    n_components: int = 10,
+    n_clusters: int = 10,
+    n_components: int | None = None,
     n_jobs: int | None = None,
     use_rep: str | None = None,
     embedding_key_added: str = "niche_embedding",
@@ -632,12 +633,13 @@ def calculate_niche_cellcharter(
         Seeds the Gaussian mixture clustering step. When stratifying by ``library_key``,
         every library is fitted with an independent rng derived from it.
     %(niche_spatial_conn_key)s
+    n_clusters
+        Number of Gaussian mixture components, and therefore the number of niche
+        labels produced per library or dataset.
     n_components
-        Number of Gaussian mixture components used to assign niches.
-        Therefore, this parameter directly determines the number of niche
-        labels produced per library or dataset. When ``use_rep`` is given, the
-        embedding is also truncated to its first ``n_components`` columns, and a
-        narrower embedding is rejected.
+        Number of principal components kept when reducing the aggregated features.
+        ``None`` uses :func:`scanpy.pp.pca`'s own default. Rejected together with
+        ``use_rep``, which supplies an already reduced embedding and so skips the PCA.
     %(n_jobs_threads)s
     use_rep
         Key in ``adata.obsm`` containing a precomputed observation-level
@@ -654,23 +656,25 @@ def calculate_niche_cellcharter(
 
     """
 
-    embedder: NicheEmbedder
-    if use_rep is not None:
-        embedder = partial(_precomputed_embedding, obsm_key=use_rep, n_components=n_components)
-    else:
+    if use_rep is None:
         logg.warning(
             "CellCharter recommends to use a dimensionality reduced embedding of the data, e.g. a scVI embedding. Since 'use_rep' is not provided, PCA will be used as proxy - performance may be suboptimal."
         )
-        embedder = partial(
-            _nhop_pca_embedding,
-            distance=distance,
-            aggregation=aggregation,
-            spatial_connectivities_key=spatial_connectivities_key,
-            n_jobs=n_jobs,
-        )
+    elif n_components is not None:
+        raise ValueError("'n_components' sizes the PCA, which 'use_rep' replaces; pass one or the other")
+
+    embedder = partial(
+        _nhop_pca_embedding,
+        distance=distance,
+        aggregation=aggregation,
+        spatial_connectivities_key=spatial_connectivities_key,
+        use_rep=use_rep,
+        n_components=n_components,
+        n_jobs=n_jobs,
+    )
 
     # `GaussianMixture` is a `Clusterer` as it stands, so this flavor needs no wrapper
-    clusterers = {"cellcharter_niche": GaussianMixture(n_components=n_components, init_params="random_from_data")}
+    clusterers = {"cellcharter_niche": GaussianMixture(n_components=n_clusters, init_params="random_from_data")}
 
     return calculate_niche_custom(
         data,
@@ -1207,7 +1211,14 @@ def _utag_embedding(adata: AnnData, *, spatial_connectivities_key: str, use_laye
 
 
 def _nhop_pca_embedding(
-    adata: AnnData, *, distance: int, aggregation: str, spatial_connectivities_key: str, n_jobs: int | None = None
+    adata: AnnData,
+    *,
+    distance: int,
+    aggregation: str,
+    spatial_connectivities_key: str,
+    use_rep: str | None = None,
+    n_components: int | None = None,
+    n_jobs: int | None = None,
 ) -> Array:
     """Disjoint hop rings of aggregated features, concatenated and reduced."""
     if aggregation not in ("mean", "variance"):
@@ -1230,7 +1241,9 @@ def _nhop_pca_embedding(
         )
 
     # hops are contiguous from 0, so hop 0 is just the first element and no lookup is needed
-    features = adata.X
+    if use_rep is not None:
+        assert_key_in_adata(adata, use_rep, attr="obsm")
+    features = adata.X if use_rep is None else adata.obsm[use_rep]
     rings = compute_hop_adjacency_matrices(adata.obsp[spatial_connectivities_key], distance, n_jobs=n_jobs)
     blocks = [features, *(_aggregate_over(ring, features, aggregation) for ring in rings)]
 
@@ -1240,24 +1253,12 @@ def _nhop_pca_embedding(
         aggregated = sparse_hstack(blocks, format="csr")
     else:
         aggregated = np.hstack([to_dense(block) for block in blocks])
-    return sc.pp.pca(aggregated)
 
-
-def _precomputed_embedding(adata: AnnData, *, obsm_key: str, n_components: int) -> Array:
-    """The first *n_components* columns of an embedding that already exists in ``adata.obsm``."""
-    assert_key_in_adata(adata, obsm_key, attr="obsm")
-    embedding = adata.obsm[obsm_key]
-    if embedding.shape[1] < n_components:
-        raise ValueError(
-            f"Embedding has {embedding.shape[1]} components, but n_components={n_components}. "
-            f"Please provide an embedding with at least {n_components} components."
-        )
-    return embedding[:, :n_components]
-
-
-############
-### clusterer classes
-############
+    # CellCharter reduces the expression it aggregates; an embedding supplied through `use_rep` is
+    # already reduced, so it goes to the clusterer as it is
+    if use_rep is not None:
+        return to_dense(aggregated)
+    return sc.pp.pca(aggregated) if n_components is None else sc.pp.pca(aggregated, n_comps=n_components)
 
 
 def _resolution_values(resolutions: Any, *, pairs_ok: bool) -> list[Any]:

@@ -22,7 +22,7 @@ from squidpy.gr import (
     spatial_neighbors_knn,
 )
 from squidpy.gr._nhood import _aggregate_over, nhood_aggregate
-from squidpy.gr._niche import _fit_clusterers, _precomputed_embedding, compute_hop_adjacency_matrices
+from squidpy.gr._niche import _fit_clusterers, compute_hop_adjacency_matrices
 
 N_NEIGHBORS = 20
 
@@ -506,15 +506,38 @@ def test_library_key_writes_no_pooled_embedding():
     assert "utag_niche_res=1.0" in adata.obs, "the labels must still be written"
 
 
-def test_use_rep_is_truncated_to_n_components():
-    "v1.8.3 and main both clustered only the first `n_components` columns of `use_rep`."
-    adata = _tiny(embedding_cols=20)
-    assert _precomputed_embedding(adata, obsm_key="emb", n_components=10).shape[1] == 10
+def test_use_rep_is_aggregated_over_the_hop_rings():
+    "CellCharter aggregates the representation; `use_rep` used to replace the whole embedder."
+    adata = _tiny(n=60, embedding_cols=6)
+    scrambled = _tiny(n=60, embedding_cols=6)
+    rng = np.random.default_rng(7)
+    scrambled.obsm["spatial"] = rng.random((60, 2)) * 10
+    del scrambled.obsp["spatial_connectivities"], scrambled.obsp["spatial_distances"]
+    spatial_neighbors_knn(scrambled, n_neighs=4)
+
+    labels = []
+    for a in (adata, scrambled):
+        calculate_niche_cellcharter(a, use_rep="emb", n_clusters=3, distance=2, rng=0)
+        labels.append(np.asarray(a.obs["cellcharter_niche"].astype(str)))
+    assert not (labels[0] == labels[1]).all(), "the spatial graph did not affect the result"
 
 
-def test_use_rep_narrower_than_n_components_is_rejected():
-    with pytest.raises(ValueError, match=r"Embedding has 5 components, but n_components=10"):
-        calculate_niche_cellcharter(_tiny(embedding_cols=5), use_rep="emb", n_components=10, rng=0)
+def test_use_rep_narrower_than_n_clusters_is_accepted():
+    "A k-cluster GMM is well posed in any dimensionality; the old guard required k columns."
+    adata = _tiny(embedding_cols=2)
+    calculate_niche_cellcharter(adata, use_rep="emb", n_clusters=5, distance=1, rng=0)
+    assert adata.obs["cellcharter_niche"].nunique() <= 5
+
+
+def test_n_components_sizes_the_pca():
+    adata = _tiny(n=60)
+    calculate_niche_cellcharter(adata, n_clusters=3, n_components=4, distance=1, rng=0)
+    assert adata.obsm["niche_embedding"].shape[1] == 4
+
+
+def test_n_components_is_rejected_with_use_rep():
+    with pytest.raises(ValueError, match=r"'n_components' sizes the PCA, which 'use_rep' replaces"):
+        calculate_niche_cellcharter(_tiny(embedding_cols=6), use_rep="emb", n_components=3, rng=0)
 
 
 # ---------------------------------------------------------------- oracles and scale
