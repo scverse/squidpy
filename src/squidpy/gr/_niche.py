@@ -12,8 +12,6 @@ import scanpy as sc
 from anndata import AnnData
 from fast_array_utils.conv import to_dense
 from fast_array_utils.types import HasArrayNamespace as Array
-from scipy.sparse import hstack as sparse_hstack
-from scipy.sparse import issparse
 from sklearn.base import clone
 from sklearn.mixture import GaussianMixture
 from spatialdata import SpatialData, sanitize_table
@@ -576,7 +574,7 @@ def calculate_niche_cellcharter(
     """Compute spatial niches using a CellCharter-style embedding and GMM :cite:`varrone2023`.
 
     CellCharter recommends a dimensionality-reduced embedding such as scVI, passed as
-    ``use_rep``; PCA of the hop-ring features is the fallback when it is not given. The mixture
+    ``use_rep``; PCA of ``adata.X`` is the fallback when it is not given. The mixture
     model is scikit-learn's, not CellCharter's torchgmm, so partitions will not match theirs.
 
     This method identifies niches by clustering an embedding that represents
@@ -586,25 +584,18 @@ def calculate_niche_cellcharter(
     continuous feature representation and a Gaussian mixture model (GMM) for
     clustering.
 
-    Two input modes are supported:
-
-    - If ``use_rep`` is provided, ``adata.obsm[use_rep]`` is used as the input
-      representation for niche clustering.
-    - If ``use_rep`` is ``None``, a CellCharter-style spatial embedding is
-      computed by aggregating features over the precomputed spatial graph,
-      including information from multi-hop neighborhoods up to ``distance``.
-
     A spatial connectivity graph must already be present in
-    ``adata.obsp[spatial_connectivities_key]`` when spatial aggregation is
-    required. This function does not construct the graph itself.
+    ``adata.obsp[spatial_connectivities_key]``. This function does not construct
+    the graph itself.
 
-    When an embedding is computed internally, the method:
+    The method:
 
-    1. Starts from the available observation-level feature representation.
-    2. Aggregates neighborhood features over the spatial graph from direct
-       neighbors through ``distance`` graph hops.
-    3. Combines the aggregated features according to ``aggregation`` to create
-       a spatial-context embedding for every observation.
+    1. Takes a reduced representation of every observation: ``adata.obsm[use_rep]``
+       if given, otherwise the first ``n_pca_components`` principal components of ``adata.X``.
+    2. Aggregates that representation over each disjoint hop ring of the spatial
+       graph, from direct neighbors through ``distance`` graph hops, according to
+       ``aggregation``.
+    3. Concatenates the observation's own representation with every ring's aggregate.
     4. Fits a Gaussian mixture model with ``n_clusters`` mixture components.
     5. Uses the GMM component assignments as niche labels.
 
@@ -637,16 +628,15 @@ def calculate_niche_cellcharter(
         Number of Gaussian mixture components, and therefore the number of niche
         labels produced per library or dataset.
     n_pca_components
-        Number of principal components kept when reducing the aggregated features. ``None``
-        uses :func:`scanpy.pp.pca`'s own default. Named for the PCA because
+        Number of principal components of ``adata.X`` aggregated over the hop rings. ``None``
+        uses 10, the latent width scVI defaults to. Named for the PCA because
         :class:`~sklearn.mixture.GaussianMixture` spells its cluster count ``n_components``
         too; here that is ``n_clusters``. Rejected together with ``use_rep``, which supplies an
         already reduced embedding and so skips the PCA.
     %(n_jobs_threads)s
     use_rep
-        Key in ``adata.obsm`` containing a precomputed observation-level
-        representation to cluster. When provided, this representation is used
-        instead of deriving a new spatially aggregated embedding.
+        Key in ``adata.obsm`` containing a precomputed reduced representation, such as
+        an scVI latent. It is aggregated over the hop rings in place of the PCA of ``adata.X``.
     %(niche_common_params)s
     %(table_key)s
 
@@ -1222,7 +1212,7 @@ def _nhop_pca_embedding(
     n_pca_components: int | None = None,
     n_jobs: int | None = None,
 ) -> Array:
-    """Disjoint hop rings of aggregated features, concatenated and reduced."""
+    """Reduced features and their means over disjoint hop rings, concatenated as in CellCharter."""
     if aggregation not in ("mean", "variance"):
         raise ValueError(f"'aggregation' must be 'mean' or 'variance', got {aggregation!r}")
     if distance < 1:
@@ -1242,25 +1232,19 @@ def _nhop_pca_embedding(
             stacklevel=4,
         )
 
-    # hops are contiguous from 0, so hop 0 is just the first element and no lookup is needed
-    if use_rep is not None:
-        assert_key_in_adata(adata, use_rep, attr="obsm")
-    features = adata.X if use_rep is None else adata.obsm[use_rep]
-    rings = compute_hop_adjacency_matrices(adata.obsp[spatial_connectivities_key], distance, n_jobs=n_jobs)
-    blocks = [features, *(_aggregate_over(ring, features, aggregation) for ring in rings)]
-
-    # this is `distance + 1` times the width of the features, so it is the one place
-    # densifying costs; keep the container they came in, as CellCharter does
-    if all(issparse(block) for block in blocks):
-        aggregated = sparse_hstack(blocks, format="csr")
+    # CellCharter aggregates an already reduced representation, so PCA comes first: the rings then
+    # average a narrow dense matrix instead of `distance + 1` copies of every gene
+    if use_rep is None:
+        # 10 matches scVI's default latent width, the input CellCharter is designed around
+        n_comps = min(10, min(adata.shape) - 1) if n_pca_components is None else n_pca_components
+        features = sc.pp.pca(adata.X, n_comps=n_comps)
     else:
-        aggregated = np.hstack([to_dense(block) for block in blocks])
+        assert_key_in_adata(adata, use_rep, attr="obsm")
+        features = to_dense(adata.obsm[use_rep])
 
-    # CellCharter reduces the expression it aggregates; an embedding supplied through `use_rep` is
-    # already reduced, so it goes to the clusterer as it is
-    if use_rep is not None:
-        return to_dense(aggregated)
-    return sc.pp.pca(aggregated) if n_pca_components is None else sc.pp.pca(aggregated, n_comps=n_pca_components)
+    # hops are contiguous from 0, so hop 0 is just the first element and no lookup is needed
+    rings = compute_hop_adjacency_matrices(adata.obsp[spatial_connectivities_key], distance, n_jobs=n_jobs)
+    return np.hstack([features, *(to_dense(_aggregate_over(ring, features, aggregation)) for ring in rings)])
 
 
 def _resolution_values(resolutions: Any, *, pairs_ok: bool) -> list[Any]:

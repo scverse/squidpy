@@ -532,7 +532,7 @@ def test_use_rep_narrower_than_n_clusters_is_accepted():
 def test_n_pca_components_sizes_the_pca():
     adata = _tiny(n=60)
     calculate_niche_cellcharter(adata, n_clusters=3, n_pca_components=4, distance=1, rng=0)
-    assert adata.obsm["niche_embedding"].shape[1] == 4
+    assert adata.obsm["niche_embedding"].shape[1] == 4 * 2
 
 
 def test_n_pca_components_is_rejected_with_use_rep():
@@ -605,24 +605,57 @@ def test_aggregate_over_variance_matches_the_definition():
 
 
 @pytest.mark.parametrize("distance", [1, 2])
-def test_cellcharter_concatenates_hop_zero_with_every_ring(monkeypatch, distance: int):
-    "The embedding is the raw features plus one block per ring; dropping hop 0 must be visible."
+def test_cellcharter_concatenates_hop_zero_with_every_ring(distance: int):
+    "The embedding is the PCA of X plus one block per ring; dropping hop 0 must be visible."
     adata = _tiny(n=60)
-    seen: list[int] = []
-    original = sc.pp.pca
+    calculate_niche_cellcharter(adata, distance=distance, n_clusters=2, n_pca_components=3, rng=0)
 
-    def spy(matrix, *args, **kwargs):
-        seen.append(matrix.shape[1])
-        return original(matrix, *args, **kwargs)
+    embedding = adata.obsm["niche_embedding"]
+    assert embedding.shape[1] == (distance + 1) * 3
+    np.testing.assert_allclose(embedding[:, :3], sc.pp.pca(adata.X, n_comps=3), rtol=1e-5)
 
-    monkeypatch.setattr(sc.pp, "pca", spy)
-    calculate_niche_cellcharter(adata, distance=distance, n_clusters=2, rng=0)
-    assert seen == [(distance + 1) * adata.n_vars], f"PCA was handed {seen} columns"
+
+def test_cellcharter_reduces_before_aggregating():
+    "PCA of X is the fallback for `use_rep`, so passing that PCA as `use_rep` must change nothing."
+    adata = _tiny(n=60)
+    adata.obsm["X_pca"] = sc.pp.pca(adata.X, n_comps=3)
+    fallback = calculate_niche_cellcharter(adata, distance=2, n_clusters=3, n_pca_components=3, rng=0, copy=True)
+    given = calculate_niche_cellcharter(adata, distance=2, n_clusters=3, use_rep="X_pca", rng=0, copy=True)
+    np.testing.assert_array_equal(fallback.obsm["niche_embedding"], given.obsm["niche_embedding"])
+    assert (fallback.obs["cellcharter_niche"] == given.obs["cellcharter_niche"]).all()
+
+
+def test_cellcharter_niches_follow_neighborhoods_not_cell_identity():
+    "Same two cell types, mixed on the left and in pure blocks on the right: niches must split them."
+    width, height = 40, 20
+    x, y = np.meshgrid(np.arange(width), np.arange(height), indexing="ij")
+    x, y = x.ravel(), y.ravel()
+    checkerboard = x < width // 2
+    is_a = np.where(checkerboard, (x + y) % 2 == 0, x < 3 * width // 4)
+
+    rng = np.random.default_rng(0)
+    adata = AnnData(X=csr_matrix((x.size, 1), dtype=np.float32))
+    adata.obsm["spatial"] = np.column_stack([x, y]).astype(float)
+    adata.obsm["emb"] = np.column_stack([is_a, ~is_a]).astype(float) + rng.normal(0, 0.05, (x.size, 2))
+    spatial_neighbors_knn(adata, n_neighs=4)
+
+    calculate_niche_cellcharter(adata, use_rep="emb", distance=1, n_clusters=4, rng=0)
+    labels = adata.obs["cellcharter_niche"].to_numpy()
+    # away from the region and block borders every neighborhood is pure, so the niches are too
+    interior = (
+        (y > 0)
+        & (y < height - 1)
+        & ~np.isin(x, [0, width // 2 - 1, width // 2, 3 * width // 4 - 1, 3 * width // 4, width - 1])
+    )
+    for cell_type in (is_a, ~is_a):
+        mixed = set(labels[interior & cell_type & checkerboard])
+        pure = set(labels[interior & cell_type & ~checkerboard])
+        assert len(mixed) == len(pure) == 1
+        assert mixed != pure, "a cell type got one niche regardless of its neighbors"
 
 
 @pytest.mark.parametrize("sparse", [True, False])
-def test_cellcharter_keeps_the_container_through_the_embedding(sparse: bool):
-    "A sparse X must reach PCA through `sparse_hstack`, not be densified on the way."
+def test_cellcharter_accepts_sparse_and_dense_x(sparse: bool):
     rng = np.random.default_rng(0)
     X = rng.random((50, 6)).astype(np.float32)
     adata = AnnData(X=csr_matrix(X) if sparse else X)
