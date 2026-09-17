@@ -676,7 +676,7 @@ def calculate_niche_cellcharter(
     )
 
     # `GaussianMixture` is a `Clusterer` as it stands, so this flavor needs no wrapper
-    clusterers = {"cellcharter_niche": GaussianMixture(n_components=n_clusters, init_params="random_from_data")}
+    clusterers = {"cellcharter_niche": GaussianMixture(n_components=n_clusters)}
 
     return calculate_niche_custom(
         data,
