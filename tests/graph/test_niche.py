@@ -612,6 +612,8 @@ def test_cellcharter_concatenates_hop_zero_with_every_ring(distance: int):
 
     embedding = adata.obsm["niche_embedding"]
     assert embedding.shape[1] == (distance + 1) * 3
+    # the concatenation is `distance + 1` times as wide as the features, so it keeps their dtype
+    assert embedding.dtype == np.float32
     np.testing.assert_allclose(embedding[:, :3], sc.pp.pca(adata.X, n_comps=3), rtol=1e-5)
 
 
@@ -621,8 +623,30 @@ def test_cellcharter_reduces_before_aggregating():
     adata.obsm["X_pca"] = sc.pp.pca(adata.X, n_comps=3)
     fallback = calculate_niche_cellcharter(adata, distance=2, n_clusters=3, n_pca_components=3, rng=0, copy=True)
     given = calculate_niche_cellcharter(adata, distance=2, n_clusters=3, use_rep="X_pca", rng=0, copy=True)
-    np.testing.assert_array_equal(fallback.obsm["niche_embedding"], given.obsm["niche_embedding"])
-    assert (fallback.obs["cellcharter_niche"] == given.obs["cellcharter_niche"]).all()
+    np.testing.assert_allclose(fallback.obsm["niche_embedding"], given.obsm["niche_embedding"], rtol=1e-5)
+    fallback_niches = fallback.obs["cellcharter_niche"].astype(str).to_numpy()
+    np.testing.assert_array_equal(fallback_niches, given.obs["cellcharter_niche"].astype(str).to_numpy())
+
+
+def test_cellcharter_pca_fallback_handles_a_single_feature():
+    "The PCA width is clamped to what X can give, down to a one-marker panel."
+    adata = _tiny(n=40)[:, :1].copy()
+    calculate_niche_cellcharter(adata, distance=1, n_clusters=2, rng=0)
+    assert adata.obsm["niche_embedding"].shape == (40, 2)
+
+
+def test_cellcharter_rejects_n_pca_components_wider_than_x():
+    "The PCA runs on X, so its ceiling is X's, and the message must say so."
+    with pytest.raises(ValueError, match=r"'n_pca_components' must be between 1 and 5"):
+        calculate_niche_cellcharter(_tiny(n=60), n_pca_components=30, rng=0)
+
+
+def test_cellcharter_pca_respects_highly_variable():
+    "`sc.pp.pca(adata)` masks by `highly_variable`; the fallback must not silently use every gene."
+    adata = _tiny(n=60)
+    adata.var["highly_variable"] = [True, True, True, False, False, False]
+    calculate_niche_cellcharter(adata, distance=1, n_clusters=2, n_pca_components=2, rng=0)
+    np.testing.assert_allclose(adata.obsm["niche_embedding"][:, :2], sc.pp.pca(adata.X[:, :3], n_comps=2), rtol=1e-5)
 
 
 def test_cellcharter_niches_follow_neighborhoods_not_cell_identity():

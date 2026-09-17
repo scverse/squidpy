@@ -591,7 +591,8 @@ def calculate_niche_cellcharter(
     The method:
 
     1. Takes a reduced representation of every observation: ``adata.obsm[use_rep]``
-       if given, otherwise the first ``n_pca_components`` principal components of ``adata.X``.
+       if given, otherwise the first ``n_pca_components`` principal components of ``adata.X``,
+       restricted to ``adata.var["highly_variable"]`` when that column is present.
     2. Aggregates that representation over each disjoint hop ring of the spatial
        graph, from direct neighbors through ``distance`` graph hops, according to
        ``aggregation``.
@@ -629,7 +630,8 @@ def calculate_niche_cellcharter(
         labels produced per library or dataset.
     n_pca_components
         Number of principal components of ``adata.X`` aggregated over the hop rings. ``None``
-        uses 10, the latent width scVI defaults to. Named for the PCA because
+        uses 10, the latent width scVI defaults to, or one fewer than the smallest dimension of
+        ``adata.X`` when that is narrower. Named for the PCA because
         :class:`~sklearn.mixture.GaussianMixture` spells its cluster count ``n_components``
         too; here that is ``n_clusters``. Rejected together with ``use_rep``, which supplies an
         already reduced embedding and so skips the PCA.
@@ -1212,7 +1214,7 @@ def _nhop_pca_embedding(
     n_pca_components: int | None = None,
     n_jobs: int | None = None,
 ) -> Array:
-    """Reduced features and their means over disjoint hop rings, concatenated as in CellCharter."""
+    """Reduced features and their ring aggregates, concatenated as in CellCharter."""
     if aggregation not in ("mean", "variance"):
         raise ValueError(f"'aggregation' must be 'mean' or 'variance', got {aggregation!r}")
     if distance < 1:
@@ -1233,18 +1235,46 @@ def _nhop_pca_embedding(
         )
 
     # CellCharter aggregates an already reduced representation, so PCA comes first: the rings then
-    # average a narrow dense matrix instead of `distance + 1` copies of every gene
+    # aggregate a narrow dense matrix instead of `distance + 1` copies of every gene
     if use_rep is None:
-        # 10 matches scVI's default latent width, the input CellCharter is designed around
-        n_comps = min(10, min(adata.shape) - 1) if n_pca_components is None else n_pca_components
-        features = sc.pp.pca(adata.X, n_comps=n_comps)
+        features = _pca_features(adata, n_pca_components)
     else:
         assert_key_in_adata(adata, use_rep, attr="obsm")
         features = to_dense(adata.obsm[use_rep])
 
-    # hops are contiguous from 0, so hop 0 is just the first element and no lookup is needed
     rings = compute_hop_adjacency_matrices(adata.obsp[spatial_connectivities_key], distance, n_jobs=n_jobs)
-    return np.hstack([features, *(to_dense(_aggregate_over(ring, features, aggregation)) for ring in rings)])
+
+    # hop 0 is the observation itself, so it heads the concatenation and every ring follows.
+    # Filling a preallocated block keeps the features' dtype and frees each aggregate as it lands
+    width = features.shape[1]
+    embedding = np.empty((features.shape[0], width * (len(rings) + 1)), dtype=features.dtype)
+    embedding[:, :width] = features
+    for position, ring in enumerate(rings, start=1):
+        embedding[:, position * width : (position + 1) * width] = _aggregate_over(ring, features, aggregation)
+    return embedding
+
+
+def _pca_features(adata: AnnData, n_pca_components: int | None) -> Array:
+    """The PCA that stands in for a reduced representation when ``use_rep`` is not given."""
+    # scanpy's `pca(adata)` masks by `highly_variable` but also writes to `adata`; mask here instead
+    if "highly_variable" in adata.var:
+        X = adata.X[:, adata.var["highly_variable"].to_numpy()]
+    else:
+        X = adata.X
+    ceiling = min(X.shape)
+    if ceiling <= 1:
+        # a one-marker panel is its own reduction, and PCA cannot return a component here
+        return to_dense(X)
+    if n_pca_components is None:
+        # 10 matches scVI's default latent width, the input CellCharter is designed around
+        return sc.pp.pca(X, n_comps=min(10, ceiling - 1))
+    if not 1 <= n_pca_components < ceiling:
+        raise ValueError(
+            f"'n_pca_components' must be between 1 and {ceiling - 1}, the features PCA runs on "
+            f"({'highly variable ' if 'highly_variable' in adata.var else ''}genes and observations), "
+            f"got {n_pca_components}"
+        )
+    return sc.pp.pca(X, n_comps=n_pca_components)
 
 
 def _resolution_values(resolutions: Any, *, pairs_ok: bool) -> list[Any]:
