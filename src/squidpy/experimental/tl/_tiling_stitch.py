@@ -2,17 +2,28 @@
 
 When segmentation is run tile-by-tile (Cellpose, Stardist, Mesmer, ...) cells
 that straddle tile boundaries get cut into 2-4 pieces with characteristic
-straight, axis-aligned cut edges.  :func:`~squidpy.experimental.tl.calculate_tiling_qc` flags these
-as ``is_outlier=True``.  This module pairs facing cut edges across boundaries
-and assigns each candidate pair a heuristic geometric score in [0, 1].
+straight, axis-aligned cut edges.  :func:`~squidpy.experimental.tl.calculate_tiling_qc`
+flags these (``is_seam_cut`` when seam detection is enabled, else ``is_outlier``).
+This module pairs facing cut edges across boundaries and assigns each candidate
+pair a heuristic geometric score in [0, 1].
 
-The score is the flat (unweighted) mean of five dataset-independent geometric
-features -- ``iou``, ``endpoint_match``, ``merge_compactness``,
-``merge_solidity`` and ``gap_proximity`` -- computed from the cut-edge geometry
-and the union mask after closing the seam gap.  No model is fitted or shipped;
-the features are recorded in ``.uns["tiling_stitch"]``.  Users should tune
-``min_confidence`` for their data; ``0.7`` is a reasonable starting point, not
-a calibrated probability.
+The score is the flat (unweighted) mean of four dataset-independent geometric
+features -- ``iou``, ``endpoint_match``, ``merge_compactness`` and
+``merge_solidity`` -- computed from the cut-edge geometry and the union mask
+after closing the seam gap.  No model is fitted or shipped; the features are
+recorded in ``.uns["tiling_stitch"]``.  Users should tune ``min_confidence``
+for their data; ``0.6`` is a reasonable starting point, not a calibrated
+probability.
+
+Everything is scale-invariant: candidate enumeration is rank-based (k nearest
+facing edges, no absolute-pixel search radius), cut-edge lengths are relative to
+the data's median cell diameter ``D`` (read from
+``.uns["tiling_qc"]["seam_diameter"]``), and how far apart two halves of one cut
+may lie is bounded by the width of the seam band they sit on -- measured by
+``calculate_tiling_qc``, not assumed.  Cut edges are extracted only on
+and facing the seam bands detected by ``calculate_tiling_qc`` -- so pairing no
+longer merges touching interior cells, and both halves of a genuine cut are
+recovered even when a 1-px segmentation fringe pushes the flat cut inward.
 
 The labels element is **never** modified here -- only ``.obs`` columns are
 written.  Materialising a stitched labels element is opt-in via
@@ -23,19 +34,19 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import spatialdata as sd
 import xarray as xr
-from scipy.ndimage import binary_closing
+from scipy.ndimage import distance_transform_edt
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import connected_components
-from skimage.measure import find_contours, regionprops
 from skimage.measure import label as cc_label
-from skimage.morphology import disk as morph_disk
+from skimage.measure import regionprops
 from spatialdata._logging import logger as logg
 
+from squidpy.experimental.tl._seam import SeamDetectionParams, SeamScale, cell_flat_edges, seam_offset
 from squidpy.experimental.utils._labels import iter_chunked_regionprops, resolve_labels_array
 from squidpy.experimental.utils._params import resolve_params
 
@@ -46,8 +57,10 @@ if TYPE_CHECKING:
 
 __all__ = ["StitchParams", "assign_stitch_groups"]
 
-# The geometric features whose flat mean is the stitch score.
-_SCORE_FEATURES: tuple[str, ...] = ("iou", "endpoint_match", "merge_compactness", "merge_solidity", "gap_proximity")
+# The geometric features whose flat mean is the stitch score.  `gap_proximity` was intentionally
+# dropped: with a per-pair `close_radius` that bridges each pair's own seam gap, it penalised
+# wide-but-genuine seams and lowered recall without helping precision (validated on ground truth).
+_SCORE_FEATURES: tuple[str, ...] = ("iou", "endpoint_match", "merge_compactness", "merge_solidity")
 # The subset computed by the expensive merge-union step; the rest are cheap
 # geometry features known before it, which drives the scoring early-prune.
 _SHAPE_FEATURES: tuple[str, ...] = ("merge_compactness", "merge_solidity")
@@ -63,45 +76,30 @@ class StitchParams:
     advanced knobs -- the defaults rarely need changing.
     """
 
-    distance_tol: float = 0.75
-    """Sub-pixel tolerance for "lies on a bbox edge"."""
-
-    min_edge_length: float = 5.0
-    """Absolute floor on cut-edge length (pixels)."""
-
-    min_edge_length_ratio: float = 0.4
-    """Minimum cut-edge length relative to the cell's equivalent diameter."""
-
-    min_edge_coverage: float = 0.5
-    """Minimum fraction of parallel-axis positions covered by near-edge contour points."""
-
     candidate_min_iou: float = 0.2
-    """Loose 1-D IoU floor at candidate enumeration."""
+    """Loose 1-D along-seam IoU floor for a facing edge to be a pair candidate."""
 
-    close_radius: int = 3
-    """Morphological closing disk radius for the union mask.  Also the
-    length scale for ``gap_proximity`` (normalised by ``2 * close_radius``)."""
+    k_neighbors: int = 5
+    """Rank-based candidate cap -- each cut edge is paired only with its ``k`` nearest
+    *facing* edges (by perpendicular gap).  Replaces an absolute ``max_gap`` pixel
+    threshold, so the search adapts to the dataset's own seam-gap width."""
+
+    close_radius_min: int = 2
+    """Floor for the per-pair morphological closing radius.  The effective radius is
+    ``max(close_radius_min, ceil(gap / 2) + 1)`` so closing always bridges that pair's
+    own seam gap before the union's solidity/compactness are measured."""
 
     def __post_init__(self) -> None:
         # Coerce numeric types (accept numpy scalars cleanly) and bounds-check.
-        self.distance_tol = float(self.distance_tol)
-        self.min_edge_length = float(self.min_edge_length)
-        self.min_edge_length_ratio = float(self.min_edge_length_ratio)
-        self.min_edge_coverage = float(self.min_edge_coverage)
         self.candidate_min_iou = float(self.candidate_min_iou)
-        self.close_radius = int(self.close_radius)
-        if self.distance_tol < 0:
-            raise ValueError(f"distance_tol must be >= 0, got {self.distance_tol}.")
-        if self.min_edge_length < 0:
-            raise ValueError(f"min_edge_length must be >= 0, got {self.min_edge_length}.")
-        if not 0.0 <= self.min_edge_length_ratio <= 1.0:
-            raise ValueError(f"min_edge_length_ratio must be in [0, 1], got {self.min_edge_length_ratio}.")
-        if not 0.0 <= self.min_edge_coverage <= 1.0:
-            raise ValueError(f"min_edge_coverage must be in [0, 1], got {self.min_edge_coverage}.")
+        self.k_neighbors = int(self.k_neighbors)
+        self.close_radius_min = int(self.close_radius_min)
         if not 0.0 <= self.candidate_min_iou <= 1.0:
             raise ValueError(f"candidate_min_iou must be in [0, 1], got {self.candidate_min_iou}.")
-        if self.close_radius < 0:
-            raise ValueError(f"close_radius must be >= 0, got {self.close_radius}.")
+        if self.k_neighbors < 1:
+            raise ValueError(f"k_neighbors must be >= 1, got {self.k_neighbors}.")
+        if self.close_radius_min < 0:
+            raise ValueError(f"close_radius_min must be >= 0, got {self.close_radius_min}.")
 
 
 def _resolve_stitch_params(stitch_params: StitchParams | Mapping[str, Any] | None) -> StitchParams:
@@ -117,7 +115,7 @@ _STITCH_DEFAULTS = StitchParams()
 # is the subset of top-level kwargs valid for re-running assign_stitch_groups
 # (the advanced tuning lives in a nested ``stitch_params`` dict).
 _STITCH_COLUMNS = ("stitch_group_id", "is_stitched", "n_pieces", "stitch_confidence")
-_STITCH_PARAM_KEYS = frozenset({"min_confidence", "max_gap", "max_group_size"})
+_STITCH_PARAM_KEYS = frozenset({"min_confidence", "max_group_size"})
 
 
 # Dataclasses
@@ -168,7 +166,6 @@ class _StitchPair:
     confidence: float
     iou: float
     endpoint_match: float
-    gap_proximity: float
     merge_solidity: float
     merge_compactness: float
     edge_a: _CutEdge | None = field(default=None, repr=False)
@@ -220,130 +217,81 @@ def _compute_outlier_bboxes(
     return bboxes
 
 
-def _bbox_edge_run(
-    contour: np.ndarray,
-    perp_axis: int,
-    target: float,
-    distance_tol: float = _STITCH_DEFAULTS.distance_tol,
-    min_coverage: float = _STITCH_DEFAULTS.min_edge_coverage,
-) -> tuple[float, float, float] | None:
-    """Find the extent of contour points lying near a single bbox edge.
-
-    A genuine cut edge has many contour points clustered at the bbox boundary,
-    spanning a long parallel-axis range with high integer-position coverage.
-    A naturally curved cell only touches its bbox at a single point, which
-    fails either the count, length, or coverage check.
-
-    Returns ``(ext_lo, ext_hi, length)`` if a substantial run is found.
-    """
-    parallel_axis = 1 - perp_axis
-    near = np.abs(contour[:, perp_axis] - target) <= distance_tol
-    if near.sum() < 3:
-        return None
-    parallel_vals = contour[near, parallel_axis]
-    ext_lo = float(parallel_vals.min())
-    ext_hi = float(parallel_vals.max())
-    length = ext_hi - ext_lo
-    if length <= 0:
-        return None
-    width = max(int(np.ceil(length)), 1)
-    bins = np.zeros(width + 1, dtype=bool)
-    bins[np.clip((parallel_vals - ext_lo).astype(int), 0, width)] = True
-    coverage = float(bins.sum()) / (width + 1)
-    if coverage < min_coverage:
-        return None
-    return ext_lo, ext_hi, length
-
-
 def _extract_cut_edges(
     labels_da: xr.DataArray | np.ndarray,
     outlier_ids: Iterable[int],
-    bboxes: dict[int, tuple[int, int, int, int]] | None = None,
-    distance_tol: float = _STITCH_DEFAULTS.distance_tol,
-    min_edge_length: float = _STITCH_DEFAULTS.min_edge_length,
-    min_edge_length_ratio: float = _STITCH_DEFAULTS.min_edge_length_ratio,
-    min_edge_coverage: float = _STITCH_DEFAULTS.min_edge_coverage,
+    bboxes: dict[int, tuple[int, int, int, int]],
+    seams: dict[str, list[tuple[float, float, int]]],
+    scale: SeamScale,
 ) -> tuple[list[_CutEdge], dict[int, np.ndarray]]:
-    """Extract cardinal-aligned bbox-edge runs (cut-edge candidates) per outlier.
+    """Extract cut edges on and facing the detected seam bands, per outlier cell.
 
-    For each outlier cell:
-    1. Crop labels to its bbox + 1 px pad, build a binary mask.
-    2. Trace its contour with :func:`skimage.measure.find_contours`.
-    3. Check each of the 4 bbox-edge lines for a substantial straight run.
+    For each cut cell we take its dominant flat boundary line on each side
+    (:func:`~squidpy.experimental.tl._seam.cell_flat_edges` -- fringe-robust: the
+    flat line is found at *any* coordinate, not pinned to the bbox extreme, so a
+    1-px segmentation fringe no longer drops the edge) and keep only edges that
+    lie on a detected seam band and face it.  This mirrors the ``is_seam_cut``
+    flagging in :func:`~squidpy.experimental.tl.calculate_tiling_qc`, so the two
+    stages agree on which edges are seam cuts.
 
-    A piece cut at a tile boundary always has its cut on a bbox edge -- the
-    piece terminates exactly at the cut.  Curved cells only touch the bbox
-    at a single contour point, which the density check rejects.
-
-    Cells at a 4-tile corner produce 2 perpendicular edges; mid-stripe pieces
-    can produce 2 parallel edges.
+    ``scale`` is the detection scale rehydrated from ``.uns["tiling_qc"]``, so the
+    thresholds here are literally the ones the cells were flagged with.
 
     Returns
     -------
-    The list of cut edges and, as a by-product of the per-cell crop already
-    read here, a ``{label_id -> boolean bbox mask}`` dict that lets the scoring
-    pass reconstruct merge unions in memory without re-reading the labels array.
+    The list of cut edges and, as a by-product of the per-cell crop already read
+    here, a ``{label_id -> boolean bbox mask}`` dict that lets the scoring pass
+    reconstruct merge unions in memory without re-reading the labels array.
     """
-    outlier_list = [int(x) for x in outlier_ids]
-    if bboxes is None:
-        bboxes = _compute_outlier_bboxes(labels_da, outlier_list)
+    probe_depth = scale.probe_depth
 
     edges: list[_CutEdge] = []
     outlier_crops: dict[int, np.ndarray] = {}
-    for lid in outlier_list:
+    for lid in [int(x) for x in outlier_ids]:
         bbox = bboxes.get(lid)
         if bbox is None:
             continue
         min_r, min_c, max_r, max_c = bbox
-
-        crop_arr = _read_bbox_slice(labels_da, min_r, max_r, min_c, max_c)
-        cell_mask = crop_arr == lid  # boolean bbox mask; reused by the scoring pass
+        # Read the bbox padded by the probe depth: cell_flat_edges probes background
+        # *beyond* the cut edge to measure the gap, so it needs the neighbourhood.
+        pad = probe_depth + 2
+        r0 = max(0, min_r - pad)
+        c0 = max(0, min_c - pad)
+        crop = _read_bbox_slice(labels_da, r0, max_r + pad, c0, max_c + pad)
+        h = max_r - min_r
+        w = max_c - min_c
+        by0 = min_r - r0
+        bx0 = min_c - c0
+        # Slice to the cell's own bbox before comparing: the crop is padded by the probe depth,
+        # so comparing first would test several times the pixels that are kept.
+        cell_mask = crop[by0 : by0 + h, bx0 : bx0 + w] == lid  # boolean bbox mask; reused by scoring
         if not cell_mask.any():
             continue
         outlier_crops[lid] = cell_mask
-        # 1px zero-pad so cells filling their bbox still trace a closed contour.
-        mask = np.pad(cell_mask.astype(np.float32), 1, mode="constant", constant_values=0)
-        contours = find_contours(mask, 0.5)
-        if not contours:  # degenerate mask traces nothing; skip it
-            continue
-        contour = max(contours, key=len)
-        contour_global = contour.copy()
-        contour_global[:, 0] += min_r - 1
-        contour_global[:, 1] += min_c - 1
 
-        # Local centroid from the mask (avoids a second regionprops call).
-        ys, xs = np.where(mask)
-        cy = float(ys.mean()) + min_r - 1
-        cx = float(xs.mean()) + min_c - 1
-        area = float(mask.sum())
-        eq_diameter = float(np.sqrt(4 * area / np.pi))  # diameter of the equal-area circle
-        min_len = max(min_edge_length, min_edge_length_ratio * eq_diameter)
-
-        # find_contours places level set 0.5 outside the integer pixel boundary.
-        bbox_targets = [
-            ("h", float(min_r) - 0.5),
-            ("h", float(max_r) - 0.5),
-            ("v", float(min_c) - 0.5),
-            ("v", float(max_c) - 0.5),
-        ]
-        for axis, target in bbox_targets:
-            perp_axis = 0 if axis == "h" else 1
-            run = _bbox_edge_run(contour_global, perp_axis, target, distance_tol, min_edge_coverage)
-            if run is None:
+        flat = cell_flat_edges(
+            cell_mask,
+            crop != 0,  # occupancy: this crop is read unmasked, so neighbours are visible
+            (by0, bx0, by0 + h, bx0 + w),
+            (r0, c0),
+            scale.min_len,
+            scale.flat_tol,
+            probe_depth,
+        )
+        for e in flat:
+            # Keep only edges lying on a detected seam band and facing it -- the *same*
+            # predicate `calculate_tiling_qc` flags cells with, so the two stages agree by
+            # construction rather than by comment.
+            if seam_offset(e, seams.get(e["axis"], []), scale) is None:
                 continue
-            ext_lo, ext_hi, length = run
-            if length < min_len:
-                continue
-            cell_coord = cy if axis == "h" else cx
-            normal = 1 if cell_coord > target else -1
             edges.append(
                 _CutEdge(
                     cell_id=lid,
-                    axis=axis,
-                    coord=target,
-                    extent=(ext_lo, ext_hi),
-                    normal_dir=normal,
-                    length=float(length),
+                    axis=e["axis"],
+                    coord=e["coord"],
+                    extent=e["extent"],
+                    normal_dir=e["side"],
+                    length=float(e["span"]),
                 )
             )
 
@@ -362,7 +310,7 @@ def _merge_shape_features(
     cell_b: int,
     bboxes: dict[int, tuple[int, int, int, int]],
     outlier_crops: dict[int, np.ndarray],
-    close_radius: int = _STITCH_DEFAULTS.close_radius,
+    close_radius: int,
     *,
     H: int,
     W: int,
@@ -402,7 +350,11 @@ def _merge_shape_features(
     if not mask.any():
         return zero
 
-    closed = binary_closing(mask, structure=morph_disk(close_radius))
+    # Closing by a disk of radius r, via distance transforms: pixel-identical to
+    # `binary_closing(mask, disk(r))` but O(N) instead of O(N * r^2).  The radius tracks each
+    # pair's own seam gap, so the explicit-footprint form got dramatically more expensive
+    # exactly on the wide-gap data this feature targets.
+    closed = distance_transform_edt(distance_transform_edt(~mask) <= close_radius) > close_radius
     cc = cc_label(closed, connectivity=2)
     if cc.max() == 0:
         return zero
@@ -421,11 +373,15 @@ def _merge_shape_features(
 def _pair_geometry_features(
     e: _CutEdge,
     c: _CutEdge,
-    max_gap: float,
     candidate_min_iou: float = _STITCH_DEFAULTS.candidate_min_iou,
 ) -> dict[str, float] | None:
     """Compute geometry-only features for a candidate pair, returning ``None``
     if the pair fails the basic facing/overlap/IoU filters.
+
+    No absolute-pixel gap cutoff is applied here -- the raw perpendicular ``gap``
+    is returned so the (rank-based) enumerator can pick each edge's nearest
+    facing partners, and the diameter-relative plausibility guard is applied in
+    :func:`_score_pairs`.
     """
     if c.normal_dir == e.normal_dir:
         return None
@@ -440,13 +396,9 @@ def _pair_geometry_features(
     if iou < candidate_min_iou:
         return None
     gap = abs(e.coord - c.coord)
-    if gap > max_gap:
-        return None
     endpoint_dist = abs(e.extent[0] - c.extent[0]) + abs(e.extent[1] - c.extent[1])
     max_len = max(e.length, c.length)
     endpoint_match = max(0.0, 1.0 - endpoint_dist / max_len) if max_len > 0 else 0.0
-    # Return the raw perpendicular gap; gap_proximity is derived later against
-    # the closing reach (2*close_radius), NOT against max_gap (a search radius).
     return {
         "iou": float(iou),
         "endpoint_match": float(endpoint_match),
@@ -456,61 +408,47 @@ def _pair_geometry_features(
 
 def _enumerate_pair_candidates(
     edges: list[_CutEdge],
-    max_gap: float,
+    k_neighbors: int = _STITCH_DEFAULTS.k_neighbors,
     candidate_min_iou: float = _STITCH_DEFAULTS.candidate_min_iou,
 ) -> list[tuple[_CutEdge, _CutEdge, dict[str, float]]]:
-    """Find all (e, c) pairs of facing cut edges with their geometry features.
+    """Find candidate pairs of facing cut edges, rank-based (no absolute max_gap).
 
-    Returns one entry per surviving candidate.  No selection / scoring yet.
+    For each edge, keep only its ``k_neighbors`` nearest *facing + overlapping*
+    edges by perpendicular gap.  A rank-based cap adapts to the dataset's own
+    seam-gap width -- unlike an absolute pixel radius, which fails when the
+    inter-FOV gap is wider than a hand-tuned constant.  Each unordered
+    ``(cell_a, cell_b, axis)`` pair is emitted once.  No scoring yet.
     """
-    out: list[tuple[_CutEdge, _CutEdge, dict[str, float]]] = []
+    out: dict[tuple[int, int, str], tuple[_CutEdge, _CutEdge, dict[str, float]]] = {}
     by_axis: dict[str, list[_CutEdge]] = {"h": [], "v": []}
     for e in edges:
         by_axis[e.axis].append(e)
 
     for axis_edges in by_axis.values():
-        axis_edges.sort(key=lambda e: e.coord)
-        coords = np.array([e.coord for e in axis_edges])
-        for i, e in enumerate(axis_edges):
-            lo = int(np.searchsorted(coords, e.coord - max_gap, side="left"))
-            hi = int(np.searchsorted(coords, e.coord + max_gap, side="right"))
-            for j in range(lo, hi):
-                if j <= i:
-                    continue  # symmetry: emit each unordered pair once
-                c = axis_edges[j]
-                if c.cell_id == e.cell_id:
+        for e in axis_edges:
+            facing: list[tuple[float, _CutEdge, dict[str, float]]] = []
+            for c in axis_edges:
+                if c is e or c.cell_id == e.cell_id:
                     continue
-                feats = _pair_geometry_features(e, c, max_gap, candidate_min_iou=candidate_min_iou)
+                feats = _pair_geometry_features(e, c, candidate_min_iou=candidate_min_iou)
                 if feats is None:
                     continue
-                out.append((e, c, feats))
-    return out
+                facing.append((feats["gap"], c, feats))
+            facing.sort(key=lambda t: t[0])
+            for _g, c, feats in facing[:k_neighbors]:
+                key = (min(e.cell_id, c.cell_id), max(e.cell_id, c.cell_id), e.axis)
+                if key not in out:
+                    out[key] = (e, c, feats)
+    return list(out.values())
 
 
 # Scoring
 
 
-def _gap_proximity(gap: float, close_radius: int) -> float:
-    """Map the raw perpendicular gap to [0, 1] against the closing reach.
-
-    Normalised by ``2 * close_radius`` -- the scale at which morphological
-    closing could actually bridge the seam -- so the feature is independent of
-    the ``max_gap`` search radius and only reaches 0 when the gap genuinely
-    exceeds what closing can join.  When closing is disabled (``close_radius=0``)
-    the feature is inactive and returns ``1.0`` rather than collapsing the score.
-    """
-    reach = 2 * close_radius
-    # gap<=0 (touching/overlapping) or reach<=0 (closing disabled, close_radius=0)
-    # -> the feature is inactive (neutral 1.0), never a silent score cliff.
-    if gap <= 0 or reach <= 0:
-        return 1.0
-    return max(0.0, 1.0 - gap / reach)
-
-
 def _score_pair_features(features: dict[str, float]) -> float:
     """Return the heuristic stitch score in [0, 1].
 
-    Flat (unweighted) mean of the five features in :data:`_SCORE_FEATURES`.
+    Flat (unweighted) mean of the four features in :data:`_SCORE_FEATURES`.
     The score is dataset-independent and not a calibrated probability -- users
     pick ``min_confidence`` based on their false-merge tolerance.
     """
@@ -527,29 +465,55 @@ def _max_achievable_score(known_features: dict[str, float]) -> float:
     return _score_pair_features({**known_features, **dict.fromkeys(_SHAPE_FEATURES, 1.0)})
 
 
+def _seam_span(seams: dict[str, list[tuple[float, float, int]]], axis: str, coord_a: float, coord_b: float) -> float:
+    """Widest plausible separation between two halves of one cut, from the measured seam band.
+
+    Both halves sit on the inner edges of the same band, so their perpendicular separation
+    cannot exceed that band's width.  Tying the bound to the detected seam rather than to a
+    multiple of the cell diameter also bounds the per-pair closing radius, which otherwise
+    grows with the gap until it bridges pieces that were never one cell.
+    """
+    bands = seams.get(axis, [])
+    if not bands:
+        return 0.0
+    mid = (coord_a + coord_b) / 2.0
+    _centre, half, _cnt = min(bands, key=lambda b: abs(mid - b[0]))
+    return 2.0 * half
+
+
 def _score_pairs(
     candidates: list[tuple[_CutEdge, _CutEdge, dict[str, float]]],
     bboxes: dict[int, tuple[int, int, int, int]],
     outlier_crops: dict[int, np.ndarray],
     min_confidence: float,
-    close_radius: int = _STITCH_DEFAULTS.close_radius,
+    seams: dict[str, list[tuple[float, float, int]]],
     *,
+    close_radius_min: int = _STITCH_DEFAULTS.close_radius_min,
     H: int,
     W: int,
 ) -> list[_StitchPair]:
     """Compute shape features per candidate, score, and keep pairs >= min_confidence.
 
-    One entry per ``(cell_a, cell_b, axis)`` (keeping max confidence on duplicates).
+    The morphological closing radius is chosen *per pair* to bridge that pair's
+    own seam gap (``max(close_radius_min, ceil(gap / 2) + 1)``), and candidates
+    separated by more than the width of the seam band they lie on are discarded
+    (:func:`_seam_span`), which also bounds that radius.  One entry per
+    ``(cell_a, cell_b, axis)`` (keeping max confidence on duplicates).
     """
     scored: list[_StitchPair] = []
     for e, c, geom in candidates:
-        known = {**geom, "gap_proximity": _gap_proximity(geom["gap"], close_radius)}
+        gap = geom["gap"]
+        if gap > _seam_span(seams, e.axis, e.coord, c.coord):  # wider than its own seam: not one cut
+            continue
+        # Per-pair closing radius bridges this pair's own gap; the gap is already bounded by
+        # the seam band's width above, so the radius needs no separate cap.
+        close_radius = max(close_radius_min, int(np.ceil(gap / 2.0)) + 1)
         # Skip the costly union reconstruction when even the best case for the
         # deferred shape features can't reach min_confidence.
-        if _max_achievable_score(known) < min_confidence:
+        if _max_achievable_score(geom) < min_confidence:
             continue
         shape = _merge_shape_features(e.cell_id, c.cell_id, bboxes, outlier_crops, close_radius=close_radius, H=H, W=W)
-        feats = {**known, **shape}
+        feats = {**geom, **shape}
         confidence = _score_pair_features(feats)
         if confidence < min_confidence:
             continue
@@ -566,7 +530,6 @@ def _score_pairs(
                 confidence=confidence,
                 iou=feats["iou"],
                 endpoint_match=feats["endpoint_match"],
-                gap_proximity=feats["gap_proximity"],
                 merge_solidity=feats["merge_solidity"],
                 merge_compactness=feats["merge_compactness"],
                 edge_a=ea,
@@ -574,13 +537,7 @@ def _score_pairs(
             )
         )
 
-    # Deduplicate to one entry per (cell_a, cell_b, axis), keeping max confidence.
-    by_pair: dict[tuple[int, int, str], _StitchPair] = {}
-    for p in scored:
-        k = (p.cell_a, p.cell_b, p.axis)
-        if k not in by_pair or by_pair[k].confidence < p.confidence:
-            by_pair[k] = p
-    return sorted(by_pair.values(), key=lambda p: (-p.confidence, p.cell_a, p.cell_b))
+    return sorted(scored, key=lambda p: (-p.confidence, p.cell_a, p.cell_b))
 
 
 # Group assembly (union-find + validation)
@@ -589,7 +546,7 @@ def _score_pairs(
 def _validate_group_geometry(
     pairs_in_group: list[_StitchPair],
     size: int,
-    max_gap: float,
+    gap_tol: float,
 ) -> bool:
     """Geometric sanity check for groups of size >= 3.
 
@@ -598,7 +555,7 @@ def _validate_group_geometry(
     - **Corner group** (size 4, both axes present): the cut edges' endpoints
       must converge near a single junction point (one ``h`` cut crossing one
       ``v`` cut defines the junction).  If the spread of edge extents from
-      the junction is greater than ``max_gap``, the group is implausible.
+      the junction is greater than ``gap_tol``, the group is implausible.
 
     - **Chain group** (size 3 or 4, all pairs share one axis): legitimate
       same-axis chains (e.g., a cell split by 3 horizontal seams into 4
@@ -606,6 +563,9 @@ def _validate_group_geometry(
       coordinates.  Multiple pairs at the same seam coord would imply
       geometrically impossible "two cuts at the same seam" pairings -- a
       signature of a false-positive cluster -- so we reject.
+
+    ``gap_tol`` is the width of the widest detected seam band, used consistently
+    with the per-pair bound applied during candidate scoring.
     """
     h_pairs = [p for p in pairs_in_group if p.axis == "h"]
     v_pairs = [p for p in pairs_in_group if p.axis == "v"]
@@ -616,10 +576,10 @@ def _validate_group_geometry(
             return True  # 2-piece groups are trivially valid on one axis
         # Each pair's seam coord is roughly midway between its two edges.
         seam_coords = [round((p.edge_a.coord + p.edge_b.coord) / 2.0, 1) for p in pairs_in_group]
-        # Allow a max_gap-sized tolerance for "distinct" seams.
+        # Allow a gap_tol-sized tolerance for "distinct" seams.
         sorted_coords = sorted(seam_coords)
         for prev, cur in zip(sorted_coords, sorted_coords[1:], strict=False):
-            if cur - prev <= max_gap:
+            if cur - prev <= gap_tol:
                 return False
         return True
 
@@ -635,10 +595,10 @@ def _validate_group_geometry(
     junction_y = float(np.mean([e.coord for e in h_edges]))
     junction_x = float(np.mean([e.coord for e in v_edges]))
     for e in h_edges:
-        if min(abs(e.extent[0] - junction_x), abs(e.extent[1] - junction_x)) > max_gap:
+        if min(abs(e.extent[0] - junction_x), abs(e.extent[1] - junction_x)) > gap_tol:
             return False
     for e in v_edges:
-        if min(abs(e.extent[0] - junction_y), abs(e.extent[1] - junction_y)) > max_gap:
+        if min(abs(e.extent[0] - junction_y), abs(e.extent[1] - junction_y)) > gap_tol:
             return False
     return True
 
@@ -647,7 +607,7 @@ def _assemble_groups(
     pairs: list[_StitchPair],
     candidate_ids: Iterable[int],
     max_group_size: int,
-    max_gap: float,
+    gap_tol: float,
 ) -> tuple[dict[int, int], dict[int, float]]:
     """Build stitch groups via union-find with size + corner validation.
 
@@ -711,7 +671,7 @@ def _assemble_groups(
 
         # Geometric validation for 3+ piece groups: corner-junction for
         # mixed-axis 4-groups, chain (distinct seam coords) for same-axis 3+.
-        if size >= 3 and not _validate_group_geometry(group_pairs, size, max_gap):
+        if size >= 3 and not _validate_group_geometry(group_pairs, size, gap_tol):
             for m in mem:
                 groups[m] = m
                 confidences[m] = 1.0
@@ -738,28 +698,33 @@ def assign_stitch_groups(
     sdata: sd.SpatialData,
     labels_key: str,
     qc_table_key: str | None = None,
-    min_confidence: float = 0.7,
-    max_gap: float = 3.0,
+    min_confidence: float = 0.6,
     max_group_size: int = 4,
+    candidates: Literal["auto", "is_seam_cut", "is_outlier"] = "auto",
     stitch_params: StitchParams | Mapping[str, Any] | None = None,
     inplace: bool = True,
 ) -> ad.AnnData | None:
     """Assign tile-cut cell pieces to stitch groups.
 
-    Reads ``is_outlier=True`` cells flagged by
-    :func:`~squidpy.experimental.tl.calculate_tiling_qc`, pairs facing cut
-    edges across tile boundaries, scores each pair via a transparent geometric
-    composite, and assembles high-confidence pairs into stitch groups via
-    union-find.  This only *annotates* which pieces belong together -- it does
-    **not** modify the labels element.  Materialising a stitched labels element
-    is opt-in via :func:`!make_stitched_labels`.
+    Reads the cells flagged by :func:`~squidpy.experimental.tl.calculate_tiling_qc`
+    (``is_seam_cut`` by default), extracts each piece's cut edges *on and facing*
+    the detected FOV seam bands, pairs facing edges across boundaries (rank-based:
+    each edge with its ``k`` nearest facing partners -- no absolute-pixel search
+    radius), scores each pair via a transparent geometric composite, and assembles
+    high-confidence pairs into stitch groups via union-find.  This only *annotates*
+    which pieces belong together -- it does **not** modify the labels element.
+    Materialising a stitched labels element is opt-in via :func:`!make_stitched_labels`.
 
-    The score per pair is the flat (unweighted) mean of five geometric features
+    The score per pair is the flat (unweighted) mean of four geometric features
     in [0, 1]: ``iou`` (1-D extent overlap), ``endpoint_match`` (chord endpoints
-    coincide), ``merge_compactness`` (``4*pi*A / P^2`` of the closed union mask),
-    ``merge_solidity`` (union area / convex hull area), and ``gap_proximity``
-    (seam gap relative to the morphological closing reach).  No coefficients are
+    coincide), ``merge_compactness`` (``4*pi*A / P^2`` of the closed union mask)
+    and ``merge_solidity`` (union area / convex hull area).  No coefficients are
     fitted or shipped; the features are recorded in ``.uns["tiling_stitch"]``.
+
+    **Requires seam detection.**  Run ``calculate_tiling_qc(..., detect_seams=True)``
+    first: the seam bands and data length scale ``D`` it records in
+    ``.uns["tiling_qc"]`` localise cut-edge extraction to real seams, so pairing
+    no longer merges touching interior cells.
 
     Parameters
     ----------
@@ -771,16 +736,17 @@ def assign_stitch_groups(
     qc_table_key
         Key of the QC table.  Defaults to ``"{labels_key}_qc"``.
     min_confidence
-        Threshold on ``stitch_confidence``.  ``0.7`` (default) is a starting
+        Threshold on ``stitch_confidence``.  ``0.6`` (default) is a starting
         point; raise it for stricter precision, lower for recall.  Tune for
         your data -- the score is heuristic, not a calibrated probability.
-    max_gap
-        Maximum perpendicular distance (px) between facing cut edges for a pair
-        to be *considered* a candidate.  This is a search radius only; it does
-        not scale the score.
     max_group_size
         Cap on group size; oversized groups (likely false merges) collapse
         to singletons.
+    candidates
+        Which QC column gates the cells considered for stitching.  ``"auto"``
+        (default) uses ``is_seam_cut`` when present -- these are localised to
+        detected FOV seams -- and otherwise falls back to ``is_outlier``.  Set
+        explicitly to ``"is_seam_cut"`` or ``"is_outlier"`` to force one.
     stitch_params
         Advanced tuning knobs as a :class:`StitchParams` instance or a
         ``Mapping`` of its field names to values.  See :class:`StitchParams`
@@ -799,8 +765,6 @@ def assign_stitch_groups(
         raise ValueError(f"Labels key '{labels_key}' not found in sdata.labels.")
     if min_confidence < 0 or min_confidence > 1:
         raise ValueError(f"min_confidence must be in [0, 1], got {min_confidence}.")
-    if max_gap < 0:
-        raise ValueError(f"max_gap must be non-negative, got {max_gap}.")
     if max_group_size < 1:
         raise ValueError(f"max_group_size must be >= 1, got {max_group_size}.")
     params = _resolve_stitch_params(stitch_params)
@@ -810,27 +774,53 @@ def assign_stitch_groups(
         raise ValueError(f"QC table '{table_key}' not found.  Run calculate_tiling_qc first.")
     adata = sdata.tables[table_key].copy()
 
-    if "is_outlier" not in adata.obs.columns:
-        raise ValueError(f"QC table '{table_key}' is missing 'is_outlier'; re-run calculate_tiling_qc.")
     if "label_id" not in adata.obs.columns:
         raise ValueError(f"QC table '{table_key}' is missing 'label_id'.")
+    # Candidate gate: prefer the seam-aware `is_seam_cut` flag (localised to detected FOV seams,
+    # so pairing no longer merges touching interior cells); fall back to the MAD `is_outlier`.
+    # Seam data is mandatory below, so `is_seam_cut` is always present under "auto".
+    gate_col = "is_seam_cut" if candidates == "auto" else candidates
+    if gate_col not in adata.obs.columns:
+        raise ValueError(
+            f"QC table '{table_key}' is missing '{gate_col}'; re-run calculate_tiling_qc "
+            f"(with detect_seams=True for 'is_seam_cut')."
+        )
 
     existing = [c for c in _STITCH_COLUMNS if c in adata.obs.columns]
     if existing:
         logg.warning(f"Overwriting existing stitch columns: {existing}.")
         adata.obs.drop(columns=existing, inplace=True)
 
-    # Resolve which labels DataArray was used at QC time (multi-scale aware).
+    # Seam contract from calculate_tiling_qc(detect_seams=True): the seam bands localise
+    # cut-edge extraction and `seam_diameter` sets every length scale.  The extraction
+    # fractions mirror detection (read from seam_params) so both stages agree on seam cuts.
     qc_params = adata.uns.get("tiling_qc", {})
     scale = qc_params.get("scale")
+    seams_uns = qc_params.get("seams")
+    diameter = qc_params.get("seam_diameter")
+    if not seams_uns or diameter is None:
+        raise ValueError(
+            f"QC table '{table_key}' has no seam detection results; assign_stitch_groups requires "
+            f"seam-localised cut edges.  Re-run calculate_tiling_qc(..., detect_seams=True)."
+        )
+    diameter = float(diameter)
+    seams = {
+        axis: [(float(b["coord"]), float(b["half_width"]), int(b["n_edges"])) for b in seams_uns.get(axis, [])]
+        for axis in ("v", "h")
+    }
+    # Rehydrate the exact parameters detection ran with, and resolve them against the same D.
+    seam_scale = resolve_params(qc_params.get("seam_params"), SeamDetectionParams, label="seam_params")._resolve(
+        diameter
+    )
+
     labels_da = resolve_labels_array(sdata, labels_key, scale)
 
     label_ids = adata.obs["label_id"].astype(int).to_numpy()
-    is_outlier = adata.obs["is_outlier"].to_numpy(dtype=bool)
+    is_outlier = adata.obs[gate_col].to_numpy(dtype=bool)
     outlier_ids = label_ids[is_outlier].tolist()
 
     n_outliers = len(outlier_ids)
-    logg.info(f"Stitching {n_outliers} outlier cells (out of {len(label_ids)} total).")
+    logg.info(f"Stitching {n_outliers} candidate cells ('{gate_col}', out of {len(label_ids)} total).")
 
     if n_outliers == 0:
         logg.warning("No outliers flagged; nothing to stitch.")
@@ -846,21 +836,27 @@ def assign_stitch_groups(
                 f"{len(missing)} outlier label_id(s) flagged in the QC table do not appear "
                 f"in '{labels_key}' (e.g. {missing[:5]}); they will not be stitched."
             )
-        edges, outlier_crops = _extract_cut_edges(
-            labels_da,
-            outlier_ids,
-            bboxes=bboxes,
-            distance_tol=params.distance_tol,
-            min_edge_length=params.min_edge_length,
-            min_edge_length_ratio=params.min_edge_length_ratio,
-            min_edge_coverage=params.min_edge_coverage,
-        )
+        edges, outlier_crops = _extract_cut_edges(labels_da, outlier_ids, bboxes, seams, seam_scale)
         H, W = labels_da.shape[-2], labels_da.shape[-1]
-        candidates = _enumerate_pair_candidates(edges, max_gap=max_gap, candidate_min_iou=params.candidate_min_iou)
-        pairs = _score_pairs(
-            candidates, bboxes, outlier_crops, min_confidence, close_radius=params.close_radius, H=H, W=W
+        cand = _enumerate_pair_candidates(
+            edges, k_neighbors=params.k_neighbors, candidate_min_iou=params.candidate_min_iou
         )
-        groups, confidences = _assemble_groups(pairs, outlier_ids, max_group_size=max_group_size, max_gap=max_gap)
+        pairs = _score_pairs(
+            cand,
+            bboxes,
+            outlier_crops,
+            min_confidence,
+            seams,
+            close_radius_min=params.close_radius_min,
+            H=H,
+            W=W,
+        )
+        # Tolerance for "distinct seams" / corner convergence: the widest detected band.
+        gap_tol = max(
+            (2.0 * half for bands in seams.values() for _c, half, _n in bands),
+            default=0.0,
+        )
+        groups, confidences = _assemble_groups(pairs, outlier_ids, max_group_size=max_group_size, gap_tol=gap_tol)
 
     # Write .obs columns with three states distinguished by stitch_confidence:
     # - non-outlier cell      -> own label_id, False, 1, NaN  (not evaluated)
@@ -902,8 +898,9 @@ def assign_stitch_groups(
 
     adata.uns[_METHOD_KEY] = {
         "min_confidence": float(min_confidence),
-        "max_gap": float(max_gap),
         "max_group_size": int(max_group_size),
+        "candidate_gate": gate_col,
+        "seam_diameter": float(diameter),
         "stitch_params": asdict(params),
         "n_outliers": int(n_outliers),
         "n_candidate_pairs": int(len(pairs)),

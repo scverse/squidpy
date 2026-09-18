@@ -20,6 +20,8 @@ def tiling_qc(
         "max_straight_edge_ratio",
         "cardinal_alignment_score",
         "is_outlier",
+        "is_seam_cut",
+        "seam_dist",
     ] = "nhood_outlier_fraction",
     cmap: str = "RdYlGn_r",
     figsize: tuple[float, float] | None = None,
@@ -44,7 +46,9 @@ def tiling_qc(
         Which ``.obs`` column to colour by.  One of
         ``"nhood_outlier_fraction"``, ``"smoothed_cut_score"``,
         ``"cut_score"``, ``"max_straight_edge_ratio"``,
-        ``"cardinal_alignment_score"``, ``"is_outlier"``.
+        ``"cardinal_alignment_score"``, ``"is_outlier"`` (MAD gate),
+        or -- from ``calculate_tiling_qc(detect_seams=True)`` -- the
+        emergent-seam columns ``"is_seam_cut"`` and ``"seam_dist"``.
     cmap
         Matplotlib colormap name.
     figsize
@@ -70,9 +74,11 @@ def tiling_qc(
         "nhood_outlier_fraction": "Neighborhood outlier fraction",
         "smoothed_cut_score": "Smoothed cut score",
         "cut_score": "Cut score",
-        "is_outlier": "Outlier flag",
+        "is_outlier": "Outlier flag (MAD)",
         "max_straight_edge_ratio": "Max straight edge ratio",
         "cardinal_alignment_score": "Cardinal alignment score",
+        "is_seam_cut": "Seam-cut flag (emergent seam)",
+        "seam_dist": "Distance to seam",
     }
 
     show_kwargs: dict[str, object] = {"title": _TITLES.get(score_col, score_col)}
