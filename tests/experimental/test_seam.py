@@ -7,11 +7,12 @@ import pytest
 
 from squidpy.experimental.tl import SeamDetectionParams, calculate_tiling_qc
 from squidpy.experimental.tl._seam import (
-    SeamScale,
+    _min_significant_count,
+    _otsu_gap_split,
     cell_flat_edges,
     detect_seams,
-    estimate_membrane_width,
     flag_cells_on_seams,
+    gap_channel,
 )
 
 
@@ -63,10 +64,10 @@ class TestSeamDetectionIntegration:
     def test_seam_params_recorded_in_uns(self, sdata_dense_seam):
         sdata, _ = sdata_dense_seam
         adata = calculate_tiling_qc(
-            sdata, labels_key="labels", detect_seams=True, seam_params={"gap_membrane_mult": 3.0}, inplace=False
+            sdata, labels_key="labels", detect_seams=True, seam_params={"alpha": 0.005}, inplace=False
         )
         assert adata.uns["tiling_qc"]["detect_seams"] is True
-        assert adata.uns["tiling_qc"]["seam_params"]["gap_membrane_mult"] == 3.0
+        assert adata.uns["tiling_qc"]["seam_params"]["alpha"] == 0.005
 
     def test_no_helper_columns_leak(self, sdata_dense_seam):
         sdata, _ = sdata_dense_seam
@@ -86,7 +87,8 @@ class TestSeamDetectionParams:
         "kwargs,match",
         [
             ({"edge_len_frac": 0.0}, "edge_len_frac"),
-            ({"min_seam_edge_frac": 1.5}, "min_seam_edge_frac"),
+            ({"gap_selectivity_max": 1.5}, "gap_selectivity_max"),
+            ({"alpha": 0.0}, "alpha"),
             ({"probe_frac": 0.0}, "probe_frac"),
         ],
     )
@@ -103,7 +105,7 @@ class TestSeamUnits:
         from skimage.measure import regionprops
 
         rp = regionprops(tile)[0]
-        edges = cell_flat_edges(rp.image, tile, rp.bbox, (0, 0), min_len=5, flat_tol=1.5, probe_depth=8)
+        edges = cell_flat_edges(rp.image, tile != 0, rp.bbox, (0, 0), min_len=5, flat_tol=1.5, probe_depth=8)
         vs = [e for e in edges if e["axis"] == "v" and e["side"] == -1]
         assert vs and abs(vs[0]["coord"] - 9) <= 1 and vs[0]["gap"] >= 3
 
@@ -115,14 +117,31 @@ class TestSeamUnits:
         from skimage.measure import regionprops
 
         rp = next(r for r in regionprops(tile) if r.label == 5)
-        edges = cell_flat_edges(rp.image, tile, rp.bbox, (0, 0), min_len=5, flat_tol=1.5, probe_depth=8)
+        edges = cell_flat_edges(rp.image, tile != 0, rp.bbox, (0, 0), min_len=5, flat_tol=1.5, probe_depth=8)
         vs = [e for e in edges if e["axis"] == "v" and e["side"] == -1]
         assert vs and vs[0]["gap"] <= 2  # membrane, not a seam gap
 
-    def test_membrane_estimate(self):
-        # mostly 1px membranes plus a few wide gaps -> membrane ~1
+    def test_otsu_splits_membranes_from_open_background(self):
+        # mostly 1px membranes plus a few wide gaps -> the split lands between the two modes
         gaps = np.array([1, 1, 1, 1, 2, 8, 9, 10], dtype=float)
-        assert estimate_membrane_width(gaps) <= 2.0
+        thr = _otsu_gap_split(gaps)
+        assert 2.0 < thr < 8.0
+
+    def test_gap_channel_filters_when_selective_and_falls_back_when_not(self):
+        # packed tissue: a few wide gaps among many membranes -> the split discriminates
+        packed = [{"gap": g} for g in [1] * 90 + [9] * 10]
+        _thr, selectivity, use_wide = gap_channel(packed)
+        assert use_wide and selectivity <= 0.25
+        # sparse tissue: most edges face open background -> the gap says nothing, use all edges
+        sparse = [{"gap": g} for g in [0] * 50 + [8] * 50]
+        _thr, selectivity, use_wide = gap_channel(sparse)
+        assert not use_wide and selectivity > 0.25
+
+    def test_significance_threshold_scales_with_the_null_rate(self):
+        # denser scatter -> a larger count is needed before a peak is surprising
+        sparse_null = _min_significant_count(n_edges=100, n_bins=300, window=1, alpha=0.01)
+        dense_null = _min_significant_count(n_edges=3000, n_bins=300, window=1, alpha=0.01)
+        assert dense_null > sparse_null >= 3
 
     def test_detect_and_flag_roundtrip(self):
         rng = np.random.default_rng(0)
@@ -132,13 +151,98 @@ class TestSeamUnits:
             edges.append({"axis": "v", "coord": float(c), "span": 20, "side": -1, "gap": 9.0, "cell_id": -1})
         for c in rng.uniform(0, 200, 80):
             edges.append({"axis": "v", "coord": float(c), "span": 20, "side": -1, "gap": 5.0, "cell_id": -1})
-        scale = SeamScale(diameter=20.0, membrane=1.0)
-        seams = detect_seams(edges, 200, 200, scale, SeamDetectionParams())
+        seams = detect_seams(edges, 200, 200, 20.0, SeamDetectionParams())
         assert len(seams["v"]) == 1 and abs(seams["v"][0][0] - 100) <= 4
         # a left-body cell whose right edge lands on the seam is flagged; one far away is not
         ebc = {
             1: [{"axis": "v", "coord": 100.0, "span": 20, "side": -1, "gap": 9.0}],
             2: [{"axis": "v", "coord": 20.0, "span": 20, "side": -1, "gap": 9.0}],
         }
-        flagged = flag_cells_on_seams(ebc, seams, scale, SeamDetectionParams())
+        flagged = flag_cells_on_seams(ebc, seams, 20.0, SeamDetectionParams())
         assert 1 in flagged and 2 not in flagged
+
+
+class TestTileGridIndependence:
+    """Seam detection must depend on the data only, never on the QC tiling used to process it.
+
+    ``tile_size`` is a throughput knob: it controls how the labels raster is chopped up for
+    parallel scoring.  Two runs of the same data at different ``tile_size`` must therefore
+    agree on where the FOV seams are.
+    """
+
+    @pytest.mark.parametrize("tile_size", [128, 200, 420])
+    def test_seams_match_truth_at_any_tile_size(self, sdata_dense_seam, tile_size):
+        sdata, gt = sdata_dense_seam
+        adata = calculate_tiling_qc(sdata, labels_key="labels", tile_size=tile_size, detect_seams=True, inplace=False)
+        seams = adata.uns["tiling_qc"]["seams"]
+        for axis in ("v", "h"):
+            coords = sorted(b["coord"] for b in seams[axis])
+            assert len(coords) == len(gt.seam_coords), (
+                f"axis {axis} at tile_size={tile_size}: expected {list(gt.seam_coords)}, "
+                f"got {[round(c, 1) for c in coords]}"
+            )
+            for want, got in zip(sorted(gt.seam_coords), coords, strict=True):
+                assert abs(got - want) <= 8, f"axis {axis}: seam {got:.1f} too far from true {want}"
+
+    def test_no_seam_lands_on_the_processing_tile_grid(self, sdata_dense_seam):
+        """The QC tile borders are not seams; detecting one there is a processing artifact."""
+        sdata, gt = sdata_dense_seam
+        tile_size = 200
+        adata = calculate_tiling_qc(sdata, labels_key="labels", tile_size=tile_size, detect_seams=True, inplace=False)
+        d = adata.uns["tiling_qc"]["seam_diameter"]
+        extent = sdata.labels["labels"].shape[-1]
+        borders = [tile_size * k for k in range(1, 1 + extent // tile_size)]
+        seams = adata.uns["tiling_qc"]["seams"]
+        for axis in ("v", "h"):
+            for band in seams[axis]:
+                c = band["coord"]
+                near_true = min(abs(c - t) for t in gt.seam_coords)
+                near_border = min(abs(c - b) for b in borders)
+                assert near_true <= d or near_border > d, (
+                    f"axis {axis}: seam at {c:.1f} sits on the tile grid {borders} "
+                    f"but not on a true seam {list(gt.seam_coords)}"
+                )
+
+
+class TestSparseTissueDetection:
+    """Detection must not depend on tissue density.
+
+    In sparse tissue nearly every cell edge faces open background, so a wide-gap pre-filter
+    keeps almost every edge and discriminates nothing.  The seam must then be found from the
+    alignment consensus alone -- many cells sharing one edge coordinate -- which is the
+    evidence that defines a seam in the first place.
+    """
+
+    @pytest.mark.parametrize("tile_size", [150, 200])
+    def test_seams_found_in_sparse_tissue(self, sdata_tile_boundary, tile_size):
+        sdata, gt = sdata_tile_boundary
+        adata = calculate_tiling_qc(sdata, labels_key="labels", tile_size=tile_size, detect_seams=True, inplace=False)
+        seams = adata.uns["tiling_qc"]["seams"]
+        for axis, truth in (("v", gt.tile_borders_x), ("h", gt.tile_borders_y)):
+            coords = sorted(b["coord"] for b in seams[axis])
+            for want in truth:
+                assert any(abs(c - want) <= 8 for c in coords), (
+                    f"axis {axis} at tile_size={tile_size}: true seam {want} not found "
+                    f"in {[round(c, 1) for c in coords]}"
+                )
+
+    def test_seams_match_truth_at_any_overlap_margin(self, sdata_dense_seam):
+        """Gap probing reaches beyond a cell's own edge, so the crop must leave room for it.
+
+        ``overlap_margin`` is sized to *contain* each owned cell; a cell sitting at the crop
+        edge would have its probe clipped and under-report its gap.  Detection must not
+        depend on that either.
+        """
+        sdata, gt = sdata_dense_seam
+        adata = calculate_tiling_qc(
+            sdata, labels_key="labels", tile_size=200, overlap_margin=2, detect_seams=True, inplace=False
+        )
+        seams = adata.uns["tiling_qc"]["seams"]
+        for axis in ("v", "h"):
+            coords = sorted(b["coord"] for b in seams[axis])
+            assert len(coords) == len(gt.seam_coords), (
+                f"axis {axis} with overlap_margin=2: expected {list(gt.seam_coords)}, "
+                f"got {[round(c, 1) for c in coords]}"
+            )
+            for want, got in zip(sorted(gt.seam_coords), coords, strict=True):
+                assert abs(got - want) <= 8

@@ -16,9 +16,11 @@ for their data; ``0.6`` is a reasonable starting point, not a calibrated
 probability.
 
 Everything is scale-invariant: candidate enumeration is rank-based (k nearest
-facing edges, no absolute-pixel search radius) and every remaining length
-threshold is expressed relative to the data's median cell diameter ``D`` (read
-from ``.uns["tiling_qc"]["seam_diameter"]``).  Cut edges are extracted only on
+facing edges, no absolute-pixel search radius), cut-edge lengths are relative to
+the data's median cell diameter ``D`` (read from
+``.uns["tiling_qc"]["seam_diameter"]``), and how far apart two halves of one cut
+may lie is bounded by the width of the seam band they sit on -- measured by
+``calculate_tiling_qc``, not assumed.  Cut edges are extracted only on
 and facing the seam bands detected by ``calculate_tiling_qc`` -- so pairing no
 longer merges touching interior cells, and both halves of a genuine cut are
 recovered even when a 1-px segmentation fringe pushes the flat cut inward.
@@ -94,12 +96,6 @@ class StitchParams:
     *facing* edges (by perpendicular gap).  Replaces an absolute ``max_gap`` pixel
     threshold, so the search adapts to the dataset's own seam-gap width."""
 
-    max_gap_frac: float = 1.5
-    """Plausibility/cost guard: a candidate whose perpendicular seam gap exceeds
-    ``max_gap_frac * D`` (``D`` = median cell diameter) is discarded -- a cut gap
-    wider than ~1.5 cells is not a real cut.  Expressed relative to ``D`` so no
-    absolute-pixel constant is baked in."""
-
     close_radius_min: int = 2
     """Floor for the per-pair morphological closing radius.  The effective radius is
     ``max(close_radius_min, ceil(gap / 2) + 1)`` so closing always bridges that pair's
@@ -109,14 +105,11 @@ class StitchParams:
         # Coerce numeric types (accept numpy scalars cleanly) and bounds-check.
         self.candidate_min_iou = float(self.candidate_min_iou)
         self.k_neighbors = int(self.k_neighbors)
-        self.max_gap_frac = float(self.max_gap_frac)
         self.close_radius_min = int(self.close_radius_min)
         if not 0.0 <= self.candidate_min_iou <= 1.0:
             raise ValueError(f"candidate_min_iou must be in [0, 1], got {self.candidate_min_iou}.")
         if self.k_neighbors < 1:
             raise ValueError(f"k_neighbors must be >= 1, got {self.k_neighbors}.")
-        if self.max_gap_frac <= 0:
-            raise ValueError(f"max_gap_frac must be > 0, got {self.max_gap_frac}.")
         if self.close_radius_min < 0:
             raise ValueError(f"close_radius_min must be >= 0, got {self.close_radius_min}.")
 
@@ -298,7 +291,7 @@ def _extract_cut_edges(
 
         flat = cell_flat_edges(
             cell_mask,
-            crop,
+            crop != 0,  # occupancy: this crop is read unmasked, so neighbours are visible
             (by0, bx0, by0 + h, bx0 + w),
             (r0, c0),
             min_len,
@@ -496,14 +489,30 @@ def _max_achievable_score(known_features: dict[str, float]) -> float:
     return _score_pair_features({**known_features, **dict.fromkeys(_SHAPE_FEATURES, 1.0)})
 
 
+def _seam_span(seams: dict[str, list[tuple[float, float, int]]], axis: str, coord_a: float, coord_b: float) -> float:
+    """Widest plausible separation between two halves of one cut, from the measured seam band.
+
+    Both halves sit on the inner edges of the same band, so their perpendicular separation
+    cannot exceed that band's width.  Tying the bound to the detected seam rather than to a
+    multiple of the cell diameter also bounds the per-pair closing radius, which otherwise
+    grows with the gap until it bridges pieces that were never one cell.
+    """
+    bands = seams.get(axis, [])
+    if not bands:
+        return 0.0
+    mid = (coord_a + coord_b) / 2.0
+    _centre, half, _cnt = min(bands, key=lambda b: abs(mid - b[0]))
+    return 2.0 * half
+
+
 def _score_pairs(
     candidates: list[tuple[_CutEdge, _CutEdge, dict[str, float]]],
     bboxes: dict[int, tuple[int, int, int, int]],
     outlier_crops: dict[int, np.ndarray],
     min_confidence: float,
     diameter: float,
+    seams: dict[str, list[tuple[float, float, int]]],
     *,
-    max_gap_frac: float = _STITCH_DEFAULTS.max_gap_frac,
     close_radius_min: int = _STITCH_DEFAULTS.close_radius_min,
     H: int,
     W: int,
@@ -512,18 +521,17 @@ def _score_pairs(
 
     The morphological closing radius is chosen *per pair* to bridge that pair's
     own seam gap (``max(close_radius_min, ceil(gap / 2) + 1)``), and candidates
-    whose perpendicular gap exceeds ``max_gap_frac * diameter`` are discarded as
-    implausible cuts.  One entry per ``(cell_a, cell_b, axis)`` (keeping max
-    confidence on duplicates).
+    separated by more than the width of the seam band they lie on are discarded
+    (:func:`_seam_span`), which also bounds that radius.  One entry per
+    ``(cell_a, cell_b, axis)`` (keeping max confidence on duplicates).
     """
-    max_gap = max_gap_frac * diameter
     scored: list[_StitchPair] = []
     for e, c, geom in candidates:
         gap = geom["gap"]
-        if gap > max_gap:  # implausibly-wide cut: skip (also bounds the closing radius)
+        if gap > _seam_span(seams, e.axis, e.coord, c.coord):  # wider than its own seam: not one cut
             continue
-        # Per-pair closing radius bridges this pair's own gap; gap is already
-        # bounded by max_gap above, so the radius needs no separate cap.
+        # Per-pair closing radius bridges this pair's own gap; the gap is already bounded by
+        # the seam band's width above, so the radius needs no separate cap.
         close_radius = max(close_radius_min, int(np.ceil(gap / 2.0)) + 1)
         # Skip the costly union reconstruction when even the best case for the
         # deferred shape features can't reach min_confidence.
@@ -587,8 +595,8 @@ def _validate_group_geometry(
       geometrically impossible "two cuts at the same seam" pairings -- a
       signature of a false-positive cluster -- so we reject.
 
-    ``gap_tol`` is the diameter-relative seam-gap scale (``max_gap_frac * D``)
-    used consistently with candidate scoring.
+    ``gap_tol`` is the width of the widest detected seam band, used consistently
+    with the per-pair bound applied during candidate scoring.
     """
     h_pairs = [p for p in pairs_in_group if p.axis == "h"]
     v_pairs = [p for p in pairs_in_group if p.axis == "v"]
@@ -877,14 +885,17 @@ def assign_stitch_groups(
             outlier_crops,
             min_confidence,
             diameter,
-            max_gap_frac=params.max_gap_frac,
+            seams,
             close_radius_min=params.close_radius_min,
             H=H,
             W=W,
         )
-        groups, confidences = _assemble_groups(
-            pairs, outlier_ids, max_group_size=max_group_size, gap_tol=params.max_gap_frac * diameter
+        # Tolerance for "distinct seams" / corner convergence: the widest detected band.
+        gap_tol = max(
+            (2.0 * half for bands in seams.values() for _c, half, _n in bands),
+            default=0.0,
         )
+        groups, confidences = _assemble_groups(pairs, outlier_ids, max_group_size=max_group_size, gap_tol=gap_tol)
 
     # Write .obs columns with three states distinguished by stitch_confidence:
     # - non-outlier cell      -> own label_id, False, 1, NaN  (not evaluated)

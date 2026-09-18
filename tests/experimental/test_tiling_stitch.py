@@ -205,7 +205,7 @@ class TestPairingContract:
         assert {e.cell_id for e in edges} == {1, 2}
 
         cands = ts._enumerate_pair_candidates(edges, k_neighbors=5, candidate_min_iou=0.2)
-        pairs = ts._score_pairs(cands, bboxes, crops, 0.6, diameter, max_gap_frac=1.5, close_radius_min=2, H=H, W=W)
+        pairs = ts._score_pairs(cands, bboxes, crops, 0.6, diameter, seams, close_radius_min=2, H=H, W=W)
         merged = [p for p in pairs if {p.cell_a, p.cell_b} == {1, 2}]
         assert len(merged) == 1
         assert merged[0].confidence >= 0.6
@@ -221,6 +221,32 @@ class TestPairingContract:
         cands = ts._enumerate_pair_candidates(edges, k_neighbors=5, candidate_min_iou=0.2)
         pair_ids = {(min(e.cell_id, c.cell_id), max(e.cell_id, c.cell_id)) for e, c, _ in cands}
         assert (1, 2) in pair_ids
+
+    def test_pieces_farther_apart_than_the_seam_are_not_merged(self):
+        """A cut's two halves cannot be separated by more than the seam band they lie on.
+
+        The closing radius is scaled to each pair's own gap, so without a bound tied to the
+        measured seam any two aligned blobs get bridged by a disk large enough to join them
+        and then score as one compact, solid cell.
+        """
+        from squidpy.experimental.tl import _tiling_stitch as ts
+
+        H, W = 60, 260
+        arr = np.zeros((H, W), dtype=np.int32)
+        arr[20:40, 80:99] = 1  # left piece,  cols 80..98
+        arr[20:40, 127:146] = 2  # right piece, cols 127..145 -> 29 px apart
+        bboxes = {1: (20, 80, 40, 99), 2: (20, 127, 40, 146)}
+        # a ~20 px wide seam band covering both edges: the pieces are still farther apart
+        # from each other than the seam itself is wide, so they are not one cut cell.
+        seams = {"v": [(112.5, 10.0, 50)], "h": []}
+        diameter = 20.0
+
+        edges, crops = ts._extract_cut_edges(arr, [1, 2], bboxes, seams, diameter)
+        cands = ts._enumerate_pair_candidates(edges, k_neighbors=5, candidate_min_iou=0.2)
+        pairs = ts._score_pairs(cands, bboxes, crops, 0.6, diameter, seams, close_radius_min=2, H=H, W=W)
+        assert not [p for p in pairs if {p.cell_a, p.cell_b} == {1, 2}], (
+            "pieces 29 px apart across a 20 px seam were merged"
+        )
 
 
 class TestStitchVisual(PlotTester, metaclass=PlotTesterMeta):

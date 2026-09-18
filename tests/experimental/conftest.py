@@ -228,7 +228,7 @@ def sdata_clean() -> SpatialData:
 
 _DENSE_SIZE = 420
 _DENSE_BORDERS = (140, 280)  # two internal seams per axis (3x3 tile grid)
-_DENSE_GAP = 8  # wide inter-FOV gap (>> the current stitcher's 3px max_gap)
+_DENSE_GAP = 8  # wide inter-FOV gap (far wider than a touching-cell membrane)
 
 
 @dataclass
