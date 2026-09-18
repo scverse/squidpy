@@ -407,8 +407,8 @@ def calculate_niche_neighborhood(
     Returns
     -------
     If ``copy=True``, returns a copy of ``adata`` with the neighborhood profile
-    stored in ``.obsm[embedding_key_added]`` and niche assignments added to
-    ``.obs``. Otherwise, modifies ``adata`` in place and returns ``None``.
+    stored in ``.obsm[embedding_key_added]``, unless ``library_key`` is given, and niche
+    assignments added to ``.obs``. Otherwise, modifies ``adata`` in place and returns ``None``.
 
     Notes
     -----
@@ -543,8 +543,9 @@ def calculate_niche_utag(
     Returns
     -------
     If ``copy=True``, returns a copy of ``adata`` with the aggregated features in
-    ``.obsm[embedding_key_added]``, PCA-reduced unless ``use_rep`` was given, and niche
-    assignments added to ``.obs``. Otherwise, modifies ``adata`` in place and returns ``None``.
+    ``.obsm[embedding_key_added]`` unless ``library_key`` is given, PCA-reduced unless ``use_rep``
+    was given, and niche assignments added to ``.obs``. Otherwise, modifies ``adata`` in place
+    and returns ``None``.
 
     """
 
@@ -676,8 +677,8 @@ def calculate_niche_cellcharter(
     Returns
     -------
     If ``copy=True``, returns a copy of ``adata`` with the embedding stored in
-    ``.obsm[embedding_key_added]`` and GMM-based niche assignments added to
-    ``.obs``. Otherwise, modifies ``adata`` in place and returns ``None``.
+    ``.obsm[embedding_key_added]``, unless ``library_key`` is given, and GMM-based niche
+    assignments added to ``.obs``. Otherwise, modifies ``adata`` in place and returns ``None``.
 
     """
 
