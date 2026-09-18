@@ -77,7 +77,7 @@ class SeamDetectionParams:
     every value.  Raising it trades recall for precision."""
 
     flat_tol: float = 1.5
-    """Flatness tolerance (px): max deviation from a single coordinate for a run to be 'flat'.
+    """Maximum deviation in pixels from a single coordinate for a run to count as flat.
     A rasterisation / pixel-grid constant (~1px), independent of cell size or resolution --
     scaling it with the cell size would accept curved edges on large cells."""
 
@@ -95,7 +95,7 @@ class SeamDetectionParams:
     decision boundary sits an order of magnitude from either regime."""
 
     bin_width: float = 2.0
-    """Seam histogram bin width (px): a pixel-grid resolution constant, independent of cell size."""
+    """Seam histogram bin width in pixels -- a raster resolution constant, independent of cell size."""
 
     alpha: float = 0.01
     """Significance level for keeping a histogram peak, Bonferroni-corrected over the bins.
@@ -132,7 +132,7 @@ class SeamDetectionParams:
         if self.probe_frac <= 0:
             raise ValueError(f"probe_frac must be > 0, got {self.probe_frac}.")
 
-    def resolve(self, diameter: float) -> SeamScale:
+    def _resolve(self, diameter: float) -> SeamScale:
         """Resolve every fraction against the data's length scale ``D`` (median cell diameter)."""
         return SeamScale(
             params=self,

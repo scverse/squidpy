@@ -639,7 +639,7 @@ def calculate_tiling_qc(
     if resolved_seam is not None:
         _sizes = np.array([np.sqrt(ci.bbox_h * ci.bbox_w) for ci in cell_info.values()], dtype=float)
         seam_diameter = float(np.median(_sizes)) if _sizes.size else 1.0
-        seam_scale = resolved_seam.resolve(seam_diameter)
+        seam_scale = resolved_seam._resolve(seam_diameter)
 
     def _process_one(spec):
         if seam_scale is None:

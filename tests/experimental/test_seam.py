@@ -162,7 +162,7 @@ class TestSeamUnits:
             edges.append({"axis": "v", "coord": float(c), "span": 20, "side": -1, "gap": 9.0, "cell_id": -1})
         for c in rng.uniform(0, 200, 80):
             edges.append({"axis": "v", "coord": float(c), "span": 20, "side": -1, "gap": 5.0, "cell_id": -1})
-        scale = SeamDetectionParams().resolve(20.0)
+        scale = SeamDetectionParams()._resolve(20.0)
         seams = detect_seams(edges, 200, 200, scale)
         assert len(seams["v"]) == 1 and abs(seams["v"][0][0] - 100) <= 4
         # a left-body cell whose right edge lands on the seam is flagged; one far away is not

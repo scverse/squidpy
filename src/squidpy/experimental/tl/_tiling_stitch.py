@@ -80,7 +80,7 @@ class StitchParams:
     """Loose 1-D along-seam IoU floor for a facing edge to be a pair candidate."""
 
     k_neighbors: int = 5
-    """Rank-based candidate cap: each cut edge is paired only with its ``k`` nearest
+    """Rank-based candidate cap -- each cut edge is paired only with its ``k`` nearest
     *facing* edges (by perpendicular gap).  Replaces an absolute ``max_gap`` pixel
     threshold, so the search adapts to the dataset's own seam-gap width."""
 
@@ -809,7 +809,7 @@ def assign_stitch_groups(
         for axis in ("v", "h")
     }
     # Rehydrate the exact parameters detection ran with, and resolve them against the same D.
-    seam_scale = resolve_params(qc_params.get("seam_params"), SeamDetectionParams, label="seam_params").resolve(
+    seam_scale = resolve_params(qc_params.get("seam_params"), SeamDetectionParams, label="seam_params")._resolve(
         diameter
     )
 
