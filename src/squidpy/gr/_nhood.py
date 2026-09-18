@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import rustworkx as rx
 from anndata import AnnData
+from fast_array_utils import stats as fau_stats
 from fast_array_utils.conv import to_dense
 from fast_array_utils.types import CSBase
 from fast_array_utils.types import HasArrayNamespace as Array
@@ -21,7 +22,6 @@ from numpy.typing import NDArray
 from pandas import CategoricalDtype
 from scanpy import logging as logg
 from scipy.sparse import csr_array, csr_matrix, diags, issparse
-from sklearn.preprocessing import normalize
 from spatialdata import SpatialData
 
 from squidpy._constants._constants import Centrality
@@ -959,11 +959,12 @@ def _power_adjacencies(adj: CSBase, max_hop: int) -> list[CSBase]:
 
 def _onehot(labels: pd.Series) -> csr_matrix:
     """Indicator matrix of ``labels``, one column per category."""
-    codes = labels.astype("category").cat.codes.to_numpy()
+    cat = labels.astype("category")
+    codes = cat.cat.codes.to_numpy()
     keep = codes >= 0
     return csr_matrix(
-        (np.ones(keep.sum(), dtype=np.float32), (np.flatnonzero(keep), codes[keep])),
-        shape=(len(codes), len(labels.astype("category").cat.categories)),
+        (np.ones(keep.sum(), dtype=np.float64), (np.flatnonzero(keep), codes[keep])),
+        shape=(len(codes), len(cat.cat.categories)),
     )
 
 
@@ -973,13 +974,33 @@ def _aggregate_over(
     """Aggregate *features* over the neighborhood each row of *adj* defines."""
     if aggregation == "sum":
         return adj @ features
-    normalized = normalize(adj, norm="l1", axis=1)
+
+    # scale after the sum, not before: normalizing `adj` rounds 1/k to `adj.dtype`, which
+    # `spatial_neighbors` leaves float32, so a mean that is exactly representable at that width
+    # still does not come back exact. Dividing by the signed sum rather than the L1 norm is also
+    # the weighted mean a negative edge weight asks for.
+    total = np.asarray(fau_stats.sum(adj, axis=1, dtype=np.float64)).reshape(-1, 1)
+    inv = np.reciprocal(total, where=total != 0, out=np.zeros_like(total))  # an isolated row stays 0
+
+    def mean_over(x: Array | CSBase) -> Array | CSBase:
+        """Row-mean of ``adj @ x``, scaled in place -- the product is ours."""
+        product = adj @ x
+        if not np.issubdtype(product.dtype, np.floating):
+            # a bool graph over integer counts sums to an integer, which cannot hold the quotient
+            product = product.astype(np.float64)
+        if issparse(product):
+            product = product.tocsr()
+            scale = np.repeat(inv.ravel(), np.diff(product.indptr))  # each entry against its own row
+            product.data = np.multiply(product.data, scale, dtype=np.float64).astype(product.dtype, copy=False)
+            return product
+        return np.multiply(product, inv, out=product, casting="same_kind")
+
     if aggregation == "mean":
-        return normalized @ features
+        return mean_over(features)
     if aggregation == "variance":
-        mean = to_dense(normalized @ features)
+        mean = to_dense(mean_over(features))
         dense = to_dense(features)
-        return to_dense(normalized @ (dense * dense)) - mean * mean
+        return to_dense(mean_over(dense * dense)) - mean * mean
     raise ValueError(f"'aggregation' must be 'mean', 'sum' or 'variance', got {aggregation!r}")
 
 
@@ -1029,8 +1050,11 @@ def nhood_aggregate(
         features = _onehot(adata.obs[groups])
         has_value = np.asarray(features.sum(axis=1)).ravel() != 0
     elif use_rep is not None:
-        assert_key_in_adata(adata, use_rep, attr="obsm")
-        features = adata.obsm[use_rep]
+        if use_rep == "X":  # the spelling `scanpy.pp.neighbors` takes
+            features = adata.X
+        else:
+            assert_key_in_adata(adata, use_rep, attr="obsm")
+            features = adata.obsm[use_rep]
     elif layer is not None:
         assert_key_in_adata(adata, layer, attr="layers")
         features = adata.layers[layer]
@@ -1040,7 +1064,7 @@ def nhood_aggregate(
     by_hop: dict[int, CSBase | None] = {0: None}
     if max(hops) >= 1:
         by_hop |= dict(enumerate(_power_adjacencies(adata.obsp[connectivity_key], max(hops)), start=1))
-    if has_value is not None:
+    if has_value is not None and not has_value.all():
         keep = diags(has_value.astype(features.dtype))
         by_hop = {hop: adj if adj is None else (adj @ keep).tocsr() for hop, adj in by_hop.items()}
     # hop 0 is the observation itself, so it contributes its features unaggregated
