@@ -39,15 +39,14 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 import spatialdata as sd
 import xarray as xr
-from scipy.ndimage import binary_closing
+from scipy.ndimage import distance_transform_edt
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import connected_components
 from skimage.measure import label as cc_label
 from skimage.measure import regionprops
-from skimage.morphology import disk as morph_disk
 from spatialdata._logging import logger as logg
 
-from squidpy.experimental.tl._seam import cell_flat_edges
+from squidpy.experimental.tl._seam import SeamDetectionParams, SeamScale, cell_flat_edges, seam_offset
 from squidpy.experimental.utils._labels import iter_chunked_regionprops, resolve_labels_array
 from squidpy.experimental.utils._params import resolve_params
 
@@ -65,17 +64,6 @@ _SCORE_FEATURES: tuple[str, ...] = ("iou", "endpoint_match", "merge_compactness"
 # The subset computed by the expensive merge-union step; the rest are cheap
 # geometry features known before it, which drives the scoring early-prune.
 _SHAPE_FEATURES: tuple[str, ...] = ("merge_compactness", "merge_solidity")
-
-# Fallback detection fractions, used only if `.uns["tiling_qc"]["seam_params"]` is absent.
-# These mirror the defaults of :class:`~squidpy.experimental.tl._seam.SeamDetectionParams`
-# so edge extraction here reproduces exactly how the cells were flagged as seam cuts.
-_SEAM_FRAC_FALLBACK: dict[str, float] = {
-    "edge_len_frac": 0.5,
-    "probe_frac": 0.6,
-    "flat_tol": 1.5,  # rasterisation / pixel-grid constant (px), not size-scaled
-    "flag_tol_frac": 0.25,
-    "face_slack_frac": 0.15,
-}
 
 
 @dataclass(slots=True)
@@ -234,13 +222,7 @@ def _extract_cut_edges(
     outlier_ids: Iterable[int],
     bboxes: dict[int, tuple[int, int, int, int]],
     seams: dict[str, list[tuple[float, float, int]]],
-    diameter: float,
-    *,
-    edge_len_frac: float = _SEAM_FRAC_FALLBACK["edge_len_frac"],
-    probe_frac: float = _SEAM_FRAC_FALLBACK["probe_frac"],
-    flat_tol: float = _SEAM_FRAC_FALLBACK["flat_tol"],
-    flag_tol_frac: float = _SEAM_FRAC_FALLBACK["flag_tol_frac"],
-    face_slack_frac: float = _SEAM_FRAC_FALLBACK["face_slack_frac"],
+    scale: SeamScale,
 ) -> tuple[list[_CutEdge], dict[int, np.ndarray]]:
     """Extract cut edges on and facing the detected seam bands, per outlier cell.
 
@@ -252,9 +234,8 @@ def _extract_cut_edges(
     flagging in :func:`~squidpy.experimental.tl.calculate_tiling_qc`, so the two
     stages agree on which edges are seam cuts.
 
-    All thresholds are resolved from ``diameter`` (median cell diameter ``D``)
-    using the same fractions detection used, read from
-    ``.uns["tiling_qc"]["seam_params"]`` by the caller.
+    ``scale`` is the detection scale rehydrated from ``.uns["tiling_qc"]``, so the
+    thresholds here are literally the ones the cells were flagged with.
 
     Returns
     -------
@@ -262,10 +243,7 @@ def _extract_cut_edges(
     here, a ``{label_id -> boolean bbox mask}`` dict that lets the scoring pass
     reconstruct merge unions in memory without re-reading the labels array.
     """
-    min_len = max(3, int(round(edge_len_frac * diameter)))
-    probe_depth = max(3, int(round(probe_frac * diameter)))
-    flag_tol = flag_tol_frac * diameter
-    face_slack = face_slack_frac * diameter
+    probe_depth = scale.probe_depth
 
     edges: list[_CutEdge] = []
     outlier_crops: dict[int, np.ndarray] = {}
@@ -284,7 +262,9 @@ def _extract_cut_edges(
         w = max_c - min_c
         by0 = min_r - r0
         bx0 = min_c - c0
-        cell_mask = (crop == lid)[by0 : by0 + h, bx0 : bx0 + w]  # boolean bbox mask; reused by scoring
+        # Slice to the cell's own bbox before comparing: the crop is padded by the probe depth,
+        # so comparing first would test several times the pixels that are kept.
+        cell_mask = crop[by0 : by0 + h, bx0 : bx0 + w] == lid  # boolean bbox mask; reused by scoring
         if not cell_mask.any():
             continue
         outlier_crops[lid] = cell_mask
@@ -294,23 +274,15 @@ def _extract_cut_edges(
             crop != 0,  # occupancy: this crop is read unmasked, so neighbours are visible
             (by0, bx0, by0 + h, bx0 + w),
             (r0, c0),
-            min_len,
-            flat_tol,
+            scale.min_len,
+            scale.flat_tol,
             probe_depth,
         )
         for e in flat:
-            # Keep only edges lying on a detected seam band and facing it -- the same
-            # test as flag_cells_on_seams, so extraction and flagging agree.
-            on_seam = False
-            for centre, half, _cnt in seams.get(e["axis"], []):
-                signed = centre - e["coord"]
-                if abs(signed) > half + flag_tol:
-                    continue
-                faces = (signed >= -face_slack) if e["side"] == -1 else (signed <= face_slack)
-                if faces:
-                    on_seam = True
-                    break
-            if not on_seam:
+            # Keep only edges lying on a detected seam band and facing it -- the *same*
+            # predicate `calculate_tiling_qc` flags cells with, so the two stages agree by
+            # construction rather than by comment.
+            if seam_offset(e, seams.get(e["axis"], []), scale) is None:
                 continue
             edges.append(
                 _CutEdge(
@@ -338,7 +310,7 @@ def _merge_shape_features(
     cell_b: int,
     bboxes: dict[int, tuple[int, int, int, int]],
     outlier_crops: dict[int, np.ndarray],
-    close_radius: int = 2,
+    close_radius: int,
     *,
     H: int,
     W: int,
@@ -378,7 +350,11 @@ def _merge_shape_features(
     if not mask.any():
         return zero
 
-    closed = binary_closing(mask, structure=morph_disk(close_radius))
+    # Closing by a disk of radius r, via distance transforms: pixel-identical to
+    # `binary_closing(mask, disk(r))` but O(N) instead of O(N * r^2).  The radius tracks each
+    # pair's own seam gap, so the explicit-footprint form got dramatically more expensive
+    # exactly on the wide-gap data this feature targets.
+    closed = distance_transform_edt(distance_transform_edt(~mask) <= close_radius) > close_radius
     cc = cc_label(closed, connectivity=2)
     if cc.max() == 0:
         return zero
@@ -510,7 +486,6 @@ def _score_pairs(
     bboxes: dict[int, tuple[int, int, int, int]],
     outlier_crops: dict[int, np.ndarray],
     min_confidence: float,
-    diameter: float,
     seams: dict[str, list[tuple[float, float, int]]],
     *,
     close_radius_min: int = _STITCH_DEFAULTS.close_radius_min,
@@ -562,13 +537,7 @@ def _score_pairs(
             )
         )
 
-    # Deduplicate to one entry per (cell_a, cell_b, axis), keeping max confidence.
-    by_pair: dict[tuple[int, int, str], _StitchPair] = {}
-    for p in scored:
-        k = (p.cell_a, p.cell_b, p.axis)
-        if k not in by_pair or by_pair[k].confidence < p.confidence:
-            by_pair[k] = p
-    return sorted(by_pair.values(), key=lambda p: (-p.confidence, p.cell_a, p.cell_b))
+    return sorted(scored, key=lambda p: (-p.confidence, p.cell_a, p.cell_b))
 
 
 # Group assembly (union-find + validation)
@@ -809,10 +778,8 @@ def assign_stitch_groups(
         raise ValueError(f"QC table '{table_key}' is missing 'label_id'.")
     # Candidate gate: prefer the seam-aware `is_seam_cut` flag (localised to detected FOV seams,
     # so pairing no longer merges touching interior cells); fall back to the MAD `is_outlier`.
-    if candidates == "auto":
-        gate_col = "is_seam_cut" if "is_seam_cut" in adata.obs.columns else "is_outlier"
-    else:
-        gate_col = candidates
+    # Seam data is mandatory below, so `is_seam_cut` is always present under "auto".
+    gate_col = "is_seam_cut" if candidates == "auto" else candidates
     if gate_col not in adata.obs.columns:
         raise ValueError(
             f"QC table '{table_key}' is missing '{gate_col}'; re-run calculate_tiling_qc "
@@ -841,8 +808,10 @@ def assign_stitch_groups(
         axis: [(float(b["coord"]), float(b["half_width"]), int(b["n_edges"])) for b in seams_uns.get(axis, [])]
         for axis in ("v", "h")
     }
-    seam_params = qc_params.get("seam_params") or {}
-    seam_fracs = {name: float(seam_params.get(name, default)) for name, default in _SEAM_FRAC_FALLBACK.items()}
+    # Rehydrate the exact parameters detection ran with, and resolve them against the same D.
+    seam_scale = resolve_params(qc_params.get("seam_params"), SeamDetectionParams, label="seam_params").resolve(
+        diameter
+    )
 
     labels_da = resolve_labels_array(sdata, labels_key, scale)
 
@@ -867,14 +836,7 @@ def assign_stitch_groups(
                 f"{len(missing)} outlier label_id(s) flagged in the QC table do not appear "
                 f"in '{labels_key}' (e.g. {missing[:5]}); they will not be stitched."
             )
-        edges, outlier_crops = _extract_cut_edges(
-            labels_da,
-            outlier_ids,
-            bboxes,
-            seams,
-            diameter,
-            **seam_fracs,
-        )
+        edges, outlier_crops = _extract_cut_edges(labels_da, outlier_ids, bboxes, seams, seam_scale)
         H, W = labels_da.shape[-2], labels_da.shape[-1]
         cand = _enumerate_pair_candidates(
             edges, k_neighbors=params.k_neighbors, candidate_min_iou=params.candidate_min_iou
@@ -884,7 +846,6 @@ def assign_stitch_groups(
             bboxes,
             outlier_crops,
             min_confidence,
-            diameter,
             seams,
             close_radius_min=params.close_radius_min,
             H=H,

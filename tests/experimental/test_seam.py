@@ -16,6 +16,17 @@ from squidpy.experimental.tl._seam import (
 )
 
 
+def _assert_seams_match(seams, truth, context, tol=8):
+    """Assert each axis reports exactly the true seams, each within ``tol`` px."""
+    for axis in ("v", "h"):
+        coords = sorted(b["coord"] for b in seams[axis])
+        assert len(coords) == len(truth), (
+            f"axis {axis} {context}: expected {list(truth)}, got {[round(c, 1) for c in coords]}"
+        )
+        for want, got in zip(sorted(truth), coords, strict=True):
+            assert abs(got - want) <= tol, f"axis {axis} {context}: seam {got:.1f} too far from true {want}"
+
+
 def _recall(pred_ids: set[int], truth_ids: frozenset[int]) -> float:
     return len(pred_ids & truth_ids) / len(truth_ids) if truth_ids else 0.0
 
@@ -151,14 +162,15 @@ class TestSeamUnits:
             edges.append({"axis": "v", "coord": float(c), "span": 20, "side": -1, "gap": 9.0, "cell_id": -1})
         for c in rng.uniform(0, 200, 80):
             edges.append({"axis": "v", "coord": float(c), "span": 20, "side": -1, "gap": 5.0, "cell_id": -1})
-        seams = detect_seams(edges, 200, 200, 20.0, SeamDetectionParams())
+        scale = SeamDetectionParams().resolve(20.0)
+        seams = detect_seams(edges, 200, 200, scale)
         assert len(seams["v"]) == 1 and abs(seams["v"][0][0] - 100) <= 4
         # a left-body cell whose right edge lands on the seam is flagged; one far away is not
         ebc = {
             1: [{"axis": "v", "coord": 100.0, "span": 20, "side": -1, "gap": 9.0}],
             2: [{"axis": "v", "coord": 20.0, "span": 20, "side": -1, "gap": 9.0}],
         }
-        flagged = flag_cells_on_seams(ebc, seams, 20.0, SeamDetectionParams())
+        flagged = flag_cells_on_seams(ebc, seams, scale)
         assert 1 in flagged and 2 not in flagged
 
 
@@ -174,15 +186,7 @@ class TestTileGridIndependence:
     def test_seams_match_truth_at_any_tile_size(self, sdata_dense_seam, tile_size):
         sdata, gt = sdata_dense_seam
         adata = calculate_tiling_qc(sdata, labels_key="labels", tile_size=tile_size, detect_seams=True, inplace=False)
-        seams = adata.uns["tiling_qc"]["seams"]
-        for axis in ("v", "h"):
-            coords = sorted(b["coord"] for b in seams[axis])
-            assert len(coords) == len(gt.seam_coords), (
-                f"axis {axis} at tile_size={tile_size}: expected {list(gt.seam_coords)}, "
-                f"got {[round(c, 1) for c in coords]}"
-            )
-            for want, got in zip(sorted(gt.seam_coords), coords, strict=True):
-                assert abs(got - want) <= 8, f"axis {axis}: seam {got:.1f} too far from true {want}"
+        _assert_seams_match(adata.uns["tiling_qc"]["seams"], gt.seam_coords, f"at tile_size={tile_size}")
 
     def test_no_seam_lands_on_the_processing_tile_grid(self, sdata_dense_seam):
         """The QC tile borders are not seams; detecting one there is a processing artifact."""
@@ -237,12 +241,4 @@ class TestSparseTissueDetection:
         adata = calculate_tiling_qc(
             sdata, labels_key="labels", tile_size=200, overlap_margin=2, detect_seams=True, inplace=False
         )
-        seams = adata.uns["tiling_qc"]["seams"]
-        for axis in ("v", "h"):
-            coords = sorted(b["coord"] for b in seams[axis])
-            assert len(coords) == len(gt.seam_coords), (
-                f"axis {axis} with overlap_margin=2: expected {list(gt.seam_coords)}, "
-                f"got {[round(c, 1) for c in coords]}"
-            )
-            for want, got in zip(sorted(gt.seam_coords), coords, strict=True):
-                assert abs(got - want) <= 8
+        _assert_seams_match(adata.uns["tiling_qc"]["seams"], gt.seam_coords, "with overlap_margin=2")

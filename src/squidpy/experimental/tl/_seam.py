@@ -40,12 +40,14 @@ depend on ``tile_size`` rather than on the data.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
+from statistics import median
 from typing import Any
 
 import numpy as np
 from scipy.signal import find_peaks
 from scipy.stats import poisson
+from skimage.filters import threshold_otsu
 
 
 @dataclass(slots=True, frozen=True)
@@ -117,19 +119,10 @@ class SeamDetectionParams:
     """Slack allowing an edge slightly past the band centre to still face the seam, fraction of ``D``."""
 
     def __post_init__(self) -> None:
-        for name in (
-            "edge_len_frac",
-            "flat_tol",
-            "probe_frac",
-            "gap_selectivity_max",
-            "bin_width",
-            "alpha",
-            "cluster_frac",
-            "band_margin_frac",
-            "flag_tol_frac",
-            "face_slack_frac",
-        ):
-            object.__setattr__(self, name, float(getattr(self, name)))
+        # Coerce every field (accepts numpy scalars cleanly); iterating the fields rather than a
+        # hand-written name list means a new knob cannot silently skip coercion.
+        for f in fields(self):
+            object.__setattr__(self, f.name, float(getattr(self, f.name)))
         if self.edge_len_frac <= 0:
             raise ValueError(f"edge_len_frac must be > 0, got {self.edge_len_frac}.")
         if not 0.0 <= self.gap_selectivity_max <= 1.0:
@@ -139,24 +132,46 @@ class SeamDetectionParams:
         if self.probe_frac <= 0:
             raise ValueError(f"probe_frac must be > 0, got {self.probe_frac}.")
 
+    def resolve(self, diameter: float) -> SeamScale:
+        """Resolve every fraction against the data's length scale ``D`` (median cell diameter)."""
+        return SeamScale(
+            params=self,
+            diameter=float(diameter),
+            min_len=max(3, int(round(self.edge_len_frac * diameter))),
+            probe_depth=max(3, int(round(self.probe_frac * diameter))),
+            flag_tol=self.flag_tol_frac * diameter,
+            face_slack=self.face_slack_frac * diameter,
+            cluster_gap=self.cluster_frac * diameter,
+            band_margin=self.band_margin_frac * diameter,
+        )
+
 
 _SEAM_DEFAULTS = SeamDetectionParams()
 
 
-def _longest_true_run(mask: np.ndarray) -> tuple[int, int]:
-    """Return ``(start, length)`` of the longest run of ``True`` in a 1-D boolean array."""
-    best_s = best_len = 0
-    s = None
-    for i, v in enumerate(mask):
-        if v and s is None:
-            s = i
-        elif not v and s is not None:
-            if i - s > best_len:
-                best_s, best_len = s, i - s
-            s = None
-    if s is not None and len(mask) - s > best_len:
-        best_s, best_len = s, len(mask) - s
-    return best_s, best_len
+@dataclass(frozen=True, slots=True)
+class SeamScale:
+    """:class:`SeamDetectionParams` resolved against the data's length scale ``D`` (pixels).
+
+    The fractions are dimensionless by design, but every consumer needs them in pixels.
+    Resolving once and passing this object keeps the arithmetic -- and the ``max(3, ...)``
+    floors -- in a single place, so seam *detection* and the stitcher's edge *extraction*
+    cannot resolve the same knob to two different pixel values.
+    """
+
+    params: SeamDetectionParams
+    diameter: float
+    min_len: int
+    probe_depth: int
+    flag_tol: float
+    face_slack: float
+    cluster_gap: float
+    band_margin: float
+
+    @property
+    def flat_tol(self) -> float:
+        """Flatness tolerance (px) -- a raster constant, so it is not scaled by ``D``."""
+        return self.params.flat_tol
 
 
 def _dominant_flat_line(extreme: np.ndarray, present: np.ndarray, flat_tol: float) -> tuple[float, int, int]:
@@ -164,17 +179,30 @@ def _dominant_flat_line(extreme: np.ndarray, present: np.ndarray, flat_tol: floa
 
     A cut leaves a straight boundary that is a plateau in the per-index extreme coordinate --
     but that plateau need not be at the cell's outermost point (a wide cell can have a partial
-    cut plus other geometry).  Scan the distinct extreme values and return the one whose
-    within-``flat_tol`` run of consecutive present indices is longest: ``(coord, start, length)``.
+    cut plus other geometry).  Every distinct extreme value is a candidate line; the one whose
+    within-``flat_tol`` run of consecutive present indices is longest wins, returned as
+    ``(coord, start, length)``.
+
+    All candidates are tested in one pass: the (candidate x index) membership matrix is
+    flattened with a False separator column, so a single run-length scan over the flat array
+    finds the longest run of any candidate.  This sits in the innermost loop of the seam pass
+    -- four sides for every cell in the dataset -- so the per-candidate Python scan it replaces
+    was a measurable share of the runtime.
     """
-    vals = extreme.copy()
-    best_coord, best_s, best_len = 0.0, 0, 0
-    for c in np.unique(np.round(vals[present])):
-        on = present & (np.abs(vals - c) <= flat_tol)
-        s, ln = _longest_true_run(on)
-        if ln > best_len:
-            best_coord, best_s, best_len = float(c), s, ln
-    return best_coord, best_s, best_len
+    cand = np.unique(np.round(extreme[present]))
+    if cand.size == 0:
+        return 0.0, 0, 0
+    on = (np.abs(extreme[None, :] - cand[:, None]) <= flat_tol) & present[None, :]
+    padded = np.zeros((on.shape[0], on.shape[1] + 1), dtype=np.int8)
+    padded[:, :-1] = on
+    diffs = np.diff(np.concatenate(([np.int8(0)], padded.ravel())))
+    starts = np.flatnonzero(diffs == 1)
+    if starts.size == 0:
+        return 0.0, 0, 0
+    lengths = np.flatnonzero(diffs == -1) - starts
+    best = int(lengths.argmax())  # ties resolve to the lowest candidate, then leftmost run
+    row, col = divmod(int(starts[best]), padded.shape[1])
+    return float(cand[row]), col, int(lengths[best])
 
 
 def _probe_gap(
@@ -188,7 +216,9 @@ def _probe_gap(
     """
     height, width = occupancy.shape
     step = 1 if side == -1 else -1
-    idxs = np.linspace(run_lo, run_hi - 1, min(9, max(1, run_hi - run_lo))).astype(int)
+    # .tolist() keeps the sampled positions identical while making each `occupancy[y, x]`
+    # a fast int index rather than a numpy-scalar one.
+    idxs = np.linspace(run_lo, run_hi - 1, min(9, max(1, run_hi - run_lo))).astype(int).tolist()
     depths = []
     for t in idxs:
         d = 0
@@ -198,7 +228,7 @@ def _probe_gap(
                 break
             d += 1
         depths.append(d)
-    return float(np.median(depths)) if depths else 0.0
+    return float(median(depths)) if depths else 0.0
 
 
 def cell_flat_edges(
@@ -269,23 +299,19 @@ def _otsu_gap_split(gaps: np.ndarray) -> float:
     The two classes are physical: an edge either faces a neighbour across a thin membrane, or
     it faces open background.  Taking the split from the data replaces a hand-set multiple of
     an estimated membrane width, and adapts to imaging resolution and segmentation style.
+
+    Gaps are small integer pixel depths, which skimage histograms one-bin-per-value, so there
+    is no bin count to tune.  The ``+ 0.5`` puts the threshold between the two integer classes,
+    matching the ``>=`` test in :func:`gap_channel`.
     """
-    g = gaps[np.isfinite(gaps)]
+    g = np.rint(gaps[np.isfinite(gaps)]).astype(int)
     if g.size == 0:
         return float("inf")
-    counts = np.bincount(np.rint(g).astype(int))
-    if counts.size < 2:
-        return float(counts.size)
-    total = counts.sum()
-    values = np.arange(counts.size, dtype=float)
-    w0 = np.cumsum(counts)[:-1] / total
-    m0 = np.cumsum(values * counts)[:-1] / total
-    mu = float((values * counts).sum() / total)
-    w1 = 1.0 - w0
-    ok = (w0 > 0) & (w1 > 0)
-    between = np.zeros_like(w0)
-    between[ok] = (mu * w0[ok] - m0[ok]) ** 2 / (w0[ok] * w1[ok])
-    return float(np.argmax(between)) + 0.5
+    if np.unique(g).size < 2:
+        # A single distinct gap has no split; treat every edge as below threshold so the
+        # caller falls back to the all-edges channel rather than filtering on noise.
+        return float(g[0] + 1)
+    return float(threshold_otsu(g)) + 0.5
 
 
 def gap_channel(edges: list[dict[str, Any]], params: SeamDetectionParams = _SEAM_DEFAULTS) -> tuple[float, float, bool]:
@@ -322,8 +348,8 @@ def detect_seams(
     edges: list[dict[str, Any]],
     extent_x: int,
     extent_y: int,
-    diameter: float,
-    params: SeamDetectionParams = _SEAM_DEFAULTS,
+    scale: SeamScale,
+    channel: tuple[float, float, bool] | None = None,
 ) -> dict[str, list[tuple[float, float, int]]]:
     """Locate seam bands per axis from the aligned edges the data supports.
 
@@ -339,13 +365,15 @@ def detect_seams(
     scattered uniformly along the axis (:func:`_min_significant_count`), so a weakly-populated
     seam is judged on its own significance rather than against the strongest peak on its axis.
 
+    Pass ``channel`` when the caller has already run :func:`gap_channel` (it is also useful as
+    a diagnostic), to avoid a second pass over every edge in the dataset.
+
     Returns ``{"v": [(centre, half_width, count), ...], "h": [...]}``.
     """
-    d = diameter
+    d = scale.diameter
+    params = scale.params
     bin_w = params.bin_width
-    cluster_gap = params.cluster_frac * d
-    band_margin = params.band_margin_frac * d
-    gap_thresh, _selectivity, use_wide_gap = gap_channel(edges, params)
+    gap_thresh, _selectivity, use_wide_gap = channel if channel is not None else gap_channel(edges, params)
 
     out: dict[str, list[tuple[float, float, int]]] = {}
     for axis, extent in (("v", extent_x), ("h", extent_y)):
@@ -371,48 +399,59 @@ def detect_seams(
         counts = smooth[peaks].astype(float)
         order = np.argsort(centres)
         centres, counts = centres[order], counts[order]
-        clusters, cur = [], [0]
-        for i in range(1, len(centres)):
-            if centres[i] - centres[cur[-1]] <= cluster_gap:
-                cur.append(i)
-            else:
-                clusters.append(cur)
-                cur = [i]
-        clusters.append(cur)
+        # Peaks closer together than `cluster_gap` belong to one seam: a wide inter-FOV gap
+        # puts one peak on each of its sides.
+        splits = np.flatnonzero(np.diff(centres) > scale.cluster_gap) + 1
         bands = []
-        for cl in clusters:
+        for cl in np.split(np.arange(centres.size), splits):
             cc, ww = centres[cl], counts[cl]
-            centre = float(np.average(cc, weights=ww))
-            half = float((cc.max() - cc.min()) / 2 + band_margin)
-            bands.append((centre, half, int(ww.sum())))
+            bands.append(
+                (
+                    float(np.average(cc, weights=ww)),
+                    float((cc.max() - cc.min()) / 2 + scale.band_margin),
+                    int(ww.sum()),
+                )
+            )
         out[axis] = bands
     return out
+
+
+def seam_offset(
+    edge: dict[str, Any],
+    bands: list[tuple[float, float, int]],
+    scale: SeamScale,
+) -> float | None:
+    """Distance from ``edge`` to the seam band it lies on and faces, or ``None`` if it does neither.
+
+    This is the definition of "this edge is a seam cut", and both stages must apply it
+    identically: :func:`flag_cells_on_seams` decides which cells `calculate_tiling_qc` marks,
+    and the stitcher decides which edges may be paired.  Sharing one predicate is what makes
+    those two agree -- when it lived in both modules the copies drifted apart silently.
+    """
+    best: float | None = None
+    for centre, half, _cnt in bands:
+        signed = centre - edge["coord"]
+        if abs(signed) > half + scale.flag_tol:
+            continue
+        faces = (signed >= -scale.face_slack) if edge["side"] == -1 else (signed <= scale.face_slack)
+        if faces and (best is None or abs(signed) < best):
+            best = abs(signed)
+    return best
 
 
 def flag_cells_on_seams(
     edges_by_cell: dict[int, list[dict[str, Any]]],
     seams: dict[str, list[tuple[float, float, int]]],
-    diameter: float,
-    params: SeamDetectionParams = _SEAM_DEFAULTS,
+    scale: SeamScale,
 ) -> dict[int, float]:
     """Return ``{cell_id: seam_dist}`` for every cell with a cardinal edge on and facing a seam.
 
     Once a seam is detected, membership does **not** require a wide gap -- a genuine two-sided
     cut whose other half sits close still counts, because its edge lies on the seam consensus.
     """
-    flag_tol = params.flag_tol_frac * diameter
-    face_slack = params.face_slack_frac * diameter
     flagged: dict[int, float] = {}
     for cid, edges in edges_by_cell.items():
-        best = None
-        for e in edges:
-            for centre, half, _cnt in seams[e["axis"]]:
-                signed = centre - e["coord"]
-                if abs(signed) > half + flag_tol:
-                    continue
-                faces = (signed >= -face_slack) if e["side"] == -1 else (signed <= face_slack)
-                if faces and (best is None or abs(signed) < best):
-                    best = abs(signed)
-        if best is not None:
-            flagged[cid] = best
+        dists = [d for e in edges if (d := seam_offset(e, seams[e["axis"]], scale)) is not None]
+        if dists:
+            flagged[cid] = min(dists)
     return flagged

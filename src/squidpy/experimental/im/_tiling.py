@@ -351,10 +351,15 @@ def extract_labels_tile_lazy(
     -------
     ``(crop_h, crop_w)`` numpy array with non-owned cells zeroed.
     """
-    cy0, cx0, cy1, cx1 = spec.crop
-    tile_labels = _as_2d(_materialize(labels_da.isel(y=slice(cy0, cy1), x=slice(cx0, cx1))).copy())
+    tile_labels = _crop_labels(labels_da, spec)
     _zero_non_owned(tile_labels, spec.owned_ids)
     return tile_labels
+
+
+def _crop_labels(labels_da: xr.DataArray, spec: TileSpec) -> np.ndarray:
+    """Materialize a tile's crop region as a writable 2-D label array, before any masking."""
+    cy0, cx0, cy1, cx1 = spec.crop
+    return _as_2d(_materialize(labels_da.isel(y=slice(cy0, cy1), x=slice(cx0, cx1))).copy())
 
 
 def extract_labels_tile_with_occupancy(
@@ -376,8 +381,7 @@ def extract_labels_tile_with_occupancy(
     ``(tile_labels, occupancy)`` -- the owned-only label crop and the boolean occupancy of
     the same region before masking.
     """
-    cy0, cx0, cy1, cx1 = spec.crop
-    tile_labels = _as_2d(_materialize(labels_da.isel(y=slice(cy0, cy1), x=slice(cx0, cx1))).copy())
+    tile_labels = _crop_labels(labels_da, spec)
     occupancy = tile_labels != 0
     _zero_non_owned(tile_labels, spec.owned_ids)
     return tile_labels, occupancy

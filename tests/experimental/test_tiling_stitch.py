@@ -11,6 +11,7 @@ from spatialdata import SpatialData
 from spatialdata.models import Labels2DModel
 
 import squidpy as sq
+from squidpy.experimental.tl import SeamDetectionParams
 from tests.conftest import DPI, PlotTester, PlotTesterMeta
 
 
@@ -200,12 +201,13 @@ class TestPairingContract:
         from squidpy.experimental.tl import _tiling_stitch as ts
 
         arr, bboxes, seams, diameter, H, W = self._two_sided_labels()
-        edges, crops = ts._extract_cut_edges(arr, [1, 2, 3], bboxes, seams, diameter)
+        scale = SeamDetectionParams().resolve(diameter)
+        edges, crops = ts._extract_cut_edges(arr, [1, 2, 3], bboxes, seams, scale)
         # Both halves put a cut edge on the seam; the off-seam distractor does not.
         assert {e.cell_id for e in edges} == {1, 2}
 
         cands = ts._enumerate_pair_candidates(edges, k_neighbors=5, candidate_min_iou=0.2)
-        pairs = ts._score_pairs(cands, bboxes, crops, 0.6, diameter, seams, close_radius_min=2, H=H, W=W)
+        pairs = ts._score_pairs(cands, bboxes, crops, 0.6, seams, close_radius_min=2, H=H, W=W)
         merged = [p for p in pairs if {p.cell_a, p.cell_b} == {1, 2}]
         assert len(merged) == 1
         assert merged[0].confidence >= 0.6
@@ -217,7 +219,7 @@ class TestPairingContract:
         from squidpy.experimental.tl import _tiling_stitch as ts
 
         arr, bboxes, seams, diameter, _H, _W = self._two_sided_labels()
-        edges, _ = ts._extract_cut_edges(arr, [1, 2], bboxes, seams, diameter)
+        edges, _ = ts._extract_cut_edges(arr, [1, 2], bboxes, seams, SeamDetectionParams().resolve(diameter))
         cands = ts._enumerate_pair_candidates(edges, k_neighbors=5, candidate_min_iou=0.2)
         pair_ids = {(min(e.cell_id, c.cell_id), max(e.cell_id, c.cell_id)) for e, c, _ in cands}
         assert (1, 2) in pair_ids
@@ -241,9 +243,9 @@ class TestPairingContract:
         seams = {"v": [(112.5, 10.0, 50)], "h": []}
         diameter = 20.0
 
-        edges, crops = ts._extract_cut_edges(arr, [1, 2], bboxes, seams, diameter)
+        edges, crops = ts._extract_cut_edges(arr, [1, 2], bboxes, seams, SeamDetectionParams().resolve(diameter))
         cands = ts._enumerate_pair_candidates(edges, k_neighbors=5, candidate_min_iou=0.2)
-        pairs = ts._score_pairs(cands, bboxes, crops, 0.6, diameter, seams, close_radius_min=2, H=H, W=W)
+        pairs = ts._score_pairs(cands, bboxes, crops, 0.6, seams, close_radius_min=2, H=H, W=W)
         assert not [p for p in pairs if {p.cell_a, p.cell_b} == {1, 2}], (
             "pieces 29 px apart across a 20 px seam were merged"
         )

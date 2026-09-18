@@ -237,7 +237,6 @@ class DenseSeamGroundTruth:
 
     cut_cell_ids: frozenset[int] = field(default_factory=frozenset)
     seam_coords: tuple[int, ...] = _DENSE_BORDERS
-    gap: int = _DENSE_GAP
 
 
 def make_dense_seam_sdata() -> tuple[SpatialData, DenseSeamGroundTruth]:
@@ -266,7 +265,7 @@ def make_dense_seam_sdata() -> tuple[SpatialData, DenseSeamGroundTruth]:
         seam[b - half : b - half + gap, :] = True
         seam[:, b - half : b - half + gap] = True
     cut_orig = set(np.unique(orig[seam & (orig > 0)])) - {0}
-    orig_area = {i: int((orig == i).sum()) for i in np.unique(orig) if i}
+    orig_area = np.bincount(orig.ravel())  # one pass, indexed by label id
 
     seg = orig.copy()
     seg[seam] = 0
@@ -283,7 +282,7 @@ def make_dense_seam_sdata() -> tuple[SpatialData, DenseSeamGroundTruth]:
     keep[0] = False
     for o in cut_orig:
         for f in frags_of.get(o, []):
-            if (frag == f).sum() / max(orig_area.get(o, 1), 1) < 0.45 and rng.random() < 0.75:
+            if (frag == f).sum() / max(int(orig_area[o]), 1) < 0.45 and rng.random() < 0.75:
                 keep[f] = False
     frag2, nf2 = ndimage.label(np.where(keep[frag], frag, 0) > 0)
 
