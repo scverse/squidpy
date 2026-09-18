@@ -718,8 +718,10 @@ def calculate_tiling_qc(
     # any cell with a cardinal edge on a detected seam -- the gap is no longer required, so
     # partial-edge and two-sided close-gap cuts are caught. All thresholds derive from `scale`.
     seams_uns: dict[str, list[dict[str, float]]] = {"v": [], "h": []}
+    seam_membrane: float | None = None
     if resolved_seam is not None:
         membrane = estimate_membrane_width(np.array([e["gap"] for e in all_edges], dtype=float))
+        seam_membrane = float(membrane)
         seam_scale = SeamScale(diameter=seam_diameter, membrane=membrane)  # note: not the `scale` arg
         seams = _detect_seam_bands(all_edges, W, H, seam_scale, resolved_seam)  # stage 1
         edges_by_cell: dict[int, list[dict[str, Any]]] = {}
@@ -771,6 +773,9 @@ def calculate_tiling_qc(
         "detect_seams": detect_seams,
         "seam_params": asdict(resolved_seam) if resolved_seam is not None else None,
         "seams": seams_uns,
+        # Data length scale needed by assign_stitch_groups' seam-aware edge extraction.
+        "seam_diameter": float(seam_diameter) if detect_seams else None,
+        "seam_membrane": seam_membrane,
     }
 
     if inplace:

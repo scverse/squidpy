@@ -95,9 +95,8 @@ class TestAssignStitchGroups:
 
     def test_uns_records_params_and_features(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
-        meta = _run_qc_and_stitch(sdata, min_confidence=0.7, max_gap=4.0).uns["tiling_stitch"]
+        meta = _run_qc_and_stitch(sdata, min_confidence=0.7).uns["tiling_stitch"]
         assert meta["min_confidence"] == 0.7
-        assert meta["max_gap"] == 4.0
         assert isinstance(meta["stitch_params"], dict)
         assert "model_coefficients" not in meta and "model_intercept" not in meta
         assert set(meta["score_features"]) == {
@@ -105,7 +104,6 @@ class TestAssignStitchGroups:
             "endpoint_match",
             "merge_compactness",
             "merge_solidity",
-            "gap_proximity",
         }
 
     @pytest.mark.parametrize(
@@ -170,6 +168,59 @@ class TestAssignStitchGroups:
         for col in ("stitch_group_id", "is_stitched", "n_pieces", "stitch_confidence"):
             assert col in a2.obs.columns
         assert "tiling_stitch" in a2.uns
+
+
+class TestPairingContract:
+    """Function-level tests of the seam-restricted, rank-based pairing pipeline.
+
+    These exercise the stitcher directly on a hand-built two-sided cut (given the
+    seam bands + data scale that ``calculate_tiling_qc`` would supply), isolating
+    the pairing/scoring logic from detection.  A dense synthetic fixture is a poor
+    end-to-end vehicle here -- its uniform geometry makes seam *detection*
+    over-flag -- so the two-sided merge contract is locked in deterministically at
+    this level instead.
+    """
+
+    @staticmethod
+    def _two_sided_labels():
+        # One cell cut into a left half (id 1) and a right half (id 2) across a
+        # vertical seam at x~101, plus an off-seam distractor (id 3).  bboxes use
+        # the skimage convention (max exclusive), as _compute_outlier_bboxes returns.
+        H, W = 60, 220
+        arr = np.zeros((H, W), dtype=np.int32)
+        arr[20:40, 80:99] = 1  # left half:  cols 80..98
+        arr[20:40, 104:123] = 2  # right half: cols 104..122 (6 px seam gap)
+        arr[20:40, 160:180] = 3  # distractor, far from the seam
+        bboxes = {1: (20, 80, 40, 99), 2: (20, 104, 40, 123), 3: (20, 160, 40, 180)}
+        seams = {"v": [(101.0, 6.0, 50)], "h": []}
+        diameter = 20.0
+        return arr, bboxes, seams, diameter, H, W
+
+    def test_facing_halves_merge_off_seam_cell_ignored(self):
+        from squidpy.experimental.tl import _tiling_stitch as ts
+
+        arr, bboxes, seams, diameter, H, W = self._two_sided_labels()
+        edges, crops = ts._extract_cut_edges(arr, [1, 2, 3], bboxes, seams, diameter)
+        # Both halves put a cut edge on the seam; the off-seam distractor does not.
+        assert {e.cell_id for e in edges} == {1, 2}
+
+        cands = ts._enumerate_pair_candidates(edges, k_neighbors=5, candidate_min_iou=0.2)
+        pairs = ts._score_pairs(cands, bboxes, crops, 0.6, diameter, max_gap_frac=1.5, close_radius_min=2, H=H, W=W)
+        merged = [p for p in pairs if {p.cell_a, p.cell_b} == {1, 2}]
+        assert len(merged) == 1
+        assert merged[0].confidence >= 0.6
+        assert 3 not in {p.cell_a for p in pairs} | {p.cell_b for p in pairs}
+
+    def test_enumeration_is_rank_based_not_absolute_gap(self):
+        # The two halves sit 6 px apart -- far beyond the old 3 px max_gap default.
+        # Rank-based (k-NN) enumeration must still surface them as a candidate.
+        from squidpy.experimental.tl import _tiling_stitch as ts
+
+        arr, bboxes, seams, diameter, _H, _W = self._two_sided_labels()
+        edges, _ = ts._extract_cut_edges(arr, [1, 2], bboxes, seams, diameter)
+        cands = ts._enumerate_pair_candidates(edges, k_neighbors=5, candidate_min_iou=0.2)
+        pair_ids = {(min(e.cell_id, c.cell_id), max(e.cell_id, c.cell_id)) for e, c, _ in cands}
+        assert (1, 2) in pair_ids
 
 
 class TestStitchVisual(PlotTester, metaclass=PlotTesterMeta):

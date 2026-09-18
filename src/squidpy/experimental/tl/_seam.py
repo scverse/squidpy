@@ -210,14 +210,23 @@ def cell_flat_edges(
         if ln < min_len:
             continue
         c_round = int(round(c))
-        if axis == "v":
+        if axis == "v":  # perp = x (column); parallel/along-seam = y (row)
             perp_local, run_lo, run_hi = x0 + c_round, y0 + s, y0 + s + ln
-            coord_global = ox + perp_local
-        else:
+            coord_global, ext_lo, ext_hi = ox + perp_local, oy + run_lo, oy + run_hi
+        else:  # perp = y (row); parallel/along-seam = x (column)
             perp_local, run_lo, run_hi = y0 + c_round, x0 + s, x0 + s + ln
-            coord_global = oy + perp_local
+            coord_global, ext_lo, ext_hi = oy + perp_local, ox + run_lo, ox + run_hi
         gap = _probe_gap(tile_labels, axis, perp_local, side, run_lo, run_hi, probe_depth)
-        out.append({"axis": axis, "coord": float(coord_global), "span": int(ln), "side": int(side), "gap": gap})
+        out.append(
+            {
+                "axis": axis,
+                "coord": float(coord_global),
+                "span": int(ln),
+                "side": int(side),
+                "gap": gap,
+                "extent": (float(ext_lo), float(ext_hi)),
+            }
+        )
     return out
 
 
@@ -254,7 +263,10 @@ def detect_seams(
         # twin peaks into one narrow band and loses the far-side cells.
         win = max(1, int(round((0.12 * d) / bin_w)))
         smooth = np.convolve(hist, np.ones(2 * win + 1), mode="same")
-        bg = np.median(smooth[smooth > 0]) if (smooth > 0).any() else 0.0
+        # Background over ALL bins (mostly empty for a real seam grid): median(nonzero) would be
+        # dominated by the seam bins themselves when the signal is clean, inflating the threshold
+        # and rejecting the very seams we want.  Specificity comes from `seam_strength_frac` below.
+        bg = float(np.median(smooth))
         height = max(min_count, params.bg_multiple * bg)
         peaks, _ = find_peaks(smooth, height=height, distance=1)
         if peaks.size == 0:
