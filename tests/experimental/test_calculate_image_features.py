@@ -438,19 +438,28 @@ class TestCalculateImageFeatures:
 
     # --- Tiled vs non-tiled equivalence ---
 
-    def test_tiled_vs_single_tile_equivalence(self, sdata_synthetic):
-        """Tile-invariant features should be identical whether we tile or not.
+    @pytest.mark.parametrize(
+        "features",
+        [
+            ["skimage:morphology", "squidpy:summary"],
+            ["cp_measure:sizeshape", "cp_measure:intensity", "cp_measure:radial"],
+        ],
+    )
+    def test_tiled_vs_single_tile_equivalence(self, sdata_synthetic, features):
+        """Features are identical whether we tile or not.
 
-        Position-dependent features (centroid, perimeter_crofton) are expected
-        to differ across tile boundaries, so we test with ``area`` and
-        ``squidpy:summary`` which depend only on the cell's pixel values.
+        Covers positional features (centroids, bounding boxes, intensity
+        locations), which must be reported in the labels' pixel frame rather
+        than the tile's, and edge/radial features, which need background
+        around the cell boundary inside the tile crop.
         """
         kw = {
             "image_key": "test_img",
             "labels_key": "test_labels",
-            "features": ["skimage:morphology:area", "squidpy:summary"],
+            "features": features,
             "inplace": False,
             "invalid_as_zero": True,
+            "drop_constant_features": False,
         }
         # Single tile (tile_size >= image -> no tiling)
         result_single = sq.experimental.im.calculate_image_features(sdata_synthetic, tile_size=1000, **kw)
@@ -472,6 +481,41 @@ class TestCalculateImageFeatures:
 
         np.testing.assert_array_equal(df_single.index, df_tiled.index)
         np.testing.assert_allclose(df_single.values, df_tiled.values, rtol=1e-5, atol=1e-5)
+
+    def test_granularity_independent_of_tile_size_within_context(self, sdata_synthetic):
+        """Granularity needs image context; when the tile padding covers the image, tiling changes nothing."""
+        kw = {
+            "image_key": "test_img",
+            "labels_key": "test_labels",
+            "features": ["cp_measure:granularity"],
+            "inplace": False,
+            "drop_constant_features": False,
+        }
+        single = sq.experimental.im.calculate_image_features(sdata_synthetic, tile_size=1000, **kw).to_df()
+        tiled = sq.experimental.im.calculate_image_features(sdata_synthetic, tile_size=100, **kw).to_df()
+        pd.testing.assert_frame_equal(tiled.loc[single.index], single)
+
+    def test_asymmetric_cell_not_truncated_by_tiling(self):
+        """A cell reaching far from its centroid (blob + long process) stays whole when tiled."""
+        labels = np.zeros((200, 200), dtype=np.int32)
+        yy, xx = np.ogrid[:200, :200]
+        labels[(yy - 50) ** 2 + (xx - 60) ** 2 <= 20**2] = 1
+        labels[49:52, 60:198] = 1  # the process pulls the centroid to x~77, still in tile 0
+        labels[140:160, 140:160] = 2
+        sdata = SpatialData(
+            images={"img": Image2DModel.parse(np.ones((1, 200, 200), dtype=np.uint8), dims=("c", "y", "x"))},
+            labels={"lbl": Labels2DModel.parse(labels, dims=("y", "x"))},
+        )
+        result = sq.experimental.im.calculate_image_features(
+            sdata,
+            image_key="img",
+            labels_key="lbl",
+            features=["skimage:morphology:area"],
+            tile_size=100,
+            inplace=False,
+            drop_constant_features=False,
+        )
+        np.testing.assert_array_equal(result[["1", "2"], "area"].X.ravel(), [(labels == 1).sum(), 400])
 
     # --- Parallelization ---
 
@@ -917,6 +961,24 @@ class TestMultiscale:
         assert set(adata.obs["label_id"].astype(int)) == set(range(1, 17))
         np.testing.assert_array_equal(adata[:, "area"].X.ravel(), np.full(16, 900.0))
 
+    def test_multiscale_keeps_cells_absent_from_coarse_scales(self):
+        """Cells too small to survive downsampling are still featurized at the requested scale."""
+        labels = np.zeros((128, 128), dtype=np.int32)
+        labels[8:40, 8:40] = 1
+        tiny = [(y, x) for y in range(50, 120, 9) for x in range(50, 120, 9)]
+        for lid, (y, x) in enumerate(tiny, start=2):
+            labels[y, x] = lid  # 1-px cells: gone at scale1/scale2
+        sdata = SpatialData(labels={"lbl": Labels2DModel.parse(labels, dims=("y", "x"), scale_factors=[2, 2])})
+        adata = sq.experimental.im.calculate_image_features(
+            sdata,
+            labels_key="lbl",
+            scale="scale0",
+            features=["skimage:morphology:area"],
+            inplace=False,
+            drop_constant_features=False,
+        )
+        assert set(adata.obs["label_id"].astype(int)) == set(range(1, len(tiny) + 2))
+
     def test_invalid_scale_name(self):
         sdata = _multiscale_sdata(multiscale_image=True, multiscale_labels=True)
         with pytest.raises(ValueError, match="Scale 'scale9' not found"):
@@ -1071,6 +1133,24 @@ class TestAlignment:
         # fully inside the overlap, so its area is untruncated (cells are 25x25).
         assert 0 < result.n_obs < n_cells
         np.testing.assert_array_equal(result[:, "area"].X.ravel(), 625.0)
+
+    def test_positions_in_labels_pixel_frame(self):
+        """Centroids are reported in the labels' own pixel grid, not the cropped overlap."""
+        # Labels pixel (30, 30) lands on image pixel (0, 0): the overlap crop starts at 30.
+        sdata = _toy_sdata(labels_translation=(-30, -30))
+        labels = sdata.labels["lbl"].values
+        result = sq.experimental.im.calculate_image_features(
+            sdata,
+            image_key="img",
+            labels_key="lbl",
+            features=["skimage:morphology:centroid"],
+            inplace=False,
+            drop_constant_features=False,
+        )
+        assert result.n_obs > 0
+        for lid in result.obs["label_id"].astype(int):
+            ys, xs = np.nonzero(labels == lid)
+            np.testing.assert_allclose(result[str(lid), ["centroid-0", "centroid-1"]].X.ravel(), [ys.mean(), xs.mean()])
 
     def test_multiscale_rasterize_raises(self):
         sdata = _toy_sdata(labels_scale=(1.3, 1.3), multiscale=True)
