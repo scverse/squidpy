@@ -882,6 +882,44 @@ def _compute_centroids(labels_da: xr.DataArray) -> dict[int, CellInfo]:
     return compute_cell_info_tiled(labels_da)
 
 
+def _stack_tiles(tile_dfs: list[pd.DataFrame], drop_constant: bool) -> tuple[np.ndarray, np.ndarray, list[str]]:
+    """Stack per-tile float32 features into one label-sorted matrix; return ``(labels, X, columns)``.
+
+    Fills a single preallocated array instead of concat -> sort -> cast, which
+    copied the full table three times. With ``drop_constant``, zero-variance
+    columns (all-NaN, or NaN-free with a single value) are found from per-tile
+    min/max and never copied. Skipped for a single cell, where every column is
+    trivially constant.
+    """
+    # Peak is tiles + output (~2 copies); freeing tiles while filling would halve it if ever needed.
+    columns = list(dict.fromkeys(c for df in tile_dfs for c in df.columns))
+    blocks = [(df if list(df.columns) == columns else df.reindex(columns=columns)).to_numpy() for df in tile_dfs]
+    labels = np.concatenate([df.index.to_numpy() for df in tile_dfs])
+
+    keep = np.ones(len(columns), dtype=bool)
+    if drop_constant and len(labels) > 1:
+        # min/max propagate NaN (so a NaN-mixed column never compares equal);
+        # nanmax is NaN only where a column is all-NaN.
+        col_min = np.min([b.min(axis=0) for b in blocks], axis=0)
+        col_max = np.max([b.max(axis=0) for b in blocks], axis=0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)  # all-NaN slices
+            all_nan = np.isnan(np.nanmax([np.nanmax(b, axis=0) for b in blocks], axis=0))
+        keep = ~(all_nan | (col_min == col_max))
+        if not keep.all():
+            logg.warning(f"Dropped {int((~keep).sum())} constant feature(s) with no variance across cells.")
+
+    order = np.argsort(labels, kind="stable")
+    rows = np.empty_like(order)
+    rows[order] = np.arange(len(order))  # output row of each stacked cell
+    X = np.empty((len(labels), int(keep.sum())), dtype=np.float32)
+    start = 0
+    for b in blocks:
+        X[rows[start : start + len(b)]] = b[:, keep]
+        start += len(b)
+    return labels[order], X, [c for c, k in zip(columns, keep, strict=True) if k]
+
+
 # ---------------------------------------------------------------------------
 # Main function
 # ---------------------------------------------------------------------------
@@ -1119,8 +1157,9 @@ def calculate_image_features(
             else:
                 tile_img, tile_lbl = extract_tile_lazy(image_da, labels_da, spec)
             df = _featurize_tile(tile_img, tile_lbl, parsed, channel_names, cp_config=cp_config)
-        # Report positions in the labels' pixel grid, not the tile crop's.
-        return _shift_positions(df, origin[0] + spec.crop[0], origin[1] + spec.crop[1])
+        # Report positions in the labels' pixel grid, not the tile crop's. The output
+        # is float32, so cast here: half the memory and transfer per tile.
+        return _shift_positions(df, origin[0] + spec.crop[0], origin[1] + spec.crop[1]).astype(np.float32)
 
     # cp_measure is GIL-bound, so kind="processes" (an active Client wins if set).
     results = _run_tiled(
@@ -1132,28 +1171,16 @@ def calculate_image_features(
     if not tile_dfs:
         raise ValueError("No features computed for any tile.")
 
-    # Sort by cell label for deterministic output.  inf/NaN handling happens
-    # in one numpy pass below to avoid two extra full-table allocations.
-    combined = pd.concat(tile_dfs, axis=0).sort_index()
-
-    # Drop zero-variance features (nunique(dropna=False) treats an all-NaN column
-    # as constant too). Skipped for a single cell, where every column is trivially
-    # constant and the filter would drop everything.
-    if drop_constant_features and len(combined) > 1:
-        constant_cols = list(combined.columns[combined.nunique(dropna=False) <= 1])
-        if constant_cols:
-            logg.warning(f"Dropped {len(constant_cols)} constant feature(s) with no variance across cells.")
-            combined = combined.drop(columns=constant_cols)
+    labels, arr, columns = _stack_tiles(tile_dfs, drop_constant_features)
 
     # --- Build AnnData ---
     # Exactly one of labels_key / shapes_key is set (enforced in _validate_inputs).
     region_key_value = labels_key or shapes_key
 
-    arr = combined.to_numpy(dtype=np.float32, copy=True)
     if invalid_as_zero:
         np.nan_to_num(arr, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
     adata = ad.AnnData(X=arr)
-    adata.var_names = list(combined.columns)
+    adata.var_names = columns
 
     adata.uns["spatialdata_attrs"] = {
         "region": region_key_value,
@@ -1165,7 +1192,7 @@ def calculate_image_features(
     if shapes_key is not None and len(sdata.shapes[shapes_key]) == len(adata):
         adata.obs["label_id"] = sdata.shapes[shapes_key].index.values
     else:
-        adata.obs["label_id"] = combined.index.values
+        adata.obs["label_id"] = labels
     # obs_names are the cell's label-image ID (the label_id), as str for AnnData.
     adata.obs_names = adata.obs["label_id"].astype(str).values
 
