@@ -254,6 +254,21 @@ class TestBuildTileSpecs:
                     f"Cell {lid} x-range [{cell_x0:.0f},{cell_x1:.0f}] not in crop x-range [{cx0},{cx1}]"
                 )
 
+    def test_aligned_crops_on_grid(self, brick_labels):
+        """With ``align``, crops start and span on the alignment grid and still cover the unaligned crop."""
+        labels, _ = brick_labels
+        H, W = labels.shape
+        cell_info = compute_cell_info(labels)
+        plain = build_tile_specs(labels.shape, cell_info, tile_size=_TILE_SIZE)
+        aligned = build_tile_specs(labels.shape, cell_info, tile_size=_TILE_SIZE, align=16)
+        for p, a in zip(plain, aligned, strict=True):
+            (py0, px0, py1, px1), (ay0, ax0, ay1, ax1) = p.crop, a.crop
+            assert a.owned_ids == p.owned_ids
+            assert ay0 % 16 == 0 and ax0 % 16 == 0
+            assert (ay1 - ay0) % 16 == 0 or ay1 == H
+            assert (ax1 - ax0) % 16 == 0 or ax1 == W
+            assert ay0 <= py0 and ax0 <= px0 and ay1 >= py1 and ax1 >= px1
+
 
 class TestBuildTileSpecsEdgeCases:
     def test_empty_labels(self):

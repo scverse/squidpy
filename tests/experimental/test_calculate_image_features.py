@@ -482,6 +482,19 @@ class TestCalculateImageFeatures:
         np.testing.assert_array_equal(df_single.index, df_tiled.index)
         np.testing.assert_allclose(df_single.values, df_tiled.values, rtol=1e-5, atol=1e-5)
 
+    def test_granularity_independent_of_tile_size_within_context(self, sdata_synthetic):
+        """Granularity needs image context; when the tile padding covers the image, tiling changes nothing."""
+        kw = {
+            "image_key": "test_img",
+            "labels_key": "test_labels",
+            "features": ["cp_measure:granularity"],
+            "inplace": False,
+            "drop_constant_features": False,
+        }
+        single = sq.experimental.im.calculate_image_features(sdata_synthetic, tile_size=1000, **kw).to_df()
+        tiled = sq.experimental.im.calculate_image_features(sdata_synthetic, tile_size=100, **kw).to_df()
+        pd.testing.assert_frame_equal(tiled.loc[single.index], single)
+
     def test_asymmetric_cell_not_truncated_by_tiling(self):
         """A cell reaching far from its centroid (blob + long process) stays whole when tiled."""
         labels = np.zeros((200, 200), dtype=np.int32)

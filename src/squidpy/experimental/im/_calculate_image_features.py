@@ -106,6 +106,14 @@ _CPMEASURE_FLAGS: dict[str, dict[str, bool]] = {
     "cp_measure:correlation_rwc": {"correlation_rwc": True},
 }
 
+# cp_measure granularity samples each crop on a 1/4 then 1/16 grid anchored at the crop
+# origin and estimates background with an opening reaching ~320 px. Tiles that request it
+# are aligned to that grid (1 / (subsample_size * image_sample_size) at cp_measure's
+# defaults) and padded for context; on real images this makes the lower granularity bins
+# match an untiled run closely.
+_GRANULARITY_ALIGN = 16
+_GRANULARITY_PAD = 256
+
 # cp_measure correlation features need >=2 channels (they correlate channel pairs).
 _CP_CORRELATION_KEYS = frozenset(_CPMEASURE_FLAGS["cp_measure:correlation"])
 
@@ -1003,7 +1011,9 @@ def calculate_image_features(
         the skimage-only props (``centroid_local``, ``feret_diameter_max``) are
         kept. cp_measure computes its groups all-or-nothing, so it wins.
     tile_size
-        Side length of the tiling grid (pixels).
+        Side length of the tiling grid (pixels). With ``"cp_measure:granularity"``
+        each tile is padded by 256 px of image context, so prefer
+        ``tile_size >= 2048`` there to keep the extra reads small.
     align_mode
         How to handle image/labels whose pixel grids do not match (via their
         SpatialData transformations).
@@ -1052,8 +1062,11 @@ def calculate_image_features(
     ``Location_*``; skimage ``centroid-*``) are in pixel units of the labels
     grid at ``scale`` (the image grid when labels are resampled via
     ``align_mode="rasterize"`` or ``shapes_key``), independent of ``tile_size``.
-    ``"cp_measure:granularity"`` depends on the image around each cell, so its
-    values vary with ``tile_size``.
+    ``"cp_measure:granularity"`` depends on the image around each cell. Tiles
+    that compute it are aligned to its sampling grid and padded, which keeps
+    the lower (fine-granule) bins close to an untiled run; the higher bins
+    depend on image context far beyond any tile (as they do across CellProfiler
+    fields of view) and still vary with ``tile_size``.
 
     With ``n_jobs > 1`` a ``LocalCluster`` is started, which spawns worker
     processes. On macOS/Windows (spawn start method) the calling code must be
@@ -1144,7 +1157,15 @@ def calculate_image_features(
     # --- Tile ---
     # overlap_margin="auto" crops each tile to its owned cells' bounding boxes (+1 px);
     # not exposed -- a fixed margin either truncates boundary cells or wastes reads.
-    specs = build_tile_specs((H, W), cell_info, tile_size=tile_size, overlap_margin="auto")
+    granularity = parsed.cp_flags is not None and (not parsed.cp_flags or parsed.cp_flags.get("granularity", False))
+    specs = build_tile_specs(
+        (H, W),
+        cell_info,
+        tile_size=tile_size,
+        overlap_margin="auto",
+        pad=_GRANULARITY_PAD if granularity else 1,
+        align=_GRANULARITY_ALIGN if granularity else 1,
+    )
     total_tiles = len(specs)
     logg.info(f"Tiling input into {total_tiles} tile(s) of size {tile_size} px.")
 

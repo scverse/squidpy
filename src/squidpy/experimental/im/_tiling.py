@@ -182,6 +182,8 @@ def build_tile_specs(
     cell_info: dict[int, CellInfo],
     tile_size: int = 2048,
     overlap_margin: int | Literal["auto"] = "auto",
+    pad: int = 1,
+    align: int = 1,
 ) -> list[TileSpec]:
     """Build tile specifications from pre-computed centroids.
 
@@ -198,9 +200,15 @@ def build_tile_specs(
         Side length of the non-overlapping base grid cells.
     overlap_margin
         ``"auto"`` crops each tile to the union of its owned cells' bounding
-        boxes plus 1 pixel, so every owned cell is whole and has background
-        around its boundary (edge and radial features need it).  An integer
-        instead adds that fixed margin around the base region.
+        boxes plus ``pad`` pixels, so every owned cell is whole and has
+        background around its boundary (edge and radial features need 1 px).
+        An integer instead adds that fixed margin around the base region.
+    pad
+        Context in pixels around the owned cells for ``overlap_margin="auto"``.
+    align
+        Snap each crop's origin down, and its size up, to multiples of
+        ``align`` pixels, for features that sample the crop on a grid anchored
+        at its origin.
 
     Returns
     -------
@@ -234,15 +242,20 @@ def build_tile_specs(
 
         if margin is None:
             cells = [cell_info[lid] for lid in owned]
-            cy0 = max(min(c.bbox_y0 for c in cells) - 1, 0)
-            cx0 = max(min(c.bbox_x0 for c in cells) - 1, 0)
-            cy1 = min(max(c.bbox_y0 + c.bbox_h for c in cells) + 1, height)
-            cx1 = min(max(c.bbox_x0 + c.bbox_w for c in cells) + 1, width)
+            cy0 = max(min(c.bbox_y0 for c in cells) - pad, 0)
+            cx0 = max(min(c.bbox_x0 for c in cells) - pad, 0)
+            cy1 = min(max(c.bbox_y0 + c.bbox_h for c in cells) + pad, height)
+            cx1 = min(max(c.bbox_x0 + c.bbox_w for c in cells) + pad, width)
         else:
             cy0 = max(by0 - margin, 0)
             cx0 = max(bx0 - margin, 0)
             cy1 = min(by1 + margin, height)
             cx1 = min(bx1 + margin, width)
+
+        if align > 1:
+            cy0, cx0 = cy0 - cy0 % align, cx0 - cx0 % align
+            cy1 = min(cy1 + (cy0 - cy1) % align, height)
+            cx1 = min(cx1 + (cx0 - cx1) % align, width)
 
         specs.append(
             TileSpec(
