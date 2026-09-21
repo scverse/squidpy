@@ -160,6 +160,19 @@ class TestCalculateTilingQC:
         for col in ["smoothed_cut_score", "is_outlier", "nhood_outlier_fraction"]:
             assert col in adata.obs.columns
 
+    def test_multiscale_scores_cells_absent_from_coarse_scales(self):
+        """Thin cells lost by downsampling are still scored at the requested scale."""
+        from spatialdata import SpatialData
+        from spatialdata.models import Labels2DModel
+
+        labels = np.zeros((128, 128), dtype=np.int32)
+        rows = range(9, 120, 8)
+        for lid, y in enumerate(rows, start=1):
+            labels[y, 10:118] = lid  # 1-px-wide cells: gone at scale1/scale2
+        sdata = SpatialData(labels={"labels": Labels2DModel.parse(labels, dims=("y", "x"), scale_factors=[2, 2])})
+        adata = sq.experimental.tl.calculate_tiling_qc(sdata, labels_key="labels", scale="scale0", inplace=False)
+        assert set(adata.obs["label_id"]) == set(range(1, len(rows) + 1))
+
     def test_both_gates_disabled_raises(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
         with pytest.raises(ValueError, match="At least one outlier gate"):

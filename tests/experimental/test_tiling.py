@@ -19,7 +19,6 @@ from squidpy.experimental.im._tiling import (
     _zero_non_owned,
     build_tile_specs,
     compute_cell_info,
-    compute_cell_info_multiscale,
     compute_cell_info_tiled,
     extract_tile_lazy,
 )
@@ -404,42 +403,7 @@ def _plot_tile_assignment(labels, specs, title=""):
     ax.set_ylabel("y")
 
 
-# Lazy / multiscale helpers
-
-
-def _make_multiscale_tree(labels: np.ndarray, n_scales: int = 3) -> xr.DataTree:
-    """Build a tiny multiscale DataTree by integer-downsampling."""
-    scales: dict[str, xr.DataTree] = {}
-    for i in range(n_scales):
-        step = 2**i
-        sub = labels[::step, ::step]
-        ds = xr.Dataset({"image": xr.DataArray(sub, dims=("y", "x"))})
-        scales[f"scale{i}"] = xr.DataTree(ds)
-    return xr.DataTree.from_dict(scales)
-
-
-class TestComputeCellInfoMultiscale:
-    def test_target_is_coarsest_matches_eager(self):
-        labels, _ = _make_brick_labels(gap=10)
-        tree = _make_multiscale_tree(labels, n_scales=3)
-        # scale2 is coarsest. Target it -> use that scale directly.
-        info_ms = compute_cell_info_multiscale(tree, target_scale="scale2")
-        info_eager = compute_cell_info(tree["scale2"].ds["image"].values)
-        assert set(info_ms.keys()) == set(info_eager.keys())
-        for lid in info_ms:
-            assert info_ms[lid].centroid_y == pytest.approx(info_eager[lid].centroid_y, abs=0.5)
-            assert info_ms[lid].centroid_x == pytest.approx(info_eager[lid].centroid_x, abs=0.5)
-
-    def test_rescale_to_finer(self):
-        labels, _ = _make_brick_labels(gap=10)
-        tree = _make_multiscale_tree(labels, n_scales=3)
-        info_ms = compute_cell_info_multiscale(tree, target_scale="scale0")
-        info_eager = compute_cell_info(labels)
-        # Centroids should be close (within ~1 px due to coarse-scale quantization)
-        assert set(info_ms.keys()) == set(info_eager.keys())
-        for lid in info_ms:
-            assert info_ms[lid].centroid_y == pytest.approx(info_eager[lid].centroid_y, abs=4.0)
-            assert info_ms[lid].centroid_x == pytest.approx(info_eager[lid].centroid_x, abs=4.0)
+# Lazy helpers
 
 
 class TestComputeCellInfoTiled:

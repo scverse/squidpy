@@ -46,7 +46,6 @@ from squidpy.experimental.im._tiling import (
     _run_tiled,
     build_tile_specs,
     compute_cell_info,
-    compute_cell_info_multiscale,
     compute_cell_info_tiled,
     extract_labels_tile_lazy,
 )
@@ -401,17 +400,8 @@ def _score_tile(
 # Centroid computation (shared logic with _feature.py)
 
 
-def _compute_centroids_for_labels(
-    sdata: sd.SpatialData,
-    labels_key: str,
-    labels_da: xr.DataArray,
-    scale: str | None,
-) -> dict:
-    """Compute cell centroids using the most efficient strategy available."""
-    if isinstance(sdata.labels[labels_key], xr.DataTree):
-        logg.info("Computing centroids from coarse scale.")
-        return compute_cell_info_multiscale(sdata.labels[labels_key], target_scale=scale or "scale0")
-
+def _compute_centroids_for_labels(labels_da: xr.DataArray) -> dict:
+    """Compute cell centroids and bounding boxes on the scored labels grid."""
     n_pixels = labels_da.sizes.get("y", 1) * labels_da.sizes.get("x", 1)
     if n_pixels <= 4096 * 4096:
         lbl_np = labels_da.values
@@ -419,7 +409,7 @@ def _compute_centroids_for_labels(
             lbl_np = lbl_np.squeeze()
         return compute_cell_info(lbl_np)
 
-    logg.info("Computing centroids in tiled mode (large single-scale labels).")
+    logg.info("Computing centroids in tiled mode (large labels).")
     return compute_cell_info_tiled(labels_da)
 
 
@@ -469,8 +459,9 @@ def calculate_tiling_qc(
     tile_size
         Side length of the tiling grid (pixels).
     overlap_margin
-        Overlap around each tile.  ``"auto"`` computes the minimum from
-        the largest cell's bounding box.
+        Overlap around each tile.  ``"auto"`` crops each tile to the
+        bounding boxes of the cells it owns (plus 1 pixel), so no cell is
+        truncated; an integer adds that fixed margin around the tile.
     downsample
         Factor by which to downsample each cell's bounding-box crop
         before contour extraction.  Straightness is scale-invariant,
@@ -561,7 +552,7 @@ def calculate_tiling_qc(
 
     labels_da = resolve_labels_array(sdata, labels_key, scale)
 
-    cell_info = _compute_centroids_for_labels(sdata, labels_key, labels_da, scale)
+    cell_info = _compute_centroids_for_labels(labels_da)
     if not cell_info:
         raise ValueError("No cells found in labels (all zeros).")
 

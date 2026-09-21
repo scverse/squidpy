@@ -69,8 +69,8 @@ class TileSpec:
         The non-overlapping region ``(y0, x0, y1, x1)`` used for centroid
         ownership.  Tiles partition the image into a grid of base regions.
     crop
-        The extended region ``(y0, x0, y1, x1)`` that includes the overlap
-        margin.  This is the actual slice extracted from the image/labels.
+        The region ``(y0, x0, y1, x1)`` that contains every owned cell.
+        This is the actual slice extracted from the image/labels.
     owned_ids
         Label IDs whose centroid falls inside ``base``.  Only these labels
         are kept in the tile's mask; all others are zeroed out.
@@ -110,48 +110,6 @@ def compute_cell_info(labels: np.ndarray) -> dict[int, CellInfo]:
             bbox_x0=min_col,
         )
     return info
-
-
-def compute_cell_info_multiscale(
-    labels_node: xr.DataTree,
-    target_scale: str = "scale0",
-) -> dict[int, CellInfo]:
-    """Compute centroids using the coarsest scale of a multiscale label pyramid.
-
-    Reads only the smallest resolution, then scales coordinates to *target_scale*.
-    """
-    available = list(labels_node.keys())
-    if not available:
-        return {}
-
-    def _spatial_size(k: str) -> int:
-        h, w = yx_size(labels_node[k].ds["image"])
-        return h * w
-
-    coarsest = min(available, key=_spatial_size)
-    coarse_labels = np.asarray(labels_node[coarsest].ds["image"].values).squeeze()
-
-    if coarse_labels.ndim != 2:
-        raise ValueError(f"Expected 2-D labels at scale {coarsest}, got shape {coarse_labels.shape}")
-
-    target_h, target_w = yx_size(labels_node[target_scale].ds["image"])
-    coarse_h, coarse_w = coarse_labels.shape
-    scale_y = target_h / coarse_h
-    scale_x = target_w / coarse_w
-
-    props = regionprops(coarse_labels)
-    return {
-        p.label: CellInfo(
-            label=p.label,
-            centroid_y=p.centroid[0] * scale_y,
-            centroid_x=p.centroid[1] * scale_x,
-            bbox_h=int(np.ceil((p.bbox[2] - p.bbox[0]) * scale_y)),
-            bbox_w=int(np.ceil((p.bbox[3] - p.bbox[1]) * scale_x)),
-            bbox_y0=int(np.floor(p.bbox[0] * scale_y)),
-            bbox_x0=int(np.floor(p.bbox[1] * scale_x)),
-        )
-        for p in props
-    }
 
 
 @dataclass
@@ -219,16 +177,6 @@ def compute_cell_info_tiled(
 # Tile spec building
 
 
-def _auto_margin(cell_info: dict[int, CellInfo]) -> int:
-    """Compute the minimum margin that covers the largest cell's half-extent."""
-    if not cell_info:
-        return 0
-    max_extent = max(max(c.bbox_h, c.bbox_w) for c in cell_info.values())
-    # Centroid can be at most half a bbox away from the cell's edge.
-    # Add 1 pixel for safety (rounding / off-by-one).
-    return int(np.ceil(max_extent / 2)) + 1
-
-
 def build_tile_specs(
     grid_shape: tuple[int, int],
     cell_info: dict[int, CellInfo],
@@ -244,13 +192,15 @@ def build_tile_specs(
     grid_shape
         ``(height, width)`` of the full-resolution labels grid.
     cell_info
-        Pre-computed centroids from :func:`compute_cell_info`,
-        :func:`compute_cell_info_multiscale`, or :func:`compute_cell_info_tiled`.
+        Pre-computed centroids from :func:`compute_cell_info` or
+        :func:`compute_cell_info_tiled`.
     tile_size
         Side length of the non-overlapping base grid cells.
     overlap_margin
-        Pixel margin added around each base region.  ``"auto"`` computes the
-        minimum margin from the largest cell's bounding box.
+        ``"auto"`` crops each tile to the union of its owned cells' bounding
+        boxes plus 1 pixel, so every owned cell is whole and has background
+        around its boundary (edge and radial features need it).  An integer
+        instead adds that fixed margin around the base region.
 
     Returns
     -------
@@ -261,8 +211,8 @@ def build_tile_specs(
     if tile_size <= 0:
         raise ValueError(f"tile_size must be positive, got {tile_size}")
 
-    margin = _auto_margin(cell_info) if overlap_margin == "auto" else int(overlap_margin)
-    if margin < 0:
+    margin = None if overlap_margin == "auto" else int(overlap_margin)
+    if margin is not None and margin < 0:
         raise ValueError(f"overlap_margin must be non-negative, got {margin}")
 
     cell_to_tile: dict[int, tuple[int, int]] = {}
@@ -282,10 +232,17 @@ def build_tile_specs(
         by1 = min(by0 + tile_size, height)
         bx1 = min(bx0 + tile_size, width)
 
-        cy0 = max(by0 - margin, 0)
-        cx0 = max(bx0 - margin, 0)
-        cy1 = min(by1 + margin, height)
-        cx1 = min(bx1 + margin, width)
+        if margin is None:
+            cells = [cell_info[lid] for lid in owned]
+            cy0 = max(min(c.bbox_y0 for c in cells) - 1, 0)
+            cx0 = max(min(c.bbox_x0 for c in cells) - 1, 0)
+            cy1 = min(max(c.bbox_y0 + c.bbox_h for c in cells) + 1, height)
+            cx1 = min(max(c.bbox_x0 + c.bbox_w for c in cells) + 1, width)
+        else:
+            cy0 = max(by0 - margin, 0)
+            cx0 = max(bx0 - margin, 0)
+            cy1 = min(by1 + margin, height)
+            cx1 = min(bx1 + margin, width)
 
         specs.append(
             TileSpec(
