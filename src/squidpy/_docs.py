@@ -240,8 +240,7 @@ spatial_connectivities_key
 _niche_embedding_key_added = """\
 embedding_key_added
     Controls the name of the key to be added in :attr:`anndata.AnnData.obsm`, which will hold
-    the niche embedding computed. Nothing is stored when ``library_key`` is given: every library
-    is embedded on its own, so the embeddings share no common axes."""
+    the niche embedding computed."""
 _niche_min_niche_size = """\
 min_niche_size
     Minimum number of observations required for a niche. Niches with fewer observations
@@ -269,7 +268,6 @@ key_added
 _niche_common_params = f"""\
 {_niche_embedding_key_added}
 {_niche_min_niche_size}
-{_niche_library_key}
 {_copy}"""
 _niche_leiden_params = f"""\
 flavor

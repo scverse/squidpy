@@ -123,19 +123,19 @@ def test_niche_cellcharter_rng_none_runs(dummy_adata2: AnnData):
 
 
 def test_niche_calc_library_key_dummy_adata(dummy_adata2: AnnData):
-    "Check whether niche calculation when library_key is supplied works as intended for dummy_adata2."
-
-    # add library_key information in dummy_adata
+    "Only spatialleiden still fits per library; the others refuse rather than silently pooling."
     dummy_adata2.obs["batch"] = ["batch1"] * 5 + ["batch2"] * 5
 
-    calculate_niche(
-        dummy_adata2, flavor="neighborhood", groups="celltype", n_neighbors=3, resolutions=1.5, library_key="batch"
-    )
+    with pytest.raises(ValueError, match=r"'library_key' fitted a separate model per library"):
+        calculate_niche(
+            dummy_adata2, flavor="neighborhood", groups="celltype", n_neighbors=3, resolutions=1.5, library_key="batch"
+        )
+
+    calculate_niche(dummy_adata2, flavor="neighborhood", groups="celltype", n_neighbors=3, resolutions=1.5)
 
     niches = _assert_all_assigned(dummy_adata2, "nhood_niche_res=1.5")
-    # niches are computed per library and prefixed with the originating library
-    for cell, label in niches.items():
-        assert label.startswith(f"lib={dummy_adata2.obs['batch'][cell]}_")
+    # one model over both batches now, so the labels are a shared vocabulary with no lib= prefix
+    assert not any(label.startswith("lib=") for _, label in niches.items())
 
 
 def test_niche_calc_spatialleiden_library_key_dummy_adata(dummy_adata2: AnnData):
@@ -440,8 +440,10 @@ def test_niche_rejects_an_unusable_embedding_key(key):
 def test_niche_library_key_with_a_skipped_first_library_still_writes_labels():
     "An empty first library must not silently drop every later library's labels."
     adata = _tiny(n=40, libraries=[None] * 8 + ["a"] * 16 + ["b"] * 16)
-    calculate_niche_neighborhood(adata, groups="ct", resolutions=1.0, n_neighbors=4, rng=0, library_key="library")
-    col = "nhood_niche_res=1.0"
+    calculate_niche_spatialleiden(
+        adata, resolutions=1.0, rng=0, library_key="library", latent_connectivities_key="spatial_connectivities"
+    )
+    col = "spatialleiden_res=1.0"
     assert col in adata.obs, "the labels of the non-empty libraries were dropped"
     assert str(adata.obs[col].dtype) == "category"
     assert (adata.obs[col][8:] != "not_a_niche").any()
@@ -450,16 +452,22 @@ def test_niche_library_key_with_a_skipped_first_library_still_writes_labels():
 def test_niche_library_key_with_no_usable_library_raises():
     adata = _tiny(n=20, libraries=[None] * 20)
     with pytest.raises(ValueError, match=r"no observation has a 'library'"):
-        calculate_niche_neighborhood(adata, groups="ct", resolutions=1.0, n_neighbors=4, rng=0, library_key="library")
+        calculate_niche_spatialleiden(
+            adata, resolutions=1.0, rng=0, library_key="library", latent_connectivities_key="spatial_connectivities"
+        )
 
 
 def test_niche_library_key_rerun_overwrites_labels():
     "A second in-place call must not keep the first run's labels."
     adata = _tiny(n=40, libraries=["a"] * 20 + ["b"] * 20)
-    calculate_niche_cellcharter(adata, distance=2, n_clusters=2, rng=0, library_key="library")
-    first = np.asarray(adata.obs["cellcharter_niche"].astype(str)).copy()
-    calculate_niche_cellcharter(adata, distance=2, n_clusters=4, rng=99, library_key="library")
-    second = np.asarray(adata.obs["cellcharter_niche"].astype(str))
+    calculate_niche_spatialleiden(
+        adata, resolutions=1.0, rng=0, library_key="library", latent_connectivities_key="spatial_connectivities"
+    )
+    first = np.asarray(adata.obs["spatialleiden_res=1.0"].astype(str)).copy()
+    calculate_niche_spatialleiden(
+        adata, resolutions=1.0, rng=99, library_key="library", latent_connectivities_key="spatial_connectivities"
+    )
+    second = np.asarray(adata.obs["spatialleiden_res=1.0"].astype(str))
     assert not (first == second).all(), "the re-run silently kept the previous labels"
 
 
@@ -481,59 +489,20 @@ def test_clusterer_without_a_random_state_is_rejected():
         _fit_clusterers(adata, np.asarray(to_dense(adata.X)), {"c": DBSCAN(eps=3.0)}, np.random.default_rng(0))
 
 
-def test_library_key_embeds_each_library_on_its_own(monkeypatch):
-    "Stratifying exists to fit the embedding per library, not once on the pooled object."
-    half = 60
-    # opposite composition per section, so a pooled fit leaves each one's offset in the rows
-    adata = _two_sections((half, half), ct=["a"] * 50 + ["b"] * 10 + ["a"] * 10 + ["b"] * 50)
-
-    seen: list[int] = []
-    original = _niche._nhood_profile_embedding
-
-    def spy(adata_arg, **kwargs):
-        seen.append(adata_arg.n_obs)
-        return original(adata_arg, **kwargs)
-
-    monkeypatch.setattr(_niche, "_nhood_profile_embedding", spy)
-    calculate_niche_neighborhood(
-        adata, groups="ct", resolutions=1.0, n_neighbors=10, rng=0, library_key="section", scale=True
-    )
-    # one fit per library, on that library's own observations; a pooled fit is a single 2 * half
-    assert seen == [half, half], f"embedder was handed {seen} observations"
-
-
-@pytest.mark.parametrize(
-    ("flavor", "kwargs"),
-    [
-        ("neighborhood", {"groups": "ct", "resolutions": 1.0}),
-        ("utag", {"resolutions": 1.0}),
-        ("cellcharter", {"distance": 1, "n_clusters": 3}),
-        ("spatialleiden", {"resolutions": 1.0, "latent_connectivities_key": "spatial_connectivities"}),
-    ],
-)
-def test_cross_library_warning_points_at_the_caller(flavor, kwargs):
+def test_cross_library_warning_points_at_the_caller():
     "The two entry points sit at different depths, so each passes its own stacklevel."
     adata = _two_sections((40, 40))
     adata.obsm["spatial"] = np.random.default_rng(1).random((80, 2)) * 10
     del adata.obsp["spatial_connectivities"], adata.obsp["spatial_distances"]
     spatial_neighbors_knn(adata, n_neighs=4)
-    fn = globals()[f"calculate_niche_{flavor}"]
-
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        fn(adata, rng=0, library_key="section", **kwargs)
+        calculate_niche_spatialleiden(
+            adata, resolutions=1.0, rng=0, library_key="section", latent_connectivities_key="spatial_connectivities"
+        )
     crossing = [w for w in caught if "between libraries" in str(w.message)]
     assert crossing, "no cross-library warning was raised"
     assert crossing[0].filename == __file__, f"points at {crossing[0].filename}, not the caller"
-
-
-def test_mask_emptying_one_library_writes_nothing():
-    "The loop merges each library as it finishes, so it must not start and then raise."
-    adata = _two_sections((40, 40))
-    mask = Series(~(adata.obs["section"] == "s2").to_numpy(), index=adata.obs_names)
-    with pytest.raises(ValueError, match=r"in library 's2': 'cluster_mask' excludes every observation"):
-        calculate_niche_utag(adata, resolutions=1.0, n_neighbors=8, rng=0, library_key="section", cluster_mask=mask)
-    assert not [c for c in adata.obs.columns if "utag" in c], "a partial result was left behind"
 
 
 def test_non_boolean_mask_raises():
@@ -542,6 +511,64 @@ def test_non_boolean_mask_raises():
     strings = Series(["False"] * 20 + ["True"] * 40, index=adata.obs_names)
     with pytest.raises(TypeError, match=r"'cluster_mask' must be a boolean Series, got dtype"):
         calculate_niche_utag(adata, resolutions=1.0, rng=0, cluster_mask=strings)
+
+
+@pytest.mark.parametrize(
+    ("flavor", "kwargs"),
+    [
+        ("neighborhood", {"groups": "ct", "resolutions": 1.0}),
+        ("utag", {"resolutions": 1.0}),
+        ("cellcharter", {"distance": 1, "n_clusters": 2}),
+    ],
+)
+def test_only_spatialleiden_takes_a_library_key(flavor, kwargs):
+    "The others fit one model over everything, so their labels compare across libraries."
+    assert "library_key" not in inspect.signature(globals()[f"calculate_niche_{flavor}"]).parameters
+    adata = _tiny(n=40, libraries=["a"] * 20 + ["b"] * 20)
+    with pytest.raises(TypeError, match="library_key"):
+        globals()[f"calculate_niche_{flavor}"](adata, rng=0, library_key="library", **kwargs)
+
+
+def test_the_umbrella_refuses_a_library_key_it_can_no_longer_honour():
+    "It is released with one, so it has to say what changed rather than quietly pool."
+    adata = _tiny(n=40, libraries=["a"] * 20 + ["b"] * 20)
+    with pytest.raises(ValueError, match=r"only 'spatialleiden' still does"):
+        calculate_niche(adata, flavor="utag", n_neighbors=4, resolutions=1.0, rng=0, library_key="library")
+    # and still honours it where the behaviour survives
+    assert "library_key" in inspect.signature(calculate_niche_spatialleiden).parameters
+
+
+def test_integer_features_keep_their_ring_means():
+    "The block the rings are written into took the features' dtype, so counts truncated the mean."
+    rng = np.random.default_rng(0)
+    counts = rng.integers(0, 20, (60, 4)).astype(np.int64)
+    adata = AnnData(X=counts)
+    adata.obs_names = [f"c{i}" for i in range(60)]
+    adata.obsm["spatial"] = rng.random((60, 2)) * 10
+    spatial_neighbors_knn(adata, n_neighs=5)
+
+    calculate_niche_cellcharter(adata, use_rep="X", distance=1, n_clusters=2, rng=0)
+    ring = np.asarray(adata.obsm["niche_embedding"][:, 4:8], dtype=np.float64)
+    expected = to_dense(
+        _aggregate_over(
+            adata.obsp["spatial_connectivities"].astype(bool),
+            counts.astype(np.float64),
+            "mean",
+        )
+    )
+    np.testing.assert_allclose(ring, expected, rtol=0, atol=1e-12)
+
+
+@pytest.mark.parametrize("dtype", [bool, np.int64])
+def test_non_float_features_aggregate_exactly(dtype):
+    "`bool @ bool` saturates to True instead of summing, so widening the product is too late."
+    rng = np.random.default_rng(0)
+    n = 40
+    adj = csr_matrix((np.ones(n * 4, bool), (np.repeat(np.arange(n), 4), rng.integers(0, n, n * 4))), shape=(n, n))
+    features = (rng.random((n, 4)) > 0.5) if dtype is bool else rng.integers(0, 20, (n, 4))
+    got = to_dense(_aggregate_over(adj, features, "mean"))
+    expected = to_dense(_aggregate_over(adj.astype(np.float64), features.astype(np.float64), "mean"))
+    np.testing.assert_allclose(got, expected, rtol=0, atol=1e-12)
 
 
 def test_cross_library_edges_warn():
@@ -554,13 +581,21 @@ def test_cross_library_edges_warn():
     pooled = base.copy()
     spatial_neighbors_knn(pooled, n_neighs=4)
     with pytest.warns(UserWarning, match=r"'spatial_connectivities' has \d+ of \d+ edges between libraries"):
-        calculate_niche_utag(pooled, resolutions=1.0, n_neighbors=8, rng=0, library_key="section")
+        calculate_niche_spatialleiden(
+            pooled, resolutions=1.0, rng=0, library_key="section", latent_connectivities_key="spatial_connectivities"
+        )
 
     per_library = base.copy()
     spatial_neighbors_knn(per_library, n_neighs=4, library_key="section")
     with warnings.catch_warnings():
         warnings.simplefilter("error", UserWarning)
-        calculate_niche_utag(per_library, resolutions=1.0, n_neighbors=8, rng=0, library_key="section")
+        calculate_niche_spatialleiden(
+            per_library,
+            resolutions=1.0,
+            rng=0,
+            library_key="section",
+            latent_connectivities_key="spatial_connectivities",
+        )
 
 
 def test_spatialleiden_checks_both_graphs_for_cross_library_edges():
@@ -580,16 +615,6 @@ def test_min_niche_size_is_not_reported_unused(flavor, caplog):
     assert "min_niche_size" not in caplog.text
 
 
-def test_library_key_writes_no_pooled_embedding():
-    "Fitted per library, the blocks are in different spaces, so there is no one array to store."
-    # PCA caps components at min(n_obs, n_vars) - 1, so these two blocks cannot even share a width
-    adata = _two_sections((15, 55), n_vars=20, seed=1)
-
-    calculate_niche_utag(adata, resolutions=1.0, n_neighbors=8, rng=0, library_key="section")
-    assert "niche_embedding" not in adata.obsm
-    assert "utag_niche_res=1.0" in adata.obs, "the labels must still be written"
-
-
 def test_utag_use_rep_replaces_the_pca_it_would_fit():
     "A representation is already reduced, so utag aggregates it and stops."
     adata = _tiny(n=60, embedding_cols=5)
@@ -603,32 +628,6 @@ def test_utag_use_rep_replaces_the_pca_it_would_fit():
     derived = _tiny(n=60)
     calculate_niche_utag(derived, resolutions=1.0, n_neighbors=8, rng=0)
     assert derived.obsm["niche_embedding"].shape[1] == 5, "without it, the PCA still runs"
-
-
-@pytest.mark.parametrize(("use_rep", "shared"), [("emb", True), (None, False)])
-def test_utag_use_rep_keeps_one_basis_across_libraries(monkeypatch, use_rep, shared):
-    "The reason for the parameter: a per-library PCA fits a different basis in every library."
-    adata = _two_sections((60, 60), n_vars=12)
-    adata.obsm["emb"] = np.asarray(sc.pp.pca(adata.X, n_comps=5))
-    kwargs = {"resolutions": 1.0, "n_neighbors": 8, "rng": 0, "use_rep": use_rep}
-
-    blocks = []
-    original = _niche._utag_embedding
-
-    def spy(adata_arg, **kw):
-        blocks.append(original(adata_arg, **kw))
-        return blocks[-1]
-
-    monkeypatch.setattr(_niche, "_utag_embedding", spy)
-    calculate_niche_utag(adata, library_key="section", **kwargs)
-    calculate_niche_utag(adata, **kwargs)
-    per_library, pooled = np.vstack(blocks[:2]), blocks[2]
-
-    # the graph is block diagonal, so aggregating a shared representation is library blind
-    if shared:
-        np.testing.assert_allclose(per_library, pooled, atol=1e-6)
-    else:
-        assert per_library.shape != pooled.shape or not np.allclose(per_library, pooled)
 
 
 def test_utag_use_rep_and_use_layer_are_exclusive():
@@ -904,17 +903,6 @@ def test_cellcharter_accepts_sparse_and_dense_x(sparse: bool):
     calculate_niche_cellcharter(adata, distance=2, n_clusters=3, rng=0)
     assert "cellcharter_niche" in adata.obs
     assert str(adata.obs["cellcharter_niche"].dtype) == "category"
-
-
-def test_cellcharter_with_a_library_key():
-    "The stratified GMM path had no test at all once the seeding test was removed."
-    adata = _tiny(n=60, libraries=["s1"] * 30 + ["s2"] * 30)
-    calculate_niche_cellcharter(adata, distance=2, n_clusters=2, rng=0, library_key="library")
-
-    labels = adata.obs["cellcharter_niche"].astype(str)
-    assert str(adata.obs["cellcharter_niche"].dtype) == "category"
-    # every label carries its own library's prefix, and both libraries produced some
-    assert {label.split("_")[0] for label in labels} == {"lib=s1", "lib=s2"}
 
 
 @pytest.mark.parametrize(

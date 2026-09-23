@@ -984,10 +984,11 @@ def _aggregate_over(
 
     def mean_over(x: Array | CSBase) -> Array | CSBase:
         """Row-mean of ``adj @ x``, scaled in place -- the product is ours."""
+        # widen before the product, not after: `bool @ bool` saturates to True instead of
+        # summing, so by the time an integer product exists the counts are already gone
+        if not np.issubdtype(x.dtype, np.floating):
+            x = x.astype(np.float64)
         product = adj @ x
-        if not np.issubdtype(product.dtype, np.floating):
-            # a bool graph over integer counts sums to an integer, which cannot hold the quotient
-            product = product.astype(np.float64)
         if issparse(product):
             product = product.tocsr()
             scale = np.repeat(inv.ravel(), np.diff(product.indptr))  # each entry against its own row
