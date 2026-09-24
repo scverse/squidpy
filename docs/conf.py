@@ -204,7 +204,13 @@ def _params_defaults() -> dict[str, dict[str, object]]:
 
 
 def _append_default(app, what, name, obj, options, lines) -> None:  # type: ignore[no-untyped-def]
-    """Append ``Default: <repr>`` to each documented params key."""
+    """Mark params classes as TypedDicts, and append ``Default: <repr>`` to each of their keys."""
+    from typing import is_typeddict
+
+    if what == "class" and is_typeddict(obj):
+        # after the summary line, so it is the first thing read about the class
+        lines[1:1] = ["", "A :class:`~typing.TypedDict`: pass a plain :class:`dict` with any subset of these keys."]
+        return
     cls_path, _, key = name.rpartition(".")
     if what != "attribute" or not cls_path:
         return
