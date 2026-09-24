@@ -166,7 +166,7 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
 
 ## Types
 
-The public parameter bags. Every key is optional and falls back to the default shown with
+The public parameter bags, all {class}`~typing.TypedDict`s: pass a plain `dict` literal or build one with the class. Every key is optional and falls back to the default shown with
 it.
 
 ```{eval-rst}

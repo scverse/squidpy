@@ -21,40 +21,13 @@ DEFAULT_LUMINOSITY_THRESHOLD: float = 0.8
 _OD_BETA: float = 0.15
 
 __all__ = [
-    "BackgroundDetectionParams",
     "FelzenszwalbParams",
     "WekaParams",
     "ReinhardParams",
     "MacenkoParams",
     "VahadaneParams",
-    "TilingQCParams",
     "StitchParams",
 ]
-
-
-class BackgroundDetectionParams(TypedDict, total=False):
-    """Which corners are background, and how large the corner boxes should be.
-
-    If no corners are flagged ``True``, background is taken to be the bright side.
-    """
-
-    ymin_xmin_is_bg: Annotated[bool, Default(True)]
-    """Whether the ``(ymin, xmin)`` corner is background."""
-
-    ymax_xmin_is_bg: Annotated[bool, Default(True)]
-    """Whether the ``(ymax, xmin)`` corner is background."""
-
-    ymin_xmax_is_bg: Annotated[bool, Default(True)]
-    """Whether the ``(ymin, xmax)`` corner is background."""
-
-    ymax_xmax_is_bg: Annotated[bool, Default(True)]
-    """Whether the ``(ymax, xmax)`` corner is background."""
-
-    corner_size_pct: Annotated[float, Default(0.01)]
-    """Corner box size as a fraction of height/width."""
-
-
-_BACKGROUND_DEFAULTS: BackgroundDetectionParams = defaults_of(BackgroundDetectionParams)
 
 
 class FelzenszwalbParams(TypedDict, total=False):
@@ -168,22 +141,6 @@ class VahadaneParams(TypedDict, total=False):
 
 
 _VAHADANE_DEFAULTS: VahadaneParams = defaults_of(VahadaneParams)
-
-
-class TilingQCParams(TypedDict, total=False):
-    """Advanced tuning knobs for :func:`~squidpy.experimental.tl.calculate_tiling_qc`."""
-
-    distance_tol: Annotated[float, Default(0.75)]
-    """Maximum perpendicular distance (pixels) from the fitted line for a contour point to count as straight."""
-
-    min_area: Annotated[int, Default(20)]
-    """Cells smaller than this (pixels at analysis resolution) are skipped (NaN scores)."""
-
-    max_contour_points: Annotated[int, Default(500)]
-    """Cap on contour resolution; longer contours are arc-length-resampled before the O(n^2) collinearity scan."""
-
-
-_QC_DEFAULTS: TilingQCParams = defaults_of(TilingQCParams)
 
 
 class StitchParams(TypedDict, total=False):

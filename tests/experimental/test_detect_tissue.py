@@ -128,43 +128,44 @@ class TestDetectTissue(PlotTester, metaclass=PlotTesterMeta):
         sdata_hne.pl.render_labels("hne_tissue").pl.show()
 
 
-class TestBackgroundPriorKeywords:
-    """The `BackgroundDetectionParams` keys are keyword arguments of `detect_tissue`."""
+class TestCornerPriors:
+    """`corners_are_background` takes one bool or one per corner."""
 
-    def test_explicit_corner_overrides_broadcast(self) -> None:
-        # `corners_are_background` broadcasts to all four corners; a corner passed
-        # explicitly wins over it (the old `or` dropped the broadcast entirely)
-        from squidpy.experimental.im._detect_tissue import _BACKGROUND_DEFAULTS, BackgroundDetectionParams
-        from squidpy.experimental.utils._params import resolve_params
+    def test_broadcast_and_per_corner(self) -> None:
+        from squidpy.experimental.im._detect_tissue import _normalize_corners
 
-        corner_priors = BackgroundDetectionParams(
-            ymin_xmin_is_bg=False, ymax_xmin_is_bg=False, ymin_xmax_is_bg=False, ymax_xmax_is_bg=False
-        )
-        bgp = resolve_params({**corner_priors, "ymin_xmin_is_bg": True}, defaults=_BACKGROUND_DEFAULTS)
-        assert bgp["ymin_xmin_is_bg"] is True
-        assert bgp["ymax_xmax_is_bg"] is False  # the broadcast still applies to the rest
+        assert _normalize_corners(False) == (False,) * 4
+        assert _normalize_corners([True, False, False, True]) == (True, False, False, True)
 
-    def test_unknown_keyword_raises(self, sdata_hne) -> None:
-        with pytest.raises(ValueError, match="Unknown `background_detection_params` field"):
-            sq.experimental.im.detect_tissue(sdata_hne, image_key="hne", inplace=False, corner_size_pctt=0.02)
+    @pytest.mark.parametrize(
+        ("kwargs", "match"),
+        [
+            ({"corners_are_background": (True, False)}, "sequence of 4 bools"),
+            ({"corner_size_pct": 0.0}, "`corner_size_pct` must be in"),
+        ],
+        ids=["wrong_length", "zero_corner_size"],
+    )
+    def test_invalid_raises(self, sdata_hne, kwargs, match) -> None:
+        with pytest.raises(ValueError, match=match):
+            sq.experimental.im.detect_tissue(sdata_hne, image_key="hne", inplace=False, **kwargs)
 
 
 class TestCornerMask:
     """Each corner prior is honoured on its own, not just all-on / all-off."""
 
     def test_single_corner_only(self) -> None:
-        from squidpy.experimental.im._detect_tissue import _BACKGROUND_DEFAULTS, _corner_mask
-        from squidpy.experimental.utils._params import resolve_params
+        from squidpy.experimental.im._detect_tissue import _corner_mask
 
-        for corner, (rows, cols) in {
-            "ymin_xmin_is_bg": (slice(None, 2), slice(None, 2)),
-            "ymin_xmax_is_bg": (slice(None, 2), slice(-2, None)),
-            "ymax_xmin_is_bg": (slice(-2, None), slice(None, 2)),
-            "ymax_xmax_is_bg": (slice(-2, None), slice(-2, None)),
-        }.items():
-            off = dict.fromkeys(("ymin_xmin_is_bg", "ymin_xmax_is_bg", "ymax_xmin_is_bg", "ymax_xmax_is_bg"), False)
-            params = resolve_params({**off, corner: True, "corner_size_pct": 0.2}, defaults=_BACKGROUND_DEFAULTS)
-            mask = _corner_mask((10, 10), params)
+        for i, (rows, cols) in enumerate(
+            [
+                (slice(None, 2), slice(None, 2)),
+                (slice(None, 2), slice(-2, None)),
+                (slice(-2, None), slice(None, 2)),
+                (slice(-2, None), slice(-2, None)),
+            ]
+        ):
+            corner = tuple(j == i for j in range(4))
+            mask = _corner_mask((10, 10), corner, 0.2)
             assert mask[rows, cols].all(), corner
             assert mask.sum() == 4, f"{corner} lit up more than its own corner"
 
@@ -182,7 +183,7 @@ class TestWekaSeeding:
         # `pseudo_min_pixels` above the seeded count forces the top-z fallback, and
         # `refine_with_classifier=False` skips the second stage -- both branches that
         # the default-parameter tests never take.
-        from squidpy.experimental.im._detect_tissue import _BACKGROUND_DEFAULTS, _segment_weka
+        from squidpy.experimental.im._detect_tissue import _segment_weka
         from squidpy.experimental.utils._params import resolve_params
         from squidpy.types import _WEKA_DEFAULTS, WekaParams
 
@@ -190,8 +191,7 @@ class TestWekaSeeding:
             WekaParams(rf_estimators=1, pseudo_min_pixels=5000, refine_with_classifier=False, rng=0),
             defaults=_WEKA_DEFAULTS,
         )
-        bgp = resolve_params({}, defaults=_BACKGROUND_DEFAULTS)
-        mask = _segment_weka(self._synthetic_rgb(), bgp, weka)
+        mask = _segment_weka(self._synthetic_rgb(), (True,) * 4, 0.01, weka)
         assert mask.dtype == bool
         assert mask.shape == (48, 48)
         assert mask.any()  # the dark blob is found
