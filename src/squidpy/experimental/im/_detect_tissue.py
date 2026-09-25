@@ -29,8 +29,6 @@ from squidpy._utils import (
 )
 from squidpy.experimental.utils._params import resolve_params
 from squidpy.types import (
-    _FELZENSZWALB_DEFAULTS,
-    _WEKA_DEFAULTS,
     FelzenszwalbParams,
     WekaParams,
 )
@@ -60,10 +58,10 @@ def _normalize_corners(corners_are_background: bool | Sequence[bool]) -> _Corner
     return (bool(corners_are_background),) * 4
 
 
-#: The params dataclass each method takes. OTSU is absent: it accepts none.
-_METHOD_DEFAULTS: dict[DetectTissueMethod, FelzenszwalbParams | WekaParams] = {
-    DetectTissueMethod.FELZENSZWALB: _FELZENSZWALB_DEFAULTS,
-    DetectTissueMethod.WEKA: _WEKA_DEFAULTS,
+#: The params type each method takes. OTSU is absent: it accepts none.
+_METHOD_PARAMS: dict[DetectTissueMethod, type[FelzenszwalbParams | WekaParams]] = {
+    DetectTissueMethod.FELZENSZWALB: FelzenszwalbParams,
+    DetectTissueMethod.WEKA: WekaParams,
 }
 
 
@@ -295,8 +293,8 @@ def detect_tissue(
         if method_params is not None:
             raise ValueError("`method_params` are not supported for OTSU tissue detection.")
         resolved_method_params = None
-    elif (method_defaults := _METHOD_DEFAULTS.get(method)) is not None:
-        resolved_method_params = resolve_params(method_params, defaults=method_defaults)
+    elif (spec := _METHOD_PARAMS.get(method)) is not None:
+        resolved_method_params = resolve_params(method_params, spec)
     else:
         raise ValueError(f"Unsupported method: {method}")
 

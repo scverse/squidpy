@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from typing import Annotated, TypedDict
 
 from squidpy._utils import RNGLike, SeedLike
-from squidpy.experimental.utils._params import Default, defaults_of
+from squidpy.experimental.utils._params import Default
 
 #: Pixels whose Ruderman Lab-L luminosity (normalised to ``[0, 1]``) exceeds this are
 #: treated as near-white background and excluded when fitting stain statistics.
@@ -49,9 +49,6 @@ class FelzenszwalbParams(TypedDict, total=False):
 
     min_size_coef: Annotated[float, Default(0.20)]
     """``min_size`` = coef * target_area."""
-
-
-_FELZENSZWALB_DEFAULTS: FelzenszwalbParams = defaults_of(FelzenszwalbParams)
 
 
 class WekaParams(TypedDict, total=False):
@@ -100,9 +97,6 @@ class WekaParams(TypedDict, total=False):
     """Border ignored when seeding and predicting."""
 
 
-_WEKA_DEFAULTS: WekaParams = defaults_of(WekaParams)
-
-
 class ReinhardParams(TypedDict, total=False):
     """Tuning knobs for Reinhard stain normalization.
 
@@ -116,9 +110,6 @@ class ReinhardParams(TypedDict, total=False):
     """If ``True``, fit channel statistics over tissue pixels only; if ``False``, use every pixel (vanilla Reinhard)."""
 
 
-_REINHARD_DEFAULTS: ReinhardParams = defaults_of(ReinhardParams)
-
-
 class MacenkoParams(TypedDict, total=False):
     """Tuning knobs for Macenko stain-matrix fitting.
 
@@ -130,9 +121,6 @@ class MacenkoParams(TypedDict, total=False):
 
     beta: Annotated[float, Default(_OD_BETA)]
     """Mean-absorbance cutoff selecting tissue pixels (optical-density space)."""
-
-
-_MACENKO_DEFAULTS: MacenkoParams = defaults_of(MacenkoParams)
 
 
 class VahadaneParams(TypedDict, total=False):
@@ -152,6 +140,3 @@ class VahadaneParams(TypedDict, total=False):
 
     rng: Annotated[SeedLike | RNGLike | None, Default(None)]
     """Source of randomness for NMF initialisation tie-breaking; ``None`` draws from OS entropy."""
-
-
-_VAHADANE_DEFAULTS: VahadaneParams = defaults_of(VahadaneParams)
