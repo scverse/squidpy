@@ -17,6 +17,7 @@ __all__ = ["sliding_window"]
 @d.dedent
 def sliding_window(
     adata: AnnData | SpatialData,
+    *,
     library_key: str | None = None,
     window_size: int | None = None,
     overlap: int = 0,
@@ -25,7 +26,6 @@ def sliding_window(
     spatial_key: str = "spatial",
     drop_partial_windows: bool = False,
     copy: bool = False,
-    *,
     table_key: str | None = None,
 ) -> pd.DataFrame | None:
     """
@@ -183,6 +183,7 @@ def _calculate_window_corners(
     min_y: int,
     max_y: int,
     window_size: int,
+    *,
     overlap: int = 0,
     drop_partial_windows: bool = False,
 ) -> pd.DataFrame:

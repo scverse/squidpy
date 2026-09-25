@@ -88,6 +88,7 @@ class Signal(Enum):
 def parallelize(
     callback: Callable[..., Any],
     collection: Sequence[Any],
+    *,
     n_jobs: int | None = 1,
     n_split: int | None = None,
     unit: str = "",

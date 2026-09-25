@@ -29,6 +29,10 @@ from squidpy.gr import (
 from squidpy.gr._nhood import _aggregate_over, nhood_aggregate
 from squidpy.gr._niche import _fit_clusterers, compute_hop_adjacency_matrices
 
+# Many tests here exercise the deprecated umbrella, which keeps working until v1.9.0;
+# `test_calculate_niche_deprecation_is_a_future_warning` checks the deprecation itself.
+pytestmark = pytest.mark.filterwarnings("ignore:Calling `calculate_niche` is deprecated:FutureWarning")
+
 N_NEIGHBORS = 20
 
 # Niche labels come from Leiden clustering, whose exact partition is not stable across

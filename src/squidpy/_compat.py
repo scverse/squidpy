@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from functools import partial
 from importlib.metadata import version
 from typing import TYPE_CHECKING
 
+from legacy_api_wrap import legacy_api
 from packaging.version import Version
 from scanpy.get import obs_df
 
@@ -11,6 +13,7 @@ if TYPE_CHECKING:
     from anndata import AnnData
 
 __all__ = [
+    "old_positionals",
     # scanpy
     "set_default_colors_for_categorical_obs",
     "add_categorical_legend",
@@ -25,6 +28,10 @@ __all__ = [
     "SparseCSRView",
     "get_vector",
 ]
+
+#: For arguments that became keyword-only: an old positional call still works, with a
+#: ``FutureWarning`` naming them (#1288).
+old_positionals = partial(legacy_api, category=FutureWarning)
 
 # Scanpy 1.13 moved the pre-v2 plotting internals under ``scanpy.plotting.legacy``.
 # ``scanpy.plotting.__getattr__`` forwards attribute access there, but submodule

@@ -12,6 +12,7 @@ from scipy.sparse import csc_matrix, csr_matrix, issparse, isspmatrix_csr, spmat
 from sklearn.metrics import pairwise_distances
 from spatialdata import SpatialData
 
+from squidpy._compat import old_positionals
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
 from squidpy._utils import NDArrayA, deprecated_params, get_n_numba_threads, thread_map
@@ -30,8 +31,23 @@ __all__ = ["sepal"]
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn())
 @deprecated_params({"backend": "1.10.0"})
+@old_positionals(
+    "max_neighs",
+    "genes",
+    "n_iter",
+    "dt",
+    "thresh",
+    "connectivity_key",
+    "spatial_key",
+    "layer",
+    "use_raw",
+    "copy",
+    "n_jobs",
+    "show_progress_bar",
+)
 def sepal(
     adata: AnnData | SpatialData,
+    *,
     max_neighs: Literal[4, 6],
     genes: str | Sequence[str] | None = None,
     n_iter: int | None = 30000,
@@ -44,7 +60,6 @@ def sepal(
     copy: bool = False,
     n_jobs: int | None = None,
     show_progress_bar: bool = True,
-    *,
     table_key: str | None = None,
 ) -> pd.DataFrame | None:
     """
@@ -135,14 +150,14 @@ def sepal(
         vals = csc_matrix(vals)
     score = _diffusion_genes(
         vals,
-        use_hex,
-        n_iter,
-        sat,
-        sat_idx,
-        unsat,
-        unsat_idx,
-        dt,
-        thresh,
+        use_hex=use_hex,
+        n_iter=n_iter,
+        sat=sat,
+        sat_idx=sat_idx,
+        unsat=unsat,
+        unsat_idx=unsat_idx,
+        dt=dt,
+        thresh=thresh,
         n_jobs=n_jobs,
         show_progress_bar=show_progress_bar,
     )
@@ -163,6 +178,7 @@ def sepal(
 
 def _diffusion_genes(
     vals: NDArrayA | spmatrix,
+    *,
     use_hex: bool,
     n_iter: int,
     sat: NDArrayA,
@@ -207,7 +223,7 @@ def _diffusion_genes(
 
 
 @njit(fastmath=True, nogil=True)
-def _diffusion(
+def _diffusion(  # noqa: PLR0917, numba requires positional arguments
     conc: NDArrayA,
     use_hex: bool,
     n_iter: int,

@@ -28,6 +28,7 @@ def var_by_distance(
     adata: AnnData,
     var: str | list[str],
     anchor_key: str | list[str],
+    *,
     design_matrix_key: str = "design_matrix",
     stack_vars: bool = False,
     covariate: str | None = None,

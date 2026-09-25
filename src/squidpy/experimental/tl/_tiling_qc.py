@@ -430,6 +430,7 @@ _METHOD_KEY = "tiling_qc"
 
 def calculate_tiling_qc(
     sdata: sd.SpatialData,
+    *,
     labels_key: str,
     scale: str | None = None,
     tile_size: int = 2048,

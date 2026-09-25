@@ -162,8 +162,8 @@ def _propagate_spot_classification(sdata: sd.SpatialData, tiles_key: str, spots_
 
 def make_tiles(
     sdata: sd.SpatialData,
-    image_key: str,
     *,
+    image_key: str,
     image_mask_key: str | None = None,
     tissue_mask_key: str | None = None,
     tile_size: tuple[int, int] = (224, 224),

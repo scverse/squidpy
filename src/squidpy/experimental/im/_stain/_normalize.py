@@ -174,8 +174,8 @@ def _write_image(
 
 def estimate_white_point(
     sdata: sd.SpatialData,
-    image_key: str,
     *,
+    image_key: str,
     tissue_mask_key: str | None = None,
     scale: str | Literal["auto"] = "auto",
 ) -> np.ndarray:
@@ -211,8 +211,8 @@ def estimate_white_point(
 
 def fit_stain_reference(
     sdata: sd.SpatialData,
-    image_key: str,
     *,
+    image_key: str,
     method: StainMethod = "macenko",
     scale: str | Literal["auto"] = "auto",
     method_params: MethodParams = None,
@@ -294,9 +294,9 @@ def fit_stain_reference(
 
 def normalize_stains(
     sdata: sd.SpatialData,
+    *,
     image_key: str,
     reference: StainReference,
-    *,
     scale: str | Literal["auto"] = "auto",
     method_params: MethodParams = None,
     image_key_added: str | None = None,
@@ -396,9 +396,9 @@ def normalize_stains(
 
 def decompose_stains(
     sdata: sd.SpatialData,
+    *,
     image_key: str,
     reference_or_method: StainReference | Literal["macenko", "vahadane"],
-    *,
     scale: str | Literal["auto"] = "auto",
     method_params: MethodParams = None,
     white_point: np.ndarray | None = None,
@@ -461,7 +461,7 @@ def decompose_stains(
             raise ValueError(f"method must be one of {list(_DECOMPOSITION_METHODS)}; got {reference_or_method!r}.")
         reference = fit_stain_reference(
             sdata,
-            image_key,
+            image_key=image_key,
             method=reference_or_method,
             scale=scale,
             method_params=method_params,
