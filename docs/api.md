@@ -239,7 +239,6 @@ All {class}`~typing.TypedDict`s: pass a plain `dict` literal or build one with t
 .. autosummary::
     :toctree: api
 
-    types.StitchParams
     types.FelzenszwalbParams
     types.WekaParams
     types.ReinhardParams
