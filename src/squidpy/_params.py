@@ -1,8 +1,4 @@
-"""Shared internal helper for resolving params-TypedDict arguments.
-
-Not part of the public API - symbols here are private and may change
-without notice.
-"""
+"""Defaults, validation and resolution for the ``*Params`` TypedDicts. Private."""
 
 from __future__ import annotations
 
@@ -14,21 +10,13 @@ from typing import Any, cast, get_type_hints
 
 @dataclass(frozen=True, slots=True)
 class Default:
-    """The default value of a params key, carried in its ``Annotated`` metadata.
-
-    Keeps the default next to the key and its docstring instead of in a parallel
-    mapping: one source of truth for the resolver and for the docs.
-    """
+    """A params key's default, declared as ``Annotated[type, Default(value)]``."""
 
     value: Any
 
 
 def defaults_of[T: Mapping[str, Any]](spec: type[T]) -> T:
-    """Collect the :class:`Default` of every key of a params TypedDict.
-
-    Raises if a key declares no default: with ``total=False`` a type checker
-    cannot see a missing entry, so catch it at import time instead.
-    """
+    """The :class:`Default` of every key of *spec*; raises if a key has none."""
     defaults = {}
     for key, hint in get_type_hints(spec, include_extras=True).items():
         marker = next((m for m in getattr(hint, "__metadata__", ()) if isinstance(m, Default)), None)
@@ -38,14 +26,14 @@ def defaults_of[T: Mapping[str, Any]](spec: type[T]) -> T:
     return cast("T", defaults)
 
 
-# resolve_params' copy: the merge below never hands it out, so sharing it is safe
+# never handed out, only merged from, so caching it is safe
 _cached_defaults = cache(defaults_of)
 
 _VALIDATORS: dict[type, Callable[[dict[str, Any]], None]] = {}
 
 
 def validates[F: Callable[[dict[str, Any]], None]](spec: type) -> Callable[[F], F]:
-    """Register the decorated function as the validator every ``resolve_params(..., spec)`` runs.
+    """Register the decorated function as *spec*'s validator, run by :func:`resolve_params`.
 
     It coerces the merged mapping in place and raises on invalid values.
     """
@@ -63,16 +51,10 @@ def resolve_params[T: Mapping[str, Any]](
     *,
     arg_name: str = "method_params",
 ) -> T:
-    """Merge a params mapping over the defaults of *spec* and validate the result.
+    """Merge *params* over the defaults of *spec*, then validate the result.
 
-    ``T`` is a :class:`~typing.TypedDict`, so callers get static key and value
-    checking at the call site; this function is the dynamic half. Unknown keys
-    are named rather than silently ignored (a plain ``dict`` would accept them),
-    and the validator registered for *spec* with :func:`validates` runs on the
-    *merged* mapping, so the defaults are checked on every call rather than
-    trusted.
-
-    Returns a new mapping; ``params`` is not mutated.
+    Unknown keys raise. The validator registered with :func:`validates` runs on the merged
+    mapping, so defaults are checked too. Returns a new mapping.
     """
     defaults = _cached_defaults(spec)
     if params is not None and not isinstance(params, Mapping):

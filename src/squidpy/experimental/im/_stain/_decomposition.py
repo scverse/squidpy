@@ -172,7 +172,6 @@ def fit_decomposition(
     max_angle_deg: float = 45.0,
 ) -> StainReference:
     """Fit a decomposition :class:`~squidpy.experimental.im.StainReference` (stain matrix + max concentrations)."""
-    # `params` is `total=False`, so resolve rather than assume every key is present.
     params = resolve_params(params, MacenkoParams if method == "macenko" else VahadaneParams)
     od = _tissue_od(image_rgb, white_point, params["beta"], tissue_mask=tissue_mask, image_key=image_key)
     matrix = _stain_matrix(od, method, params, image_key=image_key, reference=reference, max_angle_deg=max_angle_deg)
@@ -212,7 +211,6 @@ def apply_decomposition(
     """
     _check_channel_dim(image_rgb)
     bg = reference.white_point
-    # `params` is `total=False`, so resolve rather than assume every key is present.
     params = resolve_params(params, MacenkoParams if reference.method == "macenko" else VahadaneParams)
 
     od_src = _tissue_od(
