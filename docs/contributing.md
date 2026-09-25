@@ -169,7 +169,10 @@ Consider enabling this option for [ruff][ruff-editors] and [biome][biome-editors
 
 ### Conventions
 
-- **Keyword-only arguments**: a public function takes its data object (`adata`, `sdata` or `data`) positionally, and every other argument is keyword-only, e.g. `def nhood_enrichment(adata, *, cluster_key, ...)`.
+- **Keyword-only arguments**: a public function takes its data object (`adata`, `sdata` or `data`) positionally, and every other argument is keyword-only, e.g. `def nhood_enrichment(adata, *, cluster_key, ...)`. Avoid catch-all `**kwargs` that forward whatever they are given unchecked.
+- **Parameter bags**: a `*Params` {class}`~typing.TypedDict` in {mod}`squidpy.types`, each key declaring its default as `Annotated[type, Default(value)]`, only when the knobs depend on another argument (one bag per `method`, taken as `method_params`) or several functions share them (taken as `**kwargs: Unpack[XParams]`). Resolve it with `resolve_params` from `squidpy._params`, so unknown keys raise, and keep its keys out of the signature.
+- **Fits**, returned by one function for others to consume, are frozen dataclasses with methods (e.g. `.transform`). Pass them whole.
+- **Results**, returned instead of writing into the input, are {class}`~typing.NamedTuple`s.
 - **Randomness**: take `rng: SeedLike | RNGLike | None = None` ([SPEC 7](https://scientific-python.org/specs/spec-0007/)), never `seed`/`random_state`. Spawn one generator per independent task with `rng.spawn(n)`, and pass `legacy_random(rng)` to APIs that only take an integer seed.
 - **Warnings**: `warnings.warn` for anything about the call: deprecations (`FutureWarning`) and arguments whose effect the caller may not expect, such as clusters dropped by `min_cell_count` (`UserWarning`). What the computation is doing, such as the PCA it runs, goes through `logg`.
 
