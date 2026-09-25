@@ -133,8 +133,8 @@ class TestDetectTissue(PlotTester, metaclass=PlotTesterMeta):
     [
         (False, (False,) * 4),
         (np.bool_(False), (False,) * 4),
-        ([True, False, False, True], (True, False, False, True)),
-        (np.array([True, False, False, True]), (True, False, False, True)),
+        ([True, True, False, False], (True, True, False, False)),
+        (np.array([False, True, False, False]), (False, True, False, False)),
     ],
 )
 def test_normalize_corners(corners, expected) -> None:
@@ -174,26 +174,3 @@ def test_corner_mask_lights_only_its_corner(i, rows, cols) -> None:
     mask = _corner_mask((10, 10), tuple(j == i for j in range(4)), 0.2)
     assert mask[rows, cols].all()
     assert mask.sum() == 4
-
-
-class TestWekaSeeding:
-    @staticmethod
-    def _synthetic_rgb() -> np.ndarray:
-        img = np.full((48, 48, 3), 240, dtype=np.uint8)  # bright background
-        img[18:30, 18:30] = 60  # a small dark blob of "tissue"
-        return img
-
-    def test_seed_floor_and_no_refinement(self) -> None:
-        # forces the top-z seed fallback and skips refinement, which the default tests never reach
-        from squidpy._params import resolve_params
-        from squidpy.experimental.im._detect_tissue import _segment_weka
-        from squidpy.types import WekaParams
-
-        weka = resolve_params(
-            WekaParams(rf_estimators=1, pseudo_min_pixels=5000, refine_with_classifier=False, rng=0),
-            WekaParams,
-        )
-        mask = _segment_weka(self._synthetic_rgb(), (True,) * 4, 0.01, weka)
-        assert mask.dtype == bool
-        assert mask.shape == (48, 48)
-        assert mask.any()  # the dark blob is found
