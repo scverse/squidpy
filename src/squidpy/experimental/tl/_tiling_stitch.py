@@ -112,8 +112,6 @@ def _resolve_stitch_params(stitch_params: StitchParams | Mapping[str, Any] | Non
 _METHOD_KEY = "tiling_stitch"
 _STITCH_DEFAULTS = StitchParams()
 
-_STITCH_COLUMNS = ("stitch_group_id", "is_stitched", "n_pieces", "stitch_confidence")
-
 
 # Dataclasses
 
@@ -809,11 +807,6 @@ def assign_stitch_groups(
         raise ValueError(f"QC table '{table_key}' is missing 'is_outlier'; re-run calculate_tiling_qc.")
     if "label_id" not in adata.obs.columns:
         raise ValueError(f"QC table '{table_key}' is missing 'label_id'.")
-
-    existing = [c for c in _STITCH_COLUMNS if c in adata.obs.columns]
-    if existing:
-        logg.warning(f"Overwriting existing stitch columns: {existing}.")
-        adata.obs.drop(columns=existing, inplace=True)
 
     # Resolve which labels DataArray was used at QC time (multi-scale aware).
     qc_params = adata.uns.get("tiling_qc", {})
