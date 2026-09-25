@@ -124,7 +124,6 @@ class TestResolveReinhardParams:
 
     @pytest.mark.parametrize("bad", [0.0, -0.1, 1.5])
     def test_threshold_bounds(self, bad: float) -> None:
-        # validation moved from `__post_init__` to the resolve boundary
         with pytest.raises(ValueError, match="luminosity_threshold"):
             resolve_params({"luminosity_threshold": bad}, ReinhardParams)
 

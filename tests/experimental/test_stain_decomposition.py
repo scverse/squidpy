@@ -120,7 +120,6 @@ class TestResolvers:
 
     @pytest.mark.parametrize("bad", [0.0, 50.0, -1.0])
     def test_macenko_alpha_bounds(self, bad: float) -> None:
-        # validation moved from `__post_init__` to the resolve boundary
         with pytest.raises(ValueError, match="alpha"):
             resolve_params({"alpha": bad}, MacenkoParams)
 
