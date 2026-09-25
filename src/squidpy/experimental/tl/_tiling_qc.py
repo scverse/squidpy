@@ -50,7 +50,6 @@ from squidpy.experimental.im._tiling import (
     compute_cell_info_tiled,
     extract_labels_tile_lazy,
 )
-from squidpy.experimental.tl._tiling_stitch import _STITCH_COLUMNS, _STITCH_PARAM_KEYS, StitchParams
 from squidpy.experimental.utils._labels import resolve_labels_array
 from squidpy.experimental.utils._params import resolve_params
 
@@ -704,23 +703,12 @@ def _warn_if_dropping_stitch_columns(sdata: sd.SpatialData, table_key: str, labe
     """
     if table_key not in sdata.tables:
         return
-    existing = sdata.tables[table_key]
-    present = [c for c in _STITCH_COLUMNS if c in existing.obs.columns]
-    if not present:
+    stitch = sdata.tables[table_key].uns.get("tiling_stitch")
+    if stitch is None:
         return
-
-    prev_params = existing.uns.get("tiling_stitch", {}) if hasattr(existing, "uns") else {}
-    parts = [f"labels_key={labels_key!r}"]
-    parts.extend(f"{k}={v!r}" for k, v in prev_params.items() if k in _STITCH_PARAM_KEYS)
-    nested = prev_params.get("stitch_params")
-    if isinstance(nested, dict) and nested:
-        defaults = asdict(StitchParams())
-        diff = {k: v for k, v in nested.items() if k in defaults and defaults[k] != v}
-        if diff:
-            parts.append(f"stitch_params={diff!r}")
+    parts = [f"labels_key={labels_key!r}", *(f"{k}={v!r}" for k, v in stitch["params"].items())]
     rerun = f"sq.experimental.tl.assign_stitch_groups(sdata, {', '.join(parts)})"
     logg.warning(
-        f"Re-running calculate_tiling_qc dropped previous stitch columns "
-        f"({', '.join(present)}) from sdata.tables[{table_key!r}].  "
+        f"Re-running calculate_tiling_qc dropped the previous stitch columns from sdata.tables[{table_key!r}].  "
         f"To restore them, run: {rerun}"
     )

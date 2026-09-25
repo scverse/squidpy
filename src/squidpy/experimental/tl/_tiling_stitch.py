@@ -112,12 +112,7 @@ def _resolve_stitch_params(stitch_params: StitchParams | Mapping[str, Any] | Non
 _METHOD_KEY = "tiling_stitch"
 _STITCH_DEFAULTS = StitchParams()
 
-# Contract between calculate_tiling_qc and assign_stitch_groups.  _STITCH_COLUMNS
-# is the obs columns stitch writes back into the QC table; _STITCH_PARAM_KEYS
-# is the subset of top-level kwargs valid for re-running assign_stitch_groups
-# (the advanced tuning lives in a nested ``stitch_params`` dict).
 _STITCH_COLUMNS = ("stitch_group_id", "is_stitched", "n_pieces", "stitch_confidence")
-_STITCH_PARAM_KEYS = frozenset({"min_confidence", "max_gap", "max_group_size"})
 
 
 # Dataclasses
@@ -901,10 +896,12 @@ def assign_stitch_groups(
             pieces_dist[key] = pieces_dist.get(key, 0) + 1
 
     adata.uns[_METHOD_KEY] = {
-        "min_confidence": float(min_confidence),
-        "max_gap": float(max_gap),
-        "max_group_size": int(max_group_size),
-        "stitch_params": asdict(params),
+        "params": {
+            "min_confidence": float(min_confidence),
+            "max_gap": float(max_gap),
+            "max_group_size": int(max_group_size),
+            "stitch_params": asdict(params),
+        },
         "n_outliers": int(n_outliers),
         "n_candidate_pairs": int(len(pairs)),
         "n_stitched_groups": int(n_groups),
