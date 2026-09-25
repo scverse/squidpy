@@ -139,8 +139,8 @@ def _blur_conserving(histogram: np.ndarray, *, sigma: float) -> np.ndarray:
 
 def rasterize_points(
     sdata: SpatialData,
-    points_key: str,
     *,
+    points_key: str,
     dx: float = 30.0,
     blur: float | Sequence[float] = 1.0,
     expand: float = 1.1,
