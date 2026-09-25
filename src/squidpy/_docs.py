@@ -245,15 +245,6 @@ _niche_min_niche_size = """\
 min_niche_size
     Minimum number of observations required for a niche. Niches with fewer observations
     are relabeled ``'not_a_niche'``."""
-_niche_library_key = """\
-library_key
-    Key in :attr:`anndata.AnnData.obs` grouping the observations into libraries. Each is clustered
-    on its own slice of the graphs, so a graph with edges between libraries loses them and warns.
-    :func:`~squidpy.gr.spatial_neighbors` builds one per library. Labels are prefixed
-    ``lib=<id>_`` and each library is fitted separately, so a niche in one library does not
-    correspond to the same-numbered niche in another. For niches that are comparable across
-    libraries, leave this unset and pass a batch-corrected representation through ``use_rep``,
-    with the graph built per library."""
 _niche_cluster_mask = """\
 cluster_mask
     Boolean :class:`pandas.Series` indexed like :attr:`anndata.AnnData.obs`. ``False``
@@ -530,7 +521,6 @@ d = DocstringProcessor(
     groups=_groups,
     plotting_library_id=_plotting_library_id,
     library_key=_library_key,
-    niche_library_key=_niche_library_key,
     niche_cluster_mask=_niche_cluster_mask,
     niche_key_added_stem=_niche_key_added_stem,
     niche_spatial_conn_key=_niche_spatial_conn_key,

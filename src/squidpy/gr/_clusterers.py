@@ -13,9 +13,9 @@ from sklearn.base import BaseEstimator, ClusterMixin
 class Clusterer(Protocol):
     """Assigns one cluster label per observation, and can be re-fitted with a new seed.
 
-    ``get_params``/``set_params`` are part of it because the niche pipeline fits once per
-    library: every fit goes to a fresh :func:`~sklearn.base.clone`, so the estimator handed
-    in is never mutated, and cloning needs nothing beyond those two.
+    ``get_params``/``set_params`` are part of it because the niche pipeline seeds every fit
+    through ``set_params`` on a fresh :func:`~sklearn.base.clone`, so the estimator handed in
+    is never mutated, and cloning needs nothing beyond those two.
     """
 
     def fit_predict(self, X: Array) -> Array:
@@ -75,5 +75,7 @@ class LeidenClusterer(ClusterMixin, BaseEstimator):
             **kwargs,
         )
 
-        self.labels_ = shell.obs["niche"].to_numpy()
+        # integer labels, as sklearn's clusterers give; scanpy orders the categories numerically,
+        # so each code is its label
+        self.labels_ = shell.obs["niche"].cat.codes.to_numpy()
         return self

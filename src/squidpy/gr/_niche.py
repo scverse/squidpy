@@ -104,7 +104,10 @@ def calculate_niche(
             - `{fla.UTAG.s!r}` - use utag algorithm (matrix multiplication).
             - `{fla.SPATIALLEIDEN.s!r}` - cluster spatially resolved omics data using Multiplex Leiden.
             - `{fla.CELLCHARTER.s!r}` - a simplified version of CellCharter's approach, using PCA for dimensionality reduction. An arbitrary embedding can be used instead of PCA by setting the `use_rep` parameter which will try to find the embedding in `adata.obsm`.
-    %(niche_library_key)s
+    library_key
+        No longer supported, and raises if set. It fitted a separate model per library, so a
+        niche in one library was unrelated to the same-numbered niche in another. Build the
+        graphs per library with :func:`~squidpy.gr.spatial_neighbors` and leave this unset.
     %(table_key)s
     mask
         Boolean array to filter cells which won't get assigned to a niche. Spelled
@@ -182,6 +185,14 @@ def calculate_niche(
         stacklevel=3,
     )
 
+    if library_key is not None:
+        raise ValueError(
+            "'library_key' fitted a separate model per library, so a niche in one library was "
+            "unrelated to the same-numbered niche in another, and no flavor takes it any more. "
+            "Build the graphs per library with `spatial_neighbors(..., library_key=...)` and leave "
+            "this unset; for per-library niches, call the flavor on each library's subset."
+        )
+
     # cellcharter-only defaults stay guarded: filling them for other flavors would trip
     # the "not used for flavor" warning in _check_unnecessary_args
     if mask is not None and flavor == "spatialleiden":
@@ -202,7 +213,6 @@ def calculate_niche(
     _validate_niche_args(
         data,
         flavor,
-        library_key,
         table_key,
         groups,
         n_neighbors,
@@ -291,7 +301,6 @@ def calculate_niche(
             use_weights=use_weights,
             rng=rng,
             min_niche_size=min_niche_size,
-            library_key=library_key,
             copy=not inplace,
             table_key=table_key,
         )
@@ -717,7 +726,6 @@ def calculate_niche_spatialleiden(
     rng: SeedLike | RNGLike | None = None,
     key_added: str = "spatialleiden",
     min_niche_size: int | None = None,
-    library_key: str | None = None,
     copy: bool = False,
     table_key: str | None = None,
 ) -> AnnData | None:
@@ -743,11 +751,9 @@ def calculate_niche_spatialleiden(
     use_weights
         Whether to use edge weights during clustering.
     %(rng)s
-        Each resolution — and each library when stratifying by ``library_key`` — is
-        clustered with an independent rng derived from it.
+        Each resolution is clustered with an independent rng derived from it.
     %(niche_min_niche_size)s
     %(niche_key_added_stem)s
-    %(niche_library_key)s
     %(copy)s
     %(table_key)s
 
@@ -755,17 +761,12 @@ def calculate_niche_spatialleiden(
     -------
     If ``copy = True``, returns a copy of ``adata`` with niche annotations added to ``.obs``.
     Otherwise, modifies ``adata`` in place and returns ``None``.
-
-    Notes
-    -----
-    If ``library_key`` is provided, clustering is performed independently for
-    each library and the results are merged back into the parent object.
     """
-
     resolution_list = _resolution_values(resolutions, pairs_ok=True)
+    rng = np.random.default_rng(rng)
 
-    def run_one(adata: AnnData, rng: np.random.Generator, prefix: str | None) -> list[str]:
-        return _spatialleiden_once(
+    def run(adata: AnnData) -> None:
+        _spatialleiden_once(
             adata,
             key_added=key_added,
             resolution_list=resolution_list,
@@ -776,26 +777,9 @@ def calculate_niche_spatialleiden(
             n_iterations=n_iterations,
             use_weights=use_weights,
             min_niche_size=min_niche_size,
-            prefix=prefix,
         )
 
-    # the pipeline runs once over everything; `library_key` opts into the per-library loop, which
-    # is the shape the other flavors have already left behind
-    if library_key is not None:
-        return _stratify(
-            data,
-            library_key=library_key,
-            rng=rng,
-            table_key=table_key,
-            copy=copy,
-            graph_keys=(latent_connectivities_key, spatial_connectivities_key),
-            # loop, _on_table, _stratify, this function, the caller
-            stacklevel=5,
-            run_one=run_one,
-        )
-
-    rng = np.random.default_rng(rng)
-    return _on_table(data, table_key=table_key, copy=copy, work=lambda adata: run_one(adata, rng, None))
+    return _on_table(data, table_key=table_key, copy=copy, work=run)
 
 
 @d.dedent
@@ -866,8 +850,7 @@ def calculate_niche_custom(
         # called here, not via a helper: another frame would shift the warnings' stacklevel
         embedding = embedder(adata)
         adata.obsm[embedding_key_added] = embedding
-        columns = _fit_clusterers(adata, embedding, clusterers, rng, keep=keep)
-        _postprocess_niche_results(adata, columns, min_niche_size, None)
+        _fit_clusterers(adata, embedding, clusterers, rng, keep=keep, min_niche_size=min_niche_size)
 
     return _on_table(data, table_key=table_key, copy=copy, work=run)
 
@@ -875,7 +858,6 @@ def calculate_niche_custom(
 def _validate_niche_args(
     data: AnnData | SpatialData,
     flavor: Literal["neighborhood", "utag", "cellcharter", "spatialleiden"],
-    library_key: str | None,
     table_key: str | None,
     groups: str | None,
     n_neighbors: int | None,
@@ -915,12 +897,6 @@ def _validate_niche_args(
 
     if isinstance(data, SpatialData) and table_key is None:
         raise TypeError("missing required keyword-only argument: 'table_key'")
-
-    if library_key is not None:
-        assert_isinstance(library_key, str, name="library_key")
-        adata = extract_adata_if_sdata(data, table_key=table_key)
-        if library_key not in adata.obs.columns:
-            raise ValueError(f"'library_key' must be a column in 'adata.obs', got {library_key}")
 
     if n_neighbors is not None:
         assert_isinstance(n_neighbors, int, name="n_neighbors")
@@ -1003,15 +979,6 @@ def _validate_niche_args(
         param_value = locals()[param_name]
         if param_value is None:
             raise ValueError(f"'{param_name}' is required for flavor '{flavor}'")
-
-    if library_key is not None and flavor != "spatialleiden":
-        raise ValueError(
-            f"'library_key' fitted a separate model per library, so a niche in one library was "
-            f"unrelated to the same-numbered niche in another. {flavor!r} no longer takes one; "
-            "only 'spatialleiden' still does. Build the graph with "
-            "`spatial_neighbors(..., library_key=...)` and leave this unset, passing a "
-            "batch-corrected representation through 'use_rep' where the flavor takes one."
-        )
 
     _check_unnecessary_args(
         flavor,
@@ -1126,6 +1093,12 @@ def _check_unnecessary_args(flavor: str, param_dict: dict[str, Any], param_specs
 NicheEmbedder = Callable[[AnnData], Array]
 
 
+def _has_edge_weights(adata: AnnData, key: str) -> bool:
+    """True when the graph carries values other than 0 and 1."""
+    weights = adata.obsp[key].data
+    return bool(weights.size) and not np.array_equal(weights, weights.astype(bool))
+
+
 def _nhood_profile_embedding(
     adata: AnnData,
     *,
@@ -1143,6 +1116,18 @@ def _nhood_profile_embedding(
         raise ValueError(
             f"'n_hop_weights' has {len(n_hop_weights)} value(s) but 'distance' is {distance}. "
             f"Earlier versions padded a short list with its last value; pass all {distance}."
+        )
+
+    if _has_edge_weights(adata, spatial_connectivities_key):
+        warnings.warn(
+            f"'{spatial_connectivities_key}' carries non-binary edge weights. They weight hop 1, "
+            "so the profile is the share of connectivity reaching each category rather than the "
+            "share of neighboring cells. Set them to 1 for a plain composition. Hops past the "
+            "first are unweighted either way, since only edges carry weights.",
+            UserWarning,
+            # `_on_table`, the pipeline's `run` and the embedder sit in between. Still one short
+            # through `calculate_niche`.
+            stacklevel=6,
         )
 
     profile = nhood_aggregate(
@@ -1191,15 +1176,14 @@ def _nhop_pca_embedding(
     hops = range(distance + 1)
     _assert_hop_request(adata, spatial_connectivities_key, hops)
 
-    weights = adata.obsp[spatial_connectivities_key].data
-    if weights.size and not np.array_equal(weights, weights.astype(bool)):
+    if _has_edge_weights(adata, spatial_connectivities_key):
         warnings.warn(
             f"'{spatial_connectivities_key}' carries non-binary edge weights, which this flavor "
-            "ignores: the hop rings are boolean, as in CellCharter. Use the 'neighborhood' flavor "
-            "if the weights should count.",
+            "ignores entirely: the hop rings are boolean, as in CellCharter. The 'neighborhood' "
+            "flavor weights hop 1 by them.",
             UserWarning,
-            # `_stratify`, `run_one` and the `partial` sit in between. Still one short through
-            # `calculate_niche`.
+            # `_on_table`, the pipeline's `run` and the embedder sit in between. Still one short
+            # through `calculate_niche`.
             stacklevel=6,
         )
 
@@ -1303,6 +1287,7 @@ def _fit_clusterers(
     rng: np.random.Generator,
     *,
     keep: NDArray[np.bool_] | None = None,
+    min_niche_size: int | None = None,
 ) -> list[str]:
     """Fit each clusterer on *embedding* and write its labels, returning the column names.
 
@@ -1328,8 +1313,25 @@ def _fit_clusterers(
         else:
             labels = np.full(adata.n_obs, "not_a_niche", dtype=object)
             labels[keep] = np.asarray(fit.fit_predict(embedding[keep])).astype(str)
-        adata.obs[column] = pd.Categorical(labels)
+        adata.obs[column] = _niche_labels(labels, min_niche_size)
     return list(clusterers)
+
+
+def _niche_labels(labels: NDArray[np.str_] | NDArray[np.object_], min_niche_size: int | None) -> pd.Categorical:
+    """String niche labels as a categorical, niches under *min_niche_size* relabeled ``'not_a_niche'``."""
+    if min_niche_size is not None:
+        niches, counts = np.unique(labels, return_counts=True)
+        labels = np.where(np.isin(labels, niches[counts < min_niche_size]), "not_a_niche", labels)
+    # the categories order the legend and the colors, so keep `sc.tl.leiden`'s: 0, 1, 2, ... 10
+    return pd.Categorical(labels, categories=sorted(np.unique(labels), key=_label_order))
+
+
+def _label_order(label: str) -> tuple[bool, int, str]:
+    """Numeric labels in numeric order, then any other label as text."""
+    try:
+        return False, int(label), ""
+    except ValueError:
+        return True, 0, label
 
 
 ############
@@ -1357,85 +1359,6 @@ def _on_table(
     return adata if copy else None
 
 
-def _stratify(
-    data: AnnData | SpatialData,
-    *,
-    library_key: str,
-    rng: SeedLike | RNGLike | None,
-    table_key: str | None,
-    copy: bool,
-    graph_keys: Sequence[str],
-    # the caller counts it, since only one flavor reaches here
-    stacklevel: int,
-    run_one: Callable[[AnnData, np.random.Generator, str | None], list[str]],
-) -> AnnData | None:
-    """Fit one model per library and merge the labels back.
-
-    Deprecated shape: the pipeline in `calculate_niche_custom` fits one model over everything,
-    which is what makes labels comparable between libraries. Only `calculate_niche_spatialleiden`
-    still comes through here, because it clusters the graphs themselves rather than an embedding.
-    """
-
-    rng = np.random.default_rng(rng)
-
-    def loop(adata: AnnData) -> None:
-        assert_key_in_adata(adata, library_key, attr="obs")
-
-        # slicing per library only preserves a graph with no edges across them
-        libraries = np.asarray(adata.obs[library_key])
-        for key in graph_keys:
-            if key not in adata.obsp:
-                continue
-            edges = adata.obsp[key].tocoo()
-            crossing = int((libraries[edges.row] != libraries[edges.col]).sum())
-            if crossing:
-                warnings.warn(
-                    f"'{key}' has {crossing} of {edges.nnz} edges between libraries, and stratifying "
-                    f"by '{library_key}' keeps only the within-library ones. Those edges are dropped "
-                    "rather than replaced, so the kept observations lose neighbors instead of finding "
-                    "new ones. Build the graph per library — `spatial_neighbors(..., library_key=...)` "
-                    "does this, and takes any `obsm` through `spatial_key`.",
-                    UserWarning,
-                    stacklevel=stacklevel,
-                )
-        logg.info(f"Stratifying by library_key '{library_key}'")
-
-        # each library is an independent clustering problem, so it gets its own rng
-        # (indexed by `itr` so that skipped empty libraries don't shift the others)
-        library_ids = adata.obs[library_key].unique()
-        library_rngs = rng.spawn(len(library_ids))
-
-        added_columns: list[str] = []
-        seeded: set[str] = set()
-
-        for itr, lib_id in enumerate(library_ids):
-            logg.info(f"Processing library '{lib_id}'")
-            lib_indices = adata.obs[adata.obs[library_key] == lib_id].index
-            if len(lib_indices) == 0:
-                logg.warning(f"Library '{lib_id}' contains no cells, skipping")
-                continue
-
-            lib_adata = adata[lib_indices].copy()
-            result_columns = run_one(lib_adata, library_rngs[itr], f"lib={lib_id}_")
-            for col in result_columns:
-                if col not in seeded:
-                    # a fresh object column: a previous run leaves a categorical here, which would
-                    # reject this run's unseen labels and silently keep the old ones
-                    adata.obs[col] = "not_a_niche"
-                    seeded.add(col)
-                adata.obs.loc[lib_indices, col] = list(lib_adata.obs[col].astype("str"))
-            added_columns = result_columns
-
-        if len(library_ids) > 0 and len(added_columns) == 0:
-            raise ValueError(f"no observation has a '{library_key}', so no niche could be assigned")
-
-        # the per-library labels go in as strings, so cast once every library has been seen
-        for col in added_columns:
-            adata.obs[col] = adata.obs[col].astype("category")
-
-    return _on_table(data, table_key=table_key, copy=copy, work=loop)
-
-
 def _spatialleiden_once(
     adata: AnnData,
     *,
@@ -1448,9 +1371,8 @@ def _spatialleiden_once(
     n_iterations: int,
     use_weights: bool | tuple[bool, bool],
     min_niche_size: int | None,
-    prefix: str | None,
-) -> list[str]:
-    """One SpatialLeiden run per resolution, in place; returns the columns written."""
+) -> None:
+    """One SpatialLeiden run per resolution, in place."""
     try:
         import spatialleiden as sl
     except ImportError as e:
@@ -1472,49 +1394,7 @@ def _spatialleiden_once(
             directed=False,
             key_added=f"{key_added}_res={res}",
         )
-
-    result_columns = [f"{key_added}_res={res}" for res in resolution_list]
-    _postprocess_niche_results(adata, result_columns, min_niche_size, prefix)
-    return result_columns
-
-
-def _postprocess_niche_results(
-    adata: AnnData,
-    result_columns: list[str],
-    min_niche_size: int | None = None,
-    prefix: str | None = None,
-) -> None:
-    """Refine niche assignments in place, rewriting each column in ``result_columns``.
-
-    Parameters
-    ----------
-    adata
-        Annotated data matrix.
-    result_columns
-        Columns in ``adata.obs`` holding the niche assignments to refine.
-    min_niche_size
-        Niches with fewer than this many observations are relabeled ``"not_a_niche"``.
-    prefix
-        Prepended to every niche label, used to keep labels unique across libraries.
-
-    Notes
-    -----
-    Columns are modified in place, so the niche column name does not depend on
-    which of these options were supplied.
-    """
-    if min_niche_size is None and prefix is None:
-        return
-
-    for col in result_columns:
-        # str, so that "not_a_niche" and prefixed labels can be assigned regardless of the clusterer's dtype
-        labels = adata.obs[col].astype(str)
-
-        if min_niche_size is not None:
-            counts = labels.value_counts()
-            too_small = counts[counts < min_niche_size].index
-            labels[labels.isin(too_small)] = "not_a_niche"
-
-        if prefix is not None:
-            labels = prefix + labels
-
-        adata.obs[col] = labels.astype("category")
+        # `sl.spatialleiden` writes its labels into `obs` rather than returning them, so read them
+        # back and finish them as every other flavor's are: string labels, small niches relabeled
+        column = f"{key_added}_res={res}"
+        adata.obs[column] = _niche_labels(adata.obs[column].to_numpy().astype(str), min_niche_size)
