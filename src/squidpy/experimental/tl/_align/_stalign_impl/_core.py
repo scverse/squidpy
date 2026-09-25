@@ -35,7 +35,7 @@ def jax_dtype() -> jnp.dtype:
 def reverse_axes(ndim: int) -> jax.Array:
     """Homogeneous ``(ndim + 1, ndim + 1)`` matrix reversing the spatial axis order.
 
-    The solver works in array order -- ``(y, x)`` at rank 2, ``(z, y, x)`` at rank 3 --
+    The solver works in array order (``(y, x)`` at rank 2, ``(z, y, x)`` at rank 3)
     while callers speak ``(x, y)`` / ``(x, y, z)``. Conjugating an affine by this matrix
     converts between the two conventions, and being its own inverse it serves both
     directions.
@@ -73,7 +73,7 @@ def interp(
     ``mode`` is the out-of-domain rule, ``"nearest"`` being upstream's
     ``padding_mode="border"``. ``order`` is the interpolation: 1 for the linear sampling
     the objective uses, 0 for nearest-neighbour, which is what reading integer structure
-    ids off an annotation volume requires -- averaging two ids yields a third, unrelated
+    ids off an annotation volume requires: averaging two ids yields a third, unrelated
     one.
     """
     arr = jnp.asarray(image)
@@ -83,8 +83,8 @@ def interp(
         raise ValueError(
             f"Expected interpolation coordinates to have leading axis of size {ndim}, found `{coords.shape}`."
         )
-    # A single-sample axis has no step to divide by, and `x[axis][1]` on it does not raise
-    # -- JAX clamps out-of-bounds indices, so the step comes out as zero and every sampled
+    # A single-sample axis has no step to divide by, and `x[axis][1]` on it does not raise:
+    # JAX clamps out-of-bounds indices, so the step comes out as zero and every sampled
     # value is silently inf or nan. Guarded here because this is the one place every
     # caller's coordinates get converted to indices.
     for axis, values in enumerate(x):
@@ -160,7 +160,7 @@ def _contrast_transform(source_image: jax.Array, target_image: jax.Array, weight
 
     The coefficients are held constant with respect to the optimisation. This is an
     expectation-maximisation M step, solved exactly at the current estimate, not a
-    quantity to descend on -- differentiating through the solve would silently turn the
+    quantity to descend on: differentiating through the solve would silently turn the
     alternating minimisation into a joint one and change the search direction.
     """
     flat_source = source_image.reshape(source_image.shape[0], -1)
@@ -297,7 +297,7 @@ def _velocity_axes(velocity: jax.Array) -> tuple[int, ...]:
 #: Comparison-only escape hatch, read once at trace time so it stays a static branch.
 #: Set it and the regularisation *energy* transforms only the first two spatial axes,
 #: reproducing upstream's rank-3 line (``STalign.py:1504``) instead of the correct one.
-#: Never set this for real work -- see :func:`_reg_energy_axes`.
+#: Never set this for real work: see :func:`_reg_energy_axes`.
 _UPSTREAM_REG_ENERGY_AXES = "SQUIDPY_STALIGN_UPSTREAM_REG_ENERGY_AXES"
 
 
@@ -306,7 +306,7 @@ def _reg_energy_axes(velocity: jax.Array) -> tuple[int, ...]:
 
     Every spatial axis, matching :func:`_velocity_axes` and therefore the Sobolev smoothing
     applied to this energy's gradient. That agreement is the whole point, so this returns the
-    same axes -- unless :envvar:`SQUIDPY_STALIGN_UPSTREAM_REG_ENERGY_AXES` is set, in which
+    same axes: unless :envvar:`SQUIDPY_STALIGN_UPSTREAM_REG_ENERGY_AXES` is set, in which
     case it returns only the first two and squidpy reproduces upstream's rank-3 energy.
 
     That switch exists to *measure* the divergence, not to offer it. Upstream's rank-3 energy
@@ -578,7 +578,7 @@ def lddmm(
     patience
         Window for the ``tol`` test. Compared against ``patience`` iterations ago rather
         than the previous step because the mixture weights only move every 5th iteration,
-        so the objective plateaus and then jumps -- a one-step test would stop on a
+        so the objective plateaus and then jumps: a one-step test would stop on a
         plateau.
 
     The rank is read off ``len(xI)``: two axes registers a section onto a section, three
@@ -644,7 +644,7 @@ def lddmm(
     estimate_muB = muB is None
 
     # Precomputed here in Python so the diffeo-phase step sizes stay bit-identical to
-    # `epL / 10.0` -- the `(it >= diffeo_start) * 9` scaling at STalign.py:1205-1206 --
+    # `epL / 10.0` (the `(it >= diffeo_start) * 9` scaling at STalign.py:1205-1206)
     # rather than being derived from a traced scalar at the solver's active precision.
     final = _lddmm_run(
         linear,

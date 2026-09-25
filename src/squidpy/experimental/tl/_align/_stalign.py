@@ -50,7 +50,7 @@ def _check_direction(value: object) -> None:
 class StalignFit:
     """A fitted STalign diffeomorphism.
 
-    The base of the three concrete fits --
+    The base of the three concrete fits:
     :class:`~squidpy.experimental.tl.StalignObsFit`,
     :class:`~squidpy.experimental.tl.StalignImageFit` and
     :class:`~squidpy.experimental.tl.StalignVolumeFit`, one per ``stalign_align_*`` entry
@@ -61,22 +61,22 @@ class StalignFit:
 
     """
 
-    #: Homogeneous affine in the solver's row-column order -- ``(3, 3)`` at rank 2,
+    #: Homogeneous affine in the solver's row-column order, ``(3, 3)`` at rank 2,
     #: ``(4, 4)`` at rank 3.
     affine: JaxArray
     #: The fitted velocity field, row-column.
     velocity: JaxArray
     #: The axes the velocity field lives on, row-column.
     velocity_grid: tuple[JaxArray, ...]
-    #: Raster-shaped -- the mixture model's per-pixel match posterior.
+    #: The mixture model's per-pixel match posterior, raster-shaped.
     match_weights: JaxArray | None = None
-    #: Raster-shaped -- the mixture model's per-pixel artifact posterior.
+    #: The mixture model's per-pixel artifact posterior, raster-shaped.
     artifact_weights: JaxArray | None = None
-    #: Raster-shaped -- the mixture model's per-pixel background posterior.
+    #: The mixture model's per-pixel background posterior, raster-shaped.
     background_weights: JaxArray | None = None
-    #: ``(niter,)`` -- the objective trace; slice it with :attr:`n_iter`.
+    #: The objective trace, ``(niter,)``; slice it with :attr:`n_iter`.
     energies: JaxArray | None = None
-    #: ``int`` -- the iteration the fit stopped at.
+    #: The iteration the fit stopped at.
     n_iter: int | None = None
 
     #: Dimensionality of the reference frame the fit maps into.
@@ -95,7 +95,7 @@ class StalignFit:
 
         Evaluated per point, not at the nearest raster cell, so it does not quantise to the
         fit's grid. ``"forward"`` maps the query into the reference frame, ``"backward"``
-        the reverse -- both meaningful at rank 2, where the two images are flat.
+        the reverse: both meaningful at rank 2, where the two images are flat.
         """
         import jax.numpy as jnp
 
@@ -206,12 +206,12 @@ class StalignObsFit(StalignFit):
     :meth:`~squidpy.experimental.tl.StalignFit.transform` and the ``uns`` round-trip.
 
     Both clouds are rasterised into density images at ``dx`` and those are what the fit
-    ran on -- not a frame any real image lives on, so no raster axes survive and there is
+    ran on: not a frame any real image lives on, so no raster axes survive and there is
     no ``deformation_grid`` or ``warp_image`` to resample the wrong grid with.
     """
 
     velocity_grid: tuple[JaxArray, JaxArray]
-    #: ``(N, 2)`` ``(x, y)`` -- the fitted query cloud already mapped into the reference frame.
+    #: The fitted query cloud, ``(N, 2)`` ``(x, y)``, already mapped into the reference frame.
     aligned_points: JaxArray | None = None
 
     rank: ClassVar[Literal[2]] = 2
@@ -251,7 +251,7 @@ class StalignImageFit(StalignFit):
         """The dense row-column coordinate transform of the fit, shape ``(2, *grid)``.
 
         The *same* call on the *same* fitted ``affine``/``velocity``/``velocity_grid`` that
-        the objective samples through -- not an approximation for plotting. Given the same
+        the objective samples through: not an approximation for plotting. Given the same
         axes it agrees with the internal transform exactly.
 
         ``"forward"`` evaluates the query grid in the reference frame; ``"backward"`` the
@@ -280,7 +280,7 @@ class StalignImageFit(StalignFit):
         the reference onto the query's. Resampling a *forward* map means sampling through
         the *backward* grid, which is why the two are crossed below.
 
-        ``query_axes`` / ``ref_axes`` override the axes the fit ran on -- for warping an
+        ``query_axes`` / ``ref_axes`` override the axes the fit ran on: for warping an
         image of the same scene at a different resolution than the fit used.
         """
         from ._stalign_impl._core import interp
@@ -351,7 +351,7 @@ class StalignVolumeFit(StalignFit):
         # This owns both halves of the convention change: the lift of a flat section onto the
         # `z = 0` plane, and the reversal between the caller's `(x, y, z)` and the solver's
         # `(z, y, x)`. The section is the fixed image, so mapping it into the reference is the
-        # *backward* direction -- the same map the objective samples the volume through.
+        # *backward* direction: the same map the objective samples the volume through.
         lifted = jnp.stack((jnp.zeros(pts.shape[0], dtype=pts.dtype), pts[:, 1], pts[:, 0]), axis=1)
         transformed = transform_points_row_col(
             self.velocity_grid, self.velocity, self.affine, lifted, direction="backward"
@@ -368,8 +368,8 @@ class StalignVolumeFit(StalignFit):
         """The dense row-column coordinate transform of the fit, shape ``(3, *grid)``.
 
         Which element is fixed flips with the rank, so the natural direction does too: the
-        *volume* is the moving image here, so ``"backward"`` -- evaluating the section's
-        lifted grid in the volume's frame -- is the default and the one the objective
+        *volume* is the moving image here, so ``"backward"`` (evaluating the section's
+        lifted grid in the volume's frame) is the default and the one the objective
         samples through.
         """
         import jax.numpy as jnp
@@ -392,7 +392,7 @@ class StalignVolumeFit(StalignFit):
 
 # Why the full 3D deformation rather than an affine plane plus an in-plane 2D fit: on a
 # MERFISH-into-Allen-CCF run the diffeomorphism bends the fitted surface 2-5 voxels away
-# from its affine plane for the outer 5% of cells -- one to two cortical layers. The
+# from its affine plane for the outer 5% of cells: one to two cortical layers. The
 # `initial_*` arguments are therefore an initialisation, not the answer.
 def fit_stalign_volume(
     ref: npt.ArrayLike,
@@ -460,7 +460,7 @@ def fit_stalign_volume(
     if source_image.shape[1] < 2:
         # A `(c, y, x)` section passed as the reference reads as a one-voxel-deep volume,
         # which is the likely way to arrive here. Named explicitly because there is no
-        # out-of-plane information in it to fit -- `stalign_align_image` is the 2D path.
+        # out-of-plane information in it to fit: `stalign_align_image` is the 2D path.
         raise ValueError(
             f"Expected `ref` to be a volume with at least two samples along `z`, found depth "
             f"{source_image.shape[1]}. A single plane carries no out-of-plane information; use "
@@ -500,7 +500,7 @@ def fit_stalign_volume(
         # `centre_section - linear @ centre_volume` rather than by negating the volume's z
         # and centring in-plane: the short form silently assumes the volume's own in-plane
         # axes are centred on the origin, which `centred_axes` satisfies and `_element_axes`
-        # -- what every container-level fit uses -- does not, and it leaves `linear` out of
+        # (what every container-level fit uses) does not, and it leaves `linear` out of
         # the z term so `initial_scale` moves the slice it was asked to centre on.
         centre_volume = jnp.asarray(
             [source_grid[0][slice_index], jnp.mean(source_grid[1]), jnp.mean(source_grid[2])],
@@ -558,7 +558,7 @@ def _initial_affine_and_landmarks(
 
     Shared by the point-cloud and image paths: they differ in what they rasterize, not in
     the landmark contract. Landmarks are ``(x, y)``, matched by row order, and in the same
-    units as the fit's coordinates -- cell coordinates for a point-cloud fit, the images'
+    units as the fit's coordinates: cell coordinates for a point-cloud fit, the images'
     physical axes for an image fit.
 
     The two initialisers are not exclusive. Landmarks play two roles: they always
@@ -633,7 +633,7 @@ def fit_stalign_obs(
         landmarks_ref, landmarks_query, opts.get("initial_affine")
     )
 
-    # The solver runs internally in row-col (y, x); inputs are (x, y) -- swap at the boundary.
+    # The solver runs internally in row-col (y, x); inputs are (x, y): swap at the boundary.
     source_rc = validate_points(query, name="query")[:, ::-1]
     target_rc = validate_points(ref, name="ref")[:, ::-1]
     raster = {"dx": opts["dx"], "blur": opts["blur"], "expand": opts["raster_expand"]}

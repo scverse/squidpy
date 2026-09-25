@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+import spatialdata as sd
 from anndata import AnnData
 
 from squidpy.experimental.tl import align_landmarks
@@ -26,7 +27,6 @@ def _adata(points: np.ndarray, *, key: str = "spatial") -> AnnData:
 
 
 def _shapes(points: np.ndarray, cs: str = "global"):
-    pytest.importorskip("spatialdata")
     import geopandas
     import shapely
     from spatialdata.models import ShapesModel
@@ -41,7 +41,7 @@ def _shapes(points: np.ndarray, cs: str = "global"):
 
 
 def _apply(matrix: np.ndarray, points: np.ndarray) -> np.ndarray:
-    """The returned matrix needs no squidpy helper to use -- this is the whole of it."""
+    """The returned matrix needs no squidpy helper to use: this is the whole of it."""
     return points @ matrix[:2, :2].T + matrix[:2, 2]
 
 
@@ -59,7 +59,7 @@ def test_fit_defaults_to_similarity() -> None:
     """Asserted behaviourally: 4-DOF cannot absorb a non-uniform scale, 6-DOF can.
 
     A pure translation is recovered identically by both fits, so it cannot tell them
-    apart -- a query stretched along one axis only can.
+    apart: a query stretched along one axis only can.
     """
     stretched = _REF * np.array([3.0, 1.0])
     ref, query = _adata(_REF), _adata(stretched)
@@ -72,7 +72,7 @@ def test_fit_defaults_to_similarity() -> None:
 
 
 def test_landmarks_need_not_live_in_a_shapes_element() -> None:
-    """An ``obsm`` key works too -- requiring a SpatialData just to hold four points
+    """An ``obsm`` key works too: requiring a SpatialData just to hold four points
     would tax AnnData users for nothing."""
     ref, query = _adata(_REF), _adata(_QUERY)
     result = align_landmarks(ref, query, landmark_key="landmarks", method="affine")
@@ -80,7 +80,6 @@ def test_landmarks_need_not_live_in_a_shapes_element() -> None:
 
 
 def test_table_key_reads_landmarks_from_a_table() -> None:
-    sd = pytest.importorskip("spatialdata")
     from spatialdata.models import TableModel
 
     sdata = sd.SpatialData(tables={"r": TableModel.parse(_adata(_REF)), "q": TableModel.parse(_adata(_QUERY))})
@@ -137,7 +136,7 @@ def test_key_added_alone_transforms_the_conventional_spatial_key() -> None:
 
 
 def test_spatial_key_is_only_read_when_key_added_asks_for_a_write() -> None:
-    """It names a source, so on its own there is nothing to do -- and nothing to fail on."""
+    """It names a source, so on its own there is nothing to do: and nothing to fail on."""
     ref, query = _adata(_REF), _adata(_QUERY)
     before = dict(query.obsm)
     matrix = align_landmarks(ref, query, landmark_key="landmarks", spatial_key="no_such_key")
@@ -167,7 +166,6 @@ def test_key_added_writes_into_the_query_itself() -> None:
 
 
 def test_registers_a_transformation_on_the_coordinate_system() -> None:
-    sd = pytest.importorskip("spatialdata")
     from spatialdata.models import PointsModel
     from spatialdata.transformations import Identity, get_transformation
 
@@ -189,7 +187,6 @@ def test_registration_composes_with_an_existing_transform() -> None:
     An element placed into ``query_cs`` by a non-identity transform must keep that
     placement, so the registered transform has to compose the two.
     """
-    sd = pytest.importorskip("spatialdata")
     from spatialdata.models import PointsModel
     from spatialdata.transformations import Translation, get_transformation
 
@@ -214,7 +211,6 @@ def test_landmarks_are_read_in_their_coordinate_system() -> None:
     The fit is registered onto ``query_cs``, so it has to be fitted on the landmarks as they
     sit there, not on their intrinsic coordinates.
     """
-    sd = pytest.importorskip("spatialdata")
     from spatialdata.models import PointsModel
     from spatialdata.transformations import Translation, get_transformation, set_transformation
 
@@ -234,7 +230,6 @@ def test_landmarks_are_read_in_their_coordinate_system() -> None:
 
 
 def test_key_added_with_shapes_landmarks_says_what_to_do() -> None:
-    sd = pytest.importorskip("spatialdata")
 
     sdata = sd.SpatialData(shapes={"lm_ref": _shapes(_REF, "ref_cs"), "lm_query": _shapes(_QUERY, "query_cs")})
     with pytest.raises(ValueError, match="use `target_coordinate_system`"):
@@ -242,7 +237,6 @@ def test_key_added_with_shapes_landmarks_says_what_to_do() -> None:
 
 
 def test_registered_result_is_stamped_with_the_coordinate_systems() -> None:
-    sd = pytest.importorskip("spatialdata")
 
     sdata = sd.SpatialData(shapes={"lm_ref": _shapes(_REF, "ref_cs"), "lm_query": _shapes(_QUERY, "query_cs")})
     align_landmarks(sdata, landmark_key=("lm_ref", "lm_query"), target_coordinate_system="aligned")
@@ -254,21 +248,18 @@ def test_registered_result_is_stamped_with_the_coordinate_systems() -> None:
 
 
 def test_shared_coordinate_system_is_refused() -> None:
-    """Registering moves everything in the coordinate system -- including the reference.
+    """Registering moves everything in the coordinate system: including the reference.
 
     With both samples in one coordinate system the write-back would drag the reference
     along with the query and silently produce a wrong answer, so it has to refuse.
     """
-    sdata = pytest.importorskip("spatialdata").SpatialData(
-        shapes={"lm_ref": _shapes(_REF, "global"), "lm_query": _shapes(_QUERY, "global")}
-    )
+    sdata = sd.SpatialData(shapes={"lm_ref": _shapes(_REF, "global"), "lm_query": _shapes(_QUERY, "global")})
     with pytest.raises(ValueError, match="both in coordinate system 'global'.*move the reference too"):
         align_landmarks(sdata, landmark_key=("lm_ref", "lm_query"), target_coordinate_system="aligned")
 
 
 def test_reference_in_another_object_is_fine() -> None:
     """Only a *shared* coordinate system is a problem; two objects cannot collide."""
-    sd = pytest.importorskip("spatialdata")
     from spatialdata.transformations import get_transformation
 
     ref_sdata = sd.SpatialData(shapes={"lm": _shapes(_REF, "global")})
@@ -282,7 +273,6 @@ def test_reference_in_another_object_is_fine() -> None:
 
 def test_ambiguous_coordinate_system_is_refused() -> None:
     """Which system moves has to be unambiguous, so exactly one is required."""
-    sd = pytest.importorskip("spatialdata")
     import geopandas
     import shapely
     from spatialdata.models import ShapesModel
@@ -299,7 +289,6 @@ def test_ambiguous_coordinate_system_is_refused() -> None:
 
 def test_table_landmarks_cannot_target_a_coordinate_system() -> None:
     """A table annotates elements; it has no coordinate system of its own to move."""
-    sd = pytest.importorskip("spatialdata")
     from spatialdata.models import TableModel
 
     def table(points: np.ndarray) -> AnnData:
@@ -332,9 +321,7 @@ def test_target_coordinate_system_needs_a_spatialdata() -> None:
 
 
 def test_missing_shapes_element_lists_what_is_available() -> None:
-    sdata = pytest.importorskip("spatialdata").SpatialData(
-        shapes={"lm_ref": _shapes(_REF), "lm_query": _shapes(_QUERY)}
-    )
+    sdata = sd.SpatialData(shapes={"lm_ref": _shapes(_REF), "lm_query": _shapes(_QUERY)})
     with pytest.raises(KeyError, match="landmark_key='nope'.*lm_query.*lm_ref"):
         align_landmarks(sdata, landmark_key=("lm_ref", "nope"))
 
