@@ -7,9 +7,10 @@ import numpy as np
 import pandas as pd
 import pytest
 import scanpy as sc
-from anndata import AnnData
+from anndata import AnnData, read_h5ad
 from fast_array_utils.conv import to_dense
 from pandas import Series
+from pandas.testing import assert_frame_equal
 from scanpy.pp import neighbors
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import dijkstra
@@ -1065,3 +1066,71 @@ def test_key_added_defaults_reproduce_the_derived_names():
     adata = _tiny(n=60)
     calculate_niche_utag(adata, resolutions=1.0, n_neighbors=8, rng=0)
     assert "utag_niche_res=1.0" in adata.obs.columns
+
+
+# the stability sweep selecting the number of mixture components
+
+
+def test_niche_cellcharter_auto_k_stores_per_k_diagnostics(dummy_adata2: AnnData):
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean", rng=0, n_clusters=(2, 3), max_runs=2)
+
+    assert "cellcharter_niche" in dummy_adata2.obs.columns
+
+    diagnostics = dummy_adata2.uns["cellcharter_niche_autok"]
+    assert set(diagnostics) == {"table", "stability", "best_k", "n_runs", "converged"}
+
+    table = diagnostics["table"]
+    assert list(table.index) == [1, 2, 3, 4], "a (min, max) request gains a +-1 halo"
+    assert table.loc[[1, 4], "stability_mean"].isna().all(), "the halo is fitted but not scored"
+
+    interior = table.index[table["stability_mean"].notna()].tolist()
+    assert interior == [2, 3]
+    assert diagnostics["stability"].shape[0] == len(interior)
+    assert table["nll"].notna().all()
+    assert diagnostics["best_k"] in interior
+
+
+def test_niche_cellcharter_auto_k_store_labels(dummy_adata2: AnnData):
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    calculate_niche_cellcharter(
+        dummy_adata2, distance=2, aggregation="mean", rng=0, n_clusters=(2, 3), max_runs=2, store_labels=True
+    )
+
+    for k in dummy_adata2.uns["cellcharter_niche_autok"]["table"].index:
+        column = f"cellcharter_niche_k{k}"
+        assert column in dummy_adata2.obs.columns
+        assert dummy_adata2.obs[column].nunique() == k
+
+
+def test_niche_cellcharter_auto_k_labels_go_through_postprocessing(dummy_adata2: AnnData):
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    calculate_niche_cellcharter(
+        dummy_adata2,
+        distance=2,
+        aggregation="mean",
+        rng=0,
+        n_clusters=(2, 3),
+        max_runs=2,
+        store_labels=True,
+        min_niche_size=100,  # larger than the object, so every label is dropped
+    )
+
+    for k in dummy_adata2.uns["cellcharter_niche_autok"]["table"].index:
+        assert (dummy_adata2.obs[f"cellcharter_niche_k{k}"] == "not_a_niche").all()
+
+
+def test_niche_cellcharter_auto_k_diagnostics_roundtrip_h5ad(dummy_adata2: AnnData, tmp_path):
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean", rng=0, n_clusters=(2, 3), max_runs=2)
+
+    path = tmp_path / "niche.h5ad"
+    dummy_adata2.write_h5ad(path)
+    restored = read_h5ad(path)
+
+    original = dummy_adata2.uns["cellcharter_niche_autok"]
+    reloaded = restored.uns["cellcharter_niche_autok"]
+    assert set(reloaded) == set(original)
+    assert_frame_equal(reloaded["table"], original["table"])
+    assert reloaded["converged"] == original["converged"]
+    assert reloaded["best_k"] == original["best_k"]
