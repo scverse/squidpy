@@ -66,8 +66,8 @@ class TestDefaultsOf:
 class TestResolveContract:
     """`resolve_params` behaves the same for every params type.
 
-    The per-module test files cover what differs -- each validator's ranges,
-    coercions and `arg_name` -- and leave the shared contract to these.
+    The per-module test files cover what differs (each validator's ranges,
+    coercions and `arg_name`) and leave the shared contract to these.
     """
 
     @staticmethod
