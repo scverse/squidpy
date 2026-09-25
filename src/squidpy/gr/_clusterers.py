@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Literal, Protocol, Self, runtime_checkable
+from typing import Any, Literal, Protocol, Self, overload, runtime_checkable
 
 import anndata as ad
 import pandas as pd
@@ -28,6 +28,35 @@ class Clusterer(Protocol):
 
     def set_params(self, *, random_state: int) -> Self:
         """Seed the next fit; returns the estimator."""
+        ...
+
+
+@runtime_checkable
+class SweepableClusterer(Clusterer, Protocol):
+    """A :class:`Clusterer` whose number of clusters squidpy also sets, per fit.
+
+    The auto-K sweep fits one clusterer per candidate K and per run, each on a fresh
+    :func:`~sklearn.base.clone`, so the estimator passed in is never mutated.
+    """
+
+    @overload
+    def set_params(self, *, n_components: int, random_state: int) -> Self: ...
+
+    @overload
+    def set_params(self, *, n_clusters: int, random_state: int) -> Self: ...
+
+    @overload
+    def set_params(self, *, random_state: int) -> Self: ...
+
+    def set_params(self, **params: object) -> Self:
+        """Set the number of clusters and the seed of the next fit; returns the estimator.
+
+        ``random_state``, plus *one* of the two number-of-clusters spellings:
+        :class:`~sklearn.mixture.GaussianMixture` calls it ``n_components``,
+        :class:`~sklearn.cluster.KMeans` calls it ``n_clusters``. Which one an estimator
+        takes is a property of its parameters, not its methods, so ``isinstance`` cannot see
+        it and the sweep checks it before fitting.
+        """
         ...
 
 

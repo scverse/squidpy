@@ -28,6 +28,7 @@ from squidpy._utils import (
     legacy_random,
 )
 from squidpy._validators import assert_isinstance, assert_key_in_adata, assert_one_of
+from squidpy.gr._autok import AutoKClusterer
 from squidpy.gr._clusterers import Clusterer, LeidenClusterer
 from squidpy.gr._nhood import (
     _aggregate_over,
@@ -617,7 +618,10 @@ def calculate_niche_cellcharter(
     aggregation: str = "mean",
     rng: SeedLike | RNGLike | None = None,
     spatial_connectivities_key: str = "spatial_connectivities",
-    n_clusters: int = 10,
+    n_clusters: int | tuple[int, int] | Sequence[int] = 10,
+    max_runs: int = 10,
+    convergence_tol: float = 1e-2,
+    store_labels: bool = False,
     n_pca_components: int | None = None,
     n_jobs: int | None = None,
     use_rep: str | None = None,
@@ -683,7 +687,18 @@ def calculate_niche_cellcharter(
     %(niche_spatial_conn_key)s
     n_clusters
         Number of Gaussian mixture components, and therefore the number of niche
-        labels produced per library or dataset.
+        labels produced per library or dataset. A ``(min, max)`` tuple or a sequence of
+        candidates instead selects the most stable K, fitting each candidate up to
+        ``max_runs`` times, as :func:`~squidpy.gr.cluster_auto_k` does.
+    max_runs
+        Maximum number of repetitions per candidate K. Only used when ``n_clusters``
+        requests a sweep.
+    convergence_tol
+        Stop the sweep early once the mean stability curve changes by less than this
+        between consecutive runs.
+    store_labels
+        Also keep the labeling of every fitted K, as ``{key_added}_k{K}`` columns in
+        :attr:`anndata.AnnData.obs`.
     n_pca_components
         Number of principal components of ``adata.X`` aggregated over the hop rings. ``None``
         uses 10, the latent width scVI defaults to, or one fewer than the smallest dimension of
@@ -727,8 +742,19 @@ def calculate_niche_cellcharter(
         n_jobs=n_jobs,
     )
 
-    # `GaussianMixture` is a `Clusterer` as it stands, so this flavor needs no wrapper
-    clusterers = {key_added: GaussianMixture(n_components=n_clusters)}
+    # `GaussianMixture` is a `Clusterer` as it stands, so a fixed K needs no wrapper
+    clusterer: Clusterer
+    if isinstance(n_clusters, int | np.integer):
+        clusterer = GaussianMixture(n_components=int(n_clusters))
+    else:
+        clusterer = AutoKClusterer(
+            n_clusters=n_clusters,
+            max_runs=max_runs,
+            convergence_tol=convergence_tol,
+            store_labels=store_labels,
+            uns_key=f"{key_added}_autok",
+        )
+    clusterers = {key_added: clusterer}
 
     return calculate_niche_custom(
         data,
@@ -1339,12 +1365,18 @@ def _fit_clusterers(
             logg.info(f"Overwriting existing column '{column}'")
         # a fresh clone per fit, so the estimator handed in is never mutated
         fit = clone(clusterer).set_params(random_state=legacy_random(rng))
-        if keep is None:
-            labels = np.asarray(fit.fit_predict(embedding)).astype(str)
-        else:
-            labels = np.full(adata.n_obs, "not_a_niche", dtype=object)
-            labels[keep] = np.asarray(fit.fit_predict(embedding[keep])).astype(str)
-        adata.obs[column] = _niche_labels(labels, min_niche_size)
+        fitted = {column: fit.fit_predict(embedding if keep is None else embedding[keep])}
+        # an estimator that labels more than once (the auto-K sweep, one labeling per K)
+        # leaves the extra labelings and its diagnostics on itself
+        fitted |= {f"{column}_{suffix}": extra for suffix, extra in getattr(fit, "niche_columns_", {}).items()}
+        adata.uns.update(getattr(fit, "niche_uns_", {}))
+        for name, result in fitted.items():
+            if keep is None:
+                labels = np.asarray(result).astype(str)
+            else:
+                labels = np.full(adata.n_obs, "not_a_niche", dtype=object)
+                labels[keep] = np.asarray(result).astype(str)
+            adata.obs[name] = _niche_labels(labels, min_niche_size)
     return list(clusterers)
 
 

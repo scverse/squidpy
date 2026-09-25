@@ -135,6 +135,9 @@ spelling_filters = [
 # Link checking
 nitpicky = True  # this is linkcheck for Sphinx.
 nitpick_ignore = [
+    # a protocol, described in the prose of the functions that take it
+    ("py:class", "squidpy.gr._clusterers.SweepableClusterer"),
+    ("py:class", "SweepableClusterer"),
     ("py:func", "numba.prange"),  # no reference for this function
     ("py:class", "matplotlib_scalebar.ScaleBar"),  # this project has no sphinx docs
     # TODO: fix using scanpydoc.elegant_typehints
