@@ -1,4 +1,4 @@
-"""Defaults, validation and resolution for the ``*Params`` TypedDicts. Private."""
+"""Defaults, validation and resolution for the parameter TypedDicts. Private."""
 
 from __future__ import annotations
 
