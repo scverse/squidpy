@@ -94,10 +94,7 @@ suppress_warnings = ["download.not_readable", "git.too_shallow"]
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-# Keep documented objects (every params key, every attribute) out of the left nav:
-# it should list pages and sections, not one entry per key. Temporary: api.md renders
-# squidpy.types with `automodule :members:` here; the per-class pages of #1287 make
-# this unnecessary, and it is removed there.
+# keep the per-key entries of squidpy.types out of the left nav; #1287 removes this
 toc_object_entries = False
 autosummary_generate = True
 autodoc_member_order = "groupwise"
