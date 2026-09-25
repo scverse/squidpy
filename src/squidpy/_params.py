@@ -41,12 +41,26 @@ def defaults_of[T: Mapping[str, Any]](spec: type[T]) -> T:
 # resolve_params' copy: the merge below never hands it out, so sharing it is safe
 _cached_defaults = cache(defaults_of)
 
+_VALIDATORS: dict[type, Callable[[dict[str, Any]], None]] = {}
+
+
+def validates[F: Callable[[dict[str, Any]], None]](spec: type) -> Callable[[F], F]:
+    """Register the decorated function as the validator every ``resolve_params(..., spec)`` runs.
+
+    It coerces the merged mapping in place and raises on invalid values.
+    """
+
+    def register(validate: F) -> F:
+        _VALIDATORS[spec] = validate
+        return validate
+
+    return register
+
 
 def resolve_params[T: Mapping[str, Any]](
     params: T | Mapping[str, Any] | None,
     spec: type[T],
     *,
-    validate: Callable[[dict[str, Any]], None] | None = None,
     arg_name: str = "method_params",
 ) -> T:
     """Merge a params mapping over the defaults of *spec* and validate the result.
@@ -54,7 +68,7 @@ def resolve_params[T: Mapping[str, Any]](
     ``T`` is a :class:`~typing.TypedDict`, so callers get static key and value
     checking at the call site; this function is the dynamic half. Unknown keys
     are named rather than silently ignored (a plain ``dict`` would accept them),
-    and ``validate`` -- which coerces in place and range-checks -- runs on the
+    and the validator registered for *spec* with :func:`validates` runs on the
     *merged* mapping, so the defaults are checked on every call rather than
     trusted.
 
@@ -68,6 +82,6 @@ def resolve_params[T: Mapping[str, Any]](
         if unknown:
             raise ValueError(f"Unknown `{arg_name}` field(s): {sorted(unknown)}; expected from {sorted(defaults)}.")
     merged = {**defaults, **(params or {})}
-    if validate is not None:
+    if (validate := _VALIDATORS.get(spec)) is not None:
         validate(merged)
     return cast("T", merged)

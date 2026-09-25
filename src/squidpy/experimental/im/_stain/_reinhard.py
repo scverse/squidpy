@@ -7,12 +7,12 @@ thin ``sdata`` wrapper lives in :mod:`._normalize`.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
 import xarray as xr
 
+from squidpy._params import resolve_params, validates
 from squidpy.experimental.im._stain._conversion import (
     _apply_along_channel,
     _check_channel_dim,
@@ -22,7 +22,6 @@ from squidpy.experimental.im._stain._conversion import (
 )
 from squidpy.experimental.im._stain._mask import as_spatial_mask, foreground_mask_from_lab
 from squidpy.experimental.im._stain._reference import StainReference
-from squidpy.experimental.utils._params import resolve_params
 from squidpy.types import ReinhardParams
 
 # Numerical safeguard against divide-by-zero on flat (constant-colour)
@@ -30,17 +29,13 @@ from squidpy.types import ReinhardParams
 _SIGMA_FLOOR: float = 1e-6
 
 
+@validates(ReinhardParams)
 def validate_reinhard_params(params: dict[str, Any]) -> None:
     """Coerce ``params`` in place and range-check it. Raises on invalid values."""
     params["luminosity_threshold"] = float(params["luminosity_threshold"])
     params["mask_background"] = bool(params["mask_background"])
     if not 0.0 < params["luminosity_threshold"] <= 1.0:
         raise ValueError(f"`luminosity_threshold` must be in (0, 1], got {params['luminosity_threshold']}.")
-
-
-def _resolve_reinhard_params(method_params: ReinhardParams | Mapping[str, Any] | None) -> ReinhardParams:
-    """Normalise the ``method_params`` argument to a validated :class:`~squidpy.types.ReinhardParams`."""
-    return resolve_params(method_params, ReinhardParams, validate=validate_reinhard_params)
 
 
 def _masked_channel_stats(lab: xr.DataArray, mask: xr.DataArray | None) -> tuple[np.ndarray, np.ndarray]:
@@ -89,7 +84,7 @@ def _reinhard_mask(lab: xr.DataArray, params: ReinhardParams, tissue_mask: np.nd
 
     ``params`` is resolved here rather than assumed complete: :class:`~squidpy.types.ReinhardParams`
     is ``total=False``, so a caller may legitimately pass a partial mapping."""
-    params = _resolve_reinhard_params(params)
+    params = resolve_params(params, ReinhardParams)
     if tissue_mask is not None:
         return as_spatial_mask(tissue_mask, lab)
     if params["mask_background"]:

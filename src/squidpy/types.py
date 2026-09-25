@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Annotated, TypedDict
 
+from squidpy._params import Default
 from squidpy._utils import RNGLike, SeedLike
-from squidpy.experimental.utils._params import Default
 
 #: Pixels whose Ruderman Lab-L luminosity (normalised to ``[0, 1]``) exceeds this are
 #: treated as near-white background and excluded when fitting stain statistics.

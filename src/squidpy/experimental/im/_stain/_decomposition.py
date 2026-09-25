@@ -7,12 +7,12 @@ transform is a single per-pixel matmul and stays lazy.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
 import xarray as xr
 
+from squidpy._params import resolve_params, validates
 from squidpy._utils import legacy_random
 from squidpy._validators import assert_non_negative, assert_positive
 from squidpy.experimental.im._stain._constants import RUIFROK_HE
@@ -32,7 +32,6 @@ from squidpy.experimental.im._stain._validation import (
     reorder_to_canonical,
     validate_stain_matrix,
 )
-from squidpy.experimental.utils._params import resolve_params
 from squidpy.types import (
     MacenkoParams,
     VahadaneParams,
@@ -42,6 +41,7 @@ _MAXC_PERCENTILE = 99.0
 _MAXC_FLOOR = 1e-6
 
 
+@validates(MacenkoParams)
 def validate_macenko_params(params: dict[str, Any]) -> None:
     """Coerce ``params`` in place and range-check it. Raises on invalid values."""
     params["alpha"] = float(params["alpha"])
@@ -51,6 +51,7 @@ def validate_macenko_params(params: dict[str, Any]) -> None:
     assert_non_negative(params["beta"], name="beta")
 
 
+@validates(VahadaneParams)
 def validate_vahadane_params(params: dict[str, Any]) -> None:
     """Coerce ``params`` in place and range-check it. Raises on invalid values."""
     params["beta"] = float(params["beta"])
@@ -59,14 +60,6 @@ def validate_vahadane_params(params: dict[str, Any]) -> None:
     assert_non_negative(params["beta"], name="beta")
     assert_non_negative(params["lambda1"], name="lambda1")
     assert_positive(params["n_iter"], name="n_iter")
-
-
-def _resolve_macenko_params(params: MacenkoParams | Mapping[str, Any] | None) -> MacenkoParams:
-    return resolve_params(params, MacenkoParams, validate=validate_macenko_params)
-
-
-def _resolve_vahadane_params(params: VahadaneParams | Mapping[str, Any] | None) -> VahadaneParams:
-    return resolve_params(params, VahadaneParams, validate=validate_vahadane_params)
 
 
 def _tissue_od(
@@ -180,7 +173,7 @@ def fit_decomposition(
 ) -> StainReference:
     """Fit a decomposition :class:`~squidpy.experimental.im.StainReference` (stain matrix + max concentrations)."""
     # `params` is `total=False`, so resolve rather than assume every key is present.
-    params = _resolve_macenko_params(params) if method == "macenko" else _resolve_vahadane_params(params)
+    params = resolve_params(params, MacenkoParams if method == "macenko" else VahadaneParams)
     od = _tissue_od(image_rgb, white_point, params["beta"], tissue_mask=tissue_mask, image_key=image_key)
     matrix = _stain_matrix(od, method, params, image_key=image_key, reference=reference, max_angle_deg=max_angle_deg)
     return StainReference(
@@ -220,7 +213,7 @@ def apply_decomposition(
     _check_channel_dim(image_rgb)
     bg = reference.white_point
     # `params` is `total=False`, so resolve rather than assume every key is present.
-    params = _resolve_macenko_params(params) if reference.method == "macenko" else _resolve_vahadane_params(params)
+    params = resolve_params(params, MacenkoParams if reference.method == "macenko" else VahadaneParams)
 
     od_src = _tissue_od(
         fit_rgb if fit_rgb is not None else image_rgb, bg, params["beta"], tissue_mask=tissue_mask, image_key=None

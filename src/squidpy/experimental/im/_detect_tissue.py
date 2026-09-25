@@ -21,13 +21,13 @@ from spatialdata._logging import logger
 from spatialdata.models import Labels2DModel
 from spatialdata.transformations import get_transformation
 
+from squidpy._params import resolve_params
 from squidpy._utils import (
     _ensure_dim_order,
     _get_scale_factors,
     _yx_from_shape,
     legacy_random,
 )
-from squidpy.experimental.utils._params import resolve_params
 from squidpy.types import (
     FelzenszwalbParams,
     WekaParams,
@@ -217,9 +217,8 @@ def detect_tissue(
             - `DetectTissueMethod.FELZENSZWALB` or `"felzenszwalb"` - Felzenszwalb superpixel segmentation.
             - `DetectTissueMethod.WEKA` or `"weka"` - Trainable segmentation with corner background priors and RGB multiscale features.
     method_params
-        Optional parameters specific to the selected method. For `"felzenszwalb"`, provide a
-        :class:`~squidpy.types.FelzenszwalbParams` instance or a mapping of its fields. For `"weka"`, provide a
-        :class:`~squidpy.types.WekaParams` instance or mapping. Passing values when ``method="otsu"`` is not supported.
+        Tuning for ``method``, as a dict of its ``*Params`` keys; ``None`` uses the defaults.
+        Not accepted with ``method="otsu"``, which has none.
     channel_format
         Expected format of image channels. Valid options are:
 
