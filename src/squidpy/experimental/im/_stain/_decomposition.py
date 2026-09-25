@@ -171,7 +171,7 @@ def fit_decomposition(
     reference: dict[str, np.ndarray] = RUIFROK_HE,
     max_angle_deg: float = 45.0,
 ) -> StainReference:
-    """Fit a decomposition :class:`~squidpy.experimental.im.StainReference` (stain matrix + max concentrations)."""
+    """Fit a decomposition :class:`StainReference` (stain matrix + max concentrations)."""
     params = resolve_params(params, MacenkoParams if method == "macenko" else VahadaneParams)
     od = _tissue_od(image_rgb, white_point, params["beta"], tissue_mask=tissue_mask, image_key=image_key)
     matrix = _stain_matrix(od, method, params, image_key=image_key, reference=reference, max_angle_deg=max_angle_deg)
