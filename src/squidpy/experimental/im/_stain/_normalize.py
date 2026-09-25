@@ -233,7 +233,8 @@ def fit_stain_reference(
         Scale level to fit on. ``"auto"`` (default) uses the coarsest level,
         which is cheap and sufficient for colour statistics.
     method_params
-        Tuning for ``method``, as a dict of its ``*Params`` keys; ``None`` uses the defaults.
+        Tuning for ``method``, as a dict of ``ReinhardParams``, ``MacenkoParams`` or
+        ``VahadaneParams`` keys; ``None`` uses the defaults.
     white_point
         Per-channel white point ``I_0`` ``(3,)`` for the decomposition methods.
         If ``None``, a fixed full-white ``[255, 255, 255]`` is used (the
@@ -312,8 +313,8 @@ def normalize_stains(
         so the result is not downsampled; source statistics are reduced
         lazily so memory stays bounded.
     method_params
-        Tuning for ``reference.method``, as a dict of its ``*Params`` keys; ``None`` uses the
-        defaults.
+        Tuning for ``reference.method``, as a dict of ``ReinhardParams``, ``MacenkoParams`` or
+        ``VahadaneParams`` keys; ``None`` uses the defaults.
     image_key_added
         Key for the written image when ``inplace=True``. If ``None`` (default),
         ``f"{image_key}_normalized"`` is used. Ignored when ``inplace=False``.

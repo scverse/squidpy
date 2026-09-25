@@ -1,4 +1,4 @@
-"""Public ``*Params`` types for :mod:`squidpy.experimental`, and their defaults."""
+"""Parameter types for :mod:`squidpy.experimental`, and their defaults."""
 
 from __future__ import annotations
 
