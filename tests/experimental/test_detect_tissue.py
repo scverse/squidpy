@@ -128,60 +128,55 @@ class TestDetectTissue(PlotTester, metaclass=PlotTesterMeta):
         sdata_hne.pl.render_labels("hne_tissue").pl.show()
 
 
-class TestCornerPriors:
-    """`corners_are_background` takes one bool or one per corner."""
+@pytest.mark.parametrize(
+    ("corners", "expected"),
+    [
+        (False, (False,) * 4),
+        (np.bool_(False), (False,) * 4),
+        ([True, False, False, True], (True, False, False, True)),
+        (np.array([True, False, False, True]), (True, False, False, True)),
+    ],
+)
+def test_normalize_corners(corners, expected) -> None:
+    from squidpy.experimental.im._detect_tissue import _normalize_corners
 
-    def test_broadcast_and_per_corner(self) -> None:
-        from squidpy.experimental.im._detect_tissue import _normalize_corners
-
-        assert _normalize_corners(False) == (False,) * 4
-        assert _normalize_corners([True, False, False, True]) == (True, False, False, True)
-        assert _normalize_corners(np.array([True, False, False, True])) == (True, False, False, True)
-        assert _normalize_corners(np.bool_(False)) == (False,) * 4
-
-    def test_string_is_refused(self) -> None:
-        from squidpy.experimental.im._detect_tissue import _normalize_corners
-
-        with pytest.raises(TypeError, match="not a string"):
-            _normalize_corners("False")  # `bool("False")` would be True
-
-    @pytest.mark.parametrize(
-        ("kwargs", "match"),
-        [
-            ({"corners_are_background": (True, False)}, "sequence of 4 bools"),
-            ({"corners_are_background": np.ones((2, 2), dtype=bool)}, "sequence of 4 bools"),
-            ({"corner_size_pct": 0.0}, "`corner_size_pct` must be in"),
-        ],
-        ids=["wrong_length", "not_flat", "zero_corner_size"],
-    )
-    def test_invalid_raises(self, sdata_hne, kwargs, match) -> None:
-        with pytest.raises(ValueError, match=match):
-            sq.experimental.im.detect_tissue(sdata_hne, image_key="hne", inplace=False, **kwargs)
+    assert _normalize_corners(corners) == expected
 
 
-class TestCornerMask:
-    """Each corner prior is honoured on its own, not just all-on / all-off."""
+@pytest.mark.parametrize(
+    ("kwargs", "error", "match"),
+    [
+        ({"corners_are_background": "False"}, TypeError, "not a string"),  # `bool("False")` is True
+        ({"corners_are_background": (True, False)}, ValueError, "sequence of 4 bools"),
+        ({"corners_are_background": np.ones((2, 2), dtype=bool)}, ValueError, "sequence of 4 bools"),
+        ({"corner_size_pct": 0.0}, ValueError, "`corner_size_pct` must be in"),
+    ],
+    ids=["string", "wrong_length", "not_flat", "zero_corner_size"],
+)
+def test_invalid_corners_raise(sdata_hne, kwargs, error, match) -> None:
+    with pytest.raises(error, match=match):
+        sq.experimental.im.detect_tissue(sdata_hne, image_key="hne", inplace=False, **kwargs)
 
-    def test_single_corner_only(self) -> None:
-        from squidpy.experimental.im._detect_tissue import _corner_mask
 
-        for i, (rows, cols) in enumerate(
-            [
-                (slice(None, 2), slice(None, 2)),
-                (slice(None, 2), slice(-2, None)),
-                (slice(-2, None), slice(None, 2)),
-                (slice(-2, None), slice(-2, None)),
-            ]
-        ):
-            corner = tuple(j == i for j in range(4))
-            mask = _corner_mask((10, 10), corner, 0.2)
-            assert mask[rows, cols].all(), corner
-            assert mask.sum() == 4, f"{corner} lit up more than its own corner"
+@pytest.mark.parametrize(
+    ("i", "rows", "cols"),
+    [
+        (0, slice(None, 2), slice(None, 2)),
+        (1, slice(None, 2), slice(-2, None)),
+        (2, slice(-2, None), slice(None, 2)),
+        (3, slice(-2, None), slice(-2, None)),
+    ],
+    ids=["top_left", "top_right", "bottom_left", "bottom_right"],
+)
+def test_corner_mask_lights_only_its_corner(i, rows, cols) -> None:
+    from squidpy.experimental.im._detect_tissue import _corner_mask
+
+    mask = _corner_mask((10, 10), tuple(j == i for j in range(4)), 0.2)
+    assert mask[rows, cols].all()
+    assert mask.sum() == 4
 
 
 class TestWekaSeeding:
-    """The WEKA seeding fallback and the optional refinement stage."""
-
     @staticmethod
     def _synthetic_rgb() -> np.ndarray:
         img = np.full((48, 48, 3), 240, dtype=np.uint8)  # bright background
@@ -189,9 +184,7 @@ class TestWekaSeeding:
         return img
 
     def test_seed_floor_and_no_refinement(self) -> None:
-        # `pseudo_min_pixels` above the seeded count forces the top-z fallback, and
-        # `refine_with_classifier=False` skips the second stage. The default-parameter
-        # tests take neither branch.
+        # forces the top-z seed fallback and skips refinement, which the default tests never reach
         from squidpy._params import resolve_params
         from squidpy.experimental.im._detect_tissue import _segment_weka
         from squidpy.types import WekaParams
