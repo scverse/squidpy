@@ -15,7 +15,7 @@
 
 {#- Attributes render inline, with their type and their own docstring; methods keep the table
     and a page each. `:members:` is already an allowlist of this class's own attributes, so no
-    `:exclude-members:` -- that subtracts from the allowlist, and would silently drop a field
+    `:exclude-members:`: that subtracts from the allowlist, and would silently drop a field
     whose name collides with the container API, such as a params key called `copy`.
     `bysource` because for a NamedTuple the order is the unpacking contract, and the
     project-wide `autodoc_member_order` is alphabetical. #}

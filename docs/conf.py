@@ -99,7 +99,7 @@ autodoc_member_order = "groupwise"
 autodoc_typehints = "signature"
 # show each parameter's default next to its type, as scanpy does
 typehints_defaults = "braces"
-# a closed vocabulary this long is unreadable spelled out -- and `qc_image` spells it
+# a closed vocabulary this long is unreadable spelled out, and `qc_image` spells it
 # twice, once bare and once inside a list; the alias name is the useful thing
 autodoc_type_aliases = {"QCMetric": "QCMetric"}
 autodoc_docstring_signature = True
@@ -223,8 +223,8 @@ def _stack_attribute_defaults(app, doctree, docname) -> None:  # type: ignore[no
     """Show a params key's default on its signature, as a parameter's is shown.
 
     A key and a parameter are the same thing to a caller, so they should read the same:
-    ``name : type (default: value)``. Autodoc gives an attribute no default of its own --
-    a `TypedDict` key holds no value -- so it is appended to the signature here.
+    ``name : type (default: value)``. Autodoc gives an attribute no default of its own
+    (a `TypedDict` key holds no value), so it is appended to the signature here.
     """
     from docutils import nodes
     from sphinx import addnodes
@@ -247,7 +247,7 @@ def _skip_dict_api(app, what, name, obj, skip, options) -> bool | None:  # type:
 def _stack_parameter_types(app, doctree, docname) -> None:  # type: ignore[no-untyped-def]
     """Render a parameter as ``name : type`` with its description on the next line.
 
-    Sphinx's Python domain renders a typed field inline -- ``name (type) - description`` --
+    Sphinx's Python domain renders a typed field inline (``name (type) - description``),
     which puts the three things a reader scans for on one run-on line. Rewrite each entry
     into two paragraphs so the name and its type read as a term and the prose sits under it.
     """
@@ -257,7 +257,7 @@ def _stack_parameter_types(app, doctree, docname) -> None:  # type: ignore[no-un
         name = field.next_node(nodes.field_name)
         if name is None or not name.astext().startswith("Parameters"):
             continue
-        # only the field's own entries -- a description may itself contain a bullet list,
+        # only the field's own entries: a description may itself contain a bullet list,
         # and its items are prose, not parameters
         entries = field.next_node(nodes.bullet_list)
         if entries is None:
@@ -290,8 +290,8 @@ def _stack_parameter_types(app, doctree, docname) -> None:  # type: ignore[no-un
                 del head[closing]
 
             # A long parameter runs to several blocks. Only the inline run belongs in the
-            # description paragraph -- nesting a block inside it produces a `<p>` within a
-            # `<p>` -- so blocks stay siblings, and every piece is classed as description.
+            # description paragraph: nesting a block inside it produces a `<p>` within a
+            # `<p>`. So blocks stay siblings, and every piece is classed as description.
             def _is_block(node: object) -> bool:
                 # `Body` is no help: an `image` is both a `Body` and inline
                 return isinstance(node, nodes.Element) and not isinstance(node, nodes.Inline)

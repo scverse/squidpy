@@ -180,7 +180,7 @@ html.writer-html5 .rst-content dl.field-list > dd {
 }
 
 /* "Parameters", "Returns", "Notes" and friends divide a docstring into sections, so give
-   them a section heading's treatment -- a rule and the palette's purple -- rather than
+   them a section heading's treatment (a rule and the palette's purple) rather than
    leaving them looking like one more inline label. */
 html.writer-html5 .rst-content dl.field-list > dt,
 .rst-content dl.py p.rubric {
