@@ -11,6 +11,7 @@ import dask.array as da
 import numpy as np
 import pytest
 import xarray as xr
+from anndata import AnnData
 from scipy import ndimage
 from skimage.draw import ellipse
 from spatialdata import SpatialData
@@ -222,3 +223,34 @@ def make_clean_sdata() -> SpatialData:
 def sdata_clean() -> SpatialData:
     """Fixture wrapper around :func:`make_clean_sdata`."""
     return make_clean_sdata()
+
+
+# Alignment fixtures, shared across tests/experimental/tl
+
+#: A small asymmetric point cloud: enough structure to align, small enough to be instant.
+ALIGN_PTS = np.array([[10.0, 1.0], [12.0, 1.0], [11.0, 2.0], [10.0, 3.0], [12.0, 3.0]])
+
+#: Smallest solver settings that still exercise the full code path.
+TINY_SOLVER = {"dx": 0.5, "blur": 1.0, "a": 1.0, "expand": 1.0, "nt": 1, "niter": 1, "epV": 1.0}
+
+
+def make_adata(
+    coords: np.ndarray = ALIGN_PTS,
+    *,
+    key: str = "spatial",
+    landmarks: np.ndarray | None = None,
+) -> AnnData:
+    """An AnnData carrying ``coords`` in ``obsm[key]``, plus optional ``obsm["landmarks"]``."""
+    coords = np.asarray(coords)
+    adata = AnnData(np.zeros((coords.shape[0], 1)))
+    adata.obsm[key] = coords.copy()
+    if landmarks is not None:
+        adata.obsm["landmarks"] = np.asarray(landmarks).copy()
+    return adata
+
+
+def make_sdata_tables(**tables: AnnData) -> SpatialData:
+    """A SpatialData holding the given AnnData objects as tables."""
+    from spatialdata.models import TableModel
+
+    return SpatialData(tables={name: TableModel.parse(adata) for name, adata in tables.items()})
