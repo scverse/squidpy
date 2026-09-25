@@ -229,7 +229,7 @@ def test_to_uns_carries_only_what_survives_h5ad(tmp_path):
 
 def test_cluster_auto_k_on_adata():
     adata = AnnData(make_blobs())
-    assert cluster_auto_k(adata, (2, 4), max_runs=3, rng=0) is None
+    assert cluster_auto_k(adata, n_clusters=(2, 4), max_runs=3, rng=0) is None
 
     diagnostics = adata.uns["cluster_auto_k"]
     assert list(diagnostics["table"].index) == [1, 2, 3, 4, 5]
@@ -240,7 +240,7 @@ def test_cluster_auto_k_on_adata():
 
 def test_cluster_auto_k_copy():
     adata = AnnData(make_blobs())
-    out = cluster_auto_k(adata, (2, 4), max_runs=3, rng=0, copy=True)
+    out = cluster_auto_k(adata, n_clusters=(2, 4), max_runs=3, rng=0, copy=True)
 
     assert list(out.obs.columns) == ["cluster_auto_k"]
     assert "cluster_auto_k" in out.uns
@@ -251,20 +251,20 @@ def test_cluster_auto_k_copy():
 def test_cluster_auto_k_uses_the_requested_representation():
     adata = AnnData(np.zeros((90, 2)))
     adata.obsm["X_embedding"] = make_blobs()
-    cluster_auto_k(adata, (2, 4), use_rep="X_embedding", max_runs=2, rng=0)
+    cluster_auto_k(adata, n_clusters=(2, 4), use_rep="X_embedding", max_runs=2, rng=0)
     assert adata.uns["cluster_auto_k"]["best_k"] in scored(adata.uns["cluster_auto_k"]["table"])
 
 
 def test_cluster_auto_k_rejects_a_missing_representation():
     adata = AnnData(make_blobs())
     with pytest.raises(KeyError, match=r"not_there"):
-        cluster_auto_k(adata, (2, 4), use_rep="not_there", max_runs=2, rng=0)
+        cluster_auto_k(adata, n_clusters=(2, 4), use_rep="not_there", max_runs=2, rng=0)
 
 
 def test_cluster_auto_k_rejects_sparse_input():
     adata = AnnData(csr_matrix(make_blobs()))
     with pytest.raises(TypeError, match=r"does not support sparse input"):
-        cluster_auto_k(adata, (2, 4), max_runs=2, rng=0)
+        cluster_auto_k(adata, n_clusters=(2, 4), max_runs=2, rng=0)
 
 
 def test_cluster_auto_k_keep_all_labels_adds_every_fitted_k():
@@ -289,8 +289,8 @@ def test_cluster_auto_k_honours_key_added():
 
 def test_cluster_auto_k_is_reproducible_from_the_rng():
     adata = AnnData(make_blobs())
-    first = cluster_auto_k(adata, (2, 4), max_runs=3, rng=0, copy=True)
-    second = cluster_auto_k(adata, (2, 4), max_runs=3, rng=0, copy=True)
+    first = cluster_auto_k(adata, n_clusters=(2, 4), max_runs=3, rng=0, copy=True)
+    second = cluster_auto_k(adata, n_clusters=(2, 4), max_runs=3, rng=0, copy=True)
     pd.testing.assert_series_equal(first.obs["cluster_auto_k"], second.obs["cluster_auto_k"])
 
 
@@ -359,7 +359,7 @@ def _adata_with_runs(ks: list[int], n_runs: int) -> tuple[AnnData, dict[int, lis
 def test_cluster_stability_scores_obs_columns():
     adata, keys = _adata_with_runs([2, 3, 4], n_runs=3)
 
-    df = cluster_stability(adata, keys, copy=True).uns["cluster_stability"]
+    df = cluster_stability(adata, cluster_keys=keys, copy=True).uns["cluster_stability"]
     assert list(df.index) == [2, 3, 4]
     # only the interior K is scored, the bounds are a halo that is compared against but never selectable
     assert df["stability_mean"].isna().tolist() == [True, False, True]
@@ -369,10 +369,10 @@ def test_cluster_stability_scores_obs_columns():
 
 def test_cluster_stability_writes_to_uns():
     adata, keys = _adata_with_runs([2, 3, 4], n_runs=2)
-    expected = cluster_stability(adata, keys, copy=True).uns["cluster_stability"]
+    expected = cluster_stability(adata, cluster_keys=keys, copy=True).uns["cluster_stability"]
     assert "cluster_stability" not in adata.uns
 
-    assert cluster_stability(adata, keys, key_added="my_stability") is None
+    assert cluster_stability(adata, cluster_keys=keys, key_added="my_stability") is None
     pd.testing.assert_frame_equal(adata.uns["my_stability"], expected)
 
 
@@ -380,13 +380,13 @@ def test_cluster_stability_rejects_a_missing_column():
     adata, keys = _adata_with_runs([2, 3, 4], n_runs=2)
     keys[3] = ["not_a_column", *keys[3][1:]]
     with pytest.raises(KeyError, match=r"not_a_column"):
-        cluster_stability(adata, keys)
+        cluster_stability(adata, cluster_keys=keys)
 
 
 def test_cluster_stability_rejects_empty_cluster_keys():
     adata = AnnData(np.zeros((10, 2), dtype=np.float32))
     with pytest.raises(ValueError, match=r"at least 3 K values"):
-        cluster_stability(adata, {})
+        cluster_stability(adata, cluster_keys={})
 
 
 # parity with the reference implementation
@@ -475,7 +475,7 @@ def test_autok_clusterer_sweeps_a_non_mixture():
 def test_cluster_auto_k_takes_a_clusterer():
     """Any sweepable clusterer, not only the default mixture."""
     adata = AnnData(make_blobs())
-    cluster_auto_k(adata, (2, 4), clusterer=KMeans(n_init=1), max_runs=3, rng=0, key_added="kmeans_k")
+    cluster_auto_k(adata, n_clusters=(2, 4), clusterer=KMeans(n_init=1), max_runs=3, rng=0, key_added="kmeans_k")
 
     assert adata.obs["kmeans_k"].notna().all()
     assert adata.uns["kmeans_k"]["best_k"] in scored(adata.uns["kmeans_k"]["table"])
@@ -483,17 +483,17 @@ def test_cluster_auto_k_takes_a_clusterer():
 
 def test_cluster_auto_k_rejects_clusterer_with_model_params():
     with pytest.raises(ValueError, match=r"'model_params' configures the default mixture"):
-        cluster_auto_k(AnnData(make_blobs()), (2, 4), clusterer=KMeans(), model_params={"reg_covar": 1e-3})
+        cluster_auto_k(AnnData(make_blobs()), n_clusters=(2, 4), clusterer=KMeans(), model_params={"reg_covar": 1e-3})
 
 
 def test_cluster_auto_k_rejects_a_clusterer_that_cannot_be_swept():
     """A clusterer without a seed looks perfectly stable at every K, so it is refused."""
     with pytest.raises(ValueError, match=r"AgglomerativeClustering takes no 'random_state'"):
-        cluster_auto_k(AnnData(make_blobs()), (2, 4), clusterer=AgglomerativeClustering(), rng=0)
+        cluster_auto_k(AnnData(make_blobs()), n_clusters=(2, 4), clusterer=AgglomerativeClustering(), rng=0)
 
 
 def test_cluster_auto_k_takes_a_sparse_representation_with_a_clusterer():
     """The dense-only guard is about the default mixture, not about every clusterer."""
     adata = AnnData(csr_matrix(make_blobs()))
-    cluster_auto_k(adata, (2, 4), clusterer=KMeans(n_init=1), max_runs=3, rng=0, key_added="sparse_k")
+    cluster_auto_k(adata, n_clusters=(2, 4), clusterer=KMeans(n_init=1), max_runs=3, rng=0, key_added="sparse_k")
     assert adata.obs["sparse_k"].notna().all()
