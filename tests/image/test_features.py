@@ -168,15 +168,15 @@ class TestFeatureMixin:
 class TestHighLevel:
     def test_invalid_layer(self, adata: AnnData, cont: ImageContainer):
         with pytest.raises(KeyError, match=r"Image layer `foo` not found"):
-            calculate_image_features(adata, cont, layer="foo")
+            calculate_image_features(adata, img=cont, layer="foo")
 
     def test_invalid_feature(self, adata: AnnData, cont: ImageContainer):
         with pytest.raises(ValueError, match=r"Invalid option `foo` for `ImageFeature`"):
-            calculate_image_features(adata, cont, features="foo")
+            calculate_image_features(adata, img=cont, features="foo")
 
     def test_passing_spot_crops_kwargs(self, adata: AnnData, cont: ImageContainer, mocker: MockerFixture):
         spy = mocker.spy(cont, "generate_spot_crops")
-        calculate_image_features(adata, cont, mask_circle=True)
+        calculate_image_features(adata, img=cont, mask_circle=True)
 
         spy.assert_called_once()
         call = spy.call_args_list[0]
@@ -189,7 +189,7 @@ class TestHighLevel:
 
         res = calculate_image_features(
             adata,
-            cont,
+            img=cont,
             key_added="foo",
             features=ImageFeature.CUSTOM.s,
             features_kwargs={ImageFeature.CUSTOM.s: {"func": dummy, "sentinel": True, "channels": [0]}},
@@ -203,7 +203,7 @@ class TestHighLevel:
 
     def test_key_added(self, adata: AnnData, cont: ImageContainer):
         assert "foo" not in adata.obsm
-        res = calculate_image_features(adata, cont, key_added="foo", copy=False)
+        res = calculate_image_features(adata, img=cont, key_added="foo", copy=False)
 
         assert res is None
         assert "foo" in adata.obsm
@@ -211,7 +211,7 @@ class TestHighLevel:
 
     def test_copy(self, adata: AnnData, cont: ImageContainer):
         orig_keys = set(adata.obsm.keys())
-        res = calculate_image_features(adata, cont, key_added="foo", copy=True)
+        res = calculate_image_features(adata, img=cont, key_added="foo", copy=True)
 
         assert isinstance(res, pd.DataFrame)
         np.testing.assert_array_equal(res.index, adata.obs_names)
@@ -220,7 +220,7 @@ class TestHighLevel:
     @pytest.mark.parametrize("n_jobs", [1, 2])
     def test_parallelize(self, adata: AnnData, cont: ImageContainer, n_jobs: int):
         features = ["texture", "summary", "histogram"]
-        res = calculate_image_features(adata, cont, library_id=None, features=features, copy=True, n_jobs=n_jobs)
+        res = calculate_image_features(adata, img=cont, library_id=None, features=features, copy=True, n_jobs=n_jobs)
 
         assert isinstance(res, pd.DataFrame)
         np.testing.assert_array_equal(res.index, adata.obs_names)

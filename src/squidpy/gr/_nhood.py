@@ -24,6 +24,7 @@ from scanpy import logging as logg
 from scipy.sparse import csr_array, csr_matrix, issparse
 from spatialdata import SpatialData
 
+from squidpy._compat import old_positionals
 from squidpy._constants._constants import Centrality
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
@@ -180,7 +181,7 @@ def _shuffled_labels(
 
 
 @njit(parallel=True, nogil=True, cache=True)
-def _permutation_moments_counts(
+def _permutation_moments_counts(  # noqa: PLR0917, numba requires positional arguments
     indices: NDArrayA,
     indptr: NDArrayA,
     int_clust: NDArrayA,
@@ -227,7 +228,7 @@ def _permutation_moments_counts(
 
 
 @njit(parallel=True, nogil=True, cache=True)
-def _permutation_moments_normalized(
+def _permutation_moments_normalized(  # noqa: PLR0917, numba requires positional arguments
     indices: NDArrayA,
     indptr: NDArrayA,
     int_clust: NDArrayA,
@@ -298,8 +299,22 @@ def _filter_clusters_by_min_cell_count(
 @d.dedent
 @deprecated_randomness_param
 @deprecated_params({"numba_parallel": "1.10.0", "backend": "1.10.0"})
+@old_positionals(
+    "cluster_key",
+    "library_key",
+    "connectivity_key",
+    "n_perms",
+    "rng",
+    "copy",
+    "n_jobs",
+    "show_progress_bar",
+    "normalization",
+    "min_cell_count",
+    "handle_nan",
+)
 def nhood_enrichment(
     adata: AnnData | SpatialData,
+    *,
     cluster_key: str,
     library_key: str | None = None,
     connectivity_key: str | None = None,
@@ -311,7 +326,6 @@ def nhood_enrichment(
     normalization: str = "none",
     min_cell_count: int = 0,
     handle_nan: Literal["keep", "zero"] = "keep",
-    *,
     table_key: str | None = None,
 ) -> NhoodEnrichmentResult | None:
     """
@@ -539,8 +553,10 @@ def nhood_enrichment(
 
 @d.dedent
 @inject_docs(c=Centrality)
+@old_positionals("cluster_key", "score", "connectivity_key", "copy", "n_jobs", "backend", "show_progress_bar")
 def centrality_scores(
     adata: AnnData | SpatialData,
+    *,
     cluster_key: str,
     score: str | Iterable[str] | None = None,
     connectivity_key: str | None = None,
@@ -548,7 +564,6 @@ def centrality_scores(
     n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = False,
-    *,
     table_key: str | None = None,
 ) -> pd.DataFrame | None:
     """
@@ -641,14 +656,15 @@ def centrality_scores(
 
 
 @d.dedent
+@old_positionals("cluster_key", "connectivity_key", "normalized", "copy", "weights")
 def interaction_matrix(
     adata: AnnData | SpatialData,
+    *,
     cluster_key: str,
     connectivity_key: str | None = None,
     normalized: bool = False,
     copy: bool = False,
     weights: bool = False,
-    *,
     table_key: str | None = None,
 ) -> NDArrayA | None:
     """
@@ -829,7 +845,7 @@ def _build_shuffle_groups(
 
 
 @njit(inline="always", cache=True)
-def _expand(
+def _expand(  # noqa: PLR0917, numba requires positional arguments
     indptr: NDArrayA,
     indices: NDArrayA,
     stamp: NDArrayA,
@@ -857,7 +873,7 @@ def _expand(
 
 
 @njit(parallel=True, cache=True)
-def _bfs_shells(
+def _bfs_shells(  # noqa: PLR0917, numba requires positional arguments
     indptr: NDArrayA,
     indices: NDArrayA,
     max_hop: int,

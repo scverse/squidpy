@@ -23,6 +23,7 @@ from spatialdata.models.models import (
     get_model,
 )
 
+from squidpy._compat import old_positionals
 from squidpy._constants._constants import CoordType, Transform
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
@@ -129,8 +130,26 @@ def _resolve_graph_builder(
 
 @d.dedent
 @inject_docs(t=Transform, c=CoordType)
+@old_positionals(
+    "spatial_key",
+    "elements_to_coordinate_systems",
+    "table_key",
+    "library_key",
+    "coord_type",
+    "n_neighs",
+    "radius",
+    "delaunay",
+    "n_rings",
+    "percentile",
+    "transform",
+    "set_diag",
+    "key_added",
+    "copy",
+    "n_jobs",
+)
 def spatial_neighbors(
     adata: AnnData | SpatialData,
+    *,
     spatial_key: str = Key.obsm.spatial,
     elements_to_coordinate_systems: dict[str, str] | None = None,
     table_key: str | None = None,
@@ -385,10 +404,11 @@ def _resolve_data(
 
 
 @d.dedent
+@old_positionals("builder")
 def spatial_neighbors_from_builder(
     data: AnnData | SpatialData,
-    builder: GraphBuilder[Any, Any],
     *,
+    builder: GraphBuilder[Any, Any],
     spatial_key: str = Key.obsm.spatial,
     elements_to_coordinate_systems: dict[str, str] | None = None,
     table_key: str | None = None,
@@ -850,8 +870,10 @@ def _run_spatial_neighbors(
 
 
 @d.dedent
+@old_positionals("table_key", "polygon_mask", "negative_mask", "spatial_key", "key_added", "copy")
 def mask_graph(
     sdata: SpatialData,
+    *,
     table_key: str,
     polygon_mask: Polygon | MultiPolygon,
     negative_mask: bool = False,

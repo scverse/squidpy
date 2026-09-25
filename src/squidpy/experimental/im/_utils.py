@@ -22,6 +22,7 @@ class TileGrid:
         self,
         H: int,
         W: int,
+        *,
         tile_size: Literal["auto"] | tuple[int, int] = "auto",
         target_tiles: int = 100,
         offset_y: int = 0,

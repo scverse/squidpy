@@ -19,6 +19,7 @@ from scanpy import logging as logg
 from scipy.sparse import csc_matrix
 from spatialdata import SpatialData
 
+from squidpy._compat import old_positionals
 from squidpy._constants._constants import ComplexPolicy, CorrAxis
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
@@ -240,6 +241,7 @@ class PermutationTestABC(ABC):
     def test(
         self,
         cluster_key: str,
+        *,
         clusters: Cluster_t | None = None,
         n_perms: int = 1000,
         threshold: float = 0.01,
@@ -555,8 +557,21 @@ class PermutationTest(PermutationTestABC):
 @d.dedent
 @deprecated_params({"numba_parallel": "1.10.0", "backend": "1.10.0"})
 @deprecated_randomness_param
+@old_positionals(
+    "cluster_key",
+    "interactions",
+    "complex_policy",
+    "threshold",
+    "corr_method",
+    "corr_axis",
+    "use_raw",
+    "copy",
+    "key_added",
+    "gene_symbols",
+)
 def ligrec(
     adata: AnnData | SpatialData,
+    *,
     cluster_key: str,
     interactions: Interaction_t | None = None,
     complex_policy: Literal["min", "all"] = ComplexPolicy.MIN.v,
@@ -567,7 +582,6 @@ def ligrec(
     copy: bool = False,
     key_added: str | None = None,
     gene_symbols: str | None = None,
-    *,
     n_perms: int = 1000,
     rng: SeedLike | RNGLike | None = None,
     clusters: Cluster_t | None = None,
@@ -624,7 +638,7 @@ def ligrec(
 
 
 @njit(parallel=True, cache=True)
-def _score_permutations(
+def _score_permutations(  # noqa: PLR0917, numba requires positional arguments
     data: NDArrayA,
     clustering: NDArrayA,
     generators: list[np.random.Generator],

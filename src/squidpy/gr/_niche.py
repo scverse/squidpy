@@ -49,7 +49,7 @@ __all__ = [
 @d.dedent
 @inject_docs(fla=NicheDefinitions)
 @deprecated_randomness_param
-def calculate_niche(
+def calculate_niche(  # noqa: PLR0917, deprecated and removed in v1.9.0
     data: AnnData | SpatialData,
     flavor: Literal["neighborhood", "utag", "cellcharter", "spatialleiden"],
     library_key: str | None = None,
@@ -475,8 +475,8 @@ def calculate_niche_neighborhood(
 
     return calculate_niche_custom(
         data,
-        embedder,
-        clusterers,
+        embedder=embedder,
+        clusterers=clusterers,
         rng=rng,
         embedding_key_added=embedding_key_added,
         min_niche_size=min_niche_size,
@@ -598,8 +598,8 @@ def calculate_niche_utag(
 
     return calculate_niche_custom(
         data,
-        embedder,
-        clusterers,
+        embedder=embedder,
+        clusterers=clusterers,
         rng=rng,
         embedding_key_added=embedding_key_added,
         min_niche_size=min_niche_size,
@@ -732,8 +732,8 @@ def calculate_niche_cellcharter(
 
     return calculate_niche_custom(
         data,
-        embedder,
-        clusterers,
+        embedder=embedder,
+        clusterers=clusterers,
         rng=rng,
         embedding_key_added=embedding_key_added,
         min_niche_size=min_niche_size,
@@ -815,6 +815,7 @@ def calculate_niche_spatialleiden(
 @d.dedent
 def calculate_niche_custom(
     data: AnnData | SpatialData,
+    *,
     embedder: NicheEmbedder,
     clusterers: Mapping[str, Clusterer],
     rng: SeedLike | RNGLike | None = None,
@@ -885,7 +886,7 @@ def calculate_niche_custom(
     return _on_table(data, table_key=table_key, copy=copy, work=run)
 
 
-def _validate_niche_args(
+def _validate_niche_args(  # noqa: PLR0917, deprecated and removed in v1.9.0
     data: AnnData | SpatialData,
     flavor: Literal["neighborhood", "utag", "cellcharter", "spatialleiden"],
     table_key: str | None,

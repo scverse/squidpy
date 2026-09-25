@@ -8,6 +8,7 @@ import pandas as pd
 from anndata import AnnData
 from scanpy import logging as logg
 
+from squidpy._compat import old_positionals
 from squidpy._constants._constants import ImageFeature
 from squidpy._docs import d, inject_docs
 from squidpy._utils import Signal, SigQueue, get_n_processes, parallelize
@@ -19,8 +20,21 @@ __all__ = ["calculate_image_features"]
 
 @d.dedent
 @inject_docs(f=ImageFeature)
+@old_positionals(
+    "img",
+    "layer",
+    "library_id",
+    "features",
+    "features_kwargs",
+    "key_added",
+    "copy",
+    "n_jobs",
+    "backend",
+    "show_progress_bar",
+)
 def calculate_image_features(
     adata: AnnData,
+    *,
     img: ImageContainer,
     layer: str | None = None,
     library_id: str | Sequence[str] | None = None,
@@ -94,7 +108,15 @@ def calculate_image_features(
         n_jobs=n_jobs,
         backend=backend,
         show_progress_bar=show_progress_bar,
-    )(adata, img, layer=layer, library_id=library_id, features=features, features_kwargs=features_kwargs, **kwargs)
+    )(
+        adata=adata,
+        img=img,
+        layer=layer,
+        library_id=library_id,
+        features=features,
+        features_kwargs=features_kwargs,
+        **kwargs,
+    )
 
     if copy:
         logg.info("Finish", time=start)
@@ -105,6 +127,7 @@ def calculate_image_features(
 
 def _calculate_image_features_helper(
     obs_ids: Sequence[str],
+    *,
     adata: AnnData,
     img: ImageContainer,
     layer: str,

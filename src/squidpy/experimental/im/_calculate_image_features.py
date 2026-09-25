@@ -634,6 +634,7 @@ def _classify_boundary_cells(
 
 def _align_to_image_grid(
     sdata: SpatialData,
+    *,
     image_key: str,
     labels_key: str,
     image_da: xr.DataArray,
@@ -756,6 +757,7 @@ def _validate_inputs(
 
 def _prepare_lazy(
     sdata: SpatialData,
+    *,
     image_key: str | None,
     labels_key: str | None,
     shapes_key: str | None,
@@ -799,7 +801,14 @@ def _prepare_lazy(
     # Only meaningful with a real labels element + an image; the shapes->labels
     # path already rasterized onto the image grid (identity transform -> no-op).
     if image_da is not None and labels_key is not None:
-        image_da, labels_da = _align_to_image_grid(sdata, image_key, labels_key, image_da, labels_da, align_mode)
+        image_da, labels_da = _align_to_image_grid(
+            sdata,
+            image_key=image_key,
+            labels_key=labels_key,
+            image_da=image_da,
+            labels_da=labels_da,
+            align_mode=align_mode,
+        )
 
     if image_da is None:
         return image_da, labels_da, []
@@ -1050,7 +1059,13 @@ def calculate_image_features(
             raise ValueError("`channels` selection requires `image_key`.")
 
     image_da, labels_da, channel_names = _prepare_lazy(
-        sdata, image_key, labels_key, shapes_key, scale, channels, align_mode
+        sdata,
+        image_key=image_key,
+        labels_key=labels_key,
+        shapes_key=shapes_key,
+        scale=scale,
+        channels=channels,
+        align_mode=align_mode,
     )
 
     # Warn when per-channel features would be named by positional index because

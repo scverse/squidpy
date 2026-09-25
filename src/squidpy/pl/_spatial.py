@@ -46,6 +46,7 @@ from squidpy.pl._utils import sanitize_anndata, save_fig
 @d.dedent
 def _spatial_plot(
     adata: AnnData,
+    *,
     shape: _AvailShapes | None = None,
     color: str | Sequence[str | None] | None = None,
     groups: _SeqStr | None = None,
@@ -242,7 +243,7 @@ def _spatial_plot(
         adata_sub, coords_sub, image_sub = _subs(
             adata,
             _coords,
-            _img,
+            img=_img,
             library_key=library_key,
             library_id=_lib,
             crop_coords=_crops,
@@ -441,6 +442,7 @@ def spatial_scatter(
 def spatial_segment(
     adata: AnnData,
     seg_cell_id: str,
+    *,
     seg: bool | _SeqArray | None = True,
     seg_key: str = Key.uns.image_seg_key,
     seg_contourpx: int | None = None,

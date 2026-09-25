@@ -392,6 +392,7 @@ def _collapse_groups(
 
 def make_stitched_labels(
     sdata: sd.SpatialData,
+    *,
     labels_key: str,
     qc_table_key: str | None = None,
     labels_key_added: str | None = None,
