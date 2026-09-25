@@ -400,7 +400,6 @@ def calculate_tiling_qc(
     n_jobs: int = -1,
     table_key_added: str | None = None,
     inplace: bool = True,
-    *,
     distance_tol: float = 0.75,
     min_area: int = 20,
     max_contour_points: int = 500,
