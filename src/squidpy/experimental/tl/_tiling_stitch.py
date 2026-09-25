@@ -258,6 +258,7 @@ def _bbox_edge_run(
 def _extract_cut_edges(
     labels_da: xr.DataArray | np.ndarray,
     outlier_ids: Iterable[int],
+    *,
     bboxes: dict[int, tuple[int, int, int, int]] | None = None,
     distance_tol: float = _STITCH_DEFAULTS.distance_tol,
     min_edge_length: float = _STITCH_DEFAULTS.min_edge_length,
@@ -736,6 +737,7 @@ def _assemble_groups(
 
 def assign_stitch_groups(
     sdata: sd.SpatialData,
+    *,
     labels_key: str,
     qc_table_key: str | None = None,
     min_confidence: float = 0.7,

@@ -537,6 +537,7 @@ def _get_cmap_norm(
 def _heatmap(
     adata: AnnData,
     key: str,
+    *,
     title: str = "",
     method: str | None = None,
     cont_cmap: str | mcolors.Colormap = "viridis",

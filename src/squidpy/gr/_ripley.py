@@ -13,6 +13,7 @@ from sklearn.neighbors import KDTree, NearestNeighbors
 from sklearn.preprocessing import LabelEncoder
 from spatialdata import SpatialData
 
+from squidpy._compat import old_positionals
 from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
@@ -25,8 +26,22 @@ __all__ = ["ripley"]
 @d.dedent
 @inject_docs(key=Key.obsm.spatial, rp=RipleyStat)
 @deprecated_randomness_param
+@old_positionals(
+    "cluster_key",
+    "mode",
+    "spatial_key",
+    "metric",
+    "n_neigh",
+    "n_simulations",
+    "n_observations",
+    "max_dist",
+    "n_steps",
+    "rng",
+    "copy",
+)
 def ripley(
     adata: AnnData | SpatialData,
+    *,
     cluster_key: str,
     mode: Literal["F", "G", "L"] = "F",
     spatial_key: str = Key.obsm.spatial,
@@ -38,7 +53,6 @@ def ripley(
     n_steps: int = 50,
     rng: SeedLike | RNGLike | None = None,
     copy: bool = False,
-    *,
     table_key: str | None = None,
 ) -> dict[str, pd.DataFrame | NDArrayA]:
     r"""

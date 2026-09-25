@@ -214,8 +214,8 @@ def _rescale_margins(
 
 def detect_tissue(
     sdata: sd.SpatialData,
-    image_key: str,
     *,
+    image_key: str,
     scale: str = "auto",
     method: DetectTissueMethod | str = DetectTissueMethod.OTSU,
     method_params: FelzenszwalbParams | WekaParams | Mapping[str, Any] | None = None,

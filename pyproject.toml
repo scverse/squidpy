@@ -53,6 +53,7 @@ dependencies = [
   "fast-array-utils>=1.5",              # `types.HasArrayNamespace`
   "fsspec>=2021.11",
   "imagecodecs>=2025.8.2,<2026",
+  "legacy-api-wrap>=1.5",               # keyword-only args keep accepting old positional calls (#1288)
   "matplotlib>=3.3",
   "matplotlib-scalebar>=0.8",
   "networkx>=2.6",
@@ -191,6 +192,8 @@ lint.select = [
   "UP",  # pyupgrade
   "W",   # pycodestyle
 ]
+# too many positional arguments: most arguments are keyword-only (#1288)
+lint.extend-select = [ "PLR0917" ]
 lint.ignore = [
   # B008 Do not perform function calls in argument defaults.
   "B008",
@@ -250,13 +253,18 @@ lint.ignore = [
   # "E111",
   # "E114",
 ]
+lint.explicit-preview-rules = true  # only the preview rules selected by name, i.e. PLR0917
 lint.per-file-ignores."*/__init__.py" = [ "D104", "F401" ]
 lint.per-file-ignores.".scripts/ci/download_data.py" = [ "B", "D" ]
 lint.per-file-ignores."docs/*" = [ "B", "D" ]
 lint.per-file-ignores."src/squidpy/_constants/_constants.py" = [ "D101" ]
 lint.per-file-ignores."src/squidpy/_constants/_pkg_constants.py" = [ "D101", "D102", "D106" ]
+# ImageContainer is left as it is until it is deprecated, positional arguments included
+lint.per-file-ignores."src/squidpy/im/_container.py" = [ "PLR0917" ]
+lint.per-file-ignores."src/squidpy/im/_feature_mixin.py" = [ "PLR0917" ]
+lint.per-file-ignores."src/squidpy/im/_segment.py" = [ "PLR0917" ]
 lint.per-file-ignores."src/squidpy/pl/_ligrec.py" = [ "B", "D" ]
-lint.per-file-ignores."tests/*" = [ "D" ]
+lint.per-file-ignores."tests/*" = [ "D", "PLR0917" ]
 lint.unfixable = [
   "B",
   "BLE",
@@ -266,6 +274,7 @@ lint.unfixable = [
 # Disallow all relative imports.
 lint.flake8-tidy-imports.ban-relative-imports = "all"
 lint.isort.required-imports = [ "from __future__ import annotations" ]
+lint.preview = true
 # "squidpy/*.py" = [ "RST303" ]
 
 [tool.pytest]

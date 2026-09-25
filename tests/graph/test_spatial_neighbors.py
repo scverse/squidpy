@@ -412,8 +412,8 @@ class TestSpatialNeighbors:
 
         mask_graph(
             sdata,
-            "table",
-            mask_polygon,
+            table_key="table",
+            polygon_mask=mask_polygon,
             negative_mask=False,
             key_added=key_added,
         )
@@ -422,8 +422,8 @@ class TestSpatialNeighbors:
         graph_positive_filter = sdata["table"].obsp[mask_conns_key].copy()
         mask_graph(
             sdata,
-            "table",
-            mask_polygon,
+            table_key="table",
+            polygon_mask=mask_polygon,
             negative_mask=True,
             key_added=key_added,
         )
@@ -451,8 +451,8 @@ class TestSpatialNeighbors:
         ):
             mask_graph(
                 sdata,
-                "table",
-                Point((0, 1)),
+                table_key="table",
+                polygon_mask=Point((0, 1)),
                 negative_mask=True,
                 key_added=key_added,
             )

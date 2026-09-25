@@ -23,6 +23,7 @@ __all__ = ["var_by_distance"]
 def var_by_distance(
     adata: AnnData,
     groups: str | list[str] | NDArrayA,
+    *,
     cluster_key: str | None = None,
     library_key: str | None = None,
     library_id: str | list[str] | None = None,

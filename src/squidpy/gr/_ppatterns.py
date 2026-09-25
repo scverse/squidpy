@@ -19,6 +19,7 @@ from sklearn.preprocessing import normalize
 from spatialdata import SpatialData
 from statsmodels.stats.multitest import multipletests
 
+from squidpy._compat import old_positionals
 from squidpy._constants._constants import SpatialAutocorr
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
@@ -56,8 +57,26 @@ bl = nt.boolean
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn(), sp=SpatialAutocorr)
 @deprecated_randomness_param
+@old_positionals(
+    "connectivity_key",
+    "genes",
+    "mode",
+    "transformation",
+    "n_perms",
+    "two_tailed",
+    "corr_method",
+    "attr",
+    "layer",
+    "rng",
+    "use_raw",
+    "copy",
+    "n_jobs",
+    "backend",
+    "show_progress_bar",
+)
 def spatial_autocorr(
     adata: AnnData | SpatialData,
+    *,
     connectivity_key: str = Key.obsp.spatial_conn(),
     genes: str | int | Sequence[str] | Sequence[int] | None = None,
     mode: SpatialAutocorr | Literal["moran", "geary"] = "moran",
@@ -73,7 +92,6 @@ def spatial_autocorr(
     n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
-    *,
     table_key: str | None = None,
 ) -> pd.DataFrame | None:
     """
@@ -266,6 +284,7 @@ def _score_helper(
     g: spmatrix,
     vals: NDArrayA,
     generators: Sequence[np.random.Generator],
+    *,
     queue: SigQueue | None = None,
 ) -> pd.DataFrame:
     score_perms = np.empty((len(perms), vals.shape[0]))
@@ -286,7 +305,7 @@ def _score_helper(
 
 
 @njit(parallel=True, fastmath=True, cache=True)
-def _occur_count(
+def _occur_count(  # noqa: PLR0917, numba requires positional arguments
     spatial_x: NDArrayA, spatial_y: NDArrayA, thresholds: NDArrayA, label_idx: NDArrayA, n: int, k: int, l_val: int
 ) -> NDArrayA:
     # Allocate a 2D array to store a flat local result per point.
@@ -365,13 +384,14 @@ def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs
 
 @d.dedent
 @deprecated_params({"n_splits": "1.10.0", "n_jobs": "1.10.0", "backend": "1.10.0", "show_progress_bar": "1.10.0"})
+@old_positionals("cluster_key", "spatial_key", "interval", "copy")
 def co_occurrence(
     adata: AnnData | SpatialData,
+    *,
     cluster_key: str,
     spatial_key: str = Key.obsm.spatial,
     interval: int | NDArrayA = 50,
     copy: bool = False,
-    *,
     table_key: str | None = None,
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """

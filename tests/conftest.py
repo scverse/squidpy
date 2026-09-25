@@ -333,7 +333,7 @@ def ligrec_result() -> Mapping[str, pd.DataFrame]:
     interactions = tuple(product(adata.raw.var_names[:5], adata.raw.var_names[:5]))
     return sq.gr.ligrec(
         adata,
-        "leiden",
+        cluster_key="leiden",
         interactions=interactions,
         n_perms=25,
         n_jobs=1,

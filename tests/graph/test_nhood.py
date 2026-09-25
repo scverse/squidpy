@@ -179,8 +179,8 @@ def test_interaction_matrix_normalize(nhood_data: AnnData, normalized: bool):
 
 
 def test_interaction_matrix_values(adata_intmat: AnnData):
-    result_weighted = interaction_matrix(adata_intmat, "cat", weights=True, copy=True)
-    result_unweighted = interaction_matrix(adata_intmat, "cat", weights=False, copy=True)
+    result_weighted = interaction_matrix(adata_intmat, cluster_key="cat", weights=True, copy=True)
+    result_unweighted = interaction_matrix(adata_intmat, cluster_key="cat", weights=False, copy=True)
 
     expected_weighted = np.array([[5, 1], [2, 3]])
     expected_unweighted = np.array([[4, 1], [2, 2]])
@@ -191,8 +191,8 @@ def test_interaction_matrix_values(adata_intmat: AnnData):
 
 def test_interaction_matrix_nan_values(adata_intmat: AnnData):
     adata_intmat.obs.loc["0", "cat"] = np.nan
-    result_weighted = interaction_matrix(adata_intmat, "cat", weights=True, copy=True)
-    result_unweighted = interaction_matrix(adata_intmat, "cat", weights=False, copy=True)
+    result_weighted = interaction_matrix(adata_intmat, cluster_key="cat", weights=True, copy=True)
+    result_unweighted = interaction_matrix(adata_intmat, cluster_key="cat", weights=False, copy=True)
 
     expected_weighted = np.array([[2, 1], [2, 3]])
     expected_unweighted = np.array([[1, 1], [2, 2]])

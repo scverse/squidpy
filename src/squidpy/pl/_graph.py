@@ -16,6 +16,7 @@ import seaborn as sns
 from anndata import AnnData
 from matplotlib.axes import Axes
 
+from squidpy._compat import old_positionals
 from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
@@ -52,8 +53,10 @@ def _get_data(adata: AnnData, cluster_key: str, func_name: str, attr: str = "uns
 
 
 @d.dedent
+@old_positionals("cluster_key", "score", "legend_kwargs", "palette", "figsize", "dpi", "save")
 def centrality_scores(
     adata: AnnData,
+    *,
     cluster_key: str,
     score: str | Sequence[str] | None = None,
     legend_kwargs: Mapping[str, Any] = MappingProxyType({}),
@@ -124,8 +127,12 @@ def centrality_scores(
 
 
 @d.dedent
+@old_positionals(
+    "cluster_key", "annotate", "method", "title", "cmap", "palette", "cbar_kwargs", "figsize", "dpi", "save", "ax"
+)
 def interaction_matrix(
     adata: AnnData,
+    *,
     cluster_key: str,
     annotate: bool = False,
     method: str | None = None,
@@ -182,8 +189,23 @@ def interaction_matrix(
 
 
 @d.dedent
+@old_positionals(
+    "cluster_key",
+    "mode",
+    "annotate",
+    "method",
+    "title",
+    "cmap",
+    "palette",
+    "cbar_kwargs",
+    "figsize",
+    "dpi",
+    "save",
+    "ax",
+)
 def nhood_enrichment(
     adata: AnnData,
+    *,
     cluster_key: str,
     mode: Literal["zscore", "count"] = "zscore",
     annotate: bool = False,
@@ -250,6 +272,7 @@ def nhood_enrichment(
 def nhood_enrichment_dotplot(
     adata: AnnData,
     cluster_key: str,
+    *,
     annotate: bool = False,
     title: str | None = None,
     cmap: str = "RdBu_r",
@@ -357,8 +380,10 @@ def nhood_enrichment_dotplot(
 
 
 @d.dedent
+@old_positionals("cluster_key", "mode", "plot_sims", "palette", "figsize", "dpi", "save", "ax", "legend_kwargs")
 def ripley(
     adata: AnnData,
+    *,
     cluster_key: str,
     mode: Literal["F", "G", "L"] = "F",
     plot_sims: bool = True,
@@ -435,8 +460,10 @@ def ripley(
 
 
 @d.dedent
+@old_positionals("cluster_key", "palette", "clusters", "figsize", "dpi", "save", "legend_kwargs")
 def co_occurrence(
     adata: AnnData,
+    *,
     cluster_key: str,
     palette: Palette_t = None,
     clusters: str | Sequence[str] | None = None,

@@ -167,6 +167,12 @@ Consider enabling this option for [ruff][ruff-editors] and [biome][biome-editors
 [ruff-editors]: https://docs.astral.sh/ruff/integrations/
 [biome-editors]: https://biomejs.dev/guides/integrate-in-editor/
 
+### Conventions
+
+- **Keyword-only arguments**: a public function takes its data object (`adata`, `sdata` or `data`) positionally, and every other argument is keyword-only, e.g. `def nhood_enrichment(adata, *, cluster_key, ...)`.
+- **Randomness**: take `rng: SeedLike | RNGLike | None = None` ([SPEC 7](https://scientific-python.org/specs/spec-0007/)), never `seed`/`random_state`. Spawn one generator per independent task with `rng.spawn(n)`, and pass `legacy_random(rng)` to APIs that only take an integer seed.
+- **Warnings**: `warnings.warn` for anything about the call: deprecations (`FutureWarning`) and arguments whose effect the caller may not expect, such as clusters dropped by `min_cell_count` (`UserWarning`). What the computation is doing, such as the PCA it runs, goes through `logg`.
+
 (writing-tests)=
 
 ## Writing tests

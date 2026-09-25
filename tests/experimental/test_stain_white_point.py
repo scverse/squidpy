@@ -68,16 +68,16 @@ class TestEstimateWhitePoint:
         return sdata
 
     def test_recovers_background_median(self) -> None:
-        wp = estimate_white_point(self._sdata(), "img")
+        wp = estimate_white_point(self._sdata(), image_key="img")
         assert wp.shape == (3,)
         np.testing.assert_allclose(wp, [240.0, 245.0, 250.0], atol=1.0)
 
     def test_raises_when_tissue_covers_all(self) -> None:
         with pytest.raises(StainFittingError, match="covers the whole image"):
-            estimate_white_point(self._sdata(all_tissue=True), "img")
+            estimate_white_point(self._sdata(all_tissue=True), image_key="img")
 
     def test_requires_a_tissue_mask(self) -> None:
         values = np.full((3, 16, 16), 240, dtype=np.uint8)
         sdata = sd.SpatialData(images={"img": Image2DModel.parse(values, dims=("c", "y", "x"))})
         with pytest.raises(KeyError, match="detect_tissue"):
-            estimate_white_point(sdata, "img")
+            estimate_white_point(sdata, image_key="img")
