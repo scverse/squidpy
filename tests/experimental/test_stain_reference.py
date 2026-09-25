@@ -119,18 +119,14 @@ def test_rejects_non_finite() -> None:
         )
 
 
-def test_equality_is_array_aware_and_hashable() -> None:
-    """Two fits holding equal arrays compare equal, and a fit can key a dict.
+def test_comparing_or_hashing_fits_raises() -> None:
+    """A fit holds arrays, so comparing two fits is ambiguous and a fit is not hashable.
 
-    The dataclass-generated `__eq__` cannot do this: comparing array fields raises
-    "truth value of an array is ambiguous". So `eq=False` plus an explicit `__eq__` is
-    what makes `fit in fits` and `{fit: slide}` work.
+    Both raise, as numpy's arrays do, rather than falling back to identity silently.
     """
     a = StainFit(method="reinhard", mu=np.array([1.0, 2.0, 3.0]), sigma=np.ones(3))
     b = StainFit(method="reinhard", mu=np.array([1.0, 2.0, 3.0]), sigma=np.ones(3))
-    c = StainFit(method="reinhard", mu=np.array([9.0, 9.0, 9.0]), sigma=np.ones(3))
-    assert a == b
-    assert a != c
-    assert a in [c, b]
-    assert {a: "slide-1"}[a] == "slide-1"
-    assert len({a, b}) == 2, "hashing stays identity-based; array fields are unhashable"
+    with pytest.raises(ValueError, match="ambiguous"):
+        a == b  # noqa: B015
+    with pytest.raises(TypeError, match="unhashable"):
+        hash(a)
