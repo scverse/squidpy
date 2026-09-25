@@ -430,7 +430,10 @@ def stalign_align_volume(
         Uniform scale of the initial affine. A little under 1 is a common start.
     initial_affine
         Homogeneous ``(4, 4)`` affine in ``(x, y, z)``, replacing the three ``initial_*``
-        arguments above. The escape hatch when the initialisation needs to be exact.
+        arguments above. The escape hatch when the initialisation needs to be exact. It maps
+        the reference *volume* onto the query section, because here the volume is what gets
+        warped. That is the reverse of the 2D paths, whose ``initial_affine`` maps the query
+        onto the reference.
     solver_params
         LDDMM solver tuning; see
         :class:`~squidpy.types.StalignVolumeParams`.
@@ -485,6 +488,15 @@ def apply_fit_to_container(
     Container-level, so it lives here rather than on the fit: the estimators in
     :mod:`._stalign` never see a container, and the method is a thin delegator to this.
     """
+    fitted_in = getattr(fit, "coordinate_system", None)  # only the raster fits record one
+    if coordinate_system is not None and fitted_in not in (None, coordinate_system):
+        # the fit's units come from `fit.coordinate_system`; checking the table against any
+        # other frame would pass and then write coordinates in the wrong units
+        raise ValueError(
+            f"The fit was made in coordinate system {fitted_in!r}, so its units only "
+            f"apply there; `coordinate_system={coordinate_system!r}` would pass the check and write "
+            f"wrong coordinates. Bring the coordinates into {fitted_in!r} first."
+        )
     if isinstance(data, SpatialData) and isinstance(fit, StalignImageFit | StalignVolumeFit):
         # A fit carrying raster axes took its units from an image element's transformation,
         # so the coordinates it is applied to have to sit in that same frame -- and it is the
@@ -634,6 +646,15 @@ def align_landmarks(
         key_name="landmark_key",
     )
 
+    if key_added is not None and isinstance(query_container, SpatialData) and query_table is None:
+        # `key_added` writes to a table's `obsm`, and `table_key` is what names that table. But
+        # it also moves the landmark read into that table's `obsm`, so shapes-element landmarks
+        # can never be combined with `key_added`. Say so, rather than asking for `table_key`.
+        raise ValueError(
+            "`key_added` writes into a table's `obsm`, so it needs `table_key`, which also reads the "
+            "landmarks from that table. With the landmarks in shapes elements, use "
+            "`target_coordinate_system` to register the fit instead."
+        )
     ref_lm = _read_landmarks(data_ref, ref_lm_key, ref_table, side="reference")
     query_lm = _read_landmarks(query_container, query_lm_key, query_table, side="query")
 
@@ -683,7 +704,12 @@ def _read_landmarks(
             f"Available: {sorted(container.shapes)}. To read landmarks from a table's `obsm` "
             f"instead, pass `table_key`."
         )
-    geometry = container.shapes[landmark_key].geometry
+    from spatialdata import transform
+
+    # In the coordinate system, not the element's intrinsic frame: the fit is registered
+    # onto that coordinate system, so that is the frame its landmarks have to be in.
+    coordinate_system = _coordinate_system_of(container, landmark_key, side=side)
+    geometry = transform(container.shapes[landmark_key], to_coordinate_system=coordinate_system).geometry
     return np.column_stack([geometry.x.to_numpy(), geometry.y.to_numpy()])
 
 
@@ -724,7 +750,8 @@ def _register_transformation(
             f"The reference and query are both in coordinate system {moving_cs!r}, so registering "
             f"the fit there would move the reference too. Put each sample in its own coordinate "
             f"system (what napari-spatialdata does when landmarks are picked per sample), or "
-            f"write to `key_added` to move only the query."
+            f"read the landmarks from a table with `table_key` and write to `key_added` to move "
+            f"only the query's coordinates."
         )
 
     writeback_affine_sdata(
