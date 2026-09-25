@@ -132,7 +132,7 @@ def _resolve_output_tissue_mask(
 
 
 def _resolve_method_params(method: str, method_params: MethodParams) -> Any:
-    """Pick the right Params dataclass for ``method`` and resolve a mapping/instance/None."""
+    """Pick the params type for ``method`` and resolve a mapping or None against it."""
     if method == "reinhard":
         return _resolve_reinhard_params(method_params)
     if method == "macenko":

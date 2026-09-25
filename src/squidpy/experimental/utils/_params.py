@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from functools import cache
 from typing import Any, cast, get_type_hints
 
 
@@ -37,14 +38,18 @@ def defaults_of[T: Mapping[str, Any]](spec: type[T]) -> T:
     return cast("T", defaults)
 
 
+# resolve_params' copy: the merge below never hands it out, so sharing it is safe
+_cached_defaults = cache(defaults_of)
+
+
 def resolve_params[T: Mapping[str, Any]](
     params: T | Mapping[str, Any] | None,
+    spec: type[T],
     *,
-    defaults: T,
     validate: Callable[[dict[str, Any]], None] | None = None,
     arg_name: str = "method_params",
 ) -> T:
-    """Merge a params mapping over ``defaults`` and validate the result.
+    """Merge a params mapping over the defaults of *spec* and validate the result.
 
     ``T`` is a :class:`~typing.TypedDict`, so callers get static key and value
     checking at the call site; this function is the dynamic half. Unknown keys
@@ -53,8 +58,9 @@ def resolve_params[T: Mapping[str, Any]](
     *merged* mapping, so the defaults are checked on every call rather than
     trusted.
 
-    Returns a new mapping; neither ``params`` nor ``defaults`` is mutated.
+    Returns a new mapping; ``params`` is not mutated.
     """
+    defaults = _cached_defaults(spec)
     if params is not None and not isinstance(params, Mapping):
         raise TypeError(f"`{arg_name}` must be a Mapping or None; got {type(params).__name__}.")
     if params:

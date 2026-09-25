@@ -185,11 +185,11 @@ class TestWekaSeeding:
         # the default-parameter tests never take.
         from squidpy.experimental.im._detect_tissue import _segment_weka
         from squidpy.experimental.utils._params import resolve_params
-        from squidpy.types import _WEKA_DEFAULTS, WekaParams
+        from squidpy.types import WekaParams
 
         weka = resolve_params(
             WekaParams(rf_estimators=1, pseudo_min_pixels=5000, refine_with_classifier=False, rng=0),
-            defaults=_WEKA_DEFAULTS,
+            WekaParams,
         )
         mask = _segment_weka(self._synthetic_rgb(), (True,) * 4, 0.01, weka)
         assert mask.dtype == bool

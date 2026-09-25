@@ -34,8 +34,6 @@ from squidpy.experimental.im._stain._validation import (
 )
 from squidpy.experimental.utils._params import resolve_params
 from squidpy.types import (
-    _MACENKO_DEFAULTS,
-    _VAHADANE_DEFAULTS,
     MacenkoParams,
     VahadaneParams,
 )
@@ -64,11 +62,11 @@ def validate_vahadane_params(params: dict[str, Any]) -> None:
 
 
 def _resolve_macenko_params(params: MacenkoParams | Mapping[str, Any] | None) -> MacenkoParams:
-    return resolve_params(params, defaults=_MACENKO_DEFAULTS, validate=validate_macenko_params)
+    return resolve_params(params, MacenkoParams, validate=validate_macenko_params)
 
 
 def _resolve_vahadane_params(params: VahadaneParams | Mapping[str, Any] | None) -> VahadaneParams:
-    return resolve_params(params, defaults=_VAHADANE_DEFAULTS, validate=validate_vahadane_params)
+    return resolve_params(params, VahadaneParams, validate=validate_vahadane_params)
 
 
 def _tissue_od(
