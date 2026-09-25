@@ -123,6 +123,11 @@ class TestAssignStitchGroups:
             "gap_proximity",
         }
 
+    def test_knobs_reach_the_algorithm(self, sdata_tile_boundary):
+        sdata, _ = sdata_tile_boundary
+        assert _run_qc_and_stitch(sdata).obs["is_stitched"].any()
+        assert not _run_qc_and_stitch(sdata, min_edge_length=1e9).obs["is_stitched"].any()
+
     @pytest.mark.parametrize(
         ("kwargs", "match"),
         [

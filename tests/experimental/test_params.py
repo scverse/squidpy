@@ -51,8 +51,9 @@ def test_missing_default_raises() -> None:
 @SPECS
 def test_resolve_fills_defaults_without_leaking_the_cache(spec: type) -> None:
     defaults = defaults_of(spec)
-    first, *_ = defaults
-    assert resolve_params({first: defaults[first]}, spec) == defaults
+    key = next(k for k, v in defaults.items() if isinstance(v, int | float) and not isinstance(v, bool))
+    override = defaults[key] / 2  # stays inside every validator's range
+    assert resolve_params({key: override}, spec) == {**defaults, key: override}
     resolve_params(None, spec).clear()
     assert resolve_params(None, spec) == defaults
 
