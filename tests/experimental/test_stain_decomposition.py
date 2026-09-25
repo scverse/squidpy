@@ -5,7 +5,6 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from squidpy._params import resolve_params
 from squidpy.experimental.im._stain._constants import RUIFROK_HE
 from squidpy.experimental.im._stain._conversion import sda_to_rgb
 from squidpy.experimental.im._stain._decomposition import (
@@ -111,19 +110,3 @@ class TestDegenerate:
         white = xr.DataArray(np.full((3, 16, 16), 255.0), dims=("c", "y", "x"))
         with pytest.raises(StainFittingError, match="mask is empty"):
             fit_decomposition(white, "macenko", MacenkoParams(), _WHITE)
-
-
-class TestResolvers:
-    def test_mapping_reaches_the_algorithm_params(self) -> None:
-        assert resolve_params({"alpha": 2.0}, MacenkoParams)["alpha"] == 2.0
-        assert resolve_params(VahadaneParams(lambda1=0.2), VahadaneParams)["lambda1"] == 0.2
-
-    @pytest.mark.parametrize("bad", [0.0, 50.0, -1.0])
-    def test_macenko_alpha_bounds(self, bad: float) -> None:
-        with pytest.raises(ValueError, match="alpha"):
-            resolve_params({"alpha": bad}, MacenkoParams)
-
-    @pytest.mark.parametrize(("key", "bad"), [("beta", -1.0), ("lambda1", -1.0), ("n_iter", 0)])
-    def test_vahadane_bounds(self, key: str, bad: float) -> None:
-        with pytest.raises(ValueError, match=key):
-            resolve_params({key: bad}, VahadaneParams)

@@ -8,18 +8,11 @@ import pytest
 from squidpy import types
 from squidpy._params import Default, defaults_of, resolve_params
 
-#: Only the `*Params` types carry per-key defaults; the result types do not.
-PARAMS_TYPES = [name for name in types.__all__ if name.endswith("Params")]
+SPECS = pytest.mark.parametrize("spec", [getattr(types, name) for name in types.__all__], ids=types.__all__)
 
 
 def _matches(value: object, hint: Any) -> bool:
-    """Whether ``value`` satisfies ``hint``.
-
-    A stand-in for the static check a type checker cannot do: nothing relates
-    ``Annotated`` metadata to the type it annotates, so the defaults are only
-    verifiable at runtime. Follows the PEP 484 numeric tower (an ``int`` default
-    satisfies a ``float`` key) and keeps ``bool`` distinct from ``int``.
-    """
+    """Whether ``value`` fits ``hint``; an ``int`` fits ``float``, a ``bool`` fits only ``bool``."""
     if get_origin(hint) in (Union, UnionType):
         return any(_matches(value, arg) for arg in get_args(hint))
     origin = get_origin(hint) or hint
@@ -32,68 +25,82 @@ def _matches(value: object, hint: Any) -> bool:
     return isinstance(value, origin)
 
 
-class TestDefaultsOf:
-    @pytest.mark.parametrize("name", PARAMS_TYPES)
-    def test_every_key_has_a_default(self, name: str) -> None:
-        cls = getattr(types, name)
-        assert set(defaults_of(cls)) == set(cls.__annotations__)
-
-    @pytest.mark.parametrize("name", PARAMS_TYPES)
-    def test_every_default_matches_its_declared_type(self, name: str) -> None:
-        cls = getattr(types, name)
-        for key, hint in get_type_hints(cls, include_extras=True).items():
-            (marker,) = (m for m in hint.__metadata__ if isinstance(m, Default))
-            assert _matches(marker.value, hint.__origin__), f"{name}.{key} = {marker.value!r} is not {hint.__origin__}"
-
-    def test_matches_rejects_the_wrong_type(self) -> None:
-        # guards the guard: a `_matches` that waved everything through would make
-        # the test above vacuous
-        assert not _matches("0.5", float)
-        assert not _matches(1, bool)
-        assert not _matches(0.5, int)
-        assert not _matches(None, int | str)
-
-    def test_missing_default_raises(self) -> None:
-        class Incomplete(TypedDict, total=False):
-            a: Annotated[int, Default(1)]
-            b: float
-
-        with pytest.raises(TypeError, match="Incomplete.b` is missing a `Default"):
-            defaults_of(Incomplete)
+@SPECS
+def test_every_default_matches_its_type(spec: type) -> None:
+    hints = get_type_hints(spec, include_extras=True)
+    assert set(defaults_of(spec)) == set(hints)
+    for key, hint in hints.items():
+        (marker,) = (m for m in hint.__metadata__ if isinstance(m, Default))
+        assert _matches(marker.value, hint.__origin__), f"{spec.__name__}.{key} = {marker.value!r}"
 
 
-@pytest.mark.parametrize("name", PARAMS_TYPES)
-class TestResolveContract:
-    """`resolve_params` behaves the same for every params type.
+@pytest.mark.parametrize(("value", "hint"), [("0.5", float), (1, bool), (0.5, int), (None, int | str)])
+def test_matches_rejects_the_wrong_type(value: object, hint: Any) -> None:
+    assert not _matches(value, hint)
 
-    The per-module test files cover what differs (each validator's ranges,
-    coercions and `arg_name`) and leave the shared contract to these.
-    """
 
-    @staticmethod
-    def _spec(name: str) -> type:
-        return getattr(types, name)
+def test_missing_default_raises() -> None:
+    class Incomplete(TypedDict, total=False):
+        a: Annotated[int, Default(1)]
+        b: float
 
-    def test_none_returns_defaults(self, name: str) -> None:
-        assert resolve_params(None, self._spec(name)) == defaults_of(self._spec(name))
+    with pytest.raises(TypeError, match="Incomplete.b` is missing a `Default"):
+        defaults_of(Incomplete)
 
-    def test_partial_fills_the_rest(self, name: str) -> None:
-        defaults = defaults_of(self._spec(name))
-        first, *rest = defaults
-        resolved = resolve_params({first: defaults[first]}, self._spec(name))
-        assert set(resolved) == set(defaults)
-        assert all(resolved[key] == defaults[key] for key in rest)
 
-    def test_cached_defaults_not_mutated(self, name: str) -> None:
-        # the defaults are cached per spec, so a caller mutating a result must not reach them
-        resolved = resolve_params(None, self._spec(name))
-        resolved.clear()
-        assert resolve_params(None, self._spec(name)) == defaults_of(self._spec(name))
+@SPECS
+def test_resolve_fills_defaults_without_leaking_the_cache(spec: type) -> None:
+    defaults = defaults_of(spec)
+    first, *_ = defaults
+    assert resolve_params({first: defaults[first]}, spec) == defaults
+    resolve_params(None, spec).clear()
+    assert resolve_params(None, spec) == defaults
 
-    def test_unknown_key_raises(self, name: str) -> None:
-        with pytest.raises(ValueError, match="Unknown .* field"):
-            resolve_params({"definitely_not_a_key": 1}, self._spec(name))
 
-    def test_non_mapping_raises(self, name: str) -> None:
-        with pytest.raises(TypeError, match="must be a Mapping or None"):
-            resolve_params(5, self._spec(name))  # type: ignore[arg-type]
+@SPECS
+@pytest.mark.parametrize(
+    ("params", "error", "match"),
+    [({"definitely_not_a_key": 1}, ValueError, "Unknown `method_params` field"), (5, TypeError, "must be a Mapping")],
+    ids=["unknown_key", "not_a_mapping"],
+)
+def test_resolve_rejects(spec: type, params: Any, error: type[Exception], match: str) -> None:
+    with pytest.raises(error, match=match):
+        resolve_params(params, spec)
+
+
+@pytest.mark.parametrize(
+    ("spec", "params"),
+    [
+        (types.MacenkoParams, {"alpha": 0.0}),
+        (types.MacenkoParams, {"alpha": 50.0}),
+        (types.MacenkoParams, {"beta": -1.0}),
+        (types.VahadaneParams, {"beta": -1.0}),
+        (types.VahadaneParams, {"lambda1": -1.0}),
+        (types.VahadaneParams, {"n_iter": 0}),
+        (types.ReinhardParams, {"luminosity_threshold": 0.0}),
+        (types.ReinhardParams, {"luminosity_threshold": 1.5}),
+    ],
+)
+def test_validator_rejects_out_of_range(spec: type, params: dict[str, Any]) -> None:
+    (key,) = params
+    with pytest.raises(ValueError, match=key):
+        resolve_params(params, spec)
+
+
+@pytest.mark.parametrize(
+    ("spec", "params", "expected"),
+    [
+        (types.MacenkoParams, {"alpha": 2}, {"alpha": 2.0}),
+        (types.VahadaneParams, {"n_iter": 5.0}, {"n_iter": 5}),
+        (
+            types.ReinhardParams,
+            {"luminosity_threshold": 1, "mask_background": 0},
+            {"luminosity_threshold": 1.0, "mask_background": False},
+        ),
+    ],
+)
+def test_validator_coerces(spec: type, params: dict[str, Any], expected: dict[str, Any]) -> None:
+    resolved = resolve_params(params, spec)
+    for key, value in expected.items():
+        assert resolved[key] == value
+        assert type(resolved[key]) is type(value)

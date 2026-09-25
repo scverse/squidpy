@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import dask.array as da
 import matplotlib.pyplot as plt
 import numpy as np
@@ -18,6 +20,21 @@ def _run_qc_and_stitch(sdata, **stitch_kwargs):
     sq.experimental.tl.calculate_tiling_qc(sdata, labels_key="labels", tile_size=200, nmads_cut=1.0, nmads_smoothed=1.5)
     sq.experimental.tl.assign_stitch_groups(sdata, labels_key="labels", **stitch_kwargs)
     return sdata.tables["labels_qc"]
+
+
+def _qc_rerun_hint(sdata, **qc_kwargs) -> str:
+    """Re-run QC and return the restore call it logs (the spatialdata logger does not propagate to caplog)."""
+    records: list[logging.LogRecord] = []
+    handler = logging.Handler()
+    handler.emit = records.append
+    logger = logging.getLogger("spatialdata._logging")
+    logger.addHandler(handler)
+    try:
+        sq.experimental.tl.calculate_tiling_qc(sdata, **qc_kwargs)
+    finally:
+        logger.removeHandler(handler)
+    (hint,) = [r.getMessage().split("To restore them, run: ")[1] for r in records if "To restore" in r.getMessage()]
+    return hint
 
 
 class TestAssignStitchGroups:
@@ -124,46 +141,23 @@ class TestAssignStitchGroups:
     @pytest.mark.parametrize("table_key", [None, "my_qc"], ids=["default_table", "custom_table"])
     def test_qc_rerun_hint_is_runnable(self, sdata_tile_boundary, table_key):
         # re-running QC drops the stitch columns and logs the call that restores them
-        import logging
-
         sdata, _ = sdata_tile_boundary
         qc = {"labels_key": "labels", "tile_size": 200, "table_key_added": table_key}
         sq.experimental.tl.calculate_tiling_qc(sdata, nmads_cut=1.0, nmads_smoothed=1.5, **qc)
         sq.experimental.tl.assign_stitch_groups(sdata, labels_key="labels", qc_table_key=table_key, distance_tol=1.0)
-        records: list[logging.LogRecord] = []
-        handler = logging.Handler()
-        handler.emit = records.append
-        logger = logging.getLogger("spatialdata._logging")  # propagate=False, so caplog can't see it
-        logger.addHandler(handler)
-        try:
-            sq.experimental.tl.calculate_tiling_qc(sdata, **qc)
-        finally:
-            logger.removeHandler(handler)
-        (hint,) = [r.getMessage().split("To restore them, run: ")[1] for r in records if "To restore" in r.getMessage()]
+        hint = _qc_rerun_hint(sdata, **qc)
         assert "distance_tol=1.0" in hint
         eval(hint, {"sq": sq, "sdata": sdata})
         assert "stitch_group_id" in sdata.tables[table_key or "labels_qc"].obs
 
     def test_qc_rerun_hint_reads_nested_stitch_params(self, sdata_tile_boundary):
         # tables saved before the knobs were flattened keep them under `stitch_params`
-        import logging
-
         sdata, _ = sdata_tile_boundary
         _run_qc_and_stitch(sdata)
         meta = sdata.tables["labels_qc"].uns["tiling_stitch"]
         meta["stitch_params"] = {"close_radius": 5}
         del meta["close_radius"]
-        records: list[logging.LogRecord] = []
-        handler = logging.Handler()
-        handler.emit = records.append
-        logger = logging.getLogger("spatialdata._logging")
-        logger.addHandler(handler)
-        try:
-            sq.experimental.tl.calculate_tiling_qc(sdata, labels_key="labels", tile_size=200)
-        finally:
-            logger.removeHandler(handler)
-        (hint,) = [r.getMessage() for r in records if "To restore" in r.getMessage()]
-        assert "close_radius=5" in hint
+        assert "close_radius=5" in _qc_rerun_hint(sdata, labels_key="labels", tile_size=200)
 
     def test_rerun_overwrites_without_growing_columns(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
