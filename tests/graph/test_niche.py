@@ -122,13 +122,8 @@ def test_niche_cellcharter_rng_none_runs(dummy_adata2: AnnData):
 
 
 def test_niche_calc_library_key_dummy_adata(dummy_adata2: AnnData):
-    "Only spatialleiden still fits per library; the others refuse rather than silently pooling."
+    "Without library_key the labels are one vocabulary over every batch."
     dummy_adata2.obs["batch"] = ["batch1"] * 5 + ["batch2"] * 5
-
-    with pytest.raises(ValueError, match=r"'library_key' fitted a separate model per library"):
-        calculate_niche(
-            dummy_adata2, flavor="neighborhood", groups="celltype", n_neighbors=3, resolutions=1.5, library_key="batch"
-        )
 
     calculate_niche(dummy_adata2, flavor="neighborhood", groups="celltype", n_neighbors=3, resolutions=1.5)
 
@@ -529,12 +524,31 @@ def test_no_flavor_takes_a_library_key(flavor, kwargs):
         globals()[f"calculate_niche_{flavor}"](adata, rng=0, library_key="library", **kwargs)
 
 
-@pytest.mark.parametrize("flavor", ["neighborhood", "utag", "cellcharter", "spatialleiden"])
-def test_the_umbrella_refuses_a_library_key_it_can_no_longer_honour(flavor):
-    "It is released with one, so it has to say what changed rather than quietly pool."
-    adata = _tiny(n=40, libraries=["a"] * 20 + ["b"] * 20)
-    with pytest.raises(ValueError, match=r"no flavor takes it any more"):
-        calculate_niche(adata, flavor=flavor, library_key="library")
+@pytest.mark.parametrize(
+    ("flavor", "kwargs"),
+    [
+        ("neighborhood", {"groups": "ct", "n_neighbors": 4, "resolutions": 1.0}),
+        ("utag", {"n_neighbors": 4, "resolutions": 1.0}),
+        ("cellcharter", {"n_components": 2, "distance": 1}),
+        ("spatialleiden", {"resolutions": 1.0, "latent_connectivities_key": "spatial_connectivities"}),
+    ],
+)
+def test_the_umbrella_still_fits_per_library_and_warns(flavor, kwargs):
+    "Released with library_key, so until v1.9.0 it keeps v1.8.3's behaviour and says it is going."
+    adata = _tiny(n=40, libraries=["a"] * 20 + ["b"] * 18 + [None] * 2)
+    with pytest.warns(FutureWarning, match=r"'library_key' is deprecated") as caught:
+        calculate_niche(adata, flavor=flavor, library_key="library", rng=0, **kwargs)
+    ours = next(w for w in caught if "'library_key' is deprecated" in str(w.message))
+    assert ours.filename == __file__, f"attributed to {ours.filename}"
+
+    column = next(c for c in adata.obs.columns if "niche" in c or c.startswith("spatialleiden"))
+    labels = adata.obs[column].astype(str)
+    assert adata.obs[column].dtype == "category"
+    # each library is its own vocabulary, and an observation with no library gets no niche
+    for library in ("a", "b"):
+        kept = labels[adata.obs["library"] == library]
+        assert all(label == "not_a_niche" or label.startswith(f"lib={library}_") for label in kept)
+    assert (labels[adata.obs["library"].isna()] == "not_a_niche").all()
 
 
 def test_integer_features_keep_their_ring_means():

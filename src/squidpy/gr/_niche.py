@@ -105,9 +105,10 @@ def calculate_niche(
             - `{fla.SPATIALLEIDEN.s!r}` - cluster spatially resolved omics data using Multiplex Leiden.
             - `{fla.CELLCHARTER.s!r}` - a simplified version of CellCharter's approach, using PCA for dimensionality reduction. An arbitrary embedding can be used instead of PCA by setting the `use_rep` parameter which will try to find the embedding in `adata.obsm`.
     library_key
-        No longer supported, and raises if set. It fitted a separate model per library, so a
-        niche in one library was unrelated to the same-numbered niche in another. Build the
-        graphs per library with :func:`~squidpy.gr.spatial_neighbors` and leave this unset.
+        Deprecated, and removed with this function in v1.9.0; no flavor function takes it. Each
+        library is fitted on its own and its labels are prefixed ``lib=<id>_``, so a niche in one
+        library is unrelated to the same-numbered niche in another. Build the graphs per library
+        with :func:`~squidpy.gr.spatial_neighbors` and leave this unset.
     %(table_key)s
     mask
         Boolean array to filter cells which won't get assigned to a niche. Spelled
@@ -185,14 +186,6 @@ def calculate_niche(
         stacklevel=3,
     )
 
-    if library_key is not None:
-        raise ValueError(
-            "'library_key' fitted a separate model per library, so a niche in one library was "
-            "unrelated to the same-numbered niche in another, and no flavor takes it any more. "
-            "Build the graphs per library with `spatial_neighbors(..., library_key=...)` and leave "
-            "this unset; for per-library niches, call the flavor on each library's subset."
-        )
-
     # cellcharter-only defaults stay guarded: filling them for other flavors would trip
     # the "not used for flavor" warning in _check_unnecessary_args
     if mask is not None and flavor == "spatialleiden":
@@ -237,75 +230,101 @@ def calculate_niche(
     if resolutions is None:
         resolutions = [0.5]
 
-    if flavor == "neighborhood":
-        return calculate_niche_neighborhood(
-            data,
-            groups=groups,
-            resolutions=resolutions,
-            n_neighbors=n_neighbors,
-            spatial_connectivities_key=spatial_connectivities_key,
-            scale=scale,
-            distance=distance,
-            abs_nhood=abs_nhood,
-            n_hop_weights=n_hop_weights,
-            embedding_key_added="niche_embedding",
-            min_niche_size=min_niche_size,
-            cluster_mask=mask,
-            copy=not inplace,
-            table_key=table_key,
-            n_iterations=n_iterations,
-            rng=rng,
-        )
+    def run(target: AnnData | SpatialData, *, copy: bool, target_key: str | None) -> AnnData | None:
+        if flavor == "neighborhood":
+            return calculate_niche_neighborhood(
+                target,
+                groups=groups,
+                resolutions=resolutions,
+                n_neighbors=n_neighbors,
+                spatial_connectivities_key=spatial_connectivities_key,
+                scale=scale,
+                distance=distance,
+                abs_nhood=abs_nhood,
+                n_hop_weights=n_hop_weights,
+                embedding_key_added="niche_embedding",
+                min_niche_size=min_niche_size,
+                cluster_mask=mask,
+                copy=copy,
+                table_key=target_key,
+                n_iterations=n_iterations,
+                rng=rng,
+            )
 
-    elif flavor == "utag":
-        return calculate_niche_utag(
-            data,
-            resolutions=resolutions,
-            n_neighbors=n_neighbors,
-            use_layer=None,
-            use_rep=use_rep,
-            spatial_connectivities_key=spatial_connectivities_key,
-            embedding_key_added="niche_embedding",
-            cluster_mask=mask,
-            min_niche_size=min_niche_size,
-            copy=not inplace,
-            table_key=table_key,
-            n_iterations=n_iterations,
-            rng=rng,
-        )
+        elif flavor == "utag":
+            return calculate_niche_utag(
+                target,
+                resolutions=resolutions,
+                n_neighbors=n_neighbors,
+                use_layer=None,
+                use_rep=use_rep,
+                spatial_connectivities_key=spatial_connectivities_key,
+                embedding_key_added="niche_embedding",
+                cluster_mask=mask,
+                min_niche_size=min_niche_size,
+                copy=copy,
+                table_key=target_key,
+                n_iterations=n_iterations,
+                rng=rng,
+            )
 
-    elif flavor == "cellcharter":
-        return calculate_niche_cellcharter(
-            data,
-            distance=distance,
-            aggregation=aggregation,
-            rng=rng,
-            spatial_connectivities_key=spatial_connectivities_key,
-            n_clusters=n_components,
-            use_rep=use_rep,
-            embedding_key_added="niche_embedding",
-            cluster_mask=mask,
-            min_niche_size=min_niche_size,
-            copy=not inplace,
-            table_key=table_key,
-        )
+        elif flavor == "cellcharter":
+            return calculate_niche_cellcharter(
+                target,
+                distance=distance,
+                aggregation=aggregation,
+                rng=rng,
+                spatial_connectivities_key=spatial_connectivities_key,
+                n_clusters=n_components,
+                use_rep=use_rep,
+                embedding_key_added="niche_embedding",
+                cluster_mask=mask,
+                min_niche_size=min_niche_size,
+                copy=copy,
+                table_key=target_key,
+            )
 
-    elif flavor == "spatialleiden":
-        return calculate_niche_spatialleiden(
-            data,
-            resolutions=resolutions,
-            latent_connectivities_key=latent_connectivities_key,
-            spatial_connectivities_key=spatial_connectivities_key,
-            layer_ratio=layer_ratio,
-            n_iterations=n_iterations,
-            use_weights=use_weights,
-            rng=rng,
-            min_niche_size=min_niche_size,
-            copy=not inplace,
-            table_key=table_key,
-        )
+        elif flavor == "spatialleiden":
+            return calculate_niche_spatialleiden(
+                target,
+                resolutions=resolutions,
+                latent_connectivities_key=latent_connectivities_key,
+                spatial_connectivities_key=spatial_connectivities_key,
+                layer_ratio=layer_ratio,
+                n_iterations=n_iterations,
+                use_weights=use_weights,
+                rng=rng,
+                min_niche_size=min_niche_size,
+                copy=copy,
+                table_key=target_key,
+            )
+        return None
 
-    return
+    if library_key is None:
+        return run(data, copy=not inplace, target_key=table_key)
+
+    warnings.warn(
+        "'library_key' is deprecated and will be removed with `calculate_niche` in squidpy v1.9.0. "
+        "It fits a separate model per library, so a niche in one library is unrelated to the "
+        "same-numbered niche in another. Build the graphs per library with "
+        "`spatial_neighbors(..., library_key=...)` and leave it unset; for per-library niches, "
+        "call the flavor function on each library's subset.",
+        FutureWarning,
+        stacklevel=3,  # the same frame as the deprecation above
+    )
+    if flavor == "cellcharter":
+        columns = ["cellcharter_niche"]
+    else:
+        stem = {"neighborhood": "nhood_niche", "utag": "utag_niche", "spatialleiden": "spatialleiden"}[flavor]
+        columns = [f"{stem}_res={res}" for res in _resolution_values(resolutions, pairs_ok=flavor == "spatialleiden")]
+    return _niches_per_library(
+        data,
+        library_key=library_key,
+        columns=columns,
+        table_key=table_key,
+        copy=not inplace,
+        run=lambda lib_adata: run(lib_adata, copy=False, target_key=None),
+    )
 
 
 @d.dedent
@@ -1337,6 +1356,37 @@ def _label_order(label: str) -> tuple[bool, int, str]:
 ############
 ### postprocessing
 ############
+
+
+# TODO(v1.9.0): delete with `calculate_niche`, its only caller; no flavor function takes `library_key`
+def _niches_per_library(
+    data: AnnData | SpatialData,
+    *,
+    library_key: str,
+    columns: list[str],
+    table_key: str | None,
+    copy: bool,
+    run: Callable[[AnnData], object],
+) -> AnnData | None:
+    """v1.8.3's ``library_key``: each library fitted on its own, labels prefixed ``lib=<id>_``."""
+
+    def loop(adata: AnnData) -> None:
+        assert_key_in_adata(adata, library_key, attr="obs")
+        # fresh per call, so a rerun cannot keep the previous run's labels; an observation with
+        # no library keeps "not_a_niche", as in v1.8.3
+        labels = {col: np.full(adata.n_obs, "not_a_niche", dtype=object) for col in columns}
+        libraries = adata.obs[library_key]
+        for lib_id in libraries.dropna().unique():
+            at = np.flatnonzero((libraries == lib_id).to_numpy())
+            lib_adata = adata[at].copy()
+            run(lib_adata)
+            for col in columns:
+                values = lib_adata.obs[col].astype(str).to_numpy()
+                labels[col][at] = [v if v == "not_a_niche" else f"lib={lib_id}_{v}" for v in values]
+        for col, values in labels.items():
+            adata.obs[col] = pd.Categorical(values)
+
+    return _on_table(data, table_key=table_key, copy=copy, work=loop)
 
 
 def _on_table(
