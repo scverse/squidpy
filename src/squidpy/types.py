@@ -8,14 +8,6 @@ from typing import Annotated, TypedDict
 from squidpy._params import Default
 from squidpy._utils import RNGLike, SeedLike
 
-#: Pixels whose Ruderman Lab-L luminosity (normalised to ``[0, 1]``) exceeds this are
-#: treated as near-white background and excluded when fitting stain statistics.
-#: Semantics follow HistomicsTK's ``reinhard``, so luminosity thresholds from the H&E
-#: literature transfer directly. Declared here, with the key it defaults, and
-#: re-exported by ``squidpy.experimental.im._stain._constants``: this module must not
-#: import from the implementation packages, whose ``__init__`` imports this one.
-DEFAULT_LUMINOSITY_THRESHOLD: float = 0.8
-
 #: Mean-absorbance (optical-density) cutoff selecting tissue pixels. One value for both
 #: decomposition methods: it is the same quantity, so it is declared once.
 _OD_BETA: float = 0.15
@@ -103,8 +95,10 @@ class ReinhardParams(TypedDict, total=False):
     A :class:`~typing.TypedDict`: pass a plain :class:`dict` with any subset of these keys.
     """
 
-    luminosity_threshold: Annotated[float, Default(DEFAULT_LUMINOSITY_THRESHOLD)]
-    """Normalised Ruderman Lab-L cutoff in ``(0, 1]``; pixels brighter than this are excluded from the fit."""
+    luminosity_threshold: Annotated[float, Default(0.8)]
+    """Normalised Ruderman Lab-L cutoff in ``(0, 1]``; pixels brighter than this are treated as
+    near-white background and excluded from the fit. Follows HistomicsTK's ``reinhard``, so
+    thresholds from the H&E literature transfer directly."""
 
     mask_background: Annotated[bool, Default(True)]
     """If ``True``, fit channel statistics over tissue pixels only; if ``False``, use every pixel (vanilla Reinhard)."""
