@@ -71,28 +71,29 @@ class TestResolveContract:
     """
 
     @staticmethod
-    def _defaults(name: str) -> dict[str, Any]:
-        return dict(defaults_of(getattr(types, name)))
+    def _spec(name: str) -> type:
+        return getattr(types, name)
 
     def test_none_returns_defaults(self, name: str) -> None:
-        assert resolve_params(None, defaults=self._defaults(name)) == self._defaults(name)
+        assert resolve_params(None, self._spec(name)) == defaults_of(self._spec(name))
 
     def test_partial_fills_the_rest(self, name: str) -> None:
-        defaults = self._defaults(name)
+        defaults = defaults_of(self._spec(name))
         first, *rest = defaults
-        resolved = resolve_params({first: defaults[first]}, defaults=defaults)
+        resolved = resolve_params({first: defaults[first]}, self._spec(name))
         assert set(resolved) == set(defaults)
         assert all(resolved[key] == defaults[key] for key in rest)
 
-    def test_defaults_not_mutated(self, name: str) -> None:
-        defaults = self._defaults(name)
-        resolve_params({key: defaults[key] for key in defaults}, defaults=defaults)
-        assert defaults == self._defaults(name)
+    def test_cached_defaults_not_mutated(self, name: str) -> None:
+        # the defaults are cached per spec, so a caller mutating a result must not reach them
+        resolved = resolve_params(None, self._spec(name))
+        resolved.clear()
+        assert resolve_params(None, self._spec(name)) == defaults_of(self._spec(name))
 
     def test_unknown_key_raises(self, name: str) -> None:
         with pytest.raises(ValueError, match="Unknown .* field"):
-            resolve_params({"definitely_not_a_key": 1}, defaults=self._defaults(name))
+            resolve_params({"definitely_not_a_key": 1}, self._spec(name))
 
     def test_non_mapping_raises(self, name: str) -> None:
         with pytest.raises(TypeError, match="must be a Mapping or None"):
-            resolve_params(5, defaults=self._defaults(name))  # type: ignore[arg-type]
+            resolve_params(5, self._spec(name))  # type: ignore[arg-type]
