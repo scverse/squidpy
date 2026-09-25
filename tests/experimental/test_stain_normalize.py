@@ -42,32 +42,32 @@ def rgb_values() -> np.ndarray:
 class TestFitStainReference:
     def test_end_to_end(self, rgb_values: np.ndarray) -> None:
         sdata = _make_sdata(rgb_values)
-        ref = fit_stain_reference(sdata, "img", method="reinhard")
+        ref = fit_stain_reference(sdata, image_key="img", method="reinhard")
         assert isinstance(ref, StainFit)
         assert ref.method == "reinhard"
 
     def test_missing_image_key_raises(self, rgb_values: np.ndarray) -> None:
         sdata = _make_sdata(rgb_values)
         with pytest.raises(ValueError, match="not found, valid keys"):
-            fit_stain_reference(sdata, "nope")
+            fit_stain_reference(sdata, image_key="nope")
 
     def test_unknown_method_raises(self, rgb_values: np.ndarray) -> None:
         sdata = _make_sdata(rgb_values)
         with pytest.raises(ValueError, match="Unknown method"):
-            fit_stain_reference(sdata, "img", method="bogus")
+            fit_stain_reference(sdata, image_key="img", method="bogus")
 
     def test_rgba_image_rejected(self) -> None:
         rng = np.random.default_rng(0)
         rgba = rng.integers(0, 256, size=(4, 16, 16), dtype=np.uint8)  # 4-channel, not RGB
         sdata = sd.SpatialData(images={"img": Image2DModel.parse(rgba, dims=("c", "y", "x"))})
         with pytest.raises(ValueError, match="3-channel RGB"):
-            fit_stain_reference(sdata, "img", method="reinhard")
+            fit_stain_reference(sdata, image_key="img", method="reinhard")
 
 
 class TestApplyStainNormalization:
     def test_returns_lazy_and_leaves_sdata_untouched(self, rgb_values: np.ndarray) -> None:
         sdata = _make_sdata(rgb_values)
-        ref = fit_stain_reference(sdata, "img", method="reinhard")
+        ref = fit_stain_reference(sdata, image_key="img", method="reinhard")
         out = ref.transform(sdata, "img", inplace=False)
         assert isinstance(out, xr.DataArray)
         assert isinstance(out.data, da.Array)
@@ -75,7 +75,7 @@ class TestApplyStainNormalization:
 
     def test_inplace_default_writes_derived_key(self, rgb_values: np.ndarray) -> None:
         sdata = _make_sdata(rgb_values)
-        ref = fit_stain_reference(sdata, "img", method="reinhard")
+        ref = fit_stain_reference(sdata, image_key="img", method="reinhard")
         result = ref.transform(sdata, "img")  # inplace=True, image_key_added defaults to f"{key}_normalized"
         assert result is None
         assert "img_normalized" in sdata.images
@@ -85,13 +85,13 @@ class TestApplyStainNormalization:
 
     def test_output_dtype_override(self, rgb_values: np.ndarray) -> None:
         sdata = _make_sdata(rgb_values)
-        ref = fit_stain_reference(sdata, "img", method="reinhard")
+        ref = fit_stain_reference(sdata, image_key="img", method="reinhard")
         out = ref.transform(sdata, "img", inplace=False, output_dtype=np.uint16)
         assert out.dtype == np.uint16
 
     def test_writes_and_preserves_transform_and_dims(self, rgb_values: np.ndarray) -> None:
         sdata = _make_sdata(rgb_values)
-        ref = fit_stain_reference(sdata, "img", method="reinhard")
+        ref = fit_stain_reference(sdata, image_key="img", method="reinhard")
         result = ref.transform(sdata, "img", image_key_added="norm")
         assert result is None
         assert "norm" in sdata.images
@@ -105,7 +105,7 @@ class TestApplyStainNormalization:
 
     def test_multiscale_rebuilds_pyramid(self, rgb_values: np.ndarray) -> None:
         sdata = _make_sdata(rgb_values, scale_factors=[2])
-        ref = fit_stain_reference(sdata, "img", method="reinhard")
+        ref = fit_stain_reference(sdata, image_key="img", method="reinhard")
         ref.transform(sdata, "img", image_key_added="norm")
         src, out = sdata.images["img"], sdata.images["norm"]
         assert hasattr(out, "keys")
@@ -119,7 +119,7 @@ class TestApplyStainNormalization:
         sdata = sd.SpatialData(images={"img": img})
         h, w = rgb_values.shape[-2], rgb_values.shape[-1]
         sdata.labels["img_tissue"] = Labels2DModel.parse(np.ones((h, w), dtype=np.uint32), dims=("y", "x"))
-        ref = fit_stain_reference(sdata, "img", method="reinhard")
+        ref = fit_stain_reference(sdata, image_key="img", method="reinhard")
         ref.transform(sdata, "img", image_key_added="norm")
         out = sdata.images["norm"]
         assert list(out.coords["c"].values) == ["r", "g", "b"]
@@ -130,19 +130,19 @@ class TestApplyStainNormalization:
         # the source's channel names) so RGB-aware viewers render it faithfully.
         sdata = _make_sdata(rgb_values)  # parsed without explicit c_coords
         assert list(sdata.images["img"].coords["c"].values) != ["r", "g", "b"]
-        ref = fit_stain_reference(sdata, "img", method="reinhard")
+        ref = fit_stain_reference(sdata, image_key="img", method="reinhard")
         out = ref.transform(sdata, "img", inplace=False)
         assert list(out.coords["c"].values) == ["r", "g", "b"]
 
     def test_existing_key_raises(self, rgb_values: np.ndarray) -> None:
         sdata = _make_sdata(rgb_values)
-        ref = fit_stain_reference(sdata, "img", method="reinhard")
+        ref = fit_stain_reference(sdata, image_key="img", method="reinhard")
         with pytest.raises(ValueError, match="already exists"):
             ref.transform(sdata, "img", image_key_added="img")
 
     def test_method_params_mapping(self, rgb_values: np.ndarray) -> None:
         sdata = _make_sdata(rgb_values)
-        ref = fit_stain_reference(sdata, "img", method="reinhard", method_params={"mask_background": False})
+        ref = fit_stain_reference(sdata, image_key="img", method="reinhard", method_params={"mask_background": False})
         out = ref.transform(sdata, "img", method_params=ReinhardParams(mask_background=False), inplace=False)
         assert isinstance(out, xr.DataArray)
 
@@ -151,11 +151,11 @@ class TestTissueMaskMandate:
     def test_fit_requires_tissue_mask(self, rgb_values: np.ndarray) -> None:
         sdata = _make_sdata(rgb_values, with_tissue=False)
         with pytest.raises(KeyError, match="detect_tissue"):
-            fit_stain_reference(sdata, "img", method="reinhard")
+            fit_stain_reference(sdata, image_key="img", method="reinhard")
 
     def test_apply_requires_tissue_mask(self, rgb_values: np.ndarray) -> None:
         sdata = _make_sdata(rgb_values)  # has a mask -> fit works
-        ref = fit_stain_reference(sdata, "img", method="reinhard")
+        ref = fit_stain_reference(sdata, image_key="img", method="reinhard")
         del sdata.labels["img_tissue"]  # ... but now the source has none
         with pytest.raises(KeyError, match="detect_tissue"):
             ref.transform(sdata, "img")
@@ -163,13 +163,13 @@ class TestTissueMaskMandate:
     def test_explicit_missing_key_raises(self, rgb_values: np.ndarray) -> None:
         sdata = _make_sdata(rgb_values)
         with pytest.raises(KeyError, match="not found in sdata.labels"):
-            fit_stain_reference(sdata, "img", tissue_mask_key="nope")
+            fit_stain_reference(sdata, image_key="img", tissue_mask_key="nope")
 
     def test_float_0_255_source_rejected_on_apply(self, rgb_values: np.ndarray) -> None:
         # A float image holding 0-255 values would otherwise clip to [0, 1] in the
         # reconstruction (dtype_max(float)=1.0); apply must reject it, not silently destroy it.
         sdata = _make_sdata(rgb_values)  # uint8
-        ref = fit_stain_reference(sdata, "img", method="reinhard")
+        ref = fit_stain_reference(sdata, image_key="img", method="reinhard")
         floaty = rgb_values.astype(np.float32)
         sdata.images["floaty"] = Image2DModel.parse(floaty, dims=("c", "y", "x"))
         sdata.labels["floaty_tissue"] = Labels2DModel.parse(
@@ -181,14 +181,14 @@ class TestTissueMaskMandate:
     def test_mask_is_used_in_the_fit(self, rgb_values: np.ndarray) -> None:
         # A different tissue region yields different channel statistics, proving
         # the mask actually drives the fit (not silently ignored).
-        ref_full = fit_stain_reference(_make_sdata(rgb_values), "img", method="reinhard")
+        ref_full = fit_stain_reference(_make_sdata(rgb_values), image_key="img", method="reinhard")
 
         sdata_part = _make_sdata(rgb_values, with_tissue=False)
         h, w = rgb_values.shape[-2], rgb_values.shape[-1]
         partial = np.zeros((h, w), dtype=np.uint32)
         partial[: h // 2] = 1  # only the top half is tissue
         sdata_part.labels["img_tissue"] = Labels2DModel.parse(partial, dims=("y", "x"))
-        ref_part = fit_stain_reference(sdata_part, "img", method="reinhard")
+        ref_part = fit_stain_reference(sdata_part, image_key="img", method="reinhard")
 
         assert not np.allclose(ref_full.mu, ref_part.mu)
 
@@ -206,7 +206,7 @@ class TestPreserveBackground:
         shifted = np.clip(rgb_values * np.array([1.3, 0.8, 1.1])[:, None, None], 0, 255).astype(np.uint8)
         sdata.images["ref_img"] = Image2DModel.parse(shifted, dims=("c", "y", "x"))
         sdata.labels["ref_img_tissue"] = Labels2DModel.parse(np.ones((h, w), dtype=np.uint32), dims=("y", "x"))
-        ref = fit_stain_reference(sdata, "ref_img", method="reinhard")
+        ref = fit_stain_reference(sdata, image_key="ref_img", method="reinhard")
 
         original = get_element_data(sdata.images["img"], "auto", "image", "img").values
         kept = ref.transform(sdata, "img", inplace=False).values  # preserve_background=True (default)
@@ -220,8 +220,8 @@ class TestPreserveBackground:
 class TestStainNormalizationOnHnE:
     def test_fit_apply_smoke(self, sdata_hne) -> None:
         image_key = next(iter(sdata_hne.images))
-        sq.experimental.im.detect_tissue(sdata_hne, image_key)
-        ref = sq.experimental.im.fit_stain_reference(sdata_hne, image_key, method="reinhard")
+        sq.experimental.im.detect_tissue(sdata_hne, image_key=image_key)
+        ref = sq.experimental.im.fit_stain_reference(sdata_hne, image_key=image_key, method="reinhard")
         assert ref.method == "reinhard"
         out = ref.transform(sdata_hne, image_key, inplace=False)
         assert "c" in out.dims
@@ -232,8 +232,8 @@ class TestStainNormalizationVisual(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_reinhard_before_after(self, sdata_hne) -> None:
         """Visual: a re-stained source (left) normalized back to the H&E reference (right)."""
         image_key = next(iter(sdata_hne.images))
-        sq.experimental.im.detect_tissue(sdata_hne, image_key)
-        reference = fit_stain_reference(sdata_hne, image_key, method="reinhard")
+        sq.experimental.im.detect_tissue(sdata_hne, image_key=image_key)
+        reference = fit_stain_reference(sdata_hne, image_key=image_key, method="reinhard")
 
         # Deterministically warm/cool the channels to simulate a different
         # staining batch, so the before/after panels are visibly distinct.
