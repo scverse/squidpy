@@ -5,10 +5,6 @@ from __future__ import annotations
 import numpy as np
 from skimage.color import rgb_from_hed
 
-# Re-exported: the value is declared with the params key it defaults,
-# `ReinhardParams.luminosity_threshold`, and every stain module reads it from here.
-from squidpy.types import DEFAULT_LUMINOSITY_THRESHOLD  # noqa: F401
-
 
 def _unit(v: np.ndarray) -> np.ndarray:
     a = np.asarray(v, dtype=np.float64)
