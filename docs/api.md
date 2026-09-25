@@ -172,5 +172,4 @@ it.
 ```{eval-rst}
 .. automodule:: squidpy.types
     :members:
-    :inherited-members:
 ```

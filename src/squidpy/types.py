@@ -100,13 +100,7 @@ class ReinhardParams(TypedDict, total=False):
     """If ``True``, fit channel statistics over tissue pixels only; if ``False``, use every pixel (vanilla Reinhard)."""
 
 
-class _ODBetaParams(TypedDict, total=False):
-    # the key both decomposition methods take: it is the same quantity, so it is declared once
-    beta: Annotated[float, Default(0.15)]
-    """Mean-absorbance cutoff selecting tissue pixels (optical-density space)."""
-
-
-class MacenkoParams(_ODBetaParams, total=False):
+class MacenkoParams(TypedDict, total=False):
     """Tuning knobs for Macenko stain-matrix fitting.
 
     A :class:`~typing.TypedDict`: pass a plain :class:`dict` with any subset of these keys.
@@ -115,12 +109,18 @@ class MacenkoParams(_ODBetaParams, total=False):
     alpha: Annotated[float, Default(1.0)]
     """Angular percentile (deg) for the two stain directions; the extremes are taken at ``alpha`` / ``100 - alpha``."""
 
+    beta: Annotated[float, Default(0.15)]
+    """Mean-absorbance cutoff selecting tissue pixels (optical-density space)."""
 
-class VahadaneParams(_ODBetaParams, total=False):
+
+class VahadaneParams(TypedDict, total=False):
     """Tuning knobs for Vahadane (sparse-NMF) stain-matrix fitting.
 
     A :class:`~typing.TypedDict`: pass a plain :class:`dict` with any subset of these keys.
     """
+
+    beta: Annotated[float, Default(0.15)]
+    """Mean-absorbance cutoff selecting tissue pixels (optical-density space)."""
 
     lambda1: Annotated[float, Default(0.1)]
     """L1 sparsity regularisation on the concentration factor of the NMF."""
