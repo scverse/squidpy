@@ -217,9 +217,9 @@ def detect_tissue(
             - `DetectTissueMethod.FELZENSZWALB` or `"felzenszwalb"` - Felzenszwalb superpixel segmentation.
             - `DetectTissueMethod.WEKA` or `"weka"` - Trainable segmentation with corner background priors and RGB multiscale features.
     method_params
-        Tuning for ``method``, as a dict of ``FelzenszwalbParams`` or ``WekaParams`` keys;
-        ``None`` uses the defaults.
-        Not accepted with ``method="otsu"``, which has none.
+        Optional parameters specific to the selected method. For `"felzenszwalb"`, provide a
+        mapping of ``FelzenszwalbParams`` keys. For `"weka"`, provide a mapping of ``WekaParams``
+        keys. Passing values when ``method="otsu"`` is not supported.
     channel_format
         Expected format of image channels. Valid options are:
 
@@ -229,10 +229,9 @@ def detect_tissue(
             - `"multichannel"` - Multi-channel image.
 
     corners_are_background
-        Whether corners are considered background regions, used for orienting the
-        threshold. A single bool applies to all four corners; a sequence of four bools
-        sets them individually as ``(top-left, top-right, bottom-left, bottom-right)``.
-        If no corner is background, background is taken to be the bright side.
+        Whether corners are considered background regions. Used for orienting threshold.
+        Pass four bools to set ``(top-left, top-right, bottom-left, bottom-right)`` separately.
+        If no corners are flagged True, orientation falls back to bright background.
     corner_size_pct
         Corner box size as a fraction of height/width.
     border_margin_px
