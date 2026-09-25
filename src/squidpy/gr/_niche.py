@@ -107,8 +107,17 @@ def calculate_niche(
     library_key
         Deprecated, and removed with this function in v1.9.0; no flavor function takes it. Each
         library is fitted on its own and its labels are prefixed ``lib=<id>_``, so a niche in one
-        library is unrelated to the same-numbered niche in another. Build the graphs per library
-        with :func:`~squidpy.gr.spatial_neighbors` and leave this unset.
+        library is unrelated to the same-numbered niche in another.
+
+        Either way, build the graphs per library with :func:`~squidpy.gr.spatial_neighbors`.
+        For niches shared across libraries, leave this unset. For niches per library, call a
+        flavor function on each library's slice, which is what this does::
+
+            adata.obs["niche"] = "not_a_niche"
+            for lib in adata.obs["library"].unique():
+                sub = adata[adata.obs["library"] == lib].copy()
+                sq.gr.calculate_niche_utag(sub, resolutions=0.5)
+                adata.obs.loc[sub.obs_names, "niche"] = f"lib={{lib}}_" + sub.obs["utag_niche_res=0.5"].astype(str)
     %(table_key)s
     mask
         Boolean array to filter cells which won't get assigned to a niche. Spelled
@@ -305,10 +314,12 @@ def calculate_niche(
 
     warnings.warn(
         "'library_key' is deprecated and will be removed with `calculate_niche` in squidpy v1.9.0. "
-        "It fits a separate model per library, so a niche in one library is unrelated to the "
-        "same-numbered niche in another. Build the graphs per library with "
-        "`spatial_neighbors(..., library_key=...)` and leave it unset; for per-library niches, "
-        "call the flavor function on each library's subset.",
+        "It fits a separate model per library, so niche labels are not shared between libraries. "
+        "Either way, build the graphs per library with `spatial_neighbors(..., library_key=...)`. "
+        "For niches shared across libraries, leave `library_key` unset. For niches per library, "
+        "call a flavor function on each library's slice, e.g. "
+        "`calculate_niche_utag(adata[adata.obs['library'] == lib].copy(), ...)`, and copy the "
+        "labels back; the `calculate_niche` docstring shows how.",
         FutureWarning,
         stacklevel=3,  # the same frame as the deprecation above
     )
