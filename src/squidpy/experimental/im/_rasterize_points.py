@@ -5,9 +5,9 @@ inverse, reading an image or volume at arbitrary physical points.
 
 The numerics here are deliberately free of JAX: the STalign solver in
 :mod:`squidpy.experimental.tl` imports :func:`rasterize` and :func:`axis` from this
-module, so the primitive is usable -- and installable -- without the optional JAX extra.
+module, so the primitive is usable (and installable) without the optional JAX extra.
 Sampling stays JAX-free for the same reason, and because :mod:`~squidpy.experimental.im`
-is the layer the solver imports *from* -- reaching back into it would invert that.
+is the layer the solver imports *from*: reaching back into it would invert that.
 """
 
 from __future__ import annotations
@@ -128,7 +128,7 @@ def _blur_conserving(histogram: np.ndarray, *, sigma: float) -> np.ndarray:
     ``mode="constant"`` lets a kernel centred near the border spill off the edge, so
     points there contribute less than one unit and the density is biased low around the
     rim. The mass a point at cell ``c`` retains is ``sum_p K(p - c)``, which by symmetry
-    of ``K`` equals ``gaussian_filter(ones)[c]`` -- dividing by that before blurring
+    of ``K`` equals ``gaussian_filter(ones)[c]``: dividing by that before blurring
     makes the total exactly the number of points, wherever they lie.
     """
     from scipy.ndimage import gaussian_filter
@@ -231,7 +231,7 @@ def sample_volume(
     ----------
     volume
         A ``(z, y, x)`` volume or ``(y, x)`` image, optionally channelled as
-        ``(c, z, y, x)`` / ``(c, y, x)``. Need not be the array a fit ran on -- an
+        ``(c, z, y, x)`` / ``(c, y, x)``. Need not be the array a fit ran on: an
         annotation volume registered to the same frame is the point.
     axes
         The array's physical axes in array order, ``(z, y, x)`` or ``(y, x)``: one
@@ -240,7 +240,7 @@ def sample_volume(
         Physical coordinates in ``(x, y[, z])`` order, i.e. the reverse of ``axes``.
     order
         ``1`` interpolates linearly, for an intensity image. ``0`` samples the nearest
-        voxel, which is what an annotation volume needs -- interpolating integer structure
+        voxel, which is what an annotation volume needs: interpolating integer structure
         ids would average two of them into a third, unrelated id.
 
     Returns
@@ -266,7 +266,7 @@ def sample_volume(
         raise ValueError(f"Expected an (N, {ndim}) array of `(x, y[, z])` points, found shape {pts.shape}.")
 
     channelled = arr if arr.ndim == ndim + 1 else arr[None]
-    # `points` is (x, y[, z]); the array and `axes` are in array order -- reverse to match.
+    # `points` is (x, y[, z]); the array and `axes` are in array order: reverse to match.
     index = np.stack(
         [
             (pts[:, ndim - 1 - position] - values[0]) / (values[1] - values[0])

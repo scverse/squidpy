@@ -46,7 +46,7 @@ def as_chw(image: npt.ArrayLike, *, name: str, ndim: int = 2) -> jax.Array:
     """Coerce an image to channels-first, promoting an unchannelled array.
 
     ``ndim`` is the number of *spatial* axes: 2 for a ``(y, x)`` section, 3 for a
-    ``(z, y, x)`` volume. Not :func:`jnp.atleast_3d`, which appends the new axis --
+    ``(z, y, x)`` volume. Not :func:`jnp.atleast_3d`, which appends the new axis:
     turning a ``(y, x)`` image into ``(y, x, 1)``, y channels of x by 1, instead of a
     single ``(1, y, x)`` channel.
     """
@@ -112,7 +112,7 @@ def affine_xy_to_rc(
 ) -> tuple[jax.Array, jax.Array]:
     """Split a homogeneous ``(x, y[, z])`` affine into array-order ``(linear, translation)``.
 
-    The solver works in array order -- ``(y, x)`` at rank 2, ``(z, y, x)`` at rank 3 --
+    The solver works in array order (``(y, x)`` at rank 2, ``(z, y, x)`` at rank 3)
     so conjugating by the axis reversal converts the caller's convention without them
     having to think in the solver's.
     """

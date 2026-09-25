@@ -161,7 +161,7 @@ class StalignObsParams(TypedDict, total=False):
     """Axes ``initial_velocity`` lives on, row-column."""
 
     a: Annotated[float, Default(500.0)]
-    """Sobolev kernel width -- the spatial scale the velocity field is smoothed over, so it
+    """Sobolev kernel width, the spatial scale the velocity field is smoothed over, so it
     sets how local a deformation can be."""
 
     p: Annotated[float, Default(2.0)]
@@ -188,7 +188,7 @@ class StalignObsParams(TypedDict, total=False):
 
     epV: Annotated[float, Default(2000.0)]
     """Gradient-descent step size for the velocity field. **Scale dependent**, and the one to
-    reach for first -- too large and the deformation overwhelms the affine."""
+    reach for first: too large and the deformation overwhelms the affine."""
 
     sigmaM: Annotated[float, Default(1.0)]
     """Noise scale of the matching term."""
@@ -246,7 +246,7 @@ class StalignImageParams(TypedDict, total=False):
     """Axes ``initial_velocity`` lives on, row-column."""
 
     a: Annotated[float, Default(20.0)]
-    """Sobolev kernel width -- the spatial scale the velocity field is smoothed over, so it
+    """Sobolev kernel width, the spatial scale the velocity field is smoothed over, so it
     sets how local a deformation can be."""
 
     p: Annotated[float, Default(2.0)]
@@ -273,7 +273,7 @@ class StalignImageParams(TypedDict, total=False):
 
     epV: Annotated[float, Default(1.0)]
     """Gradient-descent step size for the velocity field. **Scale dependent**, and the one to
-    reach for first -- too large and the deformation overwhelms the affine."""
+    reach for first: too large and the deformation overwhelms the affine."""
 
     sigmaM: Annotated[float, Default(1.0)]
     """Noise scale of the matching term."""
@@ -320,7 +320,7 @@ class StalignVolumeParams(TypedDict, total=False):
     """Axes ``initial_velocity`` lives on, row-column."""
 
     a: Annotated[float, Default(500.0)]
-    """Sobolev kernel width -- the spatial scale the velocity field is smoothed over, so it
+    """Sobolev kernel width, the spatial scale the velocity field is smoothed over, so it
     sets how local a deformation can be."""
 
     p: Annotated[float, Default(2.0)]
@@ -347,7 +347,7 @@ class StalignVolumeParams(TypedDict, total=False):
 
     epV: Annotated[float, Default(1000.0)]
     """Gradient-descent step size for the velocity field. **Scale dependent**, and the one to
-    reach for first -- too large and the deformation overwhelms the affine."""
+    reach for first: too large and the deformation overwhelms the affine."""
 
     sigmaM: Annotated[float, Default(1.0)]
     """Noise scale of the matching term."""

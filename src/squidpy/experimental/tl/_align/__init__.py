@@ -3,7 +3,7 @@
 Layered so the numerics never touch a container: :mod:`._api` holds the public
 ``align_*`` functions, which resolve the ``*_key`` arguments to plain arrays and hand
 them to the array-in / array-out estimators in :mod:`._landmark` and :mod:`._stalign`.
-Importing stays cheap -- JAX is pulled in only when a STalign fit actually runs.
+Importing stays cheap: JAX is pulled in only when a STalign fit actually runs.
 """
 
 from __future__ import annotations
