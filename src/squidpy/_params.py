@@ -17,7 +17,7 @@ class Default:
     """The default value of a params key, carried in its ``Annotated`` metadata.
 
     Keeps the default next to the key and its docstring instead of in a parallel
-    mapping -- one source of truth for the resolver and for the docs.
+    mapping: one source of truth for the resolver and for the docs.
     """
 
     value: Any

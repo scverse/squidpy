@@ -176,13 +176,13 @@ html_show_sphinx = False
 
 
 # Each params key carries its default in the `Annotated` metadata of its
-# declaration (`squidpy._params.Default`). Read it from there --
-# one source of truth, no defaults restated in docstrings where they could drift.
+# declaration (`squidpy._params.Default`). Read it from there: one source of truth,
+# no defaults restated in docstrings where they could drift.
 
 
 @cache
 def _params_defaults() -> dict[str, dict[str, object]]:
-    """Read every params key's ``Default`` -- and then hide it from autodoc.
+    """Read every params key's ``Default``, then hide it from autodoc.
 
     Autodoc renders `Annotated` metadata verbatim (`Annotated[float, Default(1.0)]`),
     so once the defaults are in hand each annotation is replaced by its bare type.

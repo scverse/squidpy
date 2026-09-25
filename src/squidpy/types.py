@@ -17,7 +17,7 @@ from squidpy._utils import RNGLike, SeedLike
 DEFAULT_LUMINOSITY_THRESHOLD: float = 0.8
 
 #: Mean-absorbance (optical-density) cutoff selecting tissue pixels. One value for both
-#: decomposition methods -- it is the same quantity, so it is declared once.
+#: decomposition methods: it is the same quantity, so it is declared once.
 _OD_BETA: float = 0.15
 
 __all__ = [
