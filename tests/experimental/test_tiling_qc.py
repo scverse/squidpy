@@ -219,6 +219,11 @@ class TestCalculateTilingQC:
 
 
 class TestTilingQCParamsValidation:
+    def test_min_area_reaches_the_scorer(self, sdata_tile_boundary):
+        sdata, _ = sdata_tile_boundary
+        adata = sq.experimental.tl.calculate_tiling_qc(sdata, labels_key="labels", inplace=False, min_area=10**9)
+        assert adata.obs["cut_score"].isna().all()
+
     @pytest.mark.parametrize(
         ("kwargs", "match"),
         [
