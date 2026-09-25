@@ -89,7 +89,7 @@ def fit_affine(ref: np.ndarray, query: np.ndarray) -> NDArrayA:
     Parameters
     ----------
     ref, query
-        Pre-paired ``(N, 2)`` ``(x, y)`` landmark arrays (``N >= 3``), not collinear --
+        Pre-paired ``(N, 2)`` ``(x, y)`` landmark arrays (``N >= 3``), not collinear:
         a line leaves the 6 degrees of freedom underdetermined.
 
     Returns

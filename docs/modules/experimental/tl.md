@@ -18,7 +18,7 @@
 #### Fits
 
 What an alignment returns: a frozen object carrying the operations that apply it. One class
-per entry point, because what a fit can do follows from what it was fitted from -- only the
+per entry point, because what a fit can do follows from what it was fitted from: only the
 two that carry a raster frame offer ``deformation_grid``, and only the rank-2 image fit
 offers ``warp_image``.
 

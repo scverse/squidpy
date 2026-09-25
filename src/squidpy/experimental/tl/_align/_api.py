@@ -1,7 +1,7 @@
 """The public alignment functions, built on the array-in / array-out estimators.
 
 Thin orchestrators: resolve the ``*_key`` arguments to in-memory arrays and call the
-estimator. The estimators in :mod:`._stalign` never see a container -- which is why the
+estimator. The estimators in :mod:`._stalign` never see a container: which is why the
 container-level helpers here back the fit's methods rather than being public themselves,
 leaving those methods thin delegators and the layering intact. SpatialData transformation
 write-back lives in :mod:`._io`.
@@ -14,11 +14,11 @@ so representable, makes honest.
 
 Writing takes ``inplace``, with the meaning scanpy gives it: ``inplace=False`` hands back
 what would have been written instead of writing it. A function that returns a fit takes no
-such flag -- there is nothing to write yet, and ``copy`` in scanpy's sense (operate on a
+such flag: there is nothing to write yet, and ``copy`` in scanpy's sense (operate on a
 duplicated container) is a caller's ``.copy()`` away.
 
 ``key_added`` always names a write target, defaulting to a conventional key the way
-scanpy's does -- it is never the switch for whether to write. That is ``inplace``'s job,
+scanpy's does: it is never the switch for whether to write. That is ``inplace``'s job,
 and one flag with one meaning beats two spellings of the same thing.
 """
 
@@ -263,11 +263,11 @@ def stalign_align_image(
     ref_coordinate_system, query_coordinate_system
         Coordinate systems to read each element's physical axes in. The scale and
         translation the elements carry supply the units, so two images at different
-        resolutions need nothing restated -- and nothing can be restated to contradict
+        resolutions need nothing restated: and nothing can be restated to contradict
         the container.
     landmarks_ref, landmarks_query
         Optional paired ``(x, y)`` landmark arrays (matched by row order), in the units of
-        the corresponding ``*_coordinate_system`` -- the same units the elements' own
+        the corresponding ``*_coordinate_system``: the same units the elements' own
         transformations supply, not pixel indices. They contribute the point-matching term
         the solver weights by ``sigmaP``, and derive the starting affine unless
         ``initial_affine`` is given, in which case that wins and the matching term stays.
@@ -276,7 +276,7 @@ def stalign_align_image(
         :class:`~squidpy.types.StalignImageParams` for the accepted
         keys, their meaning, and their defaults. ``a``, ``epL``, ``epT`` and ``epV`` are
         lengths and step sizes in the units the elements carry, and their defaults are
-        tuned for pixel-sized units -- an element scaled to microns needs them rescaled.
+        tuned for pixel-sized units: an element scaled to microns needs them rescaled.
 
     Returns
     -------
@@ -373,7 +373,7 @@ def _assert_table_coords_share_frame(
         if not np.allclose(matrix, np.eye(3)):
             raise ValueError(
                 f"`spatial_key={spatial_key!r}` lives in the intrinsic frame of element {name!r}, which "
-                f"carries a non-identity transformation into {coordinate_system!r} -- the coordinate system "
+                f"carries a non-identity transformation into {coordinate_system!r}: the coordinate system "
                 f"the fit's units come from. Transforming it would silently produce wrong reference "
                 f"coordinates. Store the coordinates in {coordinate_system!r} units, or apply "
                 f"`StalignFit.transform_points` to coordinates you have placed there yourself."
@@ -415,7 +415,7 @@ def stalign_align_volume(
         by an ``image_key`` pair.
     image_key
         Name of the image element, or a ``(ref, query)`` pair. The reference must be a
-        ``(c, z, y, x)`` volume and the query a ``(c, y, x)`` section -- for cells rather
+        ``(c, z, y, x)`` volume and the query a ``(c, y, x)`` section: for cells rather
         than an image, rasterize them first with
         :func:`~squidpy.experimental.im.rasterize_points`.
     ref_coordinate_system, query_coordinate_system
@@ -499,7 +499,7 @@ def apply_fit_to_container(
         )
     if isinstance(data, SpatialData) and isinstance(fit, StalignImageFit | StalignVolumeFit):
         # A fit carrying raster axes took its units from an image element's transformation,
-        # so the coordinates it is applied to have to sit in that same frame -- and it is the
+        # so the coordinates it is applied to have to sit in that same frame: and it is the
         # *fit's* frame that has to match, not a default the caller never chose.
         _assert_table_coords_share_frame(
             data,
@@ -560,13 +560,13 @@ def align_landmarks(
         a SpatialData holding both samples' landmarks, distinguished by a
         ``landmark_key`` pair.
 
-        Both may instead be the ``(N, 2)`` landmark arrays themselves, matched by row order --
+        Both may instead be the ``(N, 2)`` landmark arrays themselves, matched by row order:
         the same form ``landmarks_ref`` / ``landmarks_query`` take on
         :func:`~squidpy.experimental.tl.stalign_align_obs`. Given arrays, this returns the
         affine, and every argument that addresses a container must be left unset.
     landmark_key
         Where the ``(N, 2)`` landmark correspondences live (matched by row order), or a
-        ``(ref, query)`` pair. Required for container input, rejected for arrays. On an AnnData -- or a SpatialData with ``table_key`` --
+        ``(ref, query)`` pair. Required for container input, rejected for arrays. On an AnnData (or a SpatialData with ``table_key``)
         this is an ``obsm`` key; on a SpatialData without ``table_key`` it names a
         shapes element, the layout napari-spatialdata writes when landmarks are picked
         interactively.
@@ -574,7 +574,7 @@ def align_landmarks(
         ``"similarity"`` (default) fits 4 degrees of freedom (rotation + uniform scale
         + translation); ``"affine"`` fits all 6 (adding non-uniform scale and shear).
         The more constrained fit cannot shear a sample that should not be sheared, and a
-        line determines it -- ``"affine"`` needs landmarks that are not collinear.
+        line determines it: ``"affine"`` needs landmarks that are not collinear.
     table_key
         For SpatialData input, read the landmarks from this table's ``obsm`` instead
         of a shapes element. A single key applies to both sides; a ``(ref, query)``
@@ -597,7 +597,7 @@ def align_landmarks(
     Returns
     -------
     The fitted homogeneous ``(3, 3)`` affine in ``(x, y)`` when neither ``key_added``
-    nor ``target_coordinate_system`` is given -- directly usable as a
+    nor ``target_coordinate_system`` is given: directly usable as a
     :class:`~spatialdata.transformations.Affine`; otherwise ``None``, having written into
     the query container itself. Copy it first if the original must survive.
     """
@@ -739,7 +739,7 @@ def _register_transformation(
 
     moving_cs = _coordinate_system_of(query_container, query_lm_key, side="query")
     # Registering moves *everything* in `moving_cs`. If the reference sits in that same
-    # coordinate system of the same object, it would be dragged along with the query --
+    # coordinate system of the same object, it would be dragged along with the query:
     # silently producing a wrong answer rather than failing.
     if (
         data_ref is query_container

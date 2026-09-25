@@ -58,7 +58,7 @@ def test_image_fit_reads_both_element_layouts(scale_factors: list[int] | None) -
     """A multiscale element is a DataTree, which carries a `.dims` attribute of its own.
 
     Duck-typing on that attribute silently skipped the scale resolution and crashed on
-    every multiscale image -- the layout spatialdata's readers actually produce.
+    every multiscale image: the layout spatialdata's readers actually produce.
     """
     image = np.random.default_rng(0).random((1, 32, 32))
     kwargs = {} if scale_factors is None else {"scale_factors": scale_factors}
@@ -125,7 +125,7 @@ def test_slice_fit_initialises_on_the_volume_centre_not_its_corner(scale: float)
     shape check: the initial translation used to centre the section using the *section's*
     in-plane means alone, which is only the volume's centre when the volume's own axes
     happen to be centred on the origin. Container-level fits read their axes off the
-    element, where they start at its translation and never are -- so the section began half
+    element, where they start at its translation and never are: so the section began half
     the volume extent away, in the corner. `initial_scale` is covered too: it scales the
     out-of-plane row, so leaving it out of the translation moved the selected slice.
     """
@@ -189,7 +189,7 @@ def test_writing_coords_from_a_different_frame_is_refused() -> None:
 
     A table's ``obsm`` sits in the intrinsic frame of the element it annotates. Applying the
     fit to it under a non-identity transform yields plausible-looking reference coordinates
-    that are simply wrong, with nothing to reveal it -- so it raises instead.
+    that are simply wrong, with nothing to reveal it: so it raises instead.
     """
     sdata_ref = _sdata_image(np.random.default_rng(0).random((1, 6, 12, 12)), "volume")
     kwargs = {"image_key": ("volume", "section"), **VOLUME_SOLVER}
@@ -235,7 +235,7 @@ def test_landmarks_and_initial_affine_are_not_exclusive() -> None:
     """Landmarks have two roles; only one of them collides with ``initial_affine``.
 
     They always contribute the matching term, and *also* derive the starting affine when
-    ``initial_affine`` is absent. Passing both keeps the term and pins the start -- which
+    ``initial_affine`` is absent. Passing both keeps the term and pins the start: which
     is what a fit that supplies its own L/T alongside points needs.
     """
     from squidpy.experimental.tl._align._stalign import fit_stalign_image, fit_stalign_obs
@@ -300,7 +300,7 @@ def test_a_stored_fit_survives_a_zarr_round_trip_and_still_transforms(tmp_path) 
 
     Asserted through an actual write, because the trap is on that path and not in memory:
     anndata has no writer for a tuple, and a *list* of the axes only survives when they
-    happen to be equal length -- a non-square raster fails. Hence the mapping, and hence a
+    happen to be equal length: a non-square raster fails. Hence the mapping, and hence a
     12x9 raster here rather than a square one.
     """
     import anndata as ad
@@ -324,7 +324,7 @@ def test_a_stored_fit_survives_a_zarr_round_trip_and_still_transforms(tmp_path) 
     restored = StalignFit.from_uns(reloaded)
     restored.transform(reloaded, key_added="by_key")
 
-    # `kind`, not `rank`, is the discriminant -- and it has to come back as the right class
+    # `kind`, not `rank`, is the discriminant: and it has to come back as the right class
     assert type(restored) is type(fit)
     assert restored.kind == "volume"
     assert restored.rank == 3
