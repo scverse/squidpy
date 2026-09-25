@@ -47,15 +47,17 @@ _Corners = tuple[bool, bool, bool, bool]
 
 
 def _normalize_corners(corners_are_background: bool | Sequence[bool]) -> _Corners:
-    """Broadcast a single flag to all four corners, or validate a 4-sequence."""
-    if isinstance(corners_are_background, Sequence):
-        if len(corners_are_background) != 4:
-            raise ValueError(
-                "`corners_are_background` must be a bool or a sequence of 4 bools "
-                "(top-left, top-right, bottom-left, bottom-right)."
-            )
-        return cast(_Corners, tuple(bool(c) for c in corners_are_background))
-    return (bool(corners_are_background),) * 4
+    """Broadcast a single flag to all four corners, or validate four of them (sequence or array)."""
+    if isinstance(corners_are_background, str):  # `bool("False")` is True
+        raise TypeError("`corners_are_background` must be a bool or 4 bools, not a string.")
+    if np.ndim(corners_are_background) == 0:
+        return (bool(corners_are_background),) * 4
+    if np.shape(corners_are_background) != (4,):
+        raise ValueError(
+            "`corners_are_background` must be a bool or a sequence of 4 bools "
+            "(top-left, top-right, bottom-left, bottom-right)."
+        )
+    return cast(_Corners, tuple(bool(c) for c in corners_are_background))
 
 
 #: The params type each method takes. OTSU is absent: it accepts none.

@@ -225,8 +225,16 @@ class TestTilingQCParamsValidation:
             ({"distance_tol": -1.0}, "`distance_tol` to be non-negative"),
             ({"min_area": 0}, "`min_area` to be positive"),
             ({"max_contour_points": 2}, "`max_contour_points` must be >= 3"),
+            ({"min_area": 0.5}, "`min_area` to be positive"),
+            ({"n_neighbors": 0.5}, "n_neighbors must be >= 1"),
         ],
-        ids=["negative_distance_tol", "zero_min_area", "tiny_max_contour_points"],
+        ids=[
+            "negative_distance_tol",
+            "zero_min_area",
+            "tiny_max_contour_points",
+            "fractional_min_area",
+            "fractional_n_neighbors",
+        ],
     )
     def test_invalid_raises_value_error(self, sdata_tile_boundary, kwargs, match):
         sdata, _ = sdata_tile_boundary

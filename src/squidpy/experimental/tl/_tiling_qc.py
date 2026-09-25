@@ -397,12 +397,13 @@ def calculate_tiling_qc(
     nmads_cut: float = 1.5,
     nmads_smoothed: float = 3,
     n_neighbors: int = 10,
-    distance_tol: float = 0.75,
-    min_area: int = 20,
-    max_contour_points: int = 500,
     n_jobs: int = -1,
     table_key_added: str | None = None,
     inplace: bool = True,
+    *,
+    distance_tol: float = 0.75,
+    min_area: int = 20,
+    max_contour_points: int = 500,
 ) -> ad.AnnData | None:
     """Score cells for tile-boundary segmentation artifacts.
 
@@ -453,15 +454,6 @@ def calculate_tiling_qc(
         perfect grid each cell has 8 immediate neighbours; the default
         of 10 leaves a little wiggle room for biological irregularity
         without wasting compute on distant cells.
-    distance_tol
-        Maximum perpendicular distance (pixels) from the fitted line for a
-        contour point to count as straight.
-    min_area
-        Cells smaller than this (pixels at analysis resolution) are skipped
-        (NaN scores).
-    max_contour_points
-        Cap on contour resolution; longer contours are arc-length-resampled
-        before the O(n^2) collinearity scan.
     n_jobs
         Number of threads for tile processing.  ``-1`` (default) uses
         all available CPUs; ``0`` and values below ``-1`` raise.
@@ -474,6 +466,15 @@ def calculate_tiling_qc(
     inplace
         If ``True``, store result in ``sdata.tables``.  Otherwise
         return the AnnData directly.
+    distance_tol
+        Maximum perpendicular distance (pixels) from the fitted line for a
+        contour point to count as straight.
+    min_area
+        Cells smaller than this (pixels at analysis resolution) are skipped
+        (NaN scores).
+    max_contour_points
+        Cap on contour resolution; longer contours are arc-length-resampled
+        before the O(n^2) collinearity scan.
 
     Returns
     -------
@@ -517,9 +518,11 @@ def calculate_tiling_qc(
         assert_positive(nmads_cut, name="nmads_cut")
     if outlier_use_smoothed:
         assert_positive(nmads_smoothed, name="nmads_smoothed")
-    assert_positive(n_neighbors, name="n_neighbors")
+    if n_neighbors < 1:
+        raise ValueError(f"n_neighbors must be >= 1, got {n_neighbors}.")
     distance_tol = float(distance_tol)
     assert_non_negative(distance_tol, name="distance_tol")
+    min_area, max_contour_points = int(min_area), int(max_contour_points)
     assert_positive(min_area, name="min_area")
     if max_contour_points < 3:  # the floor is 3, not 1, so no helper fits
         raise ValueError(f"`max_contour_points` must be >= 3 (collinearity needs 3 points), got {max_contour_points}.")
@@ -543,9 +546,9 @@ def calculate_tiling_qc(
         return _score_tile(
             tile_lbl,
             distance_tol=distance_tol,
-            min_area=int(min_area),
+            min_area=min_area,
             downsample=downsample,
-            max_contour_points=int(max_contour_points),
+            max_contour_points=max_contour_points,
         )
 
     # `_score_tile` is numba `nogil`, so threads scale (no process/pickle cost).
@@ -648,8 +651,8 @@ def calculate_tiling_qc(
         "nmads_smoothed": nmads_smoothed,
         "n_neighbors": n_neighbors,
         "distance_tol": distance_tol,
-        "min_area": int(min_area),
-        "max_contour_points": int(max_contour_points),
+        "min_area": min_area,
+        "max_contour_points": max_contour_points,
     }
 
     if inplace:
@@ -678,6 +681,8 @@ def _warn_if_dropping_stitch_columns(sdata: sd.SpatialData, table_key: str, labe
 
     prev_params = existing.uns.get("tiling_stitch", {}) if hasattr(existing, "uns") else {}
     parts = [f"labels_key={labels_key!r}"]
+    if table_key != f"{labels_key}_qc":
+        parts.append(f"qc_table_key={table_key!r}")
     parts.extend(f"{k}={v!r}" for k, v in prev_params.items() if k in _STITCH_PARAM_KEYS)
     rerun = f"sq.experimental.tl.assign_stitch_groups(sdata, {', '.join(parts)})"
     logg.warning(

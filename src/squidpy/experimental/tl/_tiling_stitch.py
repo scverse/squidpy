@@ -695,13 +695,14 @@ def assign_stitch_groups(
     min_confidence: float = 0.7,
     max_gap: float = 3.0,
     max_group_size: int = 4,
+    inplace: bool = True,
+    *,
     distance_tol: float = _STITCH_DEFAULTS["distance_tol"],
     min_edge_length: float = _STITCH_DEFAULTS["min_edge_length"],
     min_edge_length_ratio: float = _STITCH_DEFAULTS["min_edge_length_ratio"],
     min_edge_coverage: float = _STITCH_DEFAULTS["min_edge_coverage"],
     candidate_min_iou: float = _STITCH_DEFAULTS["candidate_min_iou"],
     close_radius: int = _STITCH_DEFAULTS["close_radius"],
-    inplace: bool = True,
 ) -> ad.AnnData | None:
     """Assign tile-cut cell pieces to stitch groups.
 
@@ -740,6 +741,9 @@ def assign_stitch_groups(
     max_group_size
         Cap on group size; oversized groups (likely false merges) collapse
         to singletons.
+    inplace
+        If ``True``, write back into ``sdata.tables[qc_table_key]``.
+        Otherwise return the modified AnnData.
     distance_tol
         Sub-pixel tolerance for "lies on a bbox edge".
     min_edge_length
@@ -753,9 +757,6 @@ def assign_stitch_groups(
     close_radius
         Morphological closing disk radius for the union mask. Also the length scale for
         ``gap_proximity`` (normalised by ``2 * close_radius``).
-    inplace
-        If ``True``, write back into ``sdata.tables[qc_table_key]``.
-        Otherwise return the modified AnnData.
 
     Returns
     -------
