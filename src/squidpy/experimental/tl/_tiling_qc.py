@@ -442,7 +442,7 @@ def calculate_tiling_qc(
     nmads_smoothed: float = 3,
     n_neighbors: int = 10,
     tiling_qc_params: TilingQCParams | Mapping[str, Any] | None = None,
-    n_jobs: int = -1,
+    n_jobs: int = 1,
     table_key_added: str | None = None,
     inplace: bool = True,
 ) -> ad.AnnData | None:
@@ -501,8 +501,9 @@ def calculate_tiling_qc(
         :class:`TilingQCParams` for each field's meaning and default.
         ``None`` (default) uses all defaults.
     n_jobs
-        Number of threads for tile processing.  ``-1`` (default) uses
-        all available CPUs; ``0`` and values below ``-1`` raise.
+        Number of threads for tile processing.  ``1`` (default) runs
+        serially and ``-1`` uses all available CPUs; ``0`` and values
+        below ``-1`` raise.
         Ignored when an active
         ``dask.distributed.Client`` is in scope (the client's own
         worker pool is used instead).
