@@ -677,10 +677,13 @@ def _warn_if_dropping_stitch_columns(sdata: sd.SpatialData, *, table_key: str, l
     stitch = sdata.tables[table_key].uns.get("tiling_stitch")
     if stitch is None:
         return
+    params = dict(stitch["params"])
+    # tables written before the stitch knobs were flattened keep them nested
+    params |= params.pop("stitch_params", None) or {}
     parts = [f"labels_key={labels_key!r}"]
     if table_key != f"{labels_key}_qc":
         parts.append(f"qc_table_key={table_key!r}")
-    parts.extend(f"{k}={v!r}" for k, v in stitch["params"].items())
+    parts.extend(f"{k}={v!r}" for k, v in params.items())
     rerun = f"sq.experimental.tl.assign_stitch_groups(sdata, {', '.join(parts)})"
     logg.warning(
         f"Re-running calculate_tiling_qc dropped the previous stitch columns from sdata.tables[{table_key!r}].  "
