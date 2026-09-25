@@ -174,7 +174,7 @@ html_show_sphinx = False
 
 
 # Each params key carries its default in the `Annotated` metadata of its
-# declaration (`squidpy.experimental.utils._params.Default`). Read it from there --
+# declaration (`squidpy._params.Default`). Read it from there --
 # one source of truth, no defaults restated in docstrings where they could drift.
 
 
@@ -189,7 +189,7 @@ def _params_defaults() -> dict[str, dict[str, object]]:
     from typing import get_type_hints
 
     from squidpy import types
-    from squidpy.experimental.utils._params import defaults_of
+    from squidpy._params import defaults_of
 
     defaults = {}
     # only the `*Params` types carry per-key defaults; the result types do not

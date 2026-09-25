@@ -192,8 +192,8 @@ class TestWekaSeeding:
         # `pseudo_min_pixels` above the seeded count forces the top-z fallback, and
         # `refine_with_classifier=False` skips the second stage -- both branches that
         # the default-parameter tests never take.
+        from squidpy._params import resolve_params
         from squidpy.experimental.im._detect_tissue import _segment_weka
-        from squidpy.experimental.utils._params import resolve_params
         from squidpy.types import WekaParams
 
         weka = resolve_params(
