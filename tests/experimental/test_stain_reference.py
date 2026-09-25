@@ -122,8 +122,8 @@ def test_rejects_non_finite() -> None:
 def test_equality_is_array_aware_and_hashable() -> None:
     """Two fits holding equal arrays compare equal, and a fit can key a dict.
 
-    The dataclass-generated `__eq__` cannot do this -- comparing array fields raises
-    "truth value of an array is ambiguous" -- so `eq=False` plus an explicit `__eq__` is
+    The dataclass-generated `__eq__` cannot do this: comparing array fields raises
+    "truth value of an array is ambiguous". So `eq=False` plus an explicit `__eq__` is
     what makes `fit in fits` and `{fit: slide}` work.
     """
     a = StainFit(method="reinhard", mu=np.array([1.0, 2.0, 3.0]), sigma=np.ones(3))
