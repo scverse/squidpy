@@ -94,6 +94,15 @@ def test_image_fit_reads_units_off_the_elements() -> None:
     assert np.asarray(result.warp_image(image)).shape == image.shape
 
 
+def test_transform_refuses_a_frame_the_fit_was_not_made_in() -> None:
+    image = np.random.default_rng(0).random((1, 20, 20))
+    fit = stalign_align_image(
+        _sdata_image(image, "img"), _sdata_image(np.roll(image, 1, axis=1), "img"), image_key="img", **IMAGE_SOLVER
+    )
+    with pytest.raises(ValueError, match="was made in coordinate system 'global'"):
+        fit.transform(make_adata(ALIGN_PTS), coordinate_system="other")
+
+
 def test_slice_fit_places_a_section_in_a_volume() -> None:
     volume = np.random.default_rng(0).random((1, 6, 12, 12))
     sdata_ref = _sdata_image(volume, "volume")

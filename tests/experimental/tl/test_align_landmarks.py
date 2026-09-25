@@ -208,6 +208,39 @@ def test_registration_composes_with_an_existing_transform() -> None:
     np.testing.assert_allclose(mapped, _REF, atol=1e-6)
 
 
+def test_landmarks_are_read_in_their_coordinate_system() -> None:
+    """A landmark element placed into ``query_cs`` by a non-identity transform.
+
+    The fit is registered onto ``query_cs``, so it has to be fitted on the landmarks as they
+    sit there, not on their intrinsic coordinates.
+    """
+    sd = pytest.importorskip("spatialdata")
+    from spatialdata.models import PointsModel
+    from spatialdata.transformations import Translation, get_transformation, set_transformation
+
+    offset = np.array([100.0, 200.0])
+    lm_query = _shapes(_QUERY, "query_cs")
+    set_transformation(lm_query, Translation(offset, axes=("x", "y")), to_coordinate_system="query_cs")
+    sdata = sd.SpatialData(
+        shapes={"lm_ref": _shapes(_REF, "ref_cs"), "lm_query": lm_query},
+        points={"pts": PointsModel.parse(_QUERY, transformations={"query_cs": Translation(offset, axes=("x", "y"))})},
+    )
+    align_landmarks(sdata, landmark_key=("lm_ref", "lm_query"), method="affine", target_coordinate_system="ref_cs")
+
+    matrix = get_transformation(sdata.points["pts"], to_coordinate_system="ref_cs").to_affine_matrix(
+        input_axes=("x", "y"), output_axes=("x", "y")
+    )
+    np.testing.assert_allclose(_QUERY @ matrix[:2, :2].T + matrix[:2, 2], _REF, atol=1e-6)
+
+
+def test_key_added_with_shapes_landmarks_says_what_to_do() -> None:
+    sd = pytest.importorskip("spatialdata")
+
+    sdata = sd.SpatialData(shapes={"lm_ref": _shapes(_REF, "ref_cs"), "lm_query": _shapes(_QUERY, "query_cs")})
+    with pytest.raises(ValueError, match="use `target_coordinate_system`"):
+        align_landmarks(sdata, landmark_key=("lm_ref", "lm_query"), key_added="aligned")
+
+
 def test_registered_result_is_stamped_with_the_coordinate_systems() -> None:
     sd = pytest.importorskip("spatialdata")
 
