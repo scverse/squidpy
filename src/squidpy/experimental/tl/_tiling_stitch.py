@@ -54,22 +54,23 @@ _SHAPE_FEATURES: tuple[str, ...] = ("merge_compactness", "merge_solidity")
 
 _METHOD_KEY = "tiling_stitch"
 
-# Defaults of the geometric tuning knobs, shared by `assign_stitch_groups` and the
-# private helpers it passes them to, so each default is declared once.
-_STITCH_DEFAULTS = {
-    "distance_tol": 0.75,
-    "min_edge_length": 5.0,
-    "min_edge_length_ratio": 0.4,
-    "min_edge_coverage": 0.5,
-    "candidate_min_iou": 0.2,
-    "close_radius": 3,
-}
-
 # Contract between calculate_tiling_qc and assign_stitch_groups.  _STITCH_COLUMNS
 # is the obs columns stitch writes back into the QC table; _STITCH_PARAM_KEYS
 # is the kwargs recorded in ``.uns`` that are valid for re-running assign_stitch_groups.
 _STITCH_COLUMNS = ("stitch_group_id", "is_stitched", "n_pieces", "stitch_confidence")
-_STITCH_PARAM_KEYS = frozenset({"min_confidence", "max_gap", "max_group_size", *_STITCH_DEFAULTS})
+_STITCH_PARAM_KEYS = frozenset(
+    {
+        "min_confidence",
+        "max_gap",
+        "max_group_size",
+        "distance_tol",
+        "min_edge_length",
+        "min_edge_length_ratio",
+        "min_edge_coverage",
+        "candidate_min_iou",
+        "close_radius",
+    }
+)
 
 
 # Dataclasses
@@ -176,8 +177,8 @@ def _bbox_edge_run(
     contour: np.ndarray,
     perp_axis: int,
     target: float,
-    distance_tol: float = _STITCH_DEFAULTS["distance_tol"],
-    min_coverage: float = _STITCH_DEFAULTS["min_edge_coverage"],
+    distance_tol: float,
+    min_coverage: float,
 ) -> tuple[float, float, float] | None:
     """Find the extent of contour points lying near a single bbox edge.
 
@@ -212,10 +213,11 @@ def _extract_cut_edges(
     outlier_ids: Iterable[int],
     *,
     bboxes: dict[int, tuple[int, int, int, int]] | None = None,
-    distance_tol: float = _STITCH_DEFAULTS["distance_tol"],
-    min_edge_length: float = _STITCH_DEFAULTS["min_edge_length"],
-    min_edge_length_ratio: float = _STITCH_DEFAULTS["min_edge_length_ratio"],
-    min_edge_coverage: float = _STITCH_DEFAULTS["min_edge_coverage"],
+    *,
+    distance_tol: float,
+    min_edge_length: float,
+    min_edge_length_ratio: float,
+    min_edge_coverage: float,
 ) -> tuple[list[_CutEdge], dict[int, np.ndarray]]:
     """Extract cardinal-aligned bbox-edge runs (cut-edge candidates) per outlier.
 
@@ -315,7 +317,7 @@ def _merge_shape_features(
     cell_b: int,
     bboxes: dict[int, tuple[int, int, int, int]],
     outlier_crops: dict[int, np.ndarray],
-    close_radius: int = _STITCH_DEFAULTS["close_radius"],
+    close_radius: int,
     *,
     H: int,
     W: int,
@@ -375,7 +377,7 @@ def _pair_geometry_features(
     e: _CutEdge,
     c: _CutEdge,
     max_gap: float,
-    candidate_min_iou: float = _STITCH_DEFAULTS["candidate_min_iou"],
+    candidate_min_iou: float,
 ) -> dict[str, float] | None:
     """Compute geometry-only features for a candidate pair, returning ``None``
     if the pair fails the basic facing/overlap/IoU filters.
@@ -410,7 +412,7 @@ def _pair_geometry_features(
 def _enumerate_pair_candidates(
     edges: list[_CutEdge],
     max_gap: float,
-    candidate_min_iou: float = _STITCH_DEFAULTS["candidate_min_iou"],
+    candidate_min_iou: float,
 ) -> list[tuple[_CutEdge, _CutEdge, dict[str, float]]]:
     """Find all (e, c) pairs of facing cut edges with their geometry features.
 
@@ -485,7 +487,7 @@ def _score_pairs(
     bboxes: dict[int, tuple[int, int, int, int]],
     outlier_crops: dict[int, np.ndarray],
     min_confidence: float,
-    close_radius: int = _STITCH_DEFAULTS["close_radius"],
+    close_radius: int,
     *,
     H: int,
     W: int,
@@ -697,12 +699,12 @@ def assign_stitch_groups(
     max_group_size: int = 4,
     inplace: bool = True,
     *,
-    distance_tol: float = _STITCH_DEFAULTS["distance_tol"],
-    min_edge_length: float = _STITCH_DEFAULTS["min_edge_length"],
-    min_edge_length_ratio: float = _STITCH_DEFAULTS["min_edge_length_ratio"],
-    min_edge_coverage: float = _STITCH_DEFAULTS["min_edge_coverage"],
-    candidate_min_iou: float = _STITCH_DEFAULTS["candidate_min_iou"],
-    close_radius: int = _STITCH_DEFAULTS["close_radius"],
+    distance_tol: float = 0.75,
+    min_edge_length: float = 5.0,
+    min_edge_length_ratio: float = 0.4,
+    min_edge_coverage: float = 0.5,
+    candidate_min_iou: float = 0.2,
+    close_radius: int = 3,
 ) -> ad.AnnData | None:
     """Assign tile-cut cell pieces to stitch groups.
 
