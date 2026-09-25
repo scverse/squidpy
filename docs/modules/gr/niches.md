@@ -12,4 +12,6 @@ The flavors of calculating niches.
     gr.calculate_niche_utag
     gr.calculate_niche_cellcharter
     gr.calculate_niche_spatialleiden
+    gr.cluster_auto_k
+    gr.cluster_stability
 ```
