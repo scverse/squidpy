@@ -5,12 +5,12 @@ import numpy as np
 import pytest
 import xarray as xr
 
+from squidpy._params import resolve_params
 from squidpy.experimental.im._stain._reference import StainReference
 from squidpy.experimental.im._stain._reinhard import (
     _SIGMA_FLOOR,
     ReinhardParams,
     _masked_channel_stats,
-    _resolve_reinhard_params,
     apply_reinhard,
     fit_reinhard,
 )
@@ -109,24 +109,24 @@ class TestApplyReinhard:
 
 class TestResolveReinhardParams:
     def test_mapping(self) -> None:
-        p = _resolve_reinhard_params({"luminosity_threshold": 0.6, "mask_background": False})
+        p = resolve_params({"luminosity_threshold": 0.6, "mask_background": False}, ReinhardParams)
         assert p["luminosity_threshold"] == 0.6
         assert p["mask_background"] is False
 
     def test_coerces_values(self) -> None:
-        p = _resolve_reinhard_params({"luminosity_threshold": 1, "mask_background": 0})
+        p = resolve_params({"luminosity_threshold": 1, "mask_background": 0}, ReinhardParams)
         assert isinstance(p["luminosity_threshold"], float)
         assert p["mask_background"] is False
 
     def test_unknown_key_raises(self) -> None:
         with pytest.raises(ValueError, match="Unknown `method_params`"):
-            _resolve_reinhard_params({"nope": 1})
+            resolve_params({"nope": 1}, ReinhardParams)
 
     @pytest.mark.parametrize("bad", [0.0, -0.1, 1.5])
     def test_threshold_bounds(self, bad: float) -> None:
         # validation moved from `__post_init__` to the resolve boundary
         with pytest.raises(ValueError, match="luminosity_threshold"):
-            _resolve_reinhard_params({"luminosity_threshold": bad})
+            resolve_params({"luminosity_threshold": bad}, ReinhardParams)
 
 
 def test_reference_is_stainreference(rgb_a: np.ndarray) -> None:
