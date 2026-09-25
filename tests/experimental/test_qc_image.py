@@ -37,7 +37,7 @@ def test_qc_image_accepts_a_bare_metric_string(sdata_hne) -> None:
     """A single metric name, not wrapped in a list.
 
     `QCMetric` was a `StrEnum`, but the guard was `isinstance(m, QCMetric)`, which is False
-    for the plain string the member compares equal to -- so this raised `TypeError` while
+    for the plain string the member compares equal to. So this raised `TypeError` while
     the docs advertised the string form.
     """
     sq.experimental.im.qc_image(sdata_hne, image_key="hne", tile_size=_FAST_TILE, metrics="tenengrad", progress=False)
