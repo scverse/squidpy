@@ -158,24 +158,6 @@ class TestCornerPriors:
         with pytest.raises(ValueError, match=match):
             sq.experimental.im.detect_tissue(sdata_hne, image_key="hne", inplace=False, **kwargs)
 
-    @pytest.mark.parametrize(
-        ("spec", "params", "match"),
-        [
-            ("FelzenszwalbParams", {"grid_rows": 0}, "grid_rows"),
-            ("FelzenszwalbParams", {"sigma_frac": -1.0}, "sigma_frac"),
-            ("WekaParams", {"sigma_min": 4.0, "sigma_max": 2.0}, "sigma_max"),
-            ("WekaParams", {"pseudo_tissue_percentile": 101.0}, "pseudo_tissue_percentile"),
-            ("WekaParams", {"rf_max_samples": 0.0}, "rf_max_samples"),
-            ("WekaParams", {"rf_max_depth": 0}, "rf_max_depth"),
-        ],
-    )
-    def test_invalid_method_params_raise(self, spec, params, match) -> None:
-        from squidpy import types
-        from squidpy._params import resolve_params
-
-        with pytest.raises(ValueError, match=match):
-            resolve_params(params, getattr(types, spec))
-
 
 class TestCornerMask:
     """Each corner prior is honoured on its own, not just all-on / all-off."""

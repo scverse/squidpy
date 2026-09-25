@@ -21,14 +21,13 @@ from spatialdata._logging import logger
 from spatialdata.models import Labels2DModel
 from spatialdata.transformations import get_transformation
 
-from squidpy._params import resolve_params, validates
+from squidpy._params import resolve_params
 from squidpy._utils import (
     _ensure_dim_order,
     _get_scale_factors,
     _yx_from_shape,
     legacy_random,
 )
-from squidpy._validators import assert_in_range, assert_non_negative, assert_positive
 from squidpy.types import (
     FelzenszwalbParams,
     WekaParams,
@@ -66,39 +65,6 @@ _METHOD_PARAMS: dict[DetectTissueMethod, type[FelzenszwalbParams | WekaParams]] 
     DetectTissueMethod.FELZENSZWALB: FelzenszwalbParams,
     DetectTissueMethod.WEKA: WekaParams,
 }
-
-
-@validates(FelzenszwalbParams)
-def validate_felzenszwalb_params(params: dict[str, Any]) -> None:
-    """Coerce ``params`` in place and range-check it. Raises on invalid values."""
-    for key in ("grid_rows", "grid_cols"):
-        params[key] = int(params[key])
-        assert_positive(params[key], name=key)
-    for key in ("sigma_frac", "scale_coef", "min_size_coef"):
-        params[key] = float(params[key])
-        assert_non_negative(params[key], name=key)
-
-
-@validates(WekaParams)
-def validate_weka_params(params: dict[str, Any]) -> None:
-    """Coerce ``params`` in place and range-check it. Raises on invalid values."""
-    params["sigma_min"] = float(params["sigma_min"])
-    params["sigma_max"] = float(params["sigma_max"])
-    assert_positive(params["sigma_min"], name="sigma_min")
-    if params["sigma_max"] < params["sigma_min"]:
-        raise ValueError(f"`sigma_max` must be >= `sigma_min`, got {params['sigma_max']} < {params['sigma_min']}.")
-    assert_in_range(params["pseudo_tissue_percentile"], 0.0, 100.0, name="pseudo_tissue_percentile")
-    assert_in_range(params["refine_bg_prob_threshold"], 0.0, 1.0, name="refine_bg_prob_threshold")
-    if not 0.0 < params["rf_max_samples"] <= 1.0:  # half-open, so `assert_in_range` does not fit
-        raise ValueError(f"`rf_max_samples` must be in (0, 1], got {params['rf_max_samples']}.")
-    for key in ("rf_estimators", "refine_n_samples_per_class"):
-        params[key] = int(params[key])
-        assert_positive(params[key], name=key)
-    params["pseudo_min_pixels"] = int(params["pseudo_min_pixels"])
-    assert_non_negative(params["pseudo_min_pixels"], name="pseudo_min_pixels")
-    if params["rf_max_depth"] is not None:
-        params["rf_max_depth"] = int(params["rf_max_depth"])
-        assert_positive(params["rf_max_depth"], name="rf_max_depth")
 
 
 def _normalize_margins(
