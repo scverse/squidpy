@@ -744,10 +744,10 @@ def _interaction_matrix(
 @d.dedent
 def nhood_entropy(
     adata: AnnData | SpatialData,
+    *,
     cluster_key: str,
     connectivity_key: str | None = None,
     copy: bool = False,
-    *,
     table_key: str | None = None,
 ) -> pd.Series | None:
     """

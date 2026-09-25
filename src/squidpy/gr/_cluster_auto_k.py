@@ -26,8 +26,8 @@ __all__ = ["cluster_auto_k", "cluster_stability"]
 @d.dedent
 def cluster_auto_k(
     data: AnnData | SpatialData,
-    n_clusters: tuple[int, int] | Sequence[int] = (2, 10),
     *,
+    n_clusters: tuple[int, int] | Sequence[int] = (2, 10),
     use_rep: str | None = None,
     max_runs: int = 10,
     convergence_tol: float = 1e-2,
@@ -164,8 +164,8 @@ def cluster_auto_k(
 @d.dedent
 def cluster_stability(
     data: AnnData | SpatialData,
-    cluster_keys: Mapping[int, Sequence[str]],
     *,
+    cluster_keys: Mapping[int, Sequence[str]],
     score_fn: Callable[[Any, Any], float] = fowlkes_mallows_score,
     key_added: str = "cluster_stability",
     copy: bool = False,
