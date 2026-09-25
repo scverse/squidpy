@@ -62,6 +62,14 @@ class TestDefaultsOf:
             defaults_of(Incomplete)
 
 
+def test_missing_validator_raises() -> None:
+    class Unvalidated(TypedDict, total=False):
+        a: Annotated[int, Default(1)]
+
+    with pytest.raises(TypeError, match="`Unvalidated` has no validator"):
+        resolve_params(None, Unvalidated)
+
+
 @pytest.mark.parametrize("name", PARAMS_TYPES)
 class TestResolveContract:
     """`resolve_params` behaves the same for every params type.
