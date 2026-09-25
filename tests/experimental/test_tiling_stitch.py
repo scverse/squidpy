@@ -144,6 +144,27 @@ class TestAssignStitchGroups:
         eval(hint, {"sq": sq, "sdata": sdata})
         assert "stitch_group_id" in sdata.tables[table_key or "labels_qc"].obs
 
+    def test_qc_rerun_hint_reads_nested_stitch_params(self, sdata_tile_boundary):
+        # tables saved before the knobs were flattened keep them under `stitch_params`
+        import logging
+
+        sdata, _ = sdata_tile_boundary
+        _run_qc_and_stitch(sdata)
+        meta = sdata.tables["labels_qc"].uns["tiling_stitch"]
+        meta["stitch_params"] = {"close_radius": 5}
+        del meta["close_radius"]
+        records: list[logging.LogRecord] = []
+        handler = logging.Handler()
+        handler.emit = records.append
+        logger = logging.getLogger("spatialdata._logging")
+        logger.addHandler(handler)
+        try:
+            sq.experimental.tl.calculate_tiling_qc(sdata, labels_key="labels", tile_size=200)
+        finally:
+            logger.removeHandler(handler)
+        (hint,) = [r.getMessage() for r in records if "To restore" in r.getMessage()]
+        assert "close_radius=5" in hint
+
     def test_rerun_overwrites_without_growing_columns(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
         _run_qc_and_stitch(sdata)

@@ -679,7 +679,9 @@ def _warn_if_dropping_stitch_columns(sdata: sd.SpatialData, table_key: str, labe
     if not present:
         return
 
-    prev_params = existing.uns.get("tiling_stitch", {}) if hasattr(existing, "uns") else {}
+    prev_params = dict(existing.uns.get("tiling_stitch", {})) if hasattr(existing, "uns") else {}
+    # tables written before the stitch knobs were flattened keep them nested
+    prev_params |= prev_params.pop("stitch_params", None) or {}
     parts = [f"labels_key={labels_key!r}"]
     if table_key != f"{labels_key}_qc":
         parts.append(f"qc_table_key={table_key!r}")
