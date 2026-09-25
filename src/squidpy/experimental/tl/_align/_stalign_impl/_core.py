@@ -382,6 +382,7 @@ def _lddmm_loss(
 @partial(jax.jit, static_argnames=("niter", "tol", "estimate_muA", "estimate_muB"))
 def _lddmm_run(
     linear,
+    *,
     translation,
     velocity,
     match_weights,
@@ -389,7 +390,6 @@ def _lddmm_run(
     background_weights,
     muA,
     muB,
-    *,
     x_source,
     source_image,
     x_target,
@@ -648,13 +648,13 @@ def lddmm(
     # rather than being derived from a traced scalar at the solver's active precision.
     final = _lddmm_run(
         linear,
-        translation,
-        velocity,
-        match_weights,
-        artifact_weights,
-        background_weights,
-        artifact_mean,
-        background_mean,
+        translation=translation,
+        velocity=velocity,
+        match_weights=match_weights,
+        artifact_weights=artifact_weights,
+        background_weights=background_weights,
+        muA=artifact_mean,
+        muB=background_mean,
         x_source=x_source,
         source_image=source_image,
         x_target=x_target,
