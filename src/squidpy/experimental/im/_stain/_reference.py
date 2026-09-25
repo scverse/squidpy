@@ -142,8 +142,7 @@ class StainFit:
             so the result is not downsampled; source statistics are reduced
             lazily so memory stays bounded.
         method_params
-            Tuning for this fit's ``method``, as a dict of its ``*Params`` keys; ``None`` uses
-            the defaults.
+            Params matching this fit's ``method`` (mapping or ``None``).
         image_key_added
             Key for the written image when ``inplace=True``. If ``None`` (default),
             ``f"{image_key}_normalized"`` is used. Ignored when ``inplace=False``.
