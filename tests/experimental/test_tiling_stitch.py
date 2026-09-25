@@ -96,7 +96,7 @@ class TestAssignStitchGroups:
         meta = _run_qc_and_stitch(sdata, min_confidence=0.7, max_gap=4.0).uns["tiling_stitch"]
         assert meta["min_confidence"] == 0.7
         assert meta["max_gap"] == 4.0
-        assert isinstance(meta["stitch_params"], dict)
+        assert meta["close_radius"] == 3
         assert "model_coefficients" not in meta and "model_intercept" not in meta
         assert set(meta["score_features"]) == {
             "iou",
@@ -112,13 +112,34 @@ class TestAssignStitchGroups:
             ({"labels_key": "labels"}, "QC table"),
             ({"labels_key": "bogus"}, "not found in sdata.labels"),
             ({"labels_key": "labels", "min_confidence": 1.5}, "min_confidence"),
+            ({"labels_key": "labels", "min_edge_coverage": 1.5}, "min_edge_coverage"),
         ],
-        ids=["missing_qc_table", "missing_labels_key", "invalid_min_confidence"],
+        ids=["missing_qc_table", "missing_labels_key", "invalid_min_confidence", "invalid_min_edge_coverage"],
     )
     def test_invalid_input_raises(self, sdata_tile_boundary, kwargs, match):
         sdata, _ = sdata_tile_boundary
         with pytest.raises(ValueError, match=match):
             sq.experimental.tl.assign_stitch_groups(sdata, **kwargs)
+
+    def test_qc_rerun_hint_is_runnable(self, sdata_tile_boundary):
+        # re-running QC drops the stitch columns and logs the call that restores them
+        import logging
+
+        sdata, _ = sdata_tile_boundary
+        _run_qc_and_stitch(sdata, distance_tol=1.0)
+        records: list[logging.LogRecord] = []
+        handler = logging.Handler()
+        handler.emit = records.append
+        logger = logging.getLogger("spatialdata._logging")  # propagate=False, so caplog can't see it
+        logger.addHandler(handler)
+        try:
+            sq.experimental.tl.calculate_tiling_qc(sdata, labels_key="labels", tile_size=200)
+        finally:
+            logger.removeHandler(handler)
+        (hint,) = [r.getMessage().split("To restore them, run: ")[1] for r in records if "To restore" in r.getMessage()]
+        assert "distance_tol=1.0" in hint
+        eval(hint, {"sq": sq, "sdata": sdata})
+        assert "stitch_group_id" in sdata.tables["labels_qc"].obs
 
     def test_rerun_overwrites_without_growing_columns(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary

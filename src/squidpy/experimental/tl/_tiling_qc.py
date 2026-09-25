@@ -49,7 +49,7 @@ from squidpy.experimental.im._tiling import (
     compute_cell_info_tiled,
     extract_labels_tile_lazy,
 )
-from squidpy.experimental.tl._tiling_stitch import _STITCH_COLUMNS, _STITCH_DEFAULTS, _STITCH_PARAM_KEYS
+from squidpy.experimental.tl._tiling_stitch import _STITCH_COLUMNS, _STITCH_PARAM_KEYS
 from squidpy.experimental.utils._labels import resolve_labels_array
 
 __all__ = ["calculate_tiling_qc"]
@@ -679,12 +679,6 @@ def _warn_if_dropping_stitch_columns(sdata: sd.SpatialData, table_key: str, labe
     prev_params = existing.uns.get("tiling_stitch", {}) if hasattr(existing, "uns") else {}
     parts = [f"labels_key={labels_key!r}"]
     parts.extend(f"{k}={v!r}" for k, v in prev_params.items() if k in _STITCH_PARAM_KEYS)
-    nested = prev_params.get("stitch_params")
-    if isinstance(nested, dict) and nested:
-        defaults = _STITCH_DEFAULTS
-        diff = {k: v for k, v in nested.items() if k in defaults and defaults[k] != v}
-        if diff:
-            parts.append(f"stitch_params={diff!r}")
     rerun = f"sq.experimental.tl.assign_stitch_groups(sdata, {', '.join(parts)})"
     logg.warning(
         f"Re-running calculate_tiling_qc dropped previous stitch columns "

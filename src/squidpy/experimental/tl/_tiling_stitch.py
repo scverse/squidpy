@@ -21,9 +21,8 @@ written.  Materialising a stitched labels element is opt-in via
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Unpack
+from typing import TYPE_CHECKING
 
 import numpy as np
 import spatialdata as sd
@@ -38,15 +37,13 @@ from spatialdata._logging import logger as logg
 
 from squidpy._validators import assert_in_range, assert_non_negative
 from squidpy.experimental.utils._labels import iter_chunked_regionprops, resolve_labels_array
-from squidpy.experimental.utils._params import resolve_params
-from squidpy.types import _STITCH_DEFAULTS, StitchParams
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     import anndata as ad
 
-__all__ = ["StitchParams", "assign_stitch_groups"]
+__all__ = ["assign_stitch_groups"]
 
 # The geometric features whose flat mean is the stitch score.
 _SCORE_FEATURES: tuple[str, ...] = ("iou", "endpoint_match", "merge_compactness", "merge_solidity", "gap_proximity")
@@ -55,33 +52,24 @@ _SCORE_FEATURES: tuple[str, ...] = ("iou", "endpoint_match", "merge_compactness"
 _SHAPE_FEATURES: tuple[str, ...] = ("merge_compactness", "merge_solidity")
 
 
-def validate_stitch_params(params: dict[str, Any]) -> None:
-    """Coerce ``params`` in place and range-check it. Raises on invalid values."""
-    for key in ("distance_tol", "min_edge_length", "min_edge_length_ratio", "min_edge_coverage", "candidate_min_iou"):
-        params[key] = float(params[key])
-    params["close_radius"] = int(params["close_radius"])
-    assert_non_negative(params["distance_tol"], name="distance_tol")
-    assert_non_negative(params["min_edge_length"], name="min_edge_length")
-    for key in ("min_edge_length_ratio", "min_edge_coverage", "candidate_min_iou"):
-        assert_in_range(params[key], 0.0, 1.0, name=key)
-    assert_non_negative(params["close_radius"], name="close_radius")
-
-
-def _resolve_stitch_params(stitch_params: StitchParams | Mapping[str, Any] | None) -> StitchParams:
-    """Normalise the ``stitch_params`` argument to a validated :class:`~squidpy.types.StitchParams`."""
-    return resolve_params(
-        stitch_params, defaults=_STITCH_DEFAULTS, validate=validate_stitch_params, arg_name="stitch_params"
-    )
-
-
 _METHOD_KEY = "tiling_stitch"
+
+# Defaults of the geometric tuning knobs, shared by `assign_stitch_groups` and the
+# private helpers it passes them to, so each default is declared once.
+_STITCH_DEFAULTS = {
+    "distance_tol": 0.75,
+    "min_edge_length": 5.0,
+    "min_edge_length_ratio": 0.4,
+    "min_edge_coverage": 0.5,
+    "candidate_min_iou": 0.2,
+    "close_radius": 3,
+}
 
 # Contract between calculate_tiling_qc and assign_stitch_groups.  _STITCH_COLUMNS
 # is the obs columns stitch writes back into the QC table; _STITCH_PARAM_KEYS
-# is the subset of top-level kwargs valid for re-running assign_stitch_groups
-# (the advanced tuning lives in a nested ``stitch_params`` dict).
+# is the kwargs recorded in ``.uns`` that are valid for re-running assign_stitch_groups.
 _STITCH_COLUMNS = ("stitch_group_id", "is_stitched", "n_pieces", "stitch_confidence")
-_STITCH_PARAM_KEYS = frozenset({"min_confidence", "max_gap", "max_group_size"})
+_STITCH_PARAM_KEYS = frozenset({"min_confidence", "max_gap", "max_group_size", *_STITCH_DEFAULTS})
 
 
 # Dataclasses
@@ -707,8 +695,13 @@ def assign_stitch_groups(
     min_confidence: float = 0.7,
     max_gap: float = 3.0,
     max_group_size: int = 4,
+    distance_tol: float = _STITCH_DEFAULTS["distance_tol"],
+    min_edge_length: float = _STITCH_DEFAULTS["min_edge_length"],
+    min_edge_length_ratio: float = _STITCH_DEFAULTS["min_edge_length_ratio"],
+    min_edge_coverage: float = _STITCH_DEFAULTS["min_edge_coverage"],
+    candidate_min_iou: float = _STITCH_DEFAULTS["candidate_min_iou"],
+    close_radius: int = _STITCH_DEFAULTS["close_radius"],
     inplace: bool = True,
-    **stitch_params: Unpack[StitchParams],
 ) -> ad.AnnData | None:
     """Assign tile-cut cell pieces to stitch groups.
 
@@ -747,11 +740,22 @@ def assign_stitch_groups(
     max_group_size
         Cap on group size; oversized groups (likely false merges) collapse
         to singletons.
+    distance_tol
+        Sub-pixel tolerance for "lies on a bbox edge".
+    min_edge_length
+        Absolute floor on cut-edge length (pixels).
+    min_edge_length_ratio
+        Minimum cut-edge length relative to the cell's equivalent diameter.
+    min_edge_coverage
+        Minimum fraction of parallel-axis positions covered by near-edge contour points.
+    candidate_min_iou
+        Loose 1-D IoU floor at candidate enumeration.
+    close_radius
+        Morphological closing disk radius for the union mask. Also the length scale for
+        ``gap_proximity`` (normalised by ``2 * close_radius``).
     inplace
         If ``True``, write back into ``sdata.tables[qc_table_key]``.
         Otherwise return the modified AnnData.
-    **stitch_params
-        Advanced tuning knobs, passed as keyword arguments.
 
     Returns
     -------
@@ -764,7 +768,15 @@ def assign_stitch_groups(
     assert_non_negative(max_gap, name="max_gap")
     if max_group_size < 1:
         raise ValueError(f"max_group_size must be >= 1, got {max_group_size}.")
-    params = _resolve_stitch_params(stitch_params)
+    distance_tol, min_edge_length = float(distance_tol), float(min_edge_length)
+    min_edge_length_ratio, min_edge_coverage = float(min_edge_length_ratio), float(min_edge_coverage)
+    candidate_min_iou, close_radius = float(candidate_min_iou), int(close_radius)
+    assert_non_negative(distance_tol, name="distance_tol")
+    assert_non_negative(min_edge_length, name="min_edge_length")
+    assert_in_range(min_edge_length_ratio, 0.0, 1.0, name="min_edge_length_ratio")
+    assert_in_range(min_edge_coverage, 0.0, 1.0, name="min_edge_coverage")
+    assert_in_range(candidate_min_iou, 0.0, 1.0, name="candidate_min_iou")
+    assert_non_negative(close_radius, name="close_radius")
 
     table_key = qc_table_key if qc_table_key is not None else f"{labels_key}_qc"
     if table_key not in sdata.tables:
@@ -811,16 +823,14 @@ def assign_stitch_groups(
             labels_da,
             outlier_ids,
             bboxes=bboxes,
-            distance_tol=params["distance_tol"],
-            min_edge_length=params["min_edge_length"],
-            min_edge_length_ratio=params["min_edge_length_ratio"],
-            min_edge_coverage=params["min_edge_coverage"],
+            distance_tol=distance_tol,
+            min_edge_length=min_edge_length,
+            min_edge_length_ratio=min_edge_length_ratio,
+            min_edge_coverage=min_edge_coverage,
         )
         H, W = labels_da.shape[-2], labels_da.shape[-1]
-        candidates = _enumerate_pair_candidates(edges, max_gap=max_gap, candidate_min_iou=params["candidate_min_iou"])
-        pairs = _score_pairs(
-            candidates, bboxes, outlier_crops, min_confidence, close_radius=params["close_radius"], H=H, W=W
-        )
+        candidates = _enumerate_pair_candidates(edges, max_gap=max_gap, candidate_min_iou=candidate_min_iou)
+        pairs = _score_pairs(candidates, bboxes, outlier_crops, min_confidence, close_radius=close_radius, H=H, W=W)
         groups, confidences = _assemble_groups(pairs, outlier_ids, max_group_size=max_group_size, max_gap=max_gap)
 
     # Write .obs columns with three states distinguished by stitch_confidence:
@@ -865,7 +875,12 @@ def assign_stitch_groups(
         "min_confidence": float(min_confidence),
         "max_gap": float(max_gap),
         "max_group_size": int(max_group_size),
-        "stitch_params": dict(params),
+        "distance_tol": distance_tol,
+        "min_edge_length": min_edge_length,
+        "min_edge_length_ratio": min_edge_length_ratio,
+        "min_edge_coverage": min_edge_coverage,
+        "candidate_min_iou": candidate_min_iou,
+        "close_radius": close_radius,
         "n_outliers": int(n_outliers),
         "n_candidate_pairs": int(len(pairs)),
         "n_stitched_groups": int(n_groups),
