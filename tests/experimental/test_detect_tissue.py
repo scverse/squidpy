@@ -136,14 +136,23 @@ class TestCornerPriors:
 
         assert _normalize_corners(False) == (False,) * 4
         assert _normalize_corners([True, False, False, True]) == (True, False, False, True)
+        assert _normalize_corners(np.array([True, False, False, True])) == (True, False, False, True)
+        assert _normalize_corners(np.bool_(False)) == (False,) * 4
+
+    def test_string_is_refused(self) -> None:
+        from squidpy.experimental.im._detect_tissue import _normalize_corners
+
+        with pytest.raises(TypeError, match="not a string"):
+            _normalize_corners("False")  # `bool("False")` would be True
 
     @pytest.mark.parametrize(
         ("kwargs", "match"),
         [
             ({"corners_are_background": (True, False)}, "sequence of 4 bools"),
+            ({"corners_are_background": np.ones((2, 2), dtype=bool)}, "sequence of 4 bools"),
             ({"corner_size_pct": 0.0}, "`corner_size_pct` must be in"),
         ],
-        ids=["wrong_length", "zero_corner_size"],
+        ids=["wrong_length", "not_flat", "zero_corner_size"],
     )
     def test_invalid_raises(self, sdata_hne, kwargs, match) -> None:
         with pytest.raises(ValueError, match=match):

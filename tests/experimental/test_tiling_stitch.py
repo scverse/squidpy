@@ -121,25 +121,28 @@ class TestAssignStitchGroups:
         with pytest.raises(ValueError, match=match):
             sq.experimental.tl.assign_stitch_groups(sdata, **kwargs)
 
-    def test_qc_rerun_hint_is_runnable(self, sdata_tile_boundary):
+    @pytest.mark.parametrize("table_key", [None, "my_qc"], ids=["default_table", "custom_table"])
+    def test_qc_rerun_hint_is_runnable(self, sdata_tile_boundary, table_key):
         # re-running QC drops the stitch columns and logs the call that restores them
         import logging
 
         sdata, _ = sdata_tile_boundary
-        _run_qc_and_stitch(sdata, distance_tol=1.0)
+        qc = {"labels_key": "labels", "tile_size": 200, "table_key_added": table_key}
+        sq.experimental.tl.calculate_tiling_qc(sdata, nmads_cut=1.0, nmads_smoothed=1.5, **qc)
+        sq.experimental.tl.assign_stitch_groups(sdata, labels_key="labels", qc_table_key=table_key, distance_tol=1.0)
         records: list[logging.LogRecord] = []
         handler = logging.Handler()
         handler.emit = records.append
         logger = logging.getLogger("spatialdata._logging")  # propagate=False, so caplog can't see it
         logger.addHandler(handler)
         try:
-            sq.experimental.tl.calculate_tiling_qc(sdata, labels_key="labels", tile_size=200)
+            sq.experimental.tl.calculate_tiling_qc(sdata, **qc)
         finally:
             logger.removeHandler(handler)
         (hint,) = [r.getMessage().split("To restore them, run: ")[1] for r in records if "To restore" in r.getMessage()]
         assert "distance_tol=1.0" in hint
         eval(hint, {"sq": sq, "sdata": sdata})
-        assert "stitch_group_id" in sdata.tables["labels_qc"].obs
+        assert "stitch_group_id" in sdata.tables[table_key or "labels_qc"].obs
 
     def test_rerun_overwrites_without_growing_columns(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
