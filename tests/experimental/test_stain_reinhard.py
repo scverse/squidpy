@@ -10,7 +10,6 @@ from squidpy.experimental.im._stain._reinhard import (
     _SIGMA_FLOOR,
     ReinhardParams,
     _masked_channel_stats,
-    _resolve_reinhard_params,
     apply_reinhard,
     fit_reinhard,
 )
@@ -105,33 +104,6 @@ class TestApplyReinhard:
 
     def test_sigma_floor_is_small(self) -> None:
         assert 0 < _SIGMA_FLOOR < 1e-3
-
-
-class TestResolveReinhardParams:
-    def test_none_returns_defaults(self) -> None:
-        assert _resolve_reinhard_params(None) == ReinhardParams()
-
-    def test_instance_passthrough(self) -> None:
-        p = ReinhardParams(luminosity_threshold=0.5)
-        assert _resolve_reinhard_params(p) is p
-
-    def test_mapping(self) -> None:
-        p = _resolve_reinhard_params({"luminosity_threshold": 0.6, "mask_background": False})
-        assert p.luminosity_threshold == 0.6
-        assert p.mask_background is False
-
-    def test_unknown_key_raises(self) -> None:
-        with pytest.raises(ValueError, match="Unknown `method_params`"):
-            _resolve_reinhard_params({"nope": 1})
-
-    def test_bad_type_raises(self) -> None:
-        with pytest.raises(TypeError, match="must be ReinhardParams"):
-            _resolve_reinhard_params(5)
-
-    @pytest.mark.parametrize("bad", [0.0, -0.1, 1.5])
-    def test_threshold_bounds(self, bad: float) -> None:
-        with pytest.raises(ValueError, match="luminosity_threshold"):
-            ReinhardParams(luminosity_threshold=bad)
 
 
 def test_reference_is_stainreference(rgb_a: np.ndarray) -> None:

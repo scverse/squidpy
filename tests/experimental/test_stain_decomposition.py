@@ -10,8 +10,6 @@ from squidpy.experimental.im._stain._conversion import sda_to_rgb
 from squidpy.experimental.im._stain._decomposition import (
     MacenkoParams,
     VahadaneParams,
-    _resolve_macenko_params,
-    _resolve_vahadane_params,
     apply_decomposition,
     fit_decomposition,
 )
@@ -112,21 +110,3 @@ class TestDegenerate:
         white = xr.DataArray(np.full((3, 16, 16), 255.0), dims=("c", "y", "x"))
         with pytest.raises(StainFittingError, match="mask is empty"):
             fit_decomposition(white, "macenko", MacenkoParams(), _WHITE)
-
-
-class TestResolvers:
-    def test_macenko_mapping_and_unknown(self) -> None:
-        assert _resolve_macenko_params({"alpha": 2.0}).alpha == 2.0
-        with pytest.raises(ValueError, match="Unknown"):
-            _resolve_macenko_params({"nope": 1})
-
-    def test_vahadane_instance_and_badtype(self) -> None:
-        p = VahadaneParams(lambda1=0.2)
-        assert _resolve_vahadane_params(p) is p
-        with pytest.raises(TypeError, match="VahadaneParams"):
-            _resolve_vahadane_params(5)
-
-    @pytest.mark.parametrize("bad", [0.0, 50.0, -1.0])
-    def test_macenko_alpha_bounds(self, bad: float) -> None:
-        with pytest.raises(ValueError, match="alpha"):
-            MacenkoParams(alpha=bad)

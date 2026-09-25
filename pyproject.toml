@@ -256,7 +256,8 @@ lint.ignore = [
 lint.explicit-preview-rules = true  # only the preview rules selected by name, i.e. PLR0917
 lint.per-file-ignores."*/__init__.py" = [ "D104", "F401" ]
 lint.per-file-ignores.".scripts/ci/download_data.py" = [ "B", "D" ]
-lint.per-file-ignores."docs/*" = [ "B", "D" ]
+# Sphinx calls event handlers with a fixed positional signature
+lint.per-file-ignores."docs/*" = [ "B", "D", "PLR0917" ]
 lint.per-file-ignores."src/squidpy/_constants/_constants.py" = [ "D101" ]
 lint.per-file-ignores."src/squidpy/_constants/_pkg_constants.py" = [ "D101", "D102", "D106" ]
 # ImageContainer is left as it is until it is deprecated, positional arguments included

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from squidpy.experimental.im._stain._constants import (
-    DEFAULT_LUMINOSITY_THRESHOLD,
     RUDERMAN_LAB_TO_LMS,
     RUDERMAN_LMS_TO_LAB,
     RUDERMAN_LMS_TO_RGB,
@@ -45,7 +44,6 @@ from squidpy.experimental.im._stain._validation import (
 )
 
 __all__ = [
-    "DEFAULT_LUMINOSITY_THRESHOLD",
     "RUDERMAN_LAB_TO_LMS",
     "RUDERMAN_LMS_TO_LAB",
     "RUDERMAN_LMS_TO_RGB",
