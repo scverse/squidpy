@@ -80,10 +80,7 @@ def _transfer_kernel(
 
 def _reinhard_mask(lab: xr.DataArray, params: ReinhardParams, tissue_mask: np.ndarray | None) -> xr.DataArray | None:
     """Resolve the tissue mask for the Reinhard stats: external mask wins, else
-    the param-driven luminosity mask (or ``None`` for vanilla Reinhard).
-
-    ``params`` is resolved here rather than assumed complete: :class:`~squidpy.types.ReinhardParams`
-    is ``total=False``, so a caller may legitimately pass a partial mapping."""
+    the param-driven luminosity mask (or ``None`` for vanilla Reinhard)."""
     params = resolve_params(params, ReinhardParams)
     if tissue_mask is not None:
         return as_spatial_mask(tissue_mask, lab)
