@@ -31,7 +31,10 @@ __all__ = [
 
 
 class FelzenszwalbParams(TypedDict, total=False):
-    """Size-aware superpixel defaults for felzenszwalb segmentation."""
+    """Size-aware superpixel defaults for felzenszwalb segmentation.
+
+    A :class:`~typing.TypedDict`: pass a plain :class:`dict` with any subset of these keys.
+    """
 
     grid_rows: Annotated[int, Default(100)]
     """Target superpixel grid rows."""
@@ -53,7 +56,10 @@ _FELZENSZWALB_DEFAULTS: FelzenszwalbParams = defaults_of(FelzenszwalbParams)
 
 
 class WekaParams(TypedDict, total=False):
-    """Parameters for WEKA-like trainable segmentation."""
+    """Parameters for WEKA-like trainable segmentation.
+
+    A :class:`~typing.TypedDict`: pass a plain :class:`dict` with any subset of these keys.
+    """
 
     sigma_min: Annotated[float, Default(1.0)]
     """Smallest scale in the multiscale feature bank."""
@@ -99,7 +105,10 @@ _WEKA_DEFAULTS: WekaParams = defaults_of(WekaParams)
 
 
 class ReinhardParams(TypedDict, total=False):
-    """Tuning knobs for Reinhard stain normalization."""
+    """Tuning knobs for Reinhard stain normalization.
+
+    A :class:`~typing.TypedDict`: pass a plain :class:`dict` with any subset of these keys.
+    """
 
     luminosity_threshold: Annotated[float, Default(DEFAULT_LUMINOSITY_THRESHOLD)]
     """Normalised Ruderman Lab-L cutoff in ``(0, 1]``; pixels brighter than this are excluded from the fit."""
@@ -112,7 +121,10 @@ _REINHARD_DEFAULTS: ReinhardParams = defaults_of(ReinhardParams)
 
 
 class MacenkoParams(TypedDict, total=False):
-    """Tuning knobs for Macenko stain-matrix fitting."""
+    """Tuning knobs for Macenko stain-matrix fitting.
+
+    A :class:`~typing.TypedDict`: pass a plain :class:`dict` with any subset of these keys.
+    """
 
     alpha: Annotated[float, Default(1.0)]
     """Angular percentile (deg) for the two stain directions; the extremes are taken at ``alpha`` / ``100 - alpha``."""
@@ -125,7 +137,10 @@ _MACENKO_DEFAULTS: MacenkoParams = defaults_of(MacenkoParams)
 
 
 class VahadaneParams(TypedDict, total=False):
-    """Tuning knobs for Vahadane (sparse-NMF) stain-matrix fitting."""
+    """Tuning knobs for Vahadane (sparse-NMF) stain-matrix fitting.
+
+    A :class:`~typing.TypedDict`: pass a plain :class:`dict` with any subset of these keys.
+    """
 
     beta: Annotated[float, Default(_OD_BETA)]
     """Mean-absorbance cutoff selecting tissue pixels (optical-density space)."""
@@ -145,6 +160,8 @@ _VAHADANE_DEFAULTS: VahadaneParams = defaults_of(VahadaneParams)
 
 class StitchParams(TypedDict, total=False):
     """Advanced tuning knobs for :func:`~squidpy.experimental.tl.assign_stitch_groups`.
+
+    A :class:`~typing.TypedDict`: pass a plain :class:`dict` with any subset of these keys.
 
     The defaults suit typical 2D segmentation tiles from cellpose-like pipelines.
     """
