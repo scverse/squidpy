@@ -141,7 +141,7 @@ class StalignFit:
         coordinate_system
             The frame ``spatial_key`` is expected to sit in. ``None`` (default) uses the
             one the fit's own units came from, which is the frame that actually has to
-            match; pass a value only to check against a different one.
+            match; a different one is refused. Needed only for a fit that records none.
         inplace
             ``True`` (default) writes ``obsm[key_added]`` and returns ``None``. ``False``
             leaves ``data`` untouched and returns the transformed coordinates.
@@ -432,7 +432,8 @@ def fit_stalign_volume(
         In-plane rotation (**radians**) and uniform scale of the initial affine.
     initial_affine
         Homogeneous ``(4, 4)`` affine in ``(x, y, z)`` order, replacing the three
-        ``initial_*`` arguments above and mutually exclusive with them.
+        ``initial_*`` arguments above and mutually exclusive with them. It maps the
+        reference volume onto the section, the reverse of the rank-2 fits.
     solver_params
         See :class:`StalignVolumeParams`.
 
