@@ -217,7 +217,8 @@ def detect_tissue(
             - `DetectTissueMethod.FELZENSZWALB` or `"felzenszwalb"` - Felzenszwalb superpixel segmentation.
             - `DetectTissueMethod.WEKA` or `"weka"` - Trainable segmentation with corner background priors and RGB multiscale features.
     method_params
-        Tuning for ``method``, as a dict of its ``*Params`` keys; ``None`` uses the defaults.
+        Tuning for ``method``, as a dict of ``FelzenszwalbParams`` or ``WekaParams`` keys;
+        ``None`` uses the defaults.
         Not accepted with ``method="otsu"``, which has none.
     channel_format
         Expected format of image channels. Valid options are:
