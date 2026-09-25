@@ -26,7 +26,6 @@ __all__ = [
     "ReinhardParams",
     "MacenkoParams",
     "VahadaneParams",
-    "StitchParams",
 ]
 
 
@@ -156,34 +155,3 @@ class VahadaneParams(TypedDict, total=False):
 
 
 _VAHADANE_DEFAULTS: VahadaneParams = defaults_of(VahadaneParams)
-
-
-class StitchParams(TypedDict, total=False):
-    """Advanced tuning knobs for :func:`~squidpy.experimental.tl.assign_stitch_groups`.
-
-    A :class:`~typing.TypedDict`: pass a plain :class:`dict` with any subset of these keys.
-
-    The defaults suit typical 2D segmentation tiles from cellpose-like pipelines.
-    """
-
-    distance_tol: Annotated[float, Default(0.75)]
-    """Sub-pixel tolerance for "lies on a bbox edge"."""
-
-    min_edge_length: Annotated[float, Default(5.0)]
-    """Absolute floor on cut-edge length (pixels)."""
-
-    min_edge_length_ratio: Annotated[float, Default(0.4)]
-    """Minimum cut-edge length relative to the cell's equivalent diameter."""
-
-    min_edge_coverage: Annotated[float, Default(0.5)]
-    """Minimum fraction of parallel-axis positions covered by near-edge contour points."""
-
-    candidate_min_iou: Annotated[float, Default(0.2)]
-    """Loose 1-D IoU floor at candidate enumeration."""
-
-    close_radius: Annotated[int, Default(3)]
-    """Morphological closing disk radius for the union mask. Also the length scale for
-    ``gap_proximity`` (normalised by ``2 * close_radius``)."""
-
-
-_STITCH_DEFAULTS: StitchParams = defaults_of(StitchParams)
