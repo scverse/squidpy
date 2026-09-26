@@ -11,13 +11,17 @@ import numpy as np
 import pandas as pd
 import rustworkx as rx
 from anndata import AnnData
-from numba import njit, prange
+from fast_array_utils import stats as fau_stats
+from fast_array_utils.conv import to_dense
+from fast_array_utils.types import CSBase
+from fast_array_utils.types import HasArrayNamespace as Array
+from numba import get_num_threads, njit, prange
 from numba.typed import List
 from numba_progress import ProgressBar
 from numpy.typing import NDArray
 from pandas import CategoricalDtype
 from scanpy import logging as logg
-from scipy.sparse import csr_matrix, issparse
+from scipy.sparse import csr_array, csr_matrix, issparse
 from spatialdata import SpatialData
 
 from squidpy._constants._constants import Centrality
@@ -36,7 +40,7 @@ from squidpy._utils import (
     numba_threads,
     parallelize,
 )
-from squidpy._validators import assert_positive
+from squidpy._validators import assert_key_in_adata, assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
@@ -822,3 +826,282 @@ def _build_shuffle_groups(
     group_indices = np.argsort(codes, kind="stable").astype(np.int64)
     group_offsets = np.concatenate(([0], np.cumsum(np.bincount(codes, minlength=n_groups)))).astype(np.int64)
     return group_offsets, group_indices
+
+
+@njit(inline="always", cache=True)
+def _expand(
+    indptr: NDArrayA,
+    indices: NDArrayA,
+    stamp: NDArrayA,
+    tag: int,
+    queue: NDArrayA,
+    head: int,
+    tail: int,
+) -> int:
+    """Advance one breadth-first level, returning the new tail.
+
+    Discoveries land contiguously at ``queue[tail:new_tail]``. ``stamp`` holds ``tag`` instead of
+    a boolean so one buffer serves many searches without being cleared.
+    """
+    new_tail = tail
+    for i in range(head, tail):
+        node = queue[i]
+        for p in range(indptr[node], indptr[node + 1]):
+            neighbor = indices[p]
+            if stamp[neighbor] == tag:
+                continue  # a nearer level already reached it
+            stamp[neighbor] = tag
+            queue[new_tail] = neighbor
+            new_tail += 1
+    return new_tail
+
+
+@njit(parallel=True, cache=True)
+def _bfs_shells(
+    indptr: NDArrayA,
+    indices: NDArrayA,
+    max_hop: int,
+    counts: NDArrayA,
+    base: NDArrayA,
+    rowptr: NDArrayA,
+    out: NDArrayA,
+    fill: bool,
+) -> None:
+    n = indptr.shape[0] - 1
+    n_threads = get_num_threads()
+    stamp = np.full((n_threads, n), -1, dtype=indices.dtype)
+    queue = np.empty((n_threads, n), dtype=indices.dtype)
+
+    for thread in prange(n_threads):
+        for src in range(thread, n, n_threads):
+            # source pre-marked, so an out-and-back walk cannot reach it
+            stamp[thread, src] = src
+            queue[thread, 0] = src
+            head, tail = 0, 1
+
+            for hop in range(1, max_hop + 1):
+                new_tail = _expand(indptr, indices, stamp[thread], src, queue[thread], head, tail)
+                found = new_tail - tail
+                # hop 1 is the input graph, which the caller keeps as ring 0, so it is expanded
+                # only as the frontier for hop 2 and nothing is written for it
+                ring = hop - 2
+                if ring >= 0:
+                    if fill:
+                        # contiguous, so the row is a straight copy with no write cursor
+                        at = base[ring] + rowptr[ring, src]
+                        for g in range(found):
+                            out[at + g] = queue[thread, tail + g]
+                    else:
+                        counts[ring, src] += found
+                head, tail = tail, new_tail
+                if found == 0:
+                    break
+
+
+def compute_hop_adjacency_matrices(
+    adjacency_matrix_orig: CSBase | Array,
+    max_hop: int,
+    n_jobs: int | None = None,
+) -> list[CSBase]:
+    """Disjoint adjacency rings, one per hop up to *max_hop*.
+
+    Ring ``k`` holds the pairs first reached at hop ``k + 1``, so the rings never restate
+    each other. Ring 0 is the input as booleans, self-loops included.
+    """
+    # CellCharter builds these as iterated products masked by a visited set (`adj_hop @ adj`,
+    # then `adj_hop > adj_visited`) in scipy; a numba BFS gives the same disjoint rings without
+    # that comparison, which is degree-dependent on a weighted graph. See
+    # https://github.com/CSOgroup/cellcharter/blob/main/src/cellcharter/gr/_aggr.py
+    if max_hop < 1:
+        raise ValueError(f"max_hop must be >= 1, got {max_hop}.")
+
+    shape = np.shape(adjacency_matrix_orig)
+    if len(shape) != 2 or shape[0] != shape[1]:
+        raise ValueError(f"'adjacency_matrix' must be square, got {shape}")
+
+    adj = (adjacency_matrix_orig if issparse(adjacency_matrix_orig) else csr_array(adjacency_matrix_orig)).tocsr()
+    adj = adj.astype(bool)
+    adj.eliminate_zeros()
+    if max_hop == 1:
+        return [csr_matrix(adj)]
+    n = adj.shape[0]
+    indptr, indices = adj.indptr, adj.indices
+
+    # one row per ring past the first; ring 0 is the input itself
+    counts = np.zeros((max_hop - 1, n), dtype=np.int64)
+    no_base = np.zeros(1, dtype=np.int64)
+    no_out = np.zeros(1, dtype=indices.dtype)
+    n_jobs = get_n_numba_threads(n_jobs)
+    with numba_threads(n_jobs):
+        _bfs_shells(indptr, indices, max_hop, counts, no_base, counts, no_out, False)
+
+        rowptr = np.zeros((max_hop - 1, n + 1), dtype=np.int64)
+        np.cumsum(counts, axis=1, out=rowptr[:, 1:])
+        base = np.concatenate((np.zeros(1, dtype=np.int64), np.cumsum(rowptr[:, -1])))
+
+        out = np.empty(int(base[-1]), dtype=indices.dtype)  # shell column indices, same dtype as the input's
+        _bfs_shells(indptr, indices, max_hop, counts, base, rowptr, out, True)
+
+    shells: list[CSBase] = [csr_matrix(adj)]
+    for ring in range(max_hop - 1):
+        lo, hi = int(base[ring]), int(base[ring + 1])
+        shell = csr_matrix((np.ones(hi - lo, dtype=bool), out[lo:hi], rowptr[ring]), shape=(n, n))
+        shell.sort_indices()  # breadth-first order is not sorted order
+        shells.append(shell)
+    return shells
+
+
+def _power_adjacencies(adj: CSBase, max_hop: int) -> list[CSBase]:
+    if max_hop < 1:
+        raise ValueError(f"max_hop must be >= 1, got {max_hop}.")
+
+    # Edge weights apply to edges, so hop 1 enters as the caller gave it. Past it there are
+    # none to apply: scipy's product counts walks, and a cell reached by two paths is still
+    # one cell, so the reach is a set. `bool @ bool` saturates to True, which is exactly that.
+    reach = adj.astype(bool)
+    reach.eliminate_zeros()
+    adjacencies, power = [adj], reach
+    for _ in range(1, max_hop):
+        power = power @ reach
+        adjacencies.append(power)
+    return adjacencies
+
+
+def _onehot(labels: pd.Series) -> csr_matrix:
+    """Indicator matrix of ``labels``, one column per category."""
+    # TODO: move to fast-array-utils; scanpy keeps its own private copy as `get._aggregated.sparse_indicator`
+    cat = labels.astype("category")
+    codes = cat.cat.codes.to_numpy()
+    keep = codes >= 0
+    return csr_matrix(
+        (np.ones(keep.sum(), dtype=np.float64), (np.flatnonzero(keep), codes[keep])),
+        shape=(len(codes), len(cat.cat.categories)),
+    )
+
+
+def _aggregate_over(
+    adj: CSBase,
+    features: Array | CSBase,
+    aggregation: Literal["mean", "sum", "variance"],
+    *,
+    counted: NDArray[np.bool_] | None = None,
+) -> Array | CSBase:
+    """Aggregate *features* over the neighborhood each row of *adj* defines.
+
+    *counted* marks the observations that count as neighbors. The others must have all-zero
+    features, so they already add nothing to a sum and only the neighbor count leaves them out.
+    """
+    if aggregation == "sum":
+        return adj @ features
+
+    # scale after the sum, not before: normalizing `adj` rounds 1/k to `adj.dtype`, which
+    # `spatial_neighbors` leaves float32, so a mean that is exactly representable at that width
+    # still does not come back exact. Dividing by the signed sum rather than the L1 norm is also
+    # the weighted mean a negative edge weight asks for.
+    if counted is None:
+        total = np.asarray(fau_stats.sum(adj, axis=1, dtype=np.float64)).reshape(-1, 1)
+    else:
+        total = np.asarray(adj @ counted.astype(np.float64)).reshape(-1, 1)
+    inv = np.reciprocal(total, where=total != 0, out=np.zeros_like(total))  # an isolated row stays 0
+
+    def mean_over(x: Array | CSBase) -> Array | CSBase:
+        """Row-mean of ``adj @ x``, scaled in place -- the product is ours."""
+        # widen before the product, not after: `bool @ bool` saturates to True instead of
+        # summing, so by the time an integer product exists the counts are already gone
+        if not np.issubdtype(x.dtype, np.floating):
+            x = x.astype(np.float64)
+        product = adj @ x
+        if issparse(product):
+            product = product.tocsr()
+            scale = np.repeat(inv.ravel(), np.diff(product.indptr))  # each entry against its own row
+            product.data = np.multiply(product.data, scale, dtype=np.float64).astype(product.dtype, copy=False)
+            return product
+        return np.multiply(product, inv, out=product, casting="same_kind")
+
+    if aggregation == "mean":
+        return mean_over(features)
+    if aggregation == "variance":
+        mean = to_dense(mean_over(features))
+        dense = to_dense(features)
+        return to_dense(mean_over(dense * dense)) - mean * mean
+    raise ValueError(f"'aggregation' must be 'mean', 'sum' or 'variance', got {aggregation!r}")
+
+
+def _assert_hop_request(adata: AnnData, connectivity_key: str, hops: Sequence[int]) -> None:
+    """Verify a hop request against the graph it is about to run on."""
+    _assert_connectivity_key(adata, connectivity_key)
+    if len(hops) == 0:
+        raise ValueError("'hops' must name at least one hop")
+    if any(hop < 0 for hop in hops):
+        raise ValueError(f"'hops' must be non-negative, got {list(hops)!r}")
+
+
+def nhood_aggregate(
+    adata: AnnData,
+    *,
+    groups: str | None = None,
+    use_rep: str | None = None,
+    layer: str | None = None,
+    connectivity_key: str = Key.obsp.spatial_conn(),
+    hops: Sequence[int] = (1,),
+    aggregation: Literal["mean", "sum", "variance"] = "mean",
+    hop_weights: Sequence[float] | None = None,
+) -> Array | CSBase:
+    """Summarise each neighborhood into one block of ``n_features`` columns.
+
+    Matrix powers, not disjoint rings, so a hop restates the ones below it. Each cell in
+    reach counts once: a cell two paths away is still one cell.
+    """
+    _assert_hop_request(adata, connectivity_key, hops)
+    if aggregation not in ("mean", "sum", "variance"):
+        raise ValueError(f"'aggregation' must be 'mean', 'sum' or 'variance', got {aggregation!r}")
+    weights = [1.0] * len(hops) if hop_weights is None else list(hop_weights)
+    if len(weights) != len(hops):
+        raise ValueError(f"'hop_weights' has {len(weights)} value(s) but there are {len(hops)} hop(s)")
+    if aggregation != "sum" and sum(weights) == 0:
+        raise ValueError("'hop_weights' must not sum to zero, since the hops are averaged over it")
+
+    given = [name for name, value in (("groups", groups), ("use_rep", use_rep), ("layer", layer)) if value is not None]
+    if len(given) > 1:
+        raise ValueError(f"pass at most one of 'groups', 'use_rep' and 'layer', got {given}")
+
+    # only a category can be missing, so a feature matrix leaves every observation a neighbor
+    has_value = None
+    if groups is not None:
+        assert_key_in_adata(adata, groups, attr="obs")
+        features = _onehot(adata.obs[groups])
+        # an observation with no category is not a neighbor either, so it leaves every denominator
+        has_value = adata.obs[groups].notna().to_numpy()
+    elif use_rep is not None:
+        if use_rep == "X":  # the spelling `scanpy.pp.neighbors` takes
+            features = adata.X
+        else:
+            assert_key_in_adata(adata, use_rep, attr="obsm")
+            features = adata.obsm[use_rep]
+    elif layer is not None:
+        assert_key_in_adata(adata, layer, attr="layers")
+        features = adata.layers[layer]
+    else:
+        features = adata.X
+
+    by_hop: dict[int, CSBase | None] = {0: None}
+    if max(hops) >= 1:
+        by_hop |= dict(enumerate(_power_adjacencies(adata.obsp[connectivity_key], max(hops)), start=1))
+    # an unlabelled observation's one-hot row is zero, so it only has to leave the neighbor count;
+    # the hop matrices are not copied to drop it, and paths through it still reach past it
+    counted = None if has_value is None or has_value.all() else has_value
+    # hop 0 is the observation itself, so it contributes its features unaggregated
+    blocks = [
+        features if hop == 0 else _aggregate_over(by_hop[hop], features, aggregation, counted=counted) for hop in hops
+    ]
+
+    # keep the container the features came in; `variance` has already densified, so a
+    # mixed set of blocks has to be densified whole
+    if not all(issparse(block) for block in blocks):
+        blocks = [to_dense(block) for block in blocks]
+    total = sum(weight * block for weight, block in zip(weights, blocks, strict=True))
+    if aggregation == "sum":  # counts are meant to stay counts
+        return total
+    # in place, since `total / scalar` promotes a sparse matrix to float64
+    total /= sum(weights)
+    return total
