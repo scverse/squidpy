@@ -32,6 +32,7 @@ from squidpy._validators import assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_spatial_basis,
+    _group_offsets,
     _save_data,
     extract_adata_if_sdata,
 )
@@ -826,19 +827,11 @@ def _run_spatial_neighbors(
 
     start = logg.info(f"Creating graph using `{builder.transform}` transform and `{len(libs)}` libraries.")
     if library_key is not None:
-        # Extract the per-library coordinate arrays once.
-        # Subsetting the full AnnData inside the loop recomputes the library mask repeatedly and
-        # creates a view per library, which dominates the runtime for many cells.
-        # Slicing the coordinate array by precomputed category codes is far cheaper and,
-        # because the resulting arrays are small, makes the per-library graph construction cheap to parallelize.
-        codes = adata.obs[library_key].cat.codes.to_numpy()
+        # Slice the coordinates per library; subsetting the AnnData per library dominates the runtime.
         coords = adata.obsm[spatial_key]
-        per_lib_coords: list[np.ndarray] = []
-        idxs: list[int] = []
-        for code in range(len(libs)):
-            idx = np.where(codes == code)[0]
-            per_lib_coords.append(np.ascontiguousarray(coords[idx]))
-            idxs.extend(idx.tolist())
+        offsets, members = _group_offsets(adata.obs[library_key])
+        per_lib_coords = [np.ascontiguousarray(coords[members[offsets[g] : offsets[g + 1]]]) for g in range(len(libs))]
+        idxs = members.tolist()  # already in library order, which is what ``combine`` expects
 
         mats = thread_map(
             builder.build,
