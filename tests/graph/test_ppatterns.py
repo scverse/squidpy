@@ -9,7 +9,7 @@ from pandas.testing import assert_frame_equal
 
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import co_occurrence, spatial_autocorr
-from squidpy.gr._ppatterns import _find_min_max
+from squidpy.gr._ppatterns import _find_min_max, _score_perms
 
 MORAN_K = "moranI"
 GEARY_C = "gearyC"
@@ -218,3 +218,64 @@ def test_use_raw(dummy_adata: AnnData):
     df = spatial_autocorr(dummy_adata, use_raw=True, copy=True)
 
     np.testing.assert_equal(sorted(df.index), sorted(var_names))
+
+
+@pytest.mark.parametrize("mode", ["moran", "geary"])
+def test_score_perms_matches_scanpy_per_permutation(mode: str):
+    """The kernel reuses per-row sums across permutations; pin it to the naive scanpy reference.
+
+    ``_score_perms`` accumulates each row of the graph once and reindexes those sums per
+    permutation. The reference below is the definition it replaced: build ``g[perm, :]`` and hand it
+    to :mod:`scanpy` for every permutation. Agreement has to hold to floating-point reordering only.
+    """
+    from scanpy.metrics import gearys_c, morans_i
+    from scipy.sparse import csr_matrix
+    from sklearn.neighbors import kneighbors_graph
+    from sklearn.preprocessing import normalize
+
+    from squidpy._constants._constants import SpatialAutocorr
+
+    n, n_genes, n_perms = 300, 4, 6
+    rng = np.random.default_rng(0)
+    g = csr_matrix(kneighbors_graph(rng.random((n, 2)), 5, mode="connectivity"))
+    normalize(g, norm="l1", axis=1, copy=False)
+    vals = rng.random((n_genes, n), dtype=np.float32)
+
+    autocorr = SpatialAutocorr(mode)
+    got = _score_perms(g, vals, mode=autocorr, n_perms=n_perms, rng=0, n_jobs=1, show_progress_bar=False)
+
+    func = morans_i if autocorr == SpatialAutocorr.MORAN else gearys_c
+    expected = np.stack([func(g[gen.permutation(n), :], vals) for gen in np.random.default_rng(0).spawn(n_perms)])
+    assert got.shape == (n_perms, n_genes)
+    np.testing.assert_allclose(got, expected, rtol=1e-9)
+
+
+@pytest.mark.parametrize("mode", ["moran", "geary"])
+def test_score_perms_thread_invariant(mode: str):
+    """Permutation scores must not depend on how many numba threads the kernel runs on."""
+    from scipy.sparse import csr_matrix
+    from sklearn.neighbors import kneighbors_graph
+    from sklearn.preprocessing import normalize
+
+    from squidpy._constants._constants import SpatialAutocorr
+
+    n, n_perms = 300, 8
+    rng = np.random.default_rng(0)
+    g = csr_matrix(kneighbors_graph(rng.random((n, 2)), 5, mode="connectivity"))
+    normalize(g, norm="l1", axis=1, copy=False)
+    vals = rng.random((3, n), dtype=np.float32)
+
+    autocorr = SpatialAutocorr(mode)
+    serial = _score_perms(g, vals, mode=autocorr, n_perms=n_perms, rng=0, n_jobs=1, show_progress_bar=False)
+    threaded = _score_perms(g, vals, mode=autocorr, n_perms=n_perms, rng=0, n_jobs=4, show_progress_bar=False)
+    np.testing.assert_array_equal(serial, threaded)
+
+
+def test_spatial_autocorr_backend_deprecated(dummy_adata: AnnData):
+    """``backend`` no longer selects a process pool; it warns and is ignored."""
+    with pytest.warns(FutureWarning, match=r"`backend`.*deprecated"):
+        with_backend = spatial_autocorr(
+            dummy_adata, copy=True, n_perms=10, rng=0, backend="loky", show_progress_bar=False
+        )
+    without = spatial_autocorr(dummy_adata, copy=True, n_perms=10, rng=0, show_progress_bar=False)
+    assert_frame_equal(with_backend, without)
