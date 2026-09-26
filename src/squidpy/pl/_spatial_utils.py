@@ -15,6 +15,7 @@ from anndata import AnnData
 from matplotlib import colors, patheffects, rcParams
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
+from matplotlib.cbook import normalize_kwargs
 from matplotlib.collections import Collection, PatchCollection
 from matplotlib.colors import (
     ColorConverter,
@@ -931,6 +932,28 @@ def _set_outline(
     return OutlineParams(outline, gap_size, gap_color, bg_size, bg_color), kwargs
 
 
+def _sort_scatter_kwargs(kwargs: dict[str, Any], order: NDArrayA) -> dict[str, Any]:
+    """Keep per-point Collection properties aligned, including cycled style sequences."""
+    kwargs = normalize_kwargs(kwargs, Collection)
+    for key in ("edgecolor", "facecolor", "linewidth", "linestyle", "antialiased", "urls", "offsets"):
+        value = kwargs.get(key)
+        if value is None or isinstance(value, str) or np.isscalar(value):
+            continue
+        if isinstance(value, np.ndarray) and value.ndim == 0:
+            continue
+        if key in ("edgecolor", "facecolor"):
+            value = colors.to_rgba_array(value)
+        elif key == "linestyle" and isinstance(value, tuple) and len(value) == 2:
+            if value[0] is None or isinstance(value[0], Number):
+                continue  # A single (offset, dash sequence) specification.
+        elif key == "offsets" and np.shape(value) == (2,):
+            continue
+        value = list(value)
+        if len(value) > 1:
+            kwargs[key] = [value[i % len(value)] for i in order]
+    return kwargs
+
+
 def _plot_scatter(
     coords: NDArrayA,
     ax: Axes,
@@ -939,9 +962,19 @@ def _plot_scatter(
     color_params: ColorParams,
     size: float,
     color_vector: NDArrayA,
+    sort_order: bool = False,
     na_color: str | tuple[float, ...] = (0, 0, 0, 0),  # TODO(giovp): remove?
     **kwargs: Any,
 ) -> tuple[Axes, Collection | PatchCollection]:
+    if sort_order:
+        color_vector = np.asarray(color_vector)
+        order = np.argsort(color_vector, kind="stable")
+        missing = pd.isna(color_vector[order])
+        order = np.concatenate((order[missing], order[~missing]))
+        coords = coords[order]
+        color_vector = color_vector[order]
+        kwargs = _sort_scatter_kwargs(kwargs, order)
+
     if color_params.shape is not None:
         scatter = partial(_shaped_scatter, shape=color_params.shape, alpha=color_params.alpha)
     else:
