@@ -356,7 +356,7 @@ size_key
     Only needed for ``spatial_shape``.
 scale_factor
     Scaling factor used to map from coordinate space to pixel space.
-    Found by default if ``library_id`` and ``img_key`` can be resolved.
+    Found by default if ``library_id`` and ``img_res_key`` can be resolved.
     Otherwise, defaults to `1`.
 crop_coord
     Coordinates to use for cropping the image (left, right, top, bottom).

@@ -140,7 +140,7 @@ def _spatial_plot(
           This does not hold if no image is plotted, then the size corresponds to points size passed to
           :meth:`matplotlib.axes.Axes.scatter`.
 
-    If :attr:`anndata.AnnData.uns` ``['spatial']`` is present, use ``img_key``, ``seg_key`` and
+    If :attr:`anndata.AnnData.uns` ``['spatial']`` is present, use ``img_res_key``, ``seg_key`` and
     ``size_key`` arguments to find values for ``img``, ``seg`` and ``size``.
     Alternatively, these values can be passed directly via ``img``.
 
@@ -405,7 +405,7 @@ def spatial_scatter(
     The plotted shapes (circles, squares or hexagons) have a real "size" with respect to their
     coordinate space, which can be specified via the ``size`` or ``size_key`` argument.
 
-        - Use ``img_key`` to display the image in the background.
+        - Use ``img_res_key`` to display the image in the background.
         - Use ``library_id`` to select the image. By default, ``'hires'`` is attempted.
         - Use ``img_alpha``, ``img_cmap`` and ``img_channel`` to control how it is displayed.
         - Use ``size`` to scale the size of the shapes plotted on top.
