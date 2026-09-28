@@ -15,7 +15,7 @@ from matplotlib.colors import ListedColormap
 from squidpy import pl
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import spatial_neighbors_grid, spatial_neighbors_radius
-from squidpy.pl._spatial_utils import _get_library_id
+from squidpy.pl._spatial_utils import _get_image, _get_library_id, _get_scalefactor_size
 from tests.conftest import PlotTester, PlotTesterMeta
 
 sc.set_figure_params(dpi=40, color_map="viridis")
@@ -243,3 +243,20 @@ class TestSpatialStaticUtils:
                     _get_libid(adata)
             else:
                 assert library_id == _get_libid(adata)
+
+    def test_custom_spatial_key_reads_uns_of_that_key(self):
+        adata = AnnData(np.zeros((3, 1)), obsm={"spatial_trans": np.zeros((3, 2))})
+        for key, value in [(Key.uns.spatial, 0.0), ("spatial_trans", 1.0)]:
+            adata.uns[key] = {
+                "lib": {
+                    "images": {"hires": np.full((4, 4, 3), value)},
+                    "scalefactors": {"tissue_hires_scalef": value + 0.5, "spot_diameter_fullres": value + 2},
+                }
+            }
+
+        (img,) = _get_image(adata, ["lib"], spatial_key="spatial_trans", img_res_key="hires")
+        assert np.all(img == 1.0)
+
+        scale_factor, size = _get_scalefactor_size(adata, ["lib"], spatial_key="spatial_trans", img_res_key="hires")
+        assert scale_factor == [1.5]
+        assert size == [3 * 1.5 * 0.5]
