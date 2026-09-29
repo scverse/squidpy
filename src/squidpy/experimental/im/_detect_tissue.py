@@ -373,7 +373,7 @@ def detect_tissue(
     if method == DetectTissueMethod.WEKA and _is_zero_margin(base_margin_px):
         wp_local = cast(WekaParams, resolved_method_params)
         base_margin_px = getattr(wp_local, "border_margin_px", 0)
-    target_shape = _get_target_upscale_shape(sdata, image_key)
+    target_shape = _get_target_upscale_shape(sdata, image_key=image_key)
     normalized_margins_target = _normalize_margins(base_margin_px, target_shape)
 
     # Decide working resolution
@@ -441,7 +441,7 @@ def detect_tissue(
     img_fg_labels = _apply_border_margin(img_fg_labels, normalized_margins)
 
     # Upscale to full resolution
-    target_shape = _get_target_upscale_shape(sdata, image_key)
+    target_shape = _get_target_upscale_shape(sdata, image_key=image_key)
     scale_matrix = _get_scaling_matrix(img_fg_labels.shape, target_shape)
     img_fg_labels_up = _affine_upscale_nearest(img_fg_labels, scale_matrix, target_shape)
 
@@ -505,7 +505,7 @@ def _get_scaling_matrix(current_shape: tuple[int, int], target_shape: tuple[int,
     return np.array([[scale_y, 0.0], [0.0, scale_x]], dtype=float)
 
 
-def _get_target_upscale_shape(sdata: sd.SpatialData, image_key: str) -> tuple[int, int]:
+def _get_target_upscale_shape(sdata: sd.SpatialData, *, image_key: str) -> tuple[int, int]:
     """
     Select the first multiscale level (assumed largest) or the single-scale shape.
     """

@@ -113,7 +113,7 @@ def sepal(
     consider re-running the function with increased ``n_iter``.
     """
     adata = extract_adata_if_sdata(adata, table_key=table_key)
-    _assert_connectivity_key(adata, connectivity_key)
+    _assert_connectivity_key(adata, key=connectivity_key)
     _assert_spatial_basis(adata, key=spatial_key)
     if max_neighs not in (4, 6):
         raise ValueError(f"Expected `max_neighs` to be either `4` or `6`, found `{max_neighs}`.")

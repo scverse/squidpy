@@ -151,8 +151,8 @@ def _get_library_id(
 
 def _get_image(
     adata: AnnData,
-    library_id: Sequence[str],
     *,
+    library_id: Sequence[str],
     spatial_key: str = Key.obsm.spatial,
     img: bool | _SeqArray | None = None,
     img_res_key: str | None = None,
@@ -189,8 +189,8 @@ def _get_image(
 
 def _get_segment(
     adata: AnnData,
-    library_id: Sequence[str],
     *,
+    library_id: Sequence[str],
     seg_cell_id: str | None = None,
     library_key: str | None = None,
     seg: _SeqArray | bool | None = None,
@@ -215,8 +215,8 @@ def _get_segment(
 
 def _get_scalefactor_size(
     adata: AnnData,
-    library_id: Sequence[str],
     *,
+    library_id: Sequence[str],
     spatial_key: str = Key.obsm.spatial,
     img_res_key: str | None = None,
     scale_factor: _SeqFloat | None = None,
@@ -342,6 +342,7 @@ def _image_spatial_attrs(
 
 def _set_coords_crops(
     adata: AnnData,
+    *,
     spatial_params: SpatialParams,
     spatial_key: str,
     crop_coord: Sequence[_CoordTuple] | _CoordTuple | None = None,
@@ -363,8 +364,8 @@ def _set_coords_crops(
 
 def _subs(
     adata: AnnData,
-    coords: NDArrayA,
     *,
+    coords: NDArrayA,
     img: NDArrayA | None = None,
     library_key: str | None = None,
     library_id: str | None = None,
@@ -451,8 +452,8 @@ def _get_list(
 
 def _set_color_source_vec(
     adata: AnnData,
-    value_to_plot: str | None,
     *,
+    value_to_plot: str | None,
     use_raw: bool | None = None,
     alt_var: str | None = None,
     layer: str | None = None,
@@ -548,10 +549,10 @@ def _make_poly(x: NDArrayA, y: NDArrayA, r: float, n: int, i: int) -> tuple[NDAr
 
 def _plot_edges(
     adata: AnnData,
+    *,
     coords: NDArrayA,
     connectivity_key: str,
     ax: Axes,
-    *,
     edges_width: float = 0.1,
     edges_color: str | Sequence[float] | Sequence[str] = "grey",
     **kwargs: Any,

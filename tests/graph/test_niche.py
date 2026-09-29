@@ -500,7 +500,12 @@ def test_clusterer_without_a_random_state_is_rejected():
 
     adata = _tiny()
     with pytest.raises(TypeError, match=r"no 'random_state'"):
-        _fit_clusterers(adata, np.asarray(to_dense(adata.X)), {"c": DBSCAN(eps=3.0)}, np.random.default_rng(0))
+        _fit_clusterers(
+            adata,
+            embedding=np.asarray(to_dense(adata.X)),
+            clusterers={"c": DBSCAN(eps=3.0)},
+            rng=np.random.default_rng(0),
+        )
 
 
 def test_non_boolean_mask_raises():

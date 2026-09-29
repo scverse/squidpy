@@ -536,7 +536,7 @@ def _histogram_features(masked_vals: np.ndarray, ch_name: str) -> dict[str, floa
 # ---------------------------------------------------------------------------
 
 
-def _shared_coordinate_system(sdata: SpatialData, image_key: str, labels_key: str) -> str:
+def _shared_coordinate_system(sdata: SpatialData, *, image_key: str, labels_key: str) -> str:
     img_t = get_transformation(sdata.images[image_key], get_all=True)
     lbl_t = get_transformation(sdata.labels[labels_key], get_all=True)
     shared = set(img_t) & set(lbl_t)
@@ -548,7 +548,7 @@ def _shared_coordinate_system(sdata: SpatialData, image_key: str, labels_key: st
     return "global" if "global" in shared else sorted(shared)[0]
 
 
-def _relative_affine(sdata: SpatialData, image_key: str, labels_key: str, cs: str) -> np.ndarray:
+def _relative_affine(sdata: SpatialData, *, image_key: str, labels_key: str, cs: str) -> np.ndarray:
     """Return the 3x3 affine mapping labels-pixel-coords to image-pixel-coords.
 
     Uses ``(x, y)`` axis order to match :mod:`spatialdata` convention.
@@ -647,8 +647,8 @@ def _align_to_image_grid(
     ``align_mode='strict'`` a non-pixel-aligned relative transform raises; under
     ``'rasterize'`` the labels are resampled onto the image grid.
     """
-    cs = _shared_coordinate_system(sdata, image_key, labels_key)
-    affine = _relative_affine(sdata, image_key, labels_key, cs)
+    cs = _shared_coordinate_system(sdata, image_key=image_key, labels_key=labels_key)
+    affine = _relative_affine(sdata, image_key=image_key, labels_key=labels_key, cs=cs)
 
     # Integer-pixel offset of labels relative to image. (tx, ty) means labels
     # pixel (0, 0) lands at image pixel (tx, ty) in (x, y) order. Identity
@@ -728,6 +728,7 @@ def _select_scale_array(element: xr.DataTree | xr.DataArray, scale: str | None) 
 
 def _validate_inputs(
     sdata: SpatialData,
+    *,
     image_key: str | None,
     labels_key: str | None,
     shapes_key: str | None,
@@ -772,7 +773,7 @@ def _prepare_lazy(
     for on-demand tile reads.  For the shapes->labels path, labels are
     materialized but wrapped in a DataArray for a uniform interface.
     """
-    _validate_inputs(sdata, image_key, labels_key, shapes_key, scale)
+    _validate_inputs(sdata, image_key=image_key, labels_key=labels_key, shapes_key=shapes_key, scale=scale)
 
     if align_mode not in ("strict", "rasterize"):
         raise ValueError(f"`align_mode` must be 'strict' or 'rasterize'; got {align_mode!r}.")
@@ -844,6 +845,7 @@ def _prepare_lazy(
 
 def _compute_centroids(
     sdata: SpatialData,
+    *,
     labels_key: str | None,
     labels_da: xr.DataArray,
     scale: str | None,
@@ -1089,7 +1091,7 @@ def calculate_image_features(
     cp_config = _build_cp_config(parsed.cp_flags, channel_names) if parsed.cp_flags is not None else None
 
     # --- Warmup: compute centroids without materializing full arrays ---
-    cell_info = _compute_centroids(sdata, labels_key, labels_da, scale)
+    cell_info = _compute_centroids(sdata, labels_key=labels_key, labels_da=labels_da, scale=scale)
     if not cell_info:
         raise ValueError("No cells found in labels (all zeros).")
 

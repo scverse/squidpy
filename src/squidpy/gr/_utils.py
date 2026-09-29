@@ -51,7 +51,7 @@ def extract_adata_if_sdata(adata: AnnData | SpatialData, *, table_key: str | Non
     return adata
 
 
-def _assert_categorical_obs(adata: AnnData, key: str) -> None:
+def _assert_categorical_obs(adata: AnnData, *, key: str) -> None:
     if key not in adata.obs:
         raise KeyError(f"Cluster key `{key}` not found in `adata.obs`.")
 
@@ -59,7 +59,7 @@ def _assert_categorical_obs(adata: AnnData, key: str) -> None:
         raise TypeError(f"Expected `adata.obs[{key!r}]` to be `categorical`, found `{infer_dtype(adata.obs[key])}`.")
 
 
-def _assert_connectivity_key(adata: AnnData, key: str) -> None:
+def _assert_connectivity_key(adata: AnnData, *, key: str) -> None:
     if key not in adata.obsp:
         key_added = key.replace("_connectivities", "")
         raise KeyError(
@@ -68,7 +68,7 @@ def _assert_connectivity_key(adata: AnnData, key: str) -> None:
         )
 
 
-def _assert_spatial_basis(adata: AnnData, key: str) -> None:
+def _assert_spatial_basis(adata: AnnData, *, key: str) -> None:
     if key not in adata.obsm:
         raise KeyError(f"Spatial basis `{key}` not found in `adata.obsm`.")
 
@@ -86,7 +86,7 @@ def _save_data(adata: AnnData, *, attr: str, key: str, data: Any, prefix: bool =
 
 
 def _extract_expression(
-    adata: AnnData, genes: Sequence[str] | None = None, use_raw: bool = False, layer: str | None = None
+    adata: AnnData, *, genes: Sequence[str] | None = None, use_raw: bool = False, layer: str | None = None
 ) -> tuple[NDArrayA | spmatrix, Sequence[str]]:
     if use_raw and adata.raw is None:
         logg.warning("AnnData object has no attribute `raw`. Setting `use_raw=False`")

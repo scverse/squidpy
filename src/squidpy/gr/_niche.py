@@ -214,26 +214,26 @@ def calculate_niche(  # noqa: PLR0917, deprecated and removed in v1.9.0
 
     _validate_niche_args(
         data,
-        flavor,
-        table_key,
-        groups,
-        n_neighbors,
-        resolutions,
-        min_niche_size,
-        scale,
-        abs_nhood,
-        distance,
-        n_hop_weights,
-        aggregation,
-        n_components,
-        rng,
-        spatial_connectivities_key,
-        latent_connectivities_key,
-        layer_ratio,
-        n_iterations,
-        use_weights,
-        use_rep,
-        inplace,
+        flavor=flavor,
+        table_key=table_key,
+        groups=groups,
+        n_neighbors=n_neighbors,
+        resolutions=resolutions,
+        min_niche_size=min_niche_size,
+        scale=scale,
+        abs_nhood=abs_nhood,
+        distance=distance,
+        n_hop_weights=n_hop_weights,
+        aggregation=aggregation,
+        n_components=n_components,
+        rng=rng,
+        spatial_connectivities_key=spatial_connectivities_key,
+        latent_connectivities_key=latent_connectivities_key,
+        layer_ratio=layer_ratio,
+        n_iterations=n_iterations,
+        use_weights=use_weights,
+        use_rep=use_rep,
+        inplace=inplace,
     )
 
     if resolutions is None:
@@ -881,13 +881,16 @@ def calculate_niche_custom(
         # called here, not via a helper: another frame would shift the warnings' stacklevel
         embedding = embedder(adata)
         adata.obsm[embedding_key_added] = embedding
-        _fit_clusterers(adata, embedding, clusterers, rng, keep=keep, min_niche_size=min_niche_size)
+        _fit_clusterers(
+            adata, embedding=embedding, clusterers=clusterers, rng=rng, keep=keep, min_niche_size=min_niche_size
+        )
 
     return _on_table(data, table_key=table_key, copy=copy, work=run)
 
 
 def _validate_niche_args(  # noqa: PLR0917, deprecated and removed in v1.9.0
     data: AnnData | SpatialData,
+    *,
     flavor: Literal["neighborhood", "utag", "cellcharter", "spatialleiden"],
     table_key: str | None,
     groups: str | None,
@@ -1124,7 +1127,7 @@ def _check_unnecessary_args(flavor: str, param_dict: dict[str, Any], param_specs
 NicheEmbedder = Callable[[AnnData], Array]
 
 
-def _has_edge_weights(adata: AnnData, key: str) -> bool:
+def _has_edge_weights(adata: AnnData, *, key: str) -> bool:
     """True when the graph carries values other than 0 and 1."""
     weights = adata.obsp[key].data
     return bool(weights.size) and not np.array_equal(weights, weights.astype(bool))
@@ -1149,7 +1152,7 @@ def _nhood_profile_embedding(
             f"Earlier versions padded a short list with its last value; pass all {distance}."
         )
 
-    if _has_edge_weights(adata, spatial_connectivities_key):
+    if _has_edge_weights(adata, key=spatial_connectivities_key):
         warnings.warn(
             f"'{spatial_connectivities_key}' carries non-binary edge weights. They weight hop 1, "
             "so the profile is the share of connectivity reaching each category rather than the "
@@ -1205,9 +1208,9 @@ def _nhop_pca_embedding(
         raise ValueError(f"'distance' must be >= 1, got {distance}")
 
     hops = range(distance + 1)
-    _assert_hop_request(adata, spatial_connectivities_key, hops)
+    _assert_hop_request(adata, connectivity_key=spatial_connectivities_key, hops=hops)
 
-    if _has_edge_weights(adata, spatial_connectivities_key):
+    if _has_edge_weights(adata, key=spatial_connectivities_key):
         warnings.warn(
             f"'{spatial_connectivities_key}' carries non-binary edge weights, which this flavor "
             "ignores entirely: the hop rings are boolean, as in CellCharter. The 'neighborhood' "
@@ -1221,7 +1224,7 @@ def _nhop_pca_embedding(
     # CellCharter aggregates an already reduced representation, so PCA comes first: the rings then
     # aggregate a narrow dense matrix instead of `distance + 1` copies of every gene
     if use_rep is None:
-        features = _pca_features(adata, n_pca_components)
+        features = _pca_features(adata, n_pca_components=n_pca_components)
     elif use_rep == "X":  # the spelling `scanpy.pp.neighbors` takes
         features = to_dense(adata.X)
     else:
@@ -1242,7 +1245,7 @@ def _nhop_pca_embedding(
     return embedding
 
 
-def _pca_features(adata: AnnData, n_pca_components: int | None) -> Array:
+def _pca_features(adata: AnnData, *, n_pca_components: int | None) -> Array:
     """The PCA that stands in for a reduced representation when ``use_rep`` is not given."""
     # scanpy's `pca(adata)` masks by `highly_variable` but also writes to `adata`; mask here instead
     if "highly_variable" in adata.var:
@@ -1313,10 +1316,10 @@ def _leiden_clusterers(
 
 def _fit_clusterers(
     adata: AnnData,
+    *,
     embedding: Array,
     clusterers: Mapping[str, Clusterer],
     rng: np.random.Generator,
-    *,
     keep: NDArray[np.bool_] | None = None,
     min_niche_size: int | None = None,
 ) -> list[str]:

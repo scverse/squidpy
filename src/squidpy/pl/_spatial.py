@@ -164,7 +164,7 @@ def _spatial_plot(
     %(plotting_returns)s
     """
     sanitize_anndata(adata)
-    _assert_spatial_basis(adata, spatial_key)
+    _assert_spatial_basis(adata, key=spatial_key)
 
     scalebar_kwargs = dict(scalebar_kwargs)
     edges_kwargs = dict(edges_kwargs)
@@ -243,7 +243,7 @@ def _spatial_plot(
         _coords = coords[_lib_count]  # TODO: do we want to order points? for now no, skip
         adata_sub, coords_sub, image_sub = _subs(
             adata,
-            _coords,
+            coords=_coords,
             img=_img,
             library_key=library_key,
             library_id=_lib,
@@ -253,7 +253,7 @@ def _spatial_plot(
         )
         color_source_vector, color_vector, categorical = _set_color_source_vec(
             adata_sub,
-            value_to_plot,
+            value_to_plot=value_to_plot,
             layer=layer,
             use_raw=color_params.use_raw,
             alt_var=alt_var,
@@ -270,8 +270,8 @@ def _spatial_plot(
         if connectivity_key is not None:
             _plot_edges(
                 adata_sub,
-                coords_sub,
-                connectivity_key,
+                coords=coords_sub,
+                connectivity_key=connectivity_key,
                 ax=ax,
                 edges_width=edges_width,
                 edges_color=edges_color,

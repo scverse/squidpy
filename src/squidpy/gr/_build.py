@@ -338,7 +338,7 @@ def spatial_neighbors(
 
     return _run_spatial_neighbors(
         adata,
-        builder,
+        builder=builder,
         spatial_key=spatial_key,
         library_key=library_key,
         key_added=key_added,
@@ -349,6 +349,7 @@ def spatial_neighbors(
 
 def _resolve_data(
     data: AnnData | SpatialData,
+    *,
     elements_to_coordinate_systems: dict[str, str] | None,
     table_key: str | None = None,
     spatial_key: str = Key.obsm.spatial,
@@ -471,7 +472,7 @@ def spatial_neighbors_from_builder(
     )
     return _run_spatial_neighbors(
         adata,
-        builder,
+        builder=builder,
         spatial_key=spatial_key,
         library_key=library_key,
         key_added=key_added,
@@ -496,7 +497,7 @@ def _prepare_spatial_neighbors_input(
         table_key=table_key,
         library_key=library_key,
     )
-    _assert_spatial_basis(adata, spatial_key)
+    _assert_spatial_basis(adata, key=spatial_key)
     return adata, library_key
 
 
@@ -560,7 +561,7 @@ def spatial_neighbors_knn(
     )
     return _run_spatial_neighbors(
         adata,
-        builder,
+        builder=builder,
         spatial_key=spatial_key,
         library_key=library_key,
         key_added=key_added,
@@ -632,7 +633,7 @@ def spatial_neighbors_radius(
     )
     return _run_spatial_neighbors(
         adata,
-        builder,
+        builder=builder,
         spatial_key=spatial_key,
         library_key=library_key,
         key_added=key_added,
@@ -708,7 +709,7 @@ def spatial_neighbors_delaunay(
     )
     return _run_spatial_neighbors(
         adata,
-        builder,
+        builder=builder,
         spatial_key=spatial_key,
         library_key=library_key,
         key_added=key_added,
@@ -797,7 +798,7 @@ def spatial_neighbors_grid(
     )
     return _run_spatial_neighbors(
         adata,
-        builder,
+        builder=builder,
         spatial_key=spatial_key,
         library_key=library_key,
         key_added=key_added,
@@ -808,8 +809,8 @@ def spatial_neighbors_grid(
 
 def _run_spatial_neighbors(
     adata: AnnData,
-    builder: GraphBuilder[Any, Any],
     *,
+    builder: GraphBuilder[Any, Any],
     spatial_key: str = Key.obsm.spatial,
     library_key: str | None = None,
     key_added: str = "spatial",

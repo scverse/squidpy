@@ -35,7 +35,7 @@ __all__ = [
 ]
 
 
-def _get_data(adata: AnnData, cluster_key: str, func_name: str, attr: str = "uns", **kwargs: Any) -> Any:
+def _get_data(adata: AnnData, *, cluster_key: str, func_name: str, attr: str = "uns", **kwargs: Any) -> Any:
     key = getattr(Key.uns, func_name)(cluster_key, **kwargs)
 
     try:

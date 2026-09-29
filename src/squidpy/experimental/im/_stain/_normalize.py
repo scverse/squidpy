@@ -63,9 +63,9 @@ MethodParams = ReinhardParams | MacenkoParams | VahadaneParams | Mapping[str, An
 
 def _resolve_image(
     sdata: sd.SpatialData,
+    *,
     image_key: str,
     scale: str,
-    *,
     prefer: Literal["coarsest", "finest"],
 ) -> xr.DataArray:
     if image_key not in sdata.images:
@@ -77,7 +77,7 @@ def _resolve_image(
 
 
 def _resolve_mask_key_and_scale(
-    sdata: sd.SpatialData, image_key: str, target_da: xr.DataArray, tissue_mask_key: str | None
+    sdata: sd.SpatialData, *, image_key: str, target_da: xr.DataArray, tissue_mask_key: str | None
 ) -> tuple[str, str, tuple[int, int]]:
     """Resolve the (mandatory) tissue-mask key and the label scale closest to ``target_da``.
 
@@ -92,7 +92,7 @@ def _resolve_mask_key_and_scale(
 
 
 def _resolve_tissue_bool_mask(
-    sdata: sd.SpatialData, image_key: str, fit_da: xr.DataArray, tissue_mask_key: str | None
+    sdata: sd.SpatialData, *, image_key: str, fit_da: xr.DataArray, tissue_mask_key: str | None
 ) -> np.ndarray:
     """Return a materialised ``(y, x)`` boolean tissue mask aligned to ``fit_da``.
 
@@ -100,7 +100,9 @@ def _resolve_tissue_bool_mask(
     closest label scale differs. The fits run on a coarse level, so the mask
     stays small.
     """
-    mask_key, label_scale, target_hw = _resolve_mask_key_and_scale(sdata, image_key, fit_da, tissue_mask_key)
+    mask_key, label_scale, target_hw = _resolve_mask_key_and_scale(
+        sdata, image_key=image_key, target_da=fit_da, tissue_mask_key=tissue_mask_key
+    )
     mask = get_mask_materialized(sdata, mask_key, label_scale) > 0
     if mask.shape != target_hw:
         from skimage.transform import resize
@@ -110,7 +112,7 @@ def _resolve_tissue_bool_mask(
 
 
 def _resolve_output_tissue_mask(
-    sdata: sd.SpatialData, image_key: str, target_da: xr.DataArray, tissue_mask_key: str | None
+    sdata: sd.SpatialData, *, image_key: str, target_da: xr.DataArray, tissue_mask_key: str | None
 ) -> xr.DataArray:
     """Return a lazy ``(y, x)`` boolean tissue mask aligned to ``target_da``.
 
@@ -120,7 +122,9 @@ def _resolve_output_tissue_mask(
     shares the image's scale factors, so the matching level usually lines up
     exactly; only a residual size mismatch forces a (small) eager resize.
     """
-    mask_key, label_scale, target_hw = _resolve_mask_key_and_scale(sdata, image_key, target_da, tissue_mask_key)
+    mask_key, label_scale, target_hw = _resolve_mask_key_and_scale(
+        sdata, image_key=image_key, target_da=target_da, tissue_mask_key=tissue_mask_key
+    )
     coords = {d: target_da.coords[d] for d in ("y", "x") if d in target_da.coords}
     mask = get_element_data(sdata.labels[mask_key], label_scale, "label", mask_key).squeeze() > 0
     if (int(mask.sizes["y"]), int(mask.sizes["x"])) == target_hw:
@@ -144,10 +148,10 @@ def _resolve_method_params(method: str, method_params: MethodParams) -> Any:
 
 def _write_image(
     sdata: sd.SpatialData,
+    *,
     source_node: Any,
     image_key_added: str,
     data_array: xr.DataArray,
-    *,
     c_coords: list[Any] | None = None,
 ) -> None:
     """Write a derived image element, preserving the source's transforms/pyramid.
@@ -203,9 +207,9 @@ def estimate_white_point(
     Shape-``(3,)`` white point; pass it as ``white_point`` to
     :func:`fit_stain_reference` / :func:`decompose_stains`.
     """
-    da = _resolve_image(sdata, image_key, scale, prefer="coarsest")
+    da = _resolve_image(sdata, image_key=image_key, scale=scale, prefer="coarsest")
     validate_rgb_range(da)
-    tissue_mask = _resolve_tissue_bool_mask(sdata, image_key, da, tissue_mask_key)
+    tissue_mask = _resolve_tissue_bool_mask(sdata, image_key=image_key, fit_da=da, tissue_mask_key=tissue_mask_key)
     return white_point_from_background(da, ~tissue_mask)
 
 
@@ -272,10 +276,10 @@ def fit_stain_reference(
     """
     if method not in _VALID_METHODS:
         raise ValueError(f"Unknown method {method!r}; expected one of {list(_VALID_METHODS)}.")
-    da = _resolve_image(sdata, image_key, scale, prefer="coarsest")
+    da = _resolve_image(sdata, image_key=image_key, scale=scale, prefer="coarsest")
     validate_rgb_range(da)
     params = _resolve_method_params(method, method_params)
-    tissue_mask = _resolve_tissue_bool_mask(sdata, image_key, da, tissue_mask_key)
+    tissue_mask = _resolve_tissue_bool_mask(sdata, image_key=image_key, fit_da=da, tissue_mask_key=tissue_mask_key)
     if method == "reinhard":
         return fit_reinhard(da, params, tissue_mask=tissue_mask)
     bg = default_white_point(da) if white_point is None else np.asarray(white_point, np.float64)
@@ -351,7 +355,7 @@ def normalize_stains(
     ``None`` if ``inplace=True`` (the image is written), otherwise the lazy
     normalized :class:`xarray.DataArray`.
     """
-    da = _resolve_image(sdata, image_key, scale, prefer="finest")
+    da = _resolve_image(sdata, image_key=image_key, scale=scale, prefer="finest")
     target_key = image_key_added if image_key_added is not None else f"{image_key}_normalized"
     if inplace and target_key in sdata.images:
         raise ValueError(f"image_key_added={target_key!r} already exists in sdata.images.")
@@ -359,9 +363,9 @@ def normalize_stains(
     # Source statistics (Reinhard mu/sigma or the decomposition source matrix)
     # are reduced on a coarse level with a tissue mask; the lazy transform is
     # then applied to the full-resolution `da`.
-    fit_rgb = _resolve_image(sdata, image_key, scale, prefer="coarsest")
+    fit_rgb = _resolve_image(sdata, image_key=image_key, scale=scale, prefer="coarsest")
     validate_rgb_range(fit_rgb)  # reject mis-typed source (e.g. 0-255 float) before the dtype-clipped reconstruction
-    tissue_mask = _resolve_tissue_bool_mask(sdata, image_key, fit_rgb, tissue_mask_key)
+    tissue_mask = _resolve_tissue_bool_mask(sdata, image_key=image_key, fit_da=fit_rgb, tissue_mask_key=tissue_mask_key)
     out_dtype = da.dtype if output_dtype is None else np.dtype(output_dtype)  # clip range + final cast
     if reference.method == "reinhard":
         normalized = apply_reinhard(
@@ -376,7 +380,7 @@ def normalize_stains(
         # Keep non-tissue pixels byte-identical to the source: the global colour
         # map would otherwise recolour background/white pixels (HistomicsTK's
         # `mask_out`). Stays lazy - the mask aligns to `da` without materialising.
-        keep = _resolve_output_tissue_mask(sdata, image_key, da, tissue_mask_key)
+        keep = _resolve_output_tissue_mask(sdata, image_key=image_key, target_da=da, tissue_mask_key=tissue_mask_key)
         normalized = normalized.where(keep, da)
 
     # Deferred cast at the write boundary: the reconstruction was kept in float
@@ -390,7 +394,7 @@ def normalize_stains(
 
     if not inplace:
         return normalized
-    _write_image(sdata, sdata.images[image_key], target_key, normalized)
+    _write_image(sdata, source_node=sdata.images[image_key], image_key_added=target_key, data_array=normalized)
     return None
 
 
@@ -450,7 +454,7 @@ def decompose_stains(
     :class:`~xarray.DataArray` (``"hematoxylin"``, ``"eosin"``, and
     ``"residual"`` unless dropped).
     """
-    da = _resolve_image(sdata, image_key, scale, prefer="finest")
+    da = _resolve_image(sdata, image_key=image_key, scale=scale, prefer="finest")
     if isinstance(reference_or_method, StainReference):
         reference = reference_or_method
         if reference.method not in _DECOMPOSITION_METHODS or reference.stain_matrix is None:
@@ -487,5 +491,7 @@ def decompose_stains(
     source = sdata.images[image_key]
     for name, key in zip(names, target_keys, strict=True):
         # keep the c dim (length 1) so Image2DModel.parse accepts it
-        _write_image(sdata, source, key, concentrations.sel(c=[name]), c_coords=[name])
+        _write_image(
+            sdata, source_node=source, image_key_added=key, data_array=concentrations.sel(c=[name]), c_coords=[name]
+        )
     return None

@@ -380,8 +380,8 @@ def nhood_enrichment(
     """
     adata = extract_adata_if_sdata(adata, table_key=table_key)
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
-    _assert_categorical_obs(adata, cluster_key)
-    _assert_connectivity_key(adata, connectivity_key)
+    _assert_categorical_obs(adata, key=cluster_key)
+    _assert_connectivity_key(adata, key=connectivity_key)
     assert_positive(n_perms, name="n_perms")
 
     if normalization not in _NORM_CODES:
@@ -597,8 +597,8 @@ def centrality_scores(
     """
     adata = extract_adata_if_sdata(adata, table_key=table_key)
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
-    _assert_categorical_obs(adata, cluster_key)
-    _assert_connectivity_key(adata, connectivity_key)
+    _assert_categorical_obs(adata, key=cluster_key)
+    _assert_connectivity_key(adata, key=connectivity_key)
 
     if isinstance(score, str | Centrality):
         centrality = [score]
@@ -692,8 +692,8 @@ def interaction_matrix(
     """
     adata = extract_adata_if_sdata(adata, table_key=table_key)
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
-    _assert_categorical_obs(adata, cluster_key)
-    _assert_connectivity_key(adata, connectivity_key)
+    _assert_categorical_obs(adata, key=cluster_key)
+    _assert_connectivity_key(adata, key=connectivity_key)
 
     cats = adata.obs[cluster_key]
     mask = ~pd.isnull(cats).values
@@ -1043,9 +1043,9 @@ def _aggregate_over(
     raise ValueError(f"'aggregation' must be 'mean', 'sum' or 'variance', got {aggregation!r}")
 
 
-def _assert_hop_request(adata: AnnData, connectivity_key: str, hops: Sequence[int]) -> None:
+def _assert_hop_request(adata: AnnData, *, connectivity_key: str, hops: Sequence[int]) -> None:
     """Verify a hop request against the graph it is about to run on."""
-    _assert_connectivity_key(adata, connectivity_key)
+    _assert_connectivity_key(adata, key=connectivity_key)
     if len(hops) == 0:
         raise ValueError("'hops' must name at least one hop")
     if any(hop < 0 for hop in hops):
@@ -1068,7 +1068,7 @@ def nhood_aggregate(
     Matrix powers, not disjoint rings, so a hop restates the ones below it. Each cell in
     reach counts once: a cell two paths away is still one cell.
     """
-    _assert_hop_request(adata, connectivity_key, hops)
+    _assert_hop_request(adata, connectivity_key=connectivity_key, hops=hops)
     if aggregation not in ("mean", "sum", "variance"):
         raise ValueError(f"'aggregation' must be 'mean', 'sum' or 'variance', got {aggregation!r}")
     weights = [1.0] * len(hops) if hop_weights is None else list(hop_weights)

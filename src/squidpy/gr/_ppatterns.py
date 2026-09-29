@@ -172,7 +172,7 @@ def spatial_autocorr(
         - :attr:`anndata.AnnData.uns` ``['gearyC']`` - the above mentioned dataframe, if ``mode = {sp.GEARY.s!r}``.
     """
     adata = extract_adata_if_sdata(adata, table_key=table_key)
-    _assert_connectivity_key(adata, connectivity_key)
+    _assert_connectivity_key(adata, key=connectivity_key)
 
     def extract_X(adata: AnnData, genes: str | Sequence[str] | None) -> tuple[NDArrayA | spmatrix, Sequence[Any]]:
         if genes is None:
