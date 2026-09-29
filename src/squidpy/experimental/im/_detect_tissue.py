@@ -313,7 +313,7 @@ def detect_tissue(
     if method == DetectTissueMethod.WEKA and _is_zero_margin(base_margin_px):
         wp_local = cast(WekaParams, resolved_method_params)
         base_margin_px = wp_local.get("border_margin_px", 0)
-    target_shape = _get_target_upscale_shape(sdata, image_key)
+    target_shape = _get_target_upscale_shape(sdata, image_key=image_key)
     normalized_margins_target = _normalize_margins(base_margin_px, target_shape)
 
     # Decide working resolution

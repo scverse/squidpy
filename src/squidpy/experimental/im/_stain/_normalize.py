@@ -271,7 +271,7 @@ def fit_stain_reference(
     da = _resolve_image(sdata, image_key=image_key, scale=scale, prefer="coarsest")
     validate_rgb_range(da)
     params = resolve_params(method_params, _METHOD_PARAMS[method])
-    tissue_mask = _resolve_tissue_bool_mask(sdata, image_key, da, tissue_mask_key)
+    tissue_mask = _resolve_tissue_bool_mask(sdata, image_key=image_key, fit_da=da, tissue_mask_key=tissue_mask_key)
     if method == "reinhard":
         return fit_reinhard(da, params, tissue_mask=tissue_mask)
     bg = default_white_point(da) if white_point is None else np.asarray(white_point, np.float64)
