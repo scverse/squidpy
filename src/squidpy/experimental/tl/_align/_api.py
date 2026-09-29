@@ -93,7 +93,7 @@ def _resolve_table(container: AnnData | SpatialData, table_key: str | None, *, s
     return container.tables[table_key]
 
 
-def _read_coords_2d(adata: AnnData, key: str, *, side: str, name: str) -> np.ndarray:
+def _read_coords_2d(adata: AnnData, *, key: str, side: str, name: str) -> np.ndarray:
     """Read a validated ``(N, 2)`` coordinate array from ``obsm``."""
     if key not in adata.obsm:
         raise KeyError(f"`{name}={key!r}`: no `obsm[{key!r}]` on the {side}. Available: {sorted(adata.obsm)}.")
@@ -142,7 +142,7 @@ def _write_coords(
 ) -> np.ndarray | None:
     """Transform ``obsm[spatial_key]`` and write it to ``obsm[key_added]`` on the query."""
     adata = _resolve_table(container, table_key, side="query")
-    coords = _read_coords_2d(adata, spatial_key, side="query", name=spatial_key_name)
+    coords = _read_coords_2d(adata, key=spatial_key, side="query", name=spatial_key_name)
     transformed = np.asarray(transform(coords))
     if not inplace:
         return transformed
@@ -226,8 +226,8 @@ def stalign_align_obs(
     query_adata = _resolve_table(query_container, query_table, side="query")
 
     return fit_stalign_obs(
-        ref=_read_coords_2d(ref_adata, ref_spatial, side="reference", name="spatial_key"),
-        query=_read_coords_2d(query_adata, query_spatial, side="query", name="spatial_key"),
+        ref=_read_coords_2d(ref_adata, key=ref_spatial, side="reference", name="spatial_key"),
+        query=_read_coords_2d(query_adata, key=query_spatial, side="query", name="spatial_key"),
         landmarks_ref=landmarks_ref,
         landmarks_query=landmarks_query,
         **solver_params,
@@ -346,7 +346,7 @@ def _element_axes(
 
 
 def _assert_table_coords_share_frame(
-    sdata: SpatialData, adata: AnnData, spatial_key: str, *, coordinate_system: str
+    sdata: SpatialData, *, adata: AnnData, spatial_key: str, coordinate_system: str
 ) -> None:
     """Refuse to transform ``obsm`` coordinates that are not in ``coordinate_system``.
 
@@ -503,8 +503,8 @@ def apply_fit_to_container(
         # *fit's* frame that has to match, not a default the caller never chose.
         _assert_table_coords_share_frame(
             data,
-            _resolve_table(data, table_key, side="query"),
-            spatial_key,
+            adata=_resolve_table(data, table_key, side="query"),
+            spatial_key=spatial_key,
             coordinate_system=fit.coordinate_system if coordinate_system is None else coordinate_system,
         )
     return _write_coords(
@@ -695,7 +695,7 @@ def _read_landmarks(
     """Read ``(N, 2)`` ``(x, y)`` landmarks from an ``obsm`` key or a shapes element."""
     if isinstance(container, AnnData) or table_key is not None:
         adata = _resolve_table(container, table_key, side=side)
-        return _read_coords_2d(adata, landmark_key, side=side, name="landmark_key")
+        return _read_coords_2d(adata, key=landmark_key, side=side, name="landmark_key")
     if not isinstance(container, SpatialData):
         raise TypeError(f"Expected the {side} to be an AnnData or SpatialData, got {type(container).__name__}.")
     if landmark_key not in container.shapes:
@@ -708,7 +708,7 @@ def _read_landmarks(
 
     # In the coordinate system, not the element's intrinsic frame: the fit is registered
     # onto that coordinate system, so that is the frame its landmarks have to be in.
-    coordinate_system = _coordinate_system_of(container, landmark_key, side=side)
+    coordinate_system = _coordinate_system_of(container, element=landmark_key, side=side)
     geometry = transform(container.shapes[landmark_key], to_coordinate_system=coordinate_system).geometry
     return np.column_stack([geometry.x.to_numpy(), geometry.y.to_numpy()])
 
@@ -737,14 +737,14 @@ def _register_transformation(
             "query's coordinates."
         )
 
-    moving_cs = _coordinate_system_of(query_container, query_lm_key, side="query")
+    moving_cs = _coordinate_system_of(query_container, element=query_lm_key, side="query")
     # Registering moves *everything* in `moving_cs`. If the reference sits in that same
     # coordinate system of the same object, it would be dragged along with the query:
     # silently producing a wrong answer rather than failing.
     if (
         data_ref is query_container
         and ref_table is None
-        and _coordinate_system_of(data_ref, ref_lm_key, side="reference") == moving_cs
+        and _coordinate_system_of(data_ref, element=ref_lm_key, side="reference") == moving_cs
     ):
         raise ValueError(
             f"The reference and query are both in coordinate system {moving_cs!r}, so registering "
@@ -763,7 +763,7 @@ def _register_transformation(
     return None
 
 
-def _coordinate_system_of(sdata: SpatialData, element: str, *, side: str) -> str:
+def _coordinate_system_of(sdata: SpatialData, *, element: str, side: str) -> str:
     """The coordinate system the shapes element is annotated in.
 
     Everything registered to it moves with the fit, so it has to be unambiguous.
