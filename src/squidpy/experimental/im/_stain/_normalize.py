@@ -311,7 +311,7 @@ def _normalize_stains(
     preserve_background: bool = True,
 ) -> xr.DataArray | None:
     """Implementation of :meth:`~squidpy.experimental.im.StainFit.transform`, which documents it."""
-    da = _resolve_image(sdata, image_key, scale, prefer="finest")
+    da = _resolve_image(sdata, image_key=image_key, scale=scale, prefer="finest")
     target_key = image_key_added if image_key_added is not None else f"{image_key}_normalized"
     if inplace and target_key in sdata.images:
         raise ValueError(f"image_key_added={target_key!r} already exists in sdata.images.")
@@ -368,7 +368,7 @@ def _decompose_stains(
     include_residual: bool = True,
 ) -> dict[str, xr.DataArray] | None:
     """Implementation of :meth:`~squidpy.experimental.im.StainFit.decompose`, which documents it."""
-    da = _resolve_image(sdata, image_key, scale, prefer="finest")
+    da = _resolve_image(sdata, image_key=image_key, scale=scale, prefer="finest")
     if reference.method not in _DECOMPOSITION_METHODS or reference.stain_matrix is None:
         raise ValueError("decompose requires a macenko/vahadane reference with a stain matrix.")
     stain_matrix, bg = reference.stain_matrix, reference.white_point
