@@ -775,8 +775,8 @@ def nhood_entropy(
     """
     adata = extract_adata_if_sdata(adata, table_key=table_key)
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
-    _assert_categorical_obs(adata, cluster_key)
-    _assert_connectivity_key(adata, connectivity_key)
+    _assert_categorical_obs(adata, key=cluster_key)
+    _assert_connectivity_key(adata, key=connectivity_key)
 
     start = logg.info(f"Calculating neighborhood entropy of `{cluster_key}`")
     profile = to_dense(
