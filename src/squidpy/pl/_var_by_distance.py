@@ -16,7 +16,7 @@ from matplotlib import rcParams
 from matplotlib.axes import Axes
 from scipy.sparse import issparse
 
-from squidpy._compat import panel_grid, set_default_colors_for_categorical_obs
+from squidpy._compat import old_positionals, panel_grid, set_default_colors_for_categorical_obs
 from squidpy._docs import d
 from squidpy.pl._utils import save_fig
 
@@ -24,11 +24,31 @@ __all__ = ["var_by_distance"]
 
 
 @d.dedent
+@old_positionals(
+    "var",
+    "anchor_key",
+    "design_matrix_key",
+    "stack_vars",
+    "covariate",
+    "order",
+    "show_scatter",
+    "color",
+    "line_palette",
+    "scatter_palette",
+    "dpi",
+    "figsize",
+    "save",
+    "title",
+    "axis_label",
+    "return_ax",
+    "regplot_kwargs",
+    "scatterplot_kwargs",
+)
 def var_by_distance(
     adata: AnnData,
+    *,
     var: str | list[str],
     anchor_key: str | list[str],
-    *,
     design_matrix_key: str = "design_matrix",
     stack_vars: bool = False,
     covariate: str | None = None,

@@ -36,6 +36,7 @@ from scipy.sparse import issparse, spmatrix
 from skimage import img_as_float32
 from skimage.color import rgb2gray
 
+from squidpy._compat import old_positionals
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
 from squidpy._utils import NDArrayA
@@ -97,8 +98,10 @@ def save_fig(
 
 
 @d.dedent
+@old_positionals("obsm_key", "prefix")
 def extract(
     adata: AnnData,
+    *,
     obsm_key: list[str] | str = "img_features",
     prefix: list[str] | str | None = None,
 ) -> AnnData:

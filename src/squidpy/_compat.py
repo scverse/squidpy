@@ -29,9 +29,17 @@ __all__ = [
     "get_vector",
 ]
 
+
+class _PositionalArgumentWarning(FutureWarning):
+    """An argument that became keyword-only was passed positionally; that stops working in v1.9.0."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(f"{message}. Passing them positionally stops working in squidpy v1.9.0.")
+
+
 #: For arguments that became keyword-only: an old positional call still works, with a
 #: ``FutureWarning`` naming them (#1288).
-old_positionals = partial(legacy_api, category=FutureWarning)
+old_positionals = partial(legacy_api, category=_PositionalArgumentWarning)
 
 # Scanpy 1.13 moved the pre-v2 plotting internals under ``scanpy.plotting.legacy``.
 # ``scanpy.plotting.__getattr__`` forwards attribute access there, but submodule

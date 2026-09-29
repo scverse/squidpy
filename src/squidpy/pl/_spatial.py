@@ -11,6 +11,7 @@ from matplotlib.axes import Axes
 from matplotlib.colors import Colormap
 from matplotlib.figure import Figure
 
+from squidpy._compat import old_positionals
 from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
@@ -395,8 +396,10 @@ def _wrap_signature(wrapper: Callable[[Any], Any]) -> Callable[[Any], Any]:
 
 @d.dedent
 @_wrap_signature
+@old_positionals("shape")
 def spatial_scatter(
     adata: AnnData,
+    *,
     shape: _AvailShapes | None = ScatterShape.CIRCLE.v,
     **kwargs: Any,
 ) -> Axes | Sequence[Axes] | None:
@@ -439,10 +442,11 @@ def spatial_scatter(
 
 @d.dedent
 @_wrap_signature  # type: ignore[arg-type]
+@old_positionals("seg_cell_id", "seg", "seg_key", "seg_contourpx", "seg_outline")
 def spatial_segment(
     adata: AnnData,
-    seg_cell_id: str,
     *,
+    seg_cell_id: str,
     seg: bool | _SeqArray | None = True,
     seg_key: str = Key.uns.image_seg_key,
     seg_contourpx: int | None = None,

@@ -271,8 +271,8 @@ def nhood_enrichment(
 @d.dedent
 def nhood_enrichment_dotplot(
     adata: AnnData,
-    cluster_key: str,
     *,
+    cluster_key: str,
     annotate: bool = False,
     title: str | None = None,
     cmap: str = "RdBu_r",

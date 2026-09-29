@@ -12,6 +12,7 @@ from scanpy import logging as logg
 from sklearn.metrics import DistanceMetric
 from sklearn.neighbors import KDTree
 
+from squidpy._compat import old_positionals
 from squidpy._docs import d
 from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _save_data
@@ -20,10 +21,21 @@ __all__ = ["var_by_distance"]
 
 
 @d.dedent
+@old_positionals(
+    "groups",
+    "cluster_key",
+    "library_key",
+    "library_id",
+    "design_matrix_key",
+    "covariates",
+    "metric",
+    "spatial_key",
+    "copy",
+)
 def var_by_distance(
     adata: AnnData,
-    groups: str | list[str] | NDArrayA,
     *,
+    groups: str | list[str] | NDArrayA,
     cluster_key: str | None = None,
     library_key: str | None = None,
     library_id: str | list[str] | None = None,
