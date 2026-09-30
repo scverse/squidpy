@@ -213,9 +213,10 @@ class StainFit:
         scale
             Scale level to decompose. ``"auto"`` uses the finest level.
         image_key_added
-            Key *prefix* for the written images when ``inplace=True``. If ``None``, ``image_key`` is used, so each stain is written as its own
-            single-channel image ``sdata.images[f"{image_key}_{stain}"]`` (e.g.
-            ``f"{image_key}_hematoxylin"``). Ignored when ``inplace=False``.
+            Key *prefix* for the written images when ``inplace=True``. If ``None``,
+            ``image_key`` is used, so each stain is written as its own single-channel image
+            ``sdata.images[f"{image_key}_{stain}"]`` (e.g. ``f"{image_key}_hematoxylin"``).
+            Ignored when ``inplace=False``.
         inplace
             If ``True``, write each stain as a separate single-channel
             image under the ``image_key_added`` prefix and return ``None``; the

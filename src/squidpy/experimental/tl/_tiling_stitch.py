@@ -711,7 +711,7 @@ def assign_stitch_groups(
     labels_key
         Key in ``sdata.labels``.
     qc_table_key
-        Key of the QC table.
+        Key of the QC table. If `None`, ``f"{labels_key}_qc"``.
     min_confidence
         Threshold on ``stitch_confidence``.  ``0.7`` is a starting
         point; raise it for stricter precision, lower for recall.  Tune for

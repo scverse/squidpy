@@ -32,7 +32,8 @@ def qc_image(
     image_key
         Image key the metrics were computed for.
     metrics
-        Metrics to plot. If `None`, plots every metric found.
+        Metrics to plot, by the names :func:`~squidpy.experimental.im.qc_image` lists.
+        If `None`, plots every metric found.
     figsize
         Figure size as ``(width, height)``; derived from the panel count if `None`.
     return_ax
