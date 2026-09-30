@@ -24,7 +24,7 @@ from scanpy import logging as logg
 from scipy.sparse import csr_array, csr_matrix, issparse
 from spatialdata import SpatialData
 
-from squidpy._compat import old_positionals
+from squidpy._compat import SKIP_OWN_FRAMES, old_positionals
 from squidpy._constants._constants import Centrality
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
@@ -297,21 +297,20 @@ def _filter_clusters_by_min_cell_count(
 
 @d.get_sections(base="nhood_ench", sections=["Parameters"])
 @d.dedent
-@deprecated_randomness_param
-@deprecated_params({"numba_parallel": "1.10.0", "backend": "1.10.0"})
 @old_positionals(
     "cluster_key",
     "library_key",
     "connectivity_key",
     "n_perms",
-    "rng",
+    "numba_parallel",
+    "seed",
     "copy",
     "n_jobs",
+    "backend",
     "show_progress_bar",
-    "normalization",
-    "min_cell_count",
-    "handle_nan",
 )
+@deprecated_randomness_param
+@deprecated_params({"numba_parallel": "1.10.0", "backend": "1.10.0"})
 def nhood_enrichment(
     adata: AnnData | SpatialData,
     *,
@@ -436,8 +435,7 @@ def nhood_enrichment(
             f"{n_filtered / n_total_cells * 100:.3f}% of cells were excluded because their clusters "
             f"had fewer than {min_cell_count} cells.",
             UserWarning,
-            # +2 for the `deprecated_randomness_param` and `deprecated_params` wrappers
-            stacklevel=4,
+            skip_file_prefixes=SKIP_OWN_FRAMES,
         )
 
     indices, indptr = (adj.indices.astype(ndt), adj.indptr.astype(ndt))

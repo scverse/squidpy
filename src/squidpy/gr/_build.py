@@ -23,7 +23,7 @@ from spatialdata.models.models import (
     get_model,
 )
 
-from squidpy._compat import old_positionals
+from squidpy._compat import SKIP_OWN_FRAMES, old_positionals
 from squidpy._constants._constants import CoordType, Transform
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
@@ -107,7 +107,7 @@ def _resolve_graph_builder(
             warnings.warn(
                 "Parameter `n_neighs` is ignored when `delaunay=True` use `spatial_neighbors_delaunay` instead.",
                 FutureWarning,
-                stacklevel=3,
+                skip_file_prefixes=SKIP_OWN_FRAMES,
             )
         # Preserve the documented legacy contract: under the deprecated
         # `spatial_neighbors`, a scalar `radius` with `delaunay=True` is silently
@@ -122,7 +122,7 @@ def _resolve_graph_builder(
             warnings.warn(
                 "Parameter `n_neighs` is ignored when `radius` is set use `spatial_neighbors_radius` instead.",
                 FutureWarning,
-                stacklevel=3,
+                skip_file_prefixes=SKIP_OWN_FRAMES,
             )
         return RadiusBuilder(**common, radius=radius, percentile=percentile)
     return KNNBuilder(n_neighs=n_neighs, **common, percentile=percentile)
@@ -315,7 +315,7 @@ def spatial_neighbors(
         "`spatial_neighbors_delaunay`, `spatial_neighbors_grid`, or "
         "`spatial_neighbors_from_builder` instead.",
         FutureWarning,
-        stacklevel=2,
+        skip_file_prefixes=SKIP_OWN_FRAMES,
     )
     adata, library_key = _prepare_spatial_neighbors_input(
         adata,

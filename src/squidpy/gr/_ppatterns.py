@@ -56,7 +56,6 @@ bl = nt.boolean
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn(), sp=SpatialAutocorr)
-@deprecated_randomness_param
 @old_positionals(
     "connectivity_key",
     "genes",
@@ -67,13 +66,14 @@ bl = nt.boolean
     "corr_method",
     "attr",
     "layer",
-    "rng",
+    "seed",
     "use_raw",
     "copy",
     "n_jobs",
     "backend",
     "show_progress_bar",
 )
+@deprecated_randomness_param
 def spatial_autocorr(
     adata: AnnData | SpatialData,
     *,

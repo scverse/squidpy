@@ -25,7 +25,6 @@ __all__ = ["ripley"]
 
 @d.dedent
 @inject_docs(key=Key.obsm.spatial, rp=RipleyStat)
-@deprecated_randomness_param
 @old_positionals(
     "cluster_key",
     "mode",
@@ -36,9 +35,10 @@ __all__ = ["ripley"]
     "n_observations",
     "max_dist",
     "n_steps",
-    "rng",
+    "seed",
     "copy",
 )
+@deprecated_randomness_param
 def ripley(
     adata: AnnData | SpatialData,
     *,
