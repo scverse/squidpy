@@ -10,41 +10,42 @@ from squidpy._utils import NDArrayA
 from squidpy._validators import validate_xy
 
 
+def check_spans_plane(points: np.ndarray, *, name: str, method: str) -> None:
+    """Raise unless ``points`` span a plane: a line (or a point) cannot fix a 2D affine."""
+    if np.linalg.matrix_rank(points - points.mean(axis=0), tol=1e-8) < 2:
+        raise ValueError(
+            f"{method} needs {name} landmarks spanning a plane, but they lie on a line "
+            f"(or a single point). Pick landmarks that are not collinear."
+        )
+
+
 def _fit(ref: np.ndarray, query: np.ndarray, *, method: Literal["similarity", "affine"]) -> NDArrayA:
     ref = validate_xy(ref, name="ref")
     query = validate_xy(query, name="query")
     if ref.shape != query.shape:
         raise ValueError(f"`ref` and `query` must have the same shape; got {ref.shape} and {query.shape}.")
-    if ref.shape[0] < 3:
-        raise ValueError(f"`{method}` needs at least 3 landmark pairs, got {ref.shape[0]}.")
+    # 2 distinct pairs fix the 4 DOF of a similarity; the 6-DOF affine needs 3 off a line,
+    # since on a line it is exact *on* the landmarks and arbitrary off them, with no residual
+    # to reveal it.
+    need = 2 if method == "similarity" else 3
+    if ref.shape[0] < need:
+        raise ValueError(f"`{method}` needs at least {need} landmark pairs, got {ref.shape[0]}.")
+    for name, points in (("ref", ref), ("query", query)):
+        if method == "affine":
+            check_spans_plane(points, name=f"`{name}`", method="`affine`")
+        elif np.ptp(points, axis=0).max() <= 1e-8:
+            raise ValueError(f"`similarity` needs `{name}` landmarks at two distinct places at least.")
 
-    if method == "similarity":
-        # spatialdata solves the 4-DOF case; skimage's "similarity" would do too, but
-        # this is the transform napari-spatialdata registers, so it matches interactively.
-        from spatialdata.models import PointsModel
-        from spatialdata.transformations import get_transformation_between_landmarks
+    from skimage.transform import estimate_transform
 
-        matrix = _extract_affine_matrix(
-            get_transformation_between_landmarks(PointsModel.parse(ref), PointsModel.parse(query))
-        )
-    else:
-        from skimage.transform import estimate_transform
-
-        # A 6-DOF affine is underdetermined by landmarks that span a line: the fit is exact
-        # *on* them and arbitrary off them, so there is no residual to reveal it. `similarity`
-        # has 4 DOF and a line determines it, hence the check only here.
-        for name, points in (("ref", ref), ("query", query)):
-            if np.linalg.matrix_rank(points - points.mean(axis=0), tol=1e-8) < 2:
-                raise ValueError(
-                    f"`affine` needs `{name}` landmarks spanning a plane, but they lie on a line "
-                    f"(or a single point). Use `method='similarity'`, which a line determines, or "
-                    f"pick landmarks that are not collinear."
-                )
-        matrix = np.asarray(estimate_transform("affine", src=query, dst=ref).params)
-
-    if matrix.shape != (3, 3):
-        raise ValueError(f"Expected a (3, 3) homogeneous matrix, found shape {matrix.shape}.")
-    return matrix
+    # skimage's similarity is Umeyama restricted to proper rotations: it never mirrors, where
+    # spatialdata's (and so napari-spatialdata's) picks the reflection sign from an affine fit
+    # and flips on (near-)collinear landmarks.
+    fitted = estimate_transform(method, src=query, dst=ref)
+    # skimage >= 0.26 returns a falsy FailedEstimation; 0.25 returns NaN params
+    if not fitted or not np.isfinite(fitted.params).all():
+        raise ValueError(f"`{method}` fit failed: {fitted}")
+    return np.asarray(fitted.params)
 
 
 def apply_affine(matrix: np.ndarray, points: np.ndarray) -> NDArrayA:
@@ -69,12 +70,17 @@ def apply_affine(matrix: np.ndarray, points: np.ndarray) -> NDArrayA:
 
 
 def fit_similarity(ref: np.ndarray, query: np.ndarray) -> NDArrayA:
-    """4-DOF similarity fit (rotation + uniform scale + translation), via spatialdata.
+    """4-DOF similarity fit (rotation + uniform scale + translation), via skimage.
+
+    Never a reflection: a mirrored query is fitted by the best rotation instead. This differs
+    from napari-spatialdata, whose similarity may reflect, so the two can disagree when the
+    landmarks are mirrored (or nearly collinear).
 
     Parameters
     ----------
     ref, query
-        Pre-paired ``(N, 2)`` ``(x, y)`` landmark arrays (``N >= 3``).
+        Pre-paired ``(N, 2)`` ``(x, y)`` landmark arrays (``N >= 2``), at two distinct
+        places at least: a line determines a similarity.
 
     Returns
     -------
@@ -97,15 +103,3 @@ def fit_affine(ref: np.ndarray, query: np.ndarray) -> NDArrayA:
     The homogeneous ``(3, 3)`` affine mapping query onto ref, in ``(x, y)``.
     """
     return _fit(ref, query, method="affine")
-
-
-def _extract_affine_matrix(sd_transform: object) -> np.ndarray:
-    """Pull a ``(3, 3)`` homogeneous matrix out of a spatialdata transformation."""
-    from spatialdata.transformations import Affine as SDAffine
-    from spatialdata.transformations import Sequence as SDSequence
-
-    if isinstance(sd_transform, SDAffine):
-        return np.asarray(sd_transform.matrix)
-    if isinstance(sd_transform, SDSequence):
-        return np.asarray(sd_transform.to_affine_matrix(input_axes=("x", "y"), output_axes=("x", "y")))
-    raise TypeError(f"Unexpected transformation type from spatialdata: {type(sd_transform).__name__}.")
