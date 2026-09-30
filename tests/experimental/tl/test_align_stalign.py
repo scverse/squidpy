@@ -414,5 +414,62 @@ def test_volume_deformation_grid_rejects_a_bad_direction() -> None:
         image_key=("volume", "section"),
         **VOLUME_SOLVER,
     )
-    with pytest.raises(ValueError, match=r"'forward' or 'backward'"):
+    with pytest.raises(ValueError, match=r"Expected `direction` to be one of"):
         result.deformation_grid(direction="sideways")
+    np.testing.assert_array_equal(
+        result.deformation_grid(direction="FORWARD"), result.deformation_grid(direction="forward")
+    )
+
+
+# --- numeric correctness: the smoke tests above would pass a swapped axis or direction ---
+
+
+def test_landmark_start_maps_query_landmarks_onto_ref_both_ways() -> None:
+    """``niter=0`` leaves the landmark-derived affine; a sheared, non-symmetric one catches x/y swaps."""
+    from squidpy.experimental.tl._align._stalign import fit_stalign_image
+
+    lm_query = _LM_REF @ np.array([[1.1, 0.2], [-0.1, 0.9]]).T + np.array([1.5, -0.5])
+    fit = fit_stalign_image(*_pair(), landmarks_ref=_LM_REF, landmarks_query=lm_query, niter=0)
+
+    np.testing.assert_allclose(fit.transform_points(lm_query), _LM_REF, atol=1e-4)
+    np.testing.assert_allclose(fit.transform_points(_LM_REF, direction="backward"), lm_query, atol=1e-4)
+
+
+def test_landmark_start_refuses_collinear_landmarks() -> None:
+    # a line leaves the start affine undetermined; it came back as an arbitrary shear
+    from squidpy.experimental.tl._align._stalign import fit_stalign_image
+
+    line = np.array([[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]])
+    with pytest.raises(ValueError, match=r"`landmarks_query` landmarks spanning a plane"):
+        fit_stalign_image(*_pair(), landmarks_ref=line, landmarks_query=line + [1.0, 0.0], niter=0)
+
+
+def test_image_fit_recovers_an_x_shift() -> None:
+    """Query = ref moved +3 px along x: forward must send it back by -3 along x, not y."""
+    from squidpy.experimental.tl._align._stalign import fit_stalign_image
+
+    yy, xx = np.mgrid[:32, :32]
+    ref = (np.exp(-((xx - 12) ** 2 + (yy - 17) ** 2) / 20.0) + 0.5 * np.exp(-((xx - 20) ** 2 + (yy - 10) ** 2) / 10.0))[
+        None
+    ]
+    query = np.roll(ref, 3, axis=2)
+    fit = fit_stalign_image(ref, query, a=4.0, nt=1, niter=30, epV=1.0)
+
+    np.testing.assert_allclose(fit.transform_points(np.zeros((1, 2))), [[-3.0, 0.0]], atol=0.05)
+    assert np.abs(np.asarray(fit.warp_image(query)) - ref).mean() < 0.01 * np.abs(query - ref).mean()
+    pts = np.array([[1.0, 2.0], [-3.0, 4.0]])
+    np.testing.assert_allclose(fit.transform_points(fit.transform_points(pts), direction="backward"), pts, atol=1e-3)
+
+
+def test_volume_initial_affine_maps_the_volume_onto_the_section() -> None:
+    """The (x, y, z) affine maps volume -> section, so section points land at ``p - t``."""
+    from squidpy.experimental.tl._align._stalign import fit_stalign_volume
+
+    volume = np.random.default_rng(0).random((1, 6, 12, 12))
+    affine = np.eye(4)
+    affine[:3, 3] = [1.0, 2.0, 0.5]
+    fit = fit_stalign_volume(volume, volume[:, 3], initial_affine=affine, a=3.0, nt=1, niter=0)
+
+    np.testing.assert_allclose(
+        fit.transform_points(np.array([[0.0, 0.0], [1.0, 3.0]])), [[-1.0, -2.0, -0.5], [0.0, 1.0, -0.5]], atol=1e-5
+    )
