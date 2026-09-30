@@ -55,14 +55,14 @@ class TestDecompositionThroughDispatchers:
         assert ref.stain_matrix.shape == (3, 3)
         assert ref.max_concentrations.shape == (2,)
 
-        out = ref.transform(sdata, "img", inplace=False)
+        out = ref.transform(sdata, image_key="img", inplace=False)
         assert isinstance(out, xr.DataArray)
         assert out.sizes["c"] == 3
 
     def test_apply_writes_back(self, method: str) -> None:
         sdata = _make_sdata(_synthetic_rgb(seed=2))
         ref = fit_stain_reference(sdata, image_key="img", method=method, white_point=_WHITE)
-        result = ref.transform(sdata, "img", image_key_added="norm")
+        result = ref.transform(sdata, image_key="img", image_key_added="norm")
         assert result is None
         assert get_transformation(sdata.images["norm"], get_all=True).keys() == (
             get_transformation(sdata.images["img"], get_all=True).keys()
@@ -73,7 +73,7 @@ class TestDecomposeStains:
     def test_returns_named_concentration_maps(self) -> None:
         sdata = _make_sdata(_synthetic_rgb())
         conc = fit_stain_reference(sdata, image_key="img", method="macenko", white_point=_WHITE).decompose(
-            sdata, "img", inplace=False
+            sdata, image_key="img", inplace=False
         )
         assert set(conc) == {"hematoxylin", "eosin", "residual"}
         assert all(set(c.dims) == {"y", "x"} for c in conc.values())  # one (y, x) map per stain
@@ -82,21 +82,21 @@ class TestDecomposeStains:
     def test_drop_residual(self) -> None:
         sdata = _make_sdata(_synthetic_rgb())
         conc = fit_stain_reference(sdata, image_key="img", method="macenko", white_point=_WHITE).decompose(
-            sdata, "img", include_residual=False, inplace=False
+            sdata, image_key="img", include_residual=False, inplace=False
         )
         assert set(conc) == {"hematoxylin", "eosin"}
 
     def test_output_dtype_override(self) -> None:
         sdata = _make_sdata(_synthetic_rgb())
         conc = fit_stain_reference(sdata, image_key="img", method="macenko", white_point=_WHITE).decompose(
-            sdata, "img", output_dtype=np.float32, inplace=False
+            sdata, image_key="img", output_dtype=np.float32, inplace=False
         )
         assert all(c.dtype == np.float32 for c in conc.values())
 
     def test_inplace_default_writes_derived_keys(self) -> None:
         sdata = _make_sdata(_synthetic_rgb())
         ref = fit_stain_reference(sdata, image_key="img", method="macenko", white_point=_WHITE)
-        out = ref.decompose(sdata, "img")  # inplace=True, prefix defaults to image_key
+        out = ref.decompose(sdata, image_key="img")  # inplace=True, prefix defaults to image_key
         assert out is None
         for stain in ("hematoxylin", "eosin", "residual"):
             assert f"img_{stain}" in sdata.images
@@ -104,7 +104,7 @@ class TestDecomposeStains:
     def test_with_reference_writes_separate_images(self) -> None:
         sdata = _make_sdata(_synthetic_rgb())
         ref = fit_stain_reference(sdata, image_key="img", method="macenko", white_point=_WHITE)
-        out = ref.decompose(sdata, "img", image_key_added="conc")
+        out = ref.decompose(sdata, image_key="img", image_key_added="conc")
         assert out is None
         for stain in ("hematoxylin", "eosin", "residual"):
             assert f"conc_{stain}" in sdata.images
@@ -117,7 +117,7 @@ class TestDecomposeStains:
         # no half-written hematoxylin/residual behind.
         sdata.images["conc_eosin"] = sdata.images["img"]
         with pytest.raises(ValueError, match="would overwrite"):
-            ref.decompose(sdata, "img", image_key_added="conc")
+            ref.decompose(sdata, image_key="img", image_key_added="conc")
         assert "conc_hematoxylin" not in sdata.images
         assert "conc_residual" not in sdata.images
 
@@ -125,7 +125,7 @@ class TestDecomposeStains:
         sdata = _make_sdata(_synthetic_rgb())
         reinhard_ref = fit_stain_reference(sdata, image_key="img", method="reinhard")
         with pytest.raises(ValueError, match="macenko/vahadane reference"):
-            reinhard_ref.decompose(sdata, "img")
+            reinhard_ref.decompose(sdata, image_key="img")
 
 
 class TestBackgroundDefault:
@@ -187,7 +187,7 @@ class TestDecompositionOnHnE:
         ref = sq.experimental.im.fit_stain_reference(sdata_hne, image_key=image_key, method=method)
         assert isinstance(ref, StainFit)
         assert ref.stain_matrix.shape == (3, 3)
-        normalized = ref.transform(sdata_hne, image_key, inplace=False)
+        normalized = ref.transform(sdata_hne, image_key=image_key, inplace=False)
         assert normalized.sizes["c"] == 3
-        conc = ref.decompose(sdata_hne, image_key, inplace=False)
+        conc = ref.decompose(sdata_hne, image_key=image_key, inplace=False)
         assert set(conc) == {"hematoxylin", "eosin", "residual"}
