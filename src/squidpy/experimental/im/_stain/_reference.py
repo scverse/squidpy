@@ -119,8 +119,8 @@ class StainFit:
     def transform(
         self,
         sdata: sd.SpatialData,
-        image_key: str,
         *,
+        image_key: str,
         scale: str | Literal["auto"] = "auto",
         method_params: MethodParams = None,
         image_key_added: str | None = None,
@@ -190,8 +190,8 @@ class StainFit:
     def decompose(
         self,
         sdata: sd.SpatialData,
-        image_key: str,
         *,
+        image_key: str,
         scale: str | Literal["auto"] = "auto",
         image_key_added: str | None = None,
         inplace: bool = True,

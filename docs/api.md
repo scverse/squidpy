@@ -160,6 +160,7 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
     experimental.pl.tiling_qc
     experimental.im.fit_stain_reference
     experimental.im.estimate_white_point
+    experimental.im.StainFit
 ```
 
 ## Types
@@ -169,8 +170,5 @@ it.
 
 ```{eval-rst}
 .. automodule:: squidpy.types
-    :members:
-
-.. autoclass:: squidpy.experimental.im.StainFit
     :members:
 ```
