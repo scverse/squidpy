@@ -44,11 +44,14 @@ def test_qc_image_accepts_a_bare_metric_string(sdata_hne) -> None:
     assert any("tenengrad" in name for name in sdata_hne.tables["qc_img_hne"].var_names)
 
 
-def test_qc_image_names_the_unknown_metric(sdata_hne) -> None:
-    with pytest.raises(ValueError, match=r"Unknown metrics \['not_a_metric'\]"):
-        sq.experimental.im.qc_image(
-            sdata_hne, image_key="hne", tile_size=_FAST_TILE, metrics=["not_a_metric"], progress=False
-        )
+@pytest.mark.parametrize(
+    ("metrics", "match"),
+    [(["not_a_metric"], r"Unknown metrics \['not_a_metric'\]"), (5, r"Unknown metrics \[5\]\. Available")],
+    ids=["unknown_name", "not_iterable"],
+)
+def test_qc_image_names_the_unknown_metric(sdata_hne, metrics, match) -> None:
+    with pytest.raises(ValueError, match=match):
+        sq.experimental.im.qc_image(sdata_hne, image_key="hne", tile_size=_FAST_TILE, metrics=metrics, progress=False)
 
 
 class TestQCImage(PlotTester, metaclass=PlotTesterMeta):

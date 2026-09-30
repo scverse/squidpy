@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 
 from squidpy._params import resolve_params
+from squidpy._validators import normalize_choice
 from squidpy.experimental.im._stain._conversion import cast_to_image_dtype
 from squidpy.experimental.im._stain._white_point import validate_rgb_range
 
@@ -78,8 +79,7 @@ class StainFit:
     max_concentrations: np.ndarray | None = None
 
     def __post_init__(self) -> None:
-        if self.method not in _VALID_METHODS:
-            raise ValueError(f"Unknown method {self.method!r}; expected one of {sorted(_VALID_METHODS)}.")
+        object.__setattr__(self, "method", normalize_choice(self.method, sorted(_VALID_METHODS), name="method"))
 
         if self.method in _DECOMPOSITION_METHODS:
             if self.stain_matrix is None:

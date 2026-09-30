@@ -90,10 +90,19 @@ def assert_isinstance(value: Any, expected_type: type | tuple[type, ...], *, nam
         raise TypeError(f"Expected `{name}` to be of type `{type_names}`, got `{type(value).__name__}`.")
 
 
-def assert_one_of(value: Any, options: Sequence[Any], *, name: str) -> None:
-    """Raise ValueError if *value* is not in *options*."""
-    if value not in options:
-        raise ValueError(f"Expected `{name}` to be one of `{list(options)}`, got `{value!r}`.")
+def normalize_choice(value: Any, options: Iterable[Any], *, name: str) -> Any:
+    """Return the option in *options* matching *value*, ignoring the case of strings.
+
+    Raise ValueError naming the valid options if nothing matches.
+    """
+    options = list(options)
+    if isinstance(value, str):
+        for opt in options:
+            if isinstance(opt, str) and opt.casefold() == value.casefold():
+                return opt
+    elif value in options:
+        return value
+    raise ValueError(f"Expected `{name}` to be one of `{options}`, got `{value!r}`.")
 
 
 def assert_key_in(obj: Any, key: str, *, attr: str, obj_name: str, extra_msg: str = "") -> None:

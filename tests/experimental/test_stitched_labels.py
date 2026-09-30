@@ -220,7 +220,11 @@ class TestMakeStitchedLabels:
         [
             ("qc_only", {"labels_key": "labels"}, "stitch_group_id"),
             ("qc_and_stitch", {"labels_key": "bogus"}, "not found"),
-            ("qc_and_stitch", {"labels_key": "labels", "merge_strategy": "bogus"}, "Unknown merge_strategy"),
+            (
+                "qc_and_stitch",
+                {"labels_key": "labels", "merge_strategy": "bogus"},
+                "Expected `merge_strategy` to be one of.*Or pass a callable",
+            ),
             (
                 "qc_and_stitch",
                 {"labels_key": "labels", "write_table": False, "table_key_added": "x"},
@@ -461,7 +465,7 @@ class TestReviewFixes:
         """M9: merge_strategy is validated eagerly even when write_table=False."""
         sdata, _ = sdata_tile_boundary
         _qc_and_stitch(sdata)
-        with pytest.raises(ValueError, match="Unknown merge_strategy"):
+        with pytest.raises(ValueError, match="Expected `merge_strategy` to be one of.*Or pass a callable"):
             sq.experimental.tl.make_stitched_labels(
                 sdata, labels_key="labels", write_table=False, merge_strategy="bogus"
             )

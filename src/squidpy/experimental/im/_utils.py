@@ -13,6 +13,7 @@ from spatialdata.models import Labels2DModel, ShapesModel
 from spatialdata.transformations import get_transformation, set_transformation
 
 from squidpy._utils import _yx_from_shape
+from squidpy._validators import normalize_choice
 
 
 class TileGrid:
@@ -190,6 +191,7 @@ def flatten_channels(
     xr.DataArray
         Greyscale image with shape (y, x)
     """
+    channel_format = normalize_choice(channel_format, ("infer", "rgb", "rgba", "multichannel"), name="channel_format")
     n_channels = img.sizes["c"]
 
     # 1 channel: always return greyscale
@@ -216,19 +218,13 @@ def flatten_channels(
         weights = xr.DataArray([0.299, 0.587, 0.114, 0.0], dims=["c"], coords={"c": img.coords["c"]})
         return (img * weights).sum(dim="c")
 
-    elif channel_format == "infer":
-        if n_channels == 3:
-            # 3 channels + infer -> RGB luminance formula
-            weights = xr.DataArray([0.299, 0.587, 0.114], dims=["c"], coords={"c": img.coords["c"]})
-            return (img * weights).sum(dim="c")
-        else:
-            # 2 channels or 4+ channels + infer -> multichannel
-            return img.mean(dim="c")
-
+    elif n_channels == 3:
+        # 3 channels + infer -> RGB luminance formula
+        weights = xr.DataArray([0.299, 0.587, 0.114], dims=["c"], coords={"c": img.coords["c"]})
+        return (img * weights).sum(dim="c")
     else:
-        raise ValueError(
-            f"Invalid channel_format: {channel_format}. Must be one of 'infer', 'rgb', 'rgba', 'multichannel'."
-        )
+        # 2 channels or 4+ channels + infer -> multichannel
+        return img.mean(dim="c")
 
 
 def get_mask_dask(sdata: SpatialData, mask_key: str, scale: str) -> da.Array:
