@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 import xarray as xr
 
+from squidpy._params import resolve_params
 from squidpy.experimental.im._stain._reference import StainReference
 from squidpy.experimental.im._stain._reinhard import (
     _SIGMA_FLOOR,
@@ -64,7 +65,7 @@ class TestMaskedChannelStats:
 
 class TestFitReinhard:
     def test_returns_valid_reference(self, rgb_a: np.ndarray) -> None:
-        ref = fit_reinhard(_da(rgb_a, chunked=False), ReinhardParams())
+        ref = fit_reinhard(_da(rgb_a, chunked=False), resolve_params(None, ReinhardParams))
         assert ref.method == "reinhard"
         assert ref.mu.shape == (3,)
         assert ref.sigma.shape == (3,)
@@ -74,14 +75,14 @@ class TestFitReinhard:
 
 class TestApplyReinhard:
     def test_idempotent_when_source_is_reference(self, rgb_a: np.ndarray) -> None:
-        params = ReinhardParams()
+        params = resolve_params(None, ReinhardParams)
         src = _da(rgb_a, chunked=False)
         ref = fit_reinhard(src, params)
         out = apply_reinhard(src, ref, params)
         np.testing.assert_allclose(out.values, rgb_a, atol=1e-4)
 
     def test_transfer_matches_reference_stats(self, rgb_a: np.ndarray, rgb_b: np.ndarray) -> None:
-        params = ReinhardParams(mask_background=False)
+        params = resolve_params({"mask_background": False}, ReinhardParams)
         ref = fit_reinhard(_da(rgb_a, chunked=False), params)
         normalized = apply_reinhard(_da(rgb_b, chunked=False), ref, params)
         refit = fit_reinhard(normalized, params)
@@ -89,13 +90,13 @@ class TestApplyReinhard:
         np.testing.assert_allclose(refit.sigma, ref.sigma, atol=1e-4)
 
     def test_lazy_in_lazy_out(self, rgb_a: np.ndarray, rgb_b: np.ndarray) -> None:
-        params = ReinhardParams()
+        params = resolve_params(None, ReinhardParams)
         ref = fit_reinhard(_da(rgb_a, chunked=False), params)
         out = apply_reinhard(_da(rgb_b, chunked=True), ref, params)
         assert isinstance(out.data, da.Array)
 
     def test_degenerate_channel_no_nan(self, rgb_a: np.ndarray) -> None:
-        params = ReinhardParams(mask_background=False)
+        params = resolve_params({"mask_background": False}, ReinhardParams)
         ref = fit_reinhard(_da(rgb_a, chunked=False), params)
         flat = rgb_a.copy()
         flat[0] = 128.0  # constant channel -> sigma_src == 0
@@ -107,5 +108,5 @@ class TestApplyReinhard:
 
 
 def test_reference_is_stainreference(rgb_a: np.ndarray) -> None:
-    ref = fit_reinhard(_da(rgb_a, chunked=False), ReinhardParams())
+    ref = fit_reinhard(_da(rgb_a, chunked=False), resolve_params(None, ReinhardParams))
     assert isinstance(ref, StainReference)

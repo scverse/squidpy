@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import enum
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from typing import Any, Literal, cast
 
 import dask.array as da
@@ -50,7 +50,8 @@ def _normalize_corners(corners_are_background: bool | Sequence[bool]) -> _Corner
     """Broadcast a single flag to all four corners, or validate four of them (sequence or array)."""
     if isinstance(corners_are_background, str):  # `bool("False")` is True
         raise TypeError("`corners_are_background` must be a bool or 4 bools, not a string.")
-    if np.ndim(corners_are_background) == 0:
+    # any scalar or 0-d array is read by truthiness (as on chore/kwonly-args); a generator is not a scalar
+    if np.ndim(corners_are_background) == 0 and not isinstance(corners_are_background, Iterator):
         return (bool(corners_are_background),) * 4
     if np.shape(corners_are_background) != (4,):
         raise ValueError(
@@ -96,18 +97,6 @@ def _normalize_margins(
     if t + b >= H or l + r >= W:
         return (0, 0, 0, 0)
     return (t, b, l, r)
-
-
-def _is_zero_margin(margins_px: int | Sequence[int]) -> bool:
-    """
-    Check whether margins resolve to zero everywhere.
-    """
-    try:
-        if isinstance(margins_px, Sequence) and not isinstance(margins_px, (str, bytes)):
-            return all(int(x) == 0 for x in margins_px)
-        return int(margins_px) == 0
-    except (TypeError, ValueError):  # pragma: no cover - defensive
-        return False
 
 
 def _build_inner_mask(shape: tuple[int, int], margins: tuple[int, int, int, int]) -> np.ndarray:
@@ -309,12 +298,8 @@ def detect_tissue(
     src_h = int(img_src.sizes["y"])
     src_w = int(img_src.sizes["x"])
     n_src_px = src_h * src_w
-    base_margin_px = border_margin_px
-    if method == DetectTissueMethod.WEKA and _is_zero_margin(base_margin_px):
-        wp_local = cast(WekaParams, resolved_method_params)
-        base_margin_px = wp_local.get("border_margin_px", 0)
     target_shape = _get_target_upscale_shape(sdata, image_key=image_key)
-    normalized_margins_target = _normalize_margins(base_margin_px, target_shape)
+    normalized_margins_target = _normalize_margins(border_margin_px, target_shape)
 
     # Decide working resolution
     need_downscale = (not manual_scale) and (n_src_px > auto_max_pixels)
@@ -622,12 +607,8 @@ def _segment_weka(
     training_labels = np.zeros((H, W), dtype=np.uint8)
 
     # Background seeds from corners
+    # never empty: detect_tissue requires a flagged corner and _corner_mask marks >= 1x1 per corner
     corner_mask = _corner_mask((H, W), corners, corner_size_pct)
-    if not corner_mask.any():
-        # Fallback: small block in top-left if corners disabled
-        h_block = max(1, H // 50)
-        w_block = max(1, W // 50)
-        corner_mask[:h_block, :w_block] = True
     training_labels[corner_mask] = 1
     if any(border_margins_px):
         # Treat excluded border as background seeds to down-weight fiducial rings.

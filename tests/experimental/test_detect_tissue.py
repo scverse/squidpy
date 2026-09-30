@@ -133,6 +133,9 @@ class TestDetectTissue(PlotTester, metaclass=PlotTesterMeta):
     [
         (False, (False,) * 4),
         (np.bool_(False), (False,) * 4),
+        (0, (False,) * 4),
+        (1, (True,) * 4),
+        (np.array(False), (False,) * 4),
         ([True, True, False, False], (True, True, False, False)),
         (np.array([False, True, False, False]), (False, True, False, False)),
     ],
@@ -141,6 +144,21 @@ def test_normalize_corners(corners, expected) -> None:
     from squidpy.experimental.im._detect_tissue import _normalize_corners
 
     assert _normalize_corners(corners) == expected
+
+
+def test_normalize_corners_rejects_generator() -> None:
+    from squidpy.experimental.im._detect_tissue import _normalize_corners
+
+    with pytest.raises(ValueError, match="sequence of 4 bools"):
+        _normalize_corners(c for c in [False] * 4)
+
+
+def test_weka_border_margin_is_not_a_params_key() -> None:
+    from squidpy._params import resolve_params
+
+    # the margin is detect_tissue's own `border_margin_px` argument only
+    with pytest.raises(ValueError, match="Unknown `method_params` field"):
+        resolve_params({"border_margin_px": 20}, WekaParams)
 
 
 @pytest.mark.parametrize(

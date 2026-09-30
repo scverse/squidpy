@@ -12,7 +12,7 @@ from typing import Any
 import numpy as np
 import xarray as xr
 
-from squidpy._params import resolve_params, validates
+from squidpy._params import validates
 from squidpy.experimental.im._stain._conversion import (
     _apply_along_channel,
     _check_channel_dim,
@@ -81,7 +81,6 @@ def _transfer_kernel(
 def _reinhard_mask(lab: xr.DataArray, params: ReinhardParams, tissue_mask: np.ndarray | None) -> xr.DataArray | None:
     """Resolve the tissue mask for the Reinhard stats: external mask wins, else
     the param-driven luminosity mask (or ``None`` for vanilla Reinhard)."""
-    params = resolve_params(params, ReinhardParams)
     if tissue_mask is not None:
         return as_spatial_mask(tissue_mask, lab)
     if params["mask_background"]:
@@ -99,6 +98,8 @@ def fit_reinhard(
     ``tissue_mask`` (a ``(y, x)`` boolean aligned to ``image_rgb``) selects the
     tissue pixels when given; otherwise the ``mask_background`` /
     ``luminosity_threshold`` params drive the mask.
+    ``params`` must already be resolved by :func:`squidpy._params.resolve_params`
+    (the public dispatchers do this once); it is not re-validated here.
     """
     _check_channel_dim(image_rgb)
     lab = rgb_to_lab_ruderman(image_rgb)
@@ -124,6 +125,8 @@ def apply_reinhard(
     full-resolution image is never materialised to compute them.
     ``tissue_mask`` (aligned to ``fit_rgb``) selects the source tissue pixels.
     Lazy if and only if ``image_rgb`` is lazy.
+    ``params`` must already be resolved by :func:`squidpy._params.resolve_params`
+    (the public dispatchers do this once); it is not re-validated here.
     """
     _check_channel_dim(image_rgb)
     fit_lab = rgb_to_lab_ruderman(fit_rgb if fit_rgb is not None else image_rgb)
