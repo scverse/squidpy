@@ -34,7 +34,7 @@ from squidpy._utils import (
     get_n_processes,
     parallelize,
 )
-from squidpy._validators import assert_key_in_adata, assert_positive
+from squidpy._validators import assert_key_in_adata, assert_positive, normalize_choice
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
@@ -207,6 +207,7 @@ def spatial_autocorr(
 
         return adata.obsm[layer][:, ixs].T, ixs
 
+    attr = normalize_choice(attr, ("obs", "X", "obsm"), name="attr")
     if attr == "X":
         vals, index = extract_X(adata, genes)  # type: ignore
     elif attr == "obs":

@@ -20,7 +20,7 @@ from squidpy._compat import old_positionals
 from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
-from squidpy._validators import assert_non_empty_sequence, get_valid_values
+from squidpy._validators import assert_non_empty_sequence, get_valid_values, normalize_choice
 from squidpy.gr._utils import _assert_categorical_obs
 from squidpy.pl._color_utils import Palette_t, _get_palette, _maybe_set_colors
 from squidpy.pl._utils import _heatmap, save_fig
@@ -101,7 +101,15 @@ def centrality_scores(
 
     score = scores if score is None else score
     score = assert_non_empty_sequence(score, name="centrality scores")
-    score = sorted(get_valid_values(score, scores))
+
+    def _canonical(s: str) -> str:
+        # Case-insensitive match; unknown names pass through and are dropped by get_valid_values.
+        try:
+            return normalize_choice(s, scores, name="score")
+        except ValueError:
+            return s
+
+    score = sorted(get_valid_values([_canonical(s) for s in score], scores))
 
     fig, axs = plt.subplots(1, len(score), figsize=figsize, dpi=dpi, constrained_layout=True)
     axs = np.ravel(axs)  # make into iterable
@@ -244,6 +252,7 @@ def nhood_enrichment(
     %(plotting_returns)s
     """
     _assert_categorical_obs(adata, key=cluster_key)
+    mode = normalize_choice(mode, ("zscore", "count"), name="mode")
     array = _get_data(adata, cluster_key=cluster_key, func_name="nhood_enrichment")[mode]
 
     ad = AnnData(X=array, obs={cluster_key: pd.Categorical(adata.obs[cluster_key].cat.categories)})
@@ -422,11 +431,10 @@ def ripley(
     """
     _assert_categorical_obs(adata, key=cluster_key)
 
-    res = _get_data(adata, cluster_key=cluster_key, func_name="ripley", mode=mode)
-
     mode = RipleyStat(mode)  # type: ignore[assignment]
     if TYPE_CHECKING:
         assert isinstance(mode, RipleyStat)
+    res = _get_data(adata, cluster_key=cluster_key, func_name="ripley", mode=mode.s)
 
     legend_kwargs = dict(legend_kwargs)
     if "loc" not in legend_kwargs:

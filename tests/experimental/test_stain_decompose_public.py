@@ -146,7 +146,7 @@ class TestBackgroundDefault:
 class TestUnknownMethod:
     def test_fit_unknown_method_raises(self) -> None:
         sdata = _make_sdata(_synthetic_rgb())
-        with pytest.raises(ValueError, match="Unknown method"):
+        with pytest.raises(ValueError, match="Expected `method` to be one of"):
             fit_stain_reference(sdata, image_key="img", method="bogus")
 
 

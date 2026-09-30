@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
+from squidpy._validators import normalize_choice
+
 if TYPE_CHECKING:
     import spatialdata as sd
     import xarray as xr
@@ -73,8 +75,7 @@ class StainFit:
     max_concentrations: np.ndarray | None = None
 
     def __post_init__(self) -> None:
-        if self.method not in _VALID_METHODS:
-            raise ValueError(f"Unknown method {self.method!r}; expected one of {sorted(_VALID_METHODS)}.")
+        object.__setattr__(self, "method", normalize_choice(self.method, sorted(_VALID_METHODS), name="method"))
 
         if self.method in _DECOMPOSITION_METHODS:
             if self.stain_matrix is None:

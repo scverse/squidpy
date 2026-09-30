@@ -461,8 +461,8 @@ def test_hop_adjacency_accepts_an_array_like():
     ("kwargs", "match"),
     [
         # hop 0 returns the features unaggregated, so it never reaches the per-hop check
-        ({"hops": (0,), "aggregation": "median"}, r"'aggregation' must be"),
-        ({"hops": (1,), "aggregation": "median"}, r"'aggregation' must be"),
+        ({"hops": (0,), "aggregation": "median"}, r"Expected `aggregation` to be one of"),
+        ({"hops": (1,), "aggregation": "median"}, r"Expected `aggregation` to be one of"),
         ({"hops": (1, 2), "hop_weights": [1.0]}, r"'hop_weights' has 1 value"),
         # averaging over a zero total used to return an all-NaN matrix silently
         ({"hops": (1, 2), "hop_weights": [1.0, -1.0], "aggregation": "mean"}, r"must not sum to zero"),

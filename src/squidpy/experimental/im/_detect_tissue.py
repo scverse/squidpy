@@ -27,6 +27,7 @@ from squidpy._utils import (
     _yx_from_shape,
     legacy_random,
 )
+from squidpy._validators import normalize_choice
 from squidpy.types import (
     FelzenszwalbParams,
     WekaParams,
@@ -260,10 +261,7 @@ def detect_tissue(
     Processing is performed at an appropriate resolution and then upscaled to match
     the original image dimensions.
     """
-    # Case-insensitive, as the enum lookup it replaces was.
-    method = method.lower() if isinstance(method, str) else method
-    if method not in get_args(DetectTissueMethod):
-        raise ValueError(f"method must be one of {get_args(DetectTissueMethod)}, found {method!r}")
+    method = normalize_choice(method, get_args(DetectTissueMethod), name="method")
 
     logger.info(f"Detecting tissue with method: {method}")
 

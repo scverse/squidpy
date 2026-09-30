@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable
 from typing import Literal, get_args
 
 import dask
@@ -15,6 +16,7 @@ from spatialdata._logging import logger
 from spatialdata.models import TableModel
 
 from squidpy._utils import _ensure_dim_order
+from squidpy._validators import normalize_choice
 from squidpy.experimental.im._intensity_metrics import hed_metrics
 from squidpy.experimental.im._qc_metrics import _HNE_METRICS, InputKind, QCMetric, get_metric_info
 from squidpy.experimental.im._utils import (
@@ -124,15 +126,21 @@ def qc_image(
 
     if metrics is None:
         metrics = list(_DEFAULT_HNE_METRICS if is_hne else _DEFAULT_GENERIC_METRICS)
-    elif isinstance(metrics, str):
-        metrics = [metrics]
+    elif isinstance(metrics, str) or not isinstance(metrics, Iterable):
+        metrics = [metrics]  # a non-iterable then fails the name check below
     else:
         metrics = list(metrics)
 
-    unknown = [m for m in metrics if m not in get_args(QCMetric)]
+    unknown, resolved = [], []
+    for m in metrics:
+        try:
+            resolved.append(normalize_choice(m, get_args(QCMetric), name="metrics"))
+        except ValueError:
+            unknown.append(m)
     if unknown:
         available = ", ".join(get_args(QCMetric))
         raise ValueError(f"Unknown metrics {unknown}. Available: {available}")
+    metrics = resolved
 
     # Validate H&E constraint
     if not is_hne:
