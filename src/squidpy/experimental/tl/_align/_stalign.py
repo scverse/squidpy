@@ -10,6 +10,7 @@ import numpy as np
 import numpy.typing as npt
 
 from squidpy._params import resolve_params
+from squidpy._validators import normalize_choice
 from squidpy.types import (
     StalignImageParams,
     StalignObsParams,
@@ -40,10 +41,9 @@ _VOLUME_SIGMA_P = 2e1
 _JAX_REQUIRED = 'STalign alignment requires JAX: `pip install "squidpy[jax]"`.'
 
 
-def _check_direction(value: object) -> None:
-    """Reject a ``direction`` that is neither of the two the solver understands."""
-    if value not in {"forward", "backward"}:
-        raise ValueError(f"Expected `direction` to be 'forward' or 'backward', found {value!r}.")
+def _check_direction(value: object) -> Literal["forward", "backward"]:
+    """The canonical ``direction``, in any casing; reject anything the solver doesn't understand."""
+    return normalize_choice(value, ("forward", "backward"), name="direction")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -101,7 +101,7 @@ class StalignFit:
 
         from ._stalign_impl._core import jax_dtype, transform_points_row_col
 
-        _check_direction(direction)
+        direction = _check_direction(direction)
         pts = jnp.asarray(points, dtype=jax_dtype())
         if pts.ndim != 2 or pts.shape[1] != 2:
             raise ValueError(f"Expected an (N, 2) `(x, y)` array, found shape {pts.shape}.")
@@ -260,7 +260,7 @@ class StalignImageFit(StalignFit):
         """
         from ._stalign_impl._core import transform_grid_row_col
 
-        _check_direction(direction)
+        direction = _check_direction(direction)
         source_axes = self.query_axes if query_axes is None else query_axes
         target_axes = self.ref_axes if ref_axes is None else ref_axes
         axes = source_axes if direction == "forward" else target_axes
@@ -286,7 +286,7 @@ class StalignImageFit(StalignFit):
         from ._stalign_impl._core import interp
         from ._stalign_impl._helpers import as_chw
 
-        _check_direction(direction)
+        direction = _check_direction(direction)
         arr = as_chw(image, name="image")
         source_axes = self.query_axes if query_axes is None else query_axes
         target_axes = self.ref_axes if ref_axes is None else ref_axes
@@ -376,7 +376,7 @@ class StalignVolumeFit(StalignFit):
 
         from ._stalign_impl._core import jax_dtype, transform_grid_row_col
 
-        _check_direction(direction)
+        direction = _check_direction(direction)
         volume_axes = tuple(self.ref_axes if ref_axes is None else ref_axes)
         section_axes = tuple(self.query_axes if query_axes is None else query_axes)
         if len(volume_axes) != 3 or len(section_axes) != 2:
@@ -565,6 +565,9 @@ def _initial_affine_and_landmarks(
     contribute the point-matching term the solver weights by ``sigmaP``, and they *also*
     derive the starting affine when ``initial_affine`` is absent. Passing both is how you
     keep the matching term while pinning the start yourself.
+
+    The derived start is translation-only for fewer than 3 pairs, and refuses collinear
+    landmarks (a line leaves the affine undetermined); ``initial_affine`` bypasses both.
     """
     import jax.numpy as jnp
 

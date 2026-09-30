@@ -129,7 +129,10 @@ def affine_from_points(
     points_source: jax.Array,
     points_target: jax.Array,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Compute an affine initialization from corresponding landmarks."""
+    """Compute an affine initialization from corresponding landmarks.
+
+    Fewer than 3 pairs give a translation-only start; 3 or more must not be collinear.
+    """
     source = np.asarray(points_source, dtype=float)
     target = np.asarray(points_target, dtype=float)
     if source.shape != target.shape:
@@ -145,6 +148,10 @@ def affine_from_points(
 
     from skimage.transform import estimate_transform
 
+    from .._landmark import check_spans_plane
+
+    for name, points in (("landmarks_query", source), ("landmarks_ref", target)):
+        check_spans_plane(points, name=f"`{name}`", method="The landmark-derived initial affine")
     model_obj = estimate_transform("affine", src=source, dst=target)
     affine = np.asarray(model_obj.params)
     return affine[:2, :2], affine[:2, -1]

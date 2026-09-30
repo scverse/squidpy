@@ -87,29 +87,90 @@ def test_table_key_reads_landmarks_from_a_table() -> None:
     np.testing.assert_allclose(_apply(result, _QUERY), _REF, atol=1e-6)
 
 
+def _similarity(theta_deg: float, scale: float, shift: tuple[float, float]) -> np.ndarray:
+    theta = np.deg2rad(theta_deg)
+    matrix = np.eye(3)
+    matrix[:2, :2] = scale * np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+    matrix[:2, 2] = shift
+    return matrix
+
+
+_LINE = np.array([[0.0, 0.0], [1.0, 1.0], [2.0, 2.0], [3.0, 3.0]])
+_OFF_LINE = np.array([[0.0, 5.0], [-2.0, 3.0]])
+
+
 def test_affine_refuses_collinear_landmarks() -> None:
     """The trap: a 6-DOF fit on a line is *exact* on the landmarks and arbitrary off them.
 
-    There is no residual to reveal it, so nothing but a rank check catches it. `similarity`
-    has 4 DOF, which a line determines, so it is allowed and must stay allowed.
+    There is no residual to reveal it, so nothing but a rank check catches it.
     """
-    line = np.array([[0.0, 0.0], [1.0, 1.0], [2.0, 2.0], [3.0, 3.0]])
-    shifted = line + np.array([3.0, 4.0])
-
     with pytest.raises(ValueError, match=r"`affine` needs `ref` landmarks spanning a plane"):
-        align_landmarks(line, shifted, method="affine")
+        align_landmarks(_LINE, _LINE + [3.0, 4.0], method="affine")
     with pytest.raises(ValueError, match=r"`affine` needs `query` landmarks spanning a plane"):
-        align_landmarks(_REF, line, method="affine")
+        align_landmarks(_REF, _LINE * [1.0, 0.0], method="affine")  # along x
 
-    # a line determines a similarity: exact off the line too, not merely on it
-    matrix = align_landmarks(line, shifted, method="similarity")
-    off_line = np.array([[0.0, 5.0], [-2.0, 3.0]])
-    np.testing.assert_allclose(_apply(matrix, off_line + np.array([3.0, 4.0])), off_line, atol=1e-8)
+
+@pytest.mark.parametrize("theta_deg", [0.0, 30.0, 90.0, 135.0, -150.0])
+@pytest.mark.parametrize("points", [_LINE, _LINE * [1.0, 0.0], _LINE[:2]], ids=["diagonal", "along_x", "two_points"])
+def test_similarity_recovers_the_transform_from_a_line(points: np.ndarray, theta_deg: float) -> None:
+    """A line (even 2 points) determines a similarity: exact off the line too, never mirrored.
+
+    spatialdata's similarity came back mirrored for a diagonal line at most angles and
+    crashed on one along x.
+    """
+    truth = _similarity(theta_deg, 1.7, (3.0, -4.0))
+    matrix = align_landmarks(_apply(truth, points), points)  # query -> ref is `truth`
+
+    np.testing.assert_allclose(matrix, truth, atol=1e-8)
+    np.testing.assert_allclose(_apply(matrix, _OFF_LINE), _apply(truth, _OFF_LINE), atol=1e-8)
+
+
+def test_similarity_never_mirrors_near_collinear_landmarks() -> None:
+    """Landmarks clicked along one edge, jittered independently on each side.
+
+    With singular-value ratios of ~1e-5 to 1e-2, spatialdata's similarity mirrored about
+    half of these fits.
+    """
+    rng = np.random.default_rng(0)
+    for trial in range(200):
+        t = np.sort(rng.uniform(-5.0, 5.0, 6))
+        line = np.c_[t, 0.3 * t]
+        truth = _similarity(rng.uniform(-180.0, 180.0), rng.uniform(0.5, 2.0), tuple(rng.normal(size=2)))
+        scale = 10.0 ** rng.uniform(-5, -2)
+        query = line + rng.normal(scale=scale, size=line.shape)
+        ref = _apply(truth, line) + rng.normal(scale=scale, size=line.shape)
+        matrix = align_landmarks(ref, query)
+
+        assert np.linalg.det(matrix[:2, :2]) > 0, f"trial {trial} mirrored"
+        np.testing.assert_allclose(matrix, truth, atol=0.1)
+
+
+def test_similarity_fits_a_mirrored_query_without_reflecting() -> None:
+    """The documented difference from napari-spatialdata, which would return the reflection."""
+    matrix = align_landmarks(_REF[:3], _REF[:3] * [-1.0, 1.0])  # a triangle: a square would give scale 0
+    assert np.linalg.det(matrix[:2, :2]) > 0
+
+
+@pytest.mark.parametrize("side", ["ref", "query"])
+def test_similarity_refuses_landmarks_at_a_single_place(side: str) -> None:
+    same = np.ones((3, 2))
+    ref, query = (same, _REF[:3]) if side == "ref" else (_REF[:3], same)
+    with pytest.raises(ValueError, match=rf"`similarity` needs `{side}` landmarks at two distinct places"):
+        align_landmarks(ref, query)
+    with pytest.raises(ValueError, match="at least 2 landmark pairs"):
+        align_landmarks(_REF[:1], _QUERY[:1])
+
+
+@pytest.mark.parametrize("method", ["similarity", "affine"])
+def test_method_ignores_case(method: str) -> None:
+    lower = align_landmarks(_adata(_REF), _adata(_QUERY), landmark_key="landmarks", method=method)
+    upper = align_landmarks(_adata(_REF), _adata(_QUERY), landmark_key="landmarks", method=method.upper())
+    np.testing.assert_array_equal(lower, upper)
 
 
 def test_unknown_method_lists_available() -> None:
     ref, query = _adata(_REF), _adata(_QUERY)
-    with pytest.raises(ValueError, match="Unknown `method='nope'`.*affine, similarity"):
+    with pytest.raises(ValueError, match=r"Expected `method` to be one of .*'nope'"):
         align_landmarks(ref, query, landmark_key="landmarks", method="nope")
 
 

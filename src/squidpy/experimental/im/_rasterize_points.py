@@ -215,9 +215,9 @@ def rasterize_points(
 
 def sample_volume(
     volume: np.ndarray,
-    axes: Sequence[np.ndarray],
     points: np.ndarray,
     *,
+    axes: Sequence[np.ndarray],
     order: int = 1,
 ) -> np.ndarray:
     """Read ``volume`` at ``(N, D)`` physical points, in ``(x, y[, z])`` order.
@@ -233,11 +233,11 @@ def sample_volume(
         A ``(z, y, x)`` volume or ``(y, x)`` image, optionally channelled as
         ``(c, z, y, x)`` / ``(c, y, x)``. Need not be the array a fit ran on: an
         annotation volume registered to the same frame is the point.
+    points
+        Physical coordinates in ``(x, y[, z])`` order, i.e. the reverse of ``axes``.
     axes
         The array's physical axes in array order, ``(z, y, x)`` or ``(y, x)``: one
         increasing 1D coordinate vector per spatial axis.
-    points
-        Physical coordinates in ``(x, y[, z])`` order, i.e. the reverse of ``axes``.
     order
         ``1`` interpolates linearly, for an intensity image. ``0`` samples the nearest
         voxel, which is what an annotation volume needs: interpolating integer structure

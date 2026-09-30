@@ -32,6 +32,8 @@ import numpy as np
 from anndata import AnnData
 from spatialdata import SpatialData
 
+from squidpy._validators import normalize_choice
+
 from ._io import fit_from_uns, fit_to_uns, writeback_affine_sdata
 from ._landmark import apply_affine, fit_affine, fit_similarity
 from ._stalign import (
@@ -201,7 +203,8 @@ def stalign_align_obs(
         may be ``None`` for an AnnData side).
     landmarks_ref, landmarks_query
         Optional paired ``(x, y)`` landmark arrays (matched by row order) used to
-        initialise the affine.
+        initialise the affine: translation-only for fewer than 3 pairs, and 3 or more
+        must not be collinear unless ``initial_affine`` is given.
     solver_params
         LDDMM solver tuning; see
         :class:`~squidpy.types.StalignObsParams` for the accepted
@@ -271,6 +274,8 @@ def stalign_align_image(
         transformations supply, not pixel indices. They contribute the point-matching term
         the solver weights by ``sigmaP``, and derive the starting affine unless
         ``initial_affine`` is given, in which case that wins and the matching term stays.
+        The derived start is translation-only for fewer than 3 pairs, and 3 or more must
+        not be collinear.
     solver_params
         LDDMM solver tuning; see
         :class:`~squidpy.types.StalignImageParams` for the accepted
@@ -572,9 +577,11 @@ def align_landmarks(
         interactively.
     method
         ``"similarity"`` (default) fits 4 degrees of freedom (rotation + uniform scale
-        + translation); ``"affine"`` fits all 6 (adding non-uniform scale and shear).
-        The more constrained fit cannot shear a sample that should not be sheared, and a
-        line determines it: ``"affine"`` needs landmarks that are not collinear.
+        + translation, never a reflection) from 2 or more distinct landmarks, a line
+        included; ``"affine"`` fits all 6 (adding non-uniform scale and shear) and needs 3
+        or more that are not collinear. The more constrained fit cannot shear a sample that
+        should not be sheared. napari-spatialdata's similarity may reflect, so for mirrored
+        landmarks the two can disagree.
     table_key
         For SpatialData input, read the landmarks from this table's ``obsm`` instead
         of a shapes element. A single key applies to both sides; a ``(ref, query)``
@@ -601,8 +608,7 @@ def align_landmarks(
     :class:`~spatialdata.transformations.Affine`; otherwise ``None``, having written into
     the query container itself. Copy it first if the original must survive.
     """
-    if method not in {"similarity", "affine"}:
-        raise ValueError(f"Unknown `method={method!r}`. Expected one of affine, similarity.")
+    method = normalize_choice(method, ("similarity", "affine"), name="method")
     fit_fn = fit_similarity if method == "similarity" else fit_affine
     if key_added is not None and target_coordinate_system is not None:
         raise ValueError(
