@@ -107,6 +107,75 @@ def test_spatial_autocorr_n_jobs_invariance(dummy_adata: AnnData, mode: str):
         np.testing.assert_allclose(df_serial[col].values, df_parallel[col].values, atol=1e-12)
 
 
+def test_spatial_autocorr_ties_match_scanpy():
+    """A gene with one non-zero count ties most permutations exactly; ties must count as in scanpy."""
+    import scipy.sparse as sps
+    from scanpy.metrics import gearys_c
+    from sklearn.preprocessing import normalize
+
+    from squidpy.gr import spatial_neighbors_knn
+
+    rng = np.random.default_rng(0)
+    X = np.zeros((300, 2), dtype=np.float32)
+    X[0, 0] = 5
+    X[:, 1] = rng.poisson(2, 300)
+    adata = AnnData(sps.csr_matrix(X))
+    adata.obsm["spatial"] = rng.random((300, 2))
+    spatial_neighbors_knn(adata, n_neighs=6)
+    df = spatial_autocorr(adata, mode="geary", n_perms=50, rng=0, copy=True).loc[adata.var_names]
+
+    # the pre-numba algorithm: scanpy on the row-permuted graph, one spawned generator per permutation
+    g = normalize(adata.obsp["spatial_connectivities"], norm="l1", axis=1)
+    vals = adata.X.T
+    obs = gearys_c(g, vals)
+    sims = np.stack([gearys_c(g[gen.permutation(300), :], vals) for gen in np.random.default_rng(0).spawn(50)])
+    large = (sims >= obs).sum(axis=0)
+    large = np.minimum(large, 50 - large)
+    assert large[0] > 0  # the scenario really has ties
+    np.testing.assert_array_equal(df["pval_sim"].values, (large + 1) / 51)
+
+
+@pytest.mark.parametrize("mode", ["moran", "geary"])
+def test_spatial_autocorr_perm_blocks(dummy_adata: AnnData, mode: str, monkeypatch):
+    """Drawing the permutations block by block changes neither the result nor its n_jobs invariance."""
+    import squidpy.gr._ppatterns as ppatterns
+
+    kw = {"mode": mode, "copy": True, "rng": 42, "n_perms": 50}
+    expected = spatial_autocorr(dummy_adata, **kw)
+    monkeypatch.setattr(ppatterns, "_PERM_BLOCK_SIZE", 7 * dummy_adata.n_obs)  # 8 blocks, the last one short
+    for n_jobs in (1, 2):
+        assert_frame_equal(spatial_autocorr(dummy_adata, n_jobs=n_jobs, **kw), expected)
+
+
+def test_spatial_autocorr_v183_positional_backend(dummy_adata: AnnData):
+    """A v1.8.3 positional call through ``backend`` binds every value and warns about ``backend``."""
+    kw = {"mode": "moran", "n_perms": 20, "rng": 0, "copy": True, "n_jobs": 1, "show_progress_bar": False}
+    expected = spatial_autocorr(dummy_adata, **kw)
+    args = (
+        "spatial_connectivities",
+        None,
+        "moran",
+        True,
+        20,
+        False,
+        "fdr_bh",
+        "X",
+        None,
+        0,
+        False,
+        True,
+        1,
+        "loky",
+        False,
+    )
+    with pytest.warns(FutureWarning) as record:
+        got = spatial_autocorr(dummy_adata, *args)
+    messages = [str(w.message) for w in record]
+    assert any("`backend`" in m for m in messages)
+    assert any("`seed`" in m for m in messages)
+    assert_frame_equal(got, expected)
+
+
 @pytest.mark.parametrize("mode", ["moran", "geary"])
 def test_spatial_autocorr_var_norm_formula(dummy_adata: AnnData, mode: str):
     """Analytic ``var_norm`` must use the variance matching the chosen statistic.
@@ -242,11 +311,12 @@ def test_score_perms_matches_scanpy_per_permutation(mode: str):
     vals = rng.random((n_genes, n), dtype=np.float32)
 
     autocorr = SpatialAutocorr(mode)
-    got = _score_perms(g, vals, mode=autocorr, n_perms=n_perms, rng=0, n_jobs=1, show_progress_bar=False)
+    observed, got = _score_perms(g, vals, mode=autocorr, n_perms=n_perms, rng=0, n_jobs=1, show_progress_bar=False)
 
     func = morans_i if autocorr == SpatialAutocorr.MORAN else gearys_c
     expected = np.stack([func(g[gen.permutation(n), :], vals) for gen in np.random.default_rng(0).spawn(n_perms)])
     assert got.shape == (n_perms, n_genes)
+    np.testing.assert_allclose(observed, func(g, vals), rtol=1e-9)
     np.testing.assert_allclose(got, expected, rtol=1e-9)
 
 
@@ -268,7 +338,8 @@ def test_score_perms_thread_invariant(mode: str):
     autocorr = SpatialAutocorr(mode)
     serial = _score_perms(g, vals, mode=autocorr, n_perms=n_perms, rng=0, n_jobs=1, show_progress_bar=False)
     threaded = _score_perms(g, vals, mode=autocorr, n_perms=n_perms, rng=0, n_jobs=4, show_progress_bar=False)
-    np.testing.assert_array_equal(serial, threaded)
+    np.testing.assert_array_equal(serial[0], threaded[0])
+    np.testing.assert_array_equal(serial[1], threaded[1])
 
 
 def test_spatial_autocorr_backend_deprecated(dummy_adata: AnnData):
