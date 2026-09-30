@@ -39,6 +39,9 @@ import squidpy as sq
     gr.calculate_niche_spatialleiden
 ```
 
+The result tuples {class}`~squidpy.types.SpatialNeighborsResult` and {class}`~squidpy.types.NhoodEnrichmentResult`
+are documented under Types and stay importable from `squidpy.gr`.
+
 ### **neighbors**
 
 See the {doc}`extensibility guide </extensibility>` for how to implement a custom graph

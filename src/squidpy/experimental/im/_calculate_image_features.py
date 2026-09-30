@@ -976,8 +976,9 @@ def calculate_image_features(
         Cells falling outside the image/labels overlap are dropped (logged at
         INFO).
     key_added
-        Key under which to store the result in ``sdata.tables``. If ``None``, the key is derived from the region and, when an image is
-        used, the image key: ``f"morphology_{labels_key or shapes_key}_{image_key}"``
+        Key under which to store the result in ``sdata.tables``. If ``None``, the key is
+        derived from the region and, when an image is used, the image key:
+        ``f"morphology_{labels_key or shapes_key}_{image_key}"``
         (or ``f"morphology_{labels_key or shapes_key}"`` for a morphology-only
         run). This keeps per-region / per-image runs from clobbering each other.
     invalid_as_zero
