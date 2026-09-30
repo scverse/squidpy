@@ -12,7 +12,7 @@ from typing import Any
 import numpy as np
 import xarray as xr
 
-from squidpy._params import resolve_params, validates
+from squidpy._params import validates
 from squidpy._utils import legacy_random
 from squidpy._validators import assert_non_negative, assert_positive
 from squidpy.experimental.im._stain._constants import RUIFROK_HE
@@ -171,8 +171,11 @@ def fit_decomposition(
     reference: dict[str, np.ndarray] = RUIFROK_HE,
     max_angle_deg: float = 45.0,
 ) -> StainReference:
-    """Fit a decomposition :class:`StainReference` (stain matrix + max concentrations)."""
-    params = resolve_params(params, MacenkoParams if method == "macenko" else VahadaneParams)
+    """Fit a decomposition :class:`StainReference` (stain matrix + max concentrations).
+
+    ``params`` must already be resolved by :func:`squidpy._params.resolve_params`
+    (the public dispatchers do this once); it is not re-validated here.
+    """
     od = _tissue_od(image_rgb, white_point, params["beta"], tissue_mask=tissue_mask, image_key=image_key)
     matrix = _stain_matrix(od, method, params, image_key=image_key, reference=reference, max_angle_deg=max_angle_deg)
     return StainReference(
@@ -208,10 +211,11 @@ def apply_decomposition(
     coarse level) when given, while ``image_rgb`` (which may be full
     resolution) is only ever touched by the lazy operator - never
     materialised to fit a matrix.
+    ``params`` must already be resolved by :func:`squidpy._params.resolve_params`
+    (the public dispatchers do this once); it is not re-validated here.
     """
     _check_channel_dim(image_rgb)
     bg = reference.white_point
-    params = resolve_params(params, MacenkoParams if reference.method == "macenko" else VahadaneParams)
 
     od_src = _tissue_od(
         fit_rgb if fit_rgb is not None else image_rgb, bg, params["beta"], tissue_mask=tissue_mask, image_key=None

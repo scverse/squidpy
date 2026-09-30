@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from typing import Annotated, TypedDict
 
 from squidpy._params import Default
@@ -80,9 +79,6 @@ class WekaParams(TypedDict, total=False):
 
     refine_bg_prob_threshold: Annotated[float, Default(0.6)]
     """Only drop pixels whose background probability exceeds this."""
-
-    border_margin_px: Annotated[int | Sequence[int], Default(0)]
-    """Border ignored when seeding and predicting."""
 
 
 class ReinhardParams(TypedDict, total=False):
