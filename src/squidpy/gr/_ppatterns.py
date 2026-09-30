@@ -52,6 +52,8 @@ ip = np.int32
 fp = np.float32
 bl = nt.boolean
 
+_PERM_BLOCK_SIZE = 2**26  # permutation entries held at once in `spatial_autocorr`
+
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn(), sp=SpatialAutocorr)
@@ -72,8 +74,8 @@ bl = nt.boolean
     "backend",
     "show_progress_bar",
 )
-@deprecated_params({"backend": "1.10.0"})
 @deprecated_randomness_param
+@deprecated_params({"backend": "1.10.0"})
 def spatial_autocorr(
     adata: AnnData | SpatialData,
     *,
@@ -108,6 +110,10 @@ def spatial_autocorr(
     %(seed_versionchanged)s
 
     %(rng_versionchanged)s
+
+    .. versionchanged:: 1.8.4
+        Permutations run on numba threads, and ``n_jobs = None`` now uses all ``NUMBA_NUM_THREADS``
+        threads instead of one process. Pass ``n_jobs = 1`` for the old serial default.
 
     Parameters
     ----------
@@ -236,17 +242,16 @@ def spatial_autocorr(
     if transformation:  # row-normalize
         normalize(g, norm="l1", axis=1, copy=False)
 
-    score = params["func"](g, vals)  # type: ignore
-
     n_jobs = get_n_numba_threads(n_jobs)
     start = logg.info(f"Calculating {mode}'s statistic for `{n_perms}` permutations using `{n_jobs}` thread(s)")
     if n_perms is not None:
         assert_positive(n_perms, name="n_perms")
-        score_perms = _score_perms(
+        # the observed score comes from the same kernel as the permuted ones, so `sims >= score` sees exact ties
+        score, score_perms = _score_perms(
             g, vals, mode=mode, n_perms=n_perms, rng=rng, n_jobs=n_jobs, show_progress_bar=show_progress_bar
         )
     else:
-        score_perms = None
+        score, score_perms = params["func"](g, vals), None  # type: ignore
 
     with np.errstate(divide="ignore"):
         pval_results = _p_value_calc(score, score_perms, g, params)
@@ -362,19 +367,18 @@ def _score_perms(
     rng: SeedLike | RNGLike | None,
     n_jobs: int,
     show_progress_bar: bool,
-) -> NDArrayA:
-    """Permutation scores for every feature, shaped ``(n_perms, n_features)``."""
+) -> tuple[NDArrayA, NDArrayA]:
+    """Observed scores ``(n_features,)`` and permutation scores ``(n_perms, n_features)``."""
     n_cells = g.shape[0]
     # Match the casts scanpy applies to its own inputs, so the kernel sees the same numbers.
     g = g.astype(np.float64, copy=False)
     w = g.data.sum()
-
-    # ponytail: the permutations are materialized up front (n_perms x n_cells int32) so that every
-    # feature is scored against the same shuffles without re-drawing them; chunk over permutations
-    # if that array ever outgrows memory.
-    perms = np.empty((n_perms, n_cells), dtype=np.int32)
-    for p, generator in enumerate(np.random.default_rng(rng).spawn(n_perms)):
-        perms[p] = generator.permutation(n_cells)
+    generators = np.random.default_rng(rng).spawn(n_perms)
+    # ponytail: permutations are drawn in blocks of at most 256 MB (int32), and every feature is
+    # re-extracted once per block; the block count only exceeds 1 past ~250k cells x 256 perms.
+    block = int(np.clip(_PERM_BLOCK_SIZE // max(n_cells, 1), 1, n_perms))
+    buffer = np.empty((block, n_cells), dtype=np.int32)
+    identity = np.arange(n_cells, dtype=np.int32)[None]
 
     moran = mode == SpatialAutocorr.MORAN
     sparse_vals = issparse(vals)
@@ -382,16 +386,29 @@ def _score_perms(
         # ``vals`` arrives as ``X.T``, i.e. CSC, whose row slicing is O(nnz) rather than O(nnz_row);
         # one conversion here makes the per-feature extraction below ~180x cheaper.
         vals = vals.tocsr()
+    n_features = vals.shape[0]
     # Constant features have a zero denominator; scanpy drops them and reports `nan`, so seed with it.
-    out = np.full((n_perms, vals.shape[0]), np.nan, dtype=np.float64)
-    with numba_threads(n_jobs):
-        for m in tqdm(range(vals.shape[0]), unit="feature", disable=not show_progress_bar):
-            x = vals[m].toarray().ravel() if sparse_vals else vals[m]
-            x = np.ascontiguousarray(x, dtype=np.float64)
-            if x.min() == x.max():
-                continue
-            out[:, m] = _autocorr_perms(g.indptr, g.indices, g.data, x, w, perms, moran)
-    return out
+    score = np.full(n_features, np.nan, dtype=np.float64)
+    out = np.full((n_perms, n_features), np.nan, dtype=np.float64)
+    n_blocks = -(-n_perms // block)
+    with (
+        numba_threads(n_jobs),
+        tqdm(total=n_blocks * n_features, unit="feature", disable=not show_progress_bar) as pbar,
+    ):
+        for lo in range(0, n_perms, block):
+            perms = buffer[: min(block, n_perms - lo)]
+            for i in range(len(perms)):
+                perms[i] = generators[lo + i].permutation(n_cells)
+            for m in range(n_features):
+                pbar.update()
+                x = vals[m].toarray().ravel() if sparse_vals else vals[m]
+                x = np.ascontiguousarray(x, dtype=np.float64)
+                if x.min() == x.max():
+                    continue
+                if lo == 0:
+                    score[m] = _autocorr_perms(g.indptr, g.indices, g.data, x, w, identity, moran)[0]
+                out[lo : lo + len(perms), m] = _autocorr_perms(g.indptr, g.indices, g.data, x, w, perms, moran)
+    return score, out
 
 
 @njit(parallel=True, fastmath=True, cache=True)
