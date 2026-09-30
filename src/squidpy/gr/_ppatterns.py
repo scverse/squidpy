@@ -426,6 +426,9 @@ def co_occurrence(
     spatial = adata.obsm[spatial_key].astype(fp)
     original_clust = adata.obs[cluster_key]
     labs = original_clust.cat.codes.to_numpy().astype(ip)  # same mapping, without a per-cell loop
+    if (labs < 0).any():
+        # code -1 would index out of bounds in the kernel (the old per-cell dict raised KeyError)
+        raise ValueError(f"`adata.obs[{cluster_key!r}]` contains missing values.")
 
     # create intervals thresholds
     if isinstance(interval, int):

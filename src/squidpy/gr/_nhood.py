@@ -546,8 +546,8 @@ def nhood_enrichment(
 
 @d.dedent
 @inject_docs(c=Centrality)
+@old_positionals("cluster_key", "score", "connectivity_key", "copy", "n_jobs", "backend", "show_progress_bar")
 @deprecated_params({"backend": "1.10.0"})
-@old_positionals("cluster_key", "score", "connectivity_key", "copy", "n_jobs", "show_progress_bar")
 def centrality_scores(
     adata: AnnData | SpatialData,
     *,
@@ -563,6 +563,10 @@ def centrality_scores(
     Compute centrality scores per cluster or cell type.
 
     Inspired by usage in Gene Regulatory Networks (GRNs) in :cite:`celloracle`.
+
+    .. versionchanged:: 1.8.4
+        The scores run on numba threads, and ``n_jobs = None`` now uses all ``NUMBA_NUM_THREADS``
+        threads instead of one process. Pass ``n_jobs = 1`` for the old serial default.
 
     Parameters
     ----------
