@@ -263,8 +263,8 @@ def _fit_once(
         labels = est.fit(X).predict(X) if hasattr(est, "predict") else est.fit_predict(X)
     except ValueError as err:  # a failed fit otherwise aborts the whole sweep opaquely
         hint = (
-            " Pass a stronger regularisation with model_params={'reg_covar': 1e-4}, or request a "
-            "smaller range of K values."
+            " Increase the mixture's 'reg_covar' (e.g. model_params={'reg_covar': 1e-4} where the "
+            "caller takes it), pass float64 data, or request a smaller range of K values."
             if "ill-defined empirical covariance" in str(err)
             else ""
         )

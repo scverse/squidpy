@@ -658,7 +658,8 @@ def calculate_niche_cellcharter(
        graph, from direct neighbors through ``distance`` graph hops, according to
        ``aggregation``.
     3. Concatenates the observation's own representation with every ring's aggregate.
-    4. Fits a Gaussian mixture model with ``n_clusters`` mixture components.
+    4. Fits a Gaussian mixture model with ``n_clusters`` mixture components, or with the
+       most stable K when ``n_clusters`` requests a sweep.
     5. Uses the GMM component assignments as niche labels.
 
     Consequently, each niche corresponds to a probabilistic cluster in a
@@ -689,16 +690,18 @@ def calculate_niche_cellcharter(
         Number of Gaussian mixture components, and therefore the number of niche
         labels produced per library or dataset. A ``(min, max)`` tuple or a sequence of
         candidates instead selects the most stable K, fitting each candidate up to
-        ``max_runs`` times, as :func:`~squidpy.gr.cluster_auto_k` does.
+        ``max_runs`` times, as :func:`~squidpy.gr.cluster_auto_k` does. The sweep keeps the
+        best of several fits per K, so rerunning with the selected K as an int does not
+        reproduce its labels; use ``store_labels`` to keep the runners-up instead.
     max_runs
         Maximum number of repetitions per candidate K. Only used when ``n_clusters``
         requests a sweep.
     convergence_tol
         Stop the sweep early once the mean stability curve changes by less than this
-        between consecutive runs.
+        between consecutive runs. Only used when ``n_clusters`` requests a sweep.
     store_labels
         Also keep the labeling of every fitted K, as ``{key_added}_k{K}`` columns in
-        :attr:`anndata.AnnData.obs`.
+        :attr:`anndata.AnnData.obs`. Only used when ``n_clusters`` requests a sweep.
     n_pca_components
         Number of principal components of ``adata.X`` aggregated over the hop rings. ``None``
         uses 10, the latent width scVI defaults to, or one fewer than the smallest dimension of
@@ -722,6 +725,8 @@ def calculate_niche_cellcharter(
     If ``copy=True``, returns a copy of ``adata`` with the embedding stored in
     ``.obsm[embedding_key_added]`` and GMM-based niche
     assignments added to ``.obs``. Otherwise, modifies ``adata`` in place and returns ``None``.
+    A sweep also stores its diagnostics, including the selected ``best_k``, as a dict in
+    ``.uns['{key_added}_autok']``.
 
     """
 
@@ -742,7 +747,9 @@ def calculate_niche_cellcharter(
         n_jobs=n_jobs,
     )
 
-    # `GaussianMixture` is a `Clusterer` as it stands, so a fixed K needs no wrapper
+    # `GaussianMixture` is a `Clusterer` as it stands, so a fixed K needs no wrapper.
+    # The default 'kmeans' init on purpose, unlike the sweep's pinned one: for one fit it
+    # finds the niches far more reliably than 'random_from_data' (the init squidpy 1.8 used)
     clusterer: Clusterer
     if isinstance(n_clusters, int | np.integer):
         clusterer = GaussianMixture(n_components=int(n_clusters))

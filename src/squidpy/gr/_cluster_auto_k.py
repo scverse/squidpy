@@ -83,8 +83,9 @@ def cluster_auto_k(
     %(rng)s
         Seeds every individual fit.
     keep_all_labels
-        Also keep the labeling of every *other* fitted K, as ``{key_added}_k{K}``. The sweep
-        fits them all anyway, so this is how a runner-up K is inspected without refitting.
+        Also keep the labeling of every fitted K, the selected one included, as
+        ``{key_added}_k{K}``. The sweep fits them all anyway, so this is how a runner-up K is
+        inspected without refitting.
     key_added
         Name of the labeling added to ``adata.obs``, and of the diagnostics added to
         ``adata.uns``.
@@ -98,9 +99,9 @@ def cluster_auto_k(
 
         - :attr:`anndata.AnnData.obs` ``['{key_added}']`` - the labeling at the selected K,
           plus one ``['{key_added}_k{K}']`` per fitted K if ``keep_all_labels``.
-        - :attr:`anndata.AnnData.uns` ``['{key_added}']`` - a ``ClusterAutoKResult``
-          with the selected ``best_k``, the per-K diagnostics ``table`` and the full
-          ``stability`` matrix.
+        - :attr:`anndata.AnnData.uns` ``['{key_added}']`` - a dict with the selected
+          ``best_k``, the per-K diagnostics ``table``, the full ``stability`` matrix,
+          ``n_runs`` and ``converged``.
 
     See :func:`~squidpy.gr.calculate_niche_cellcharter` to run the same sweep as part of a
     niche pipeline.
