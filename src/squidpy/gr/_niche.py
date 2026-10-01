@@ -27,7 +27,7 @@ from squidpy._utils import (
     deprecated_randomness_param,
     legacy_random,
 )
-from squidpy._validators import assert_isinstance, assert_key_in_adata, assert_one_of
+from squidpy._validators import assert_isinstance, assert_key_in_adata, normalize_choice
 from squidpy.gr._clusterers import Clusterer, LeidenClusterer
 from squidpy.gr._nhood import (
     _aggregate_over,
@@ -195,6 +195,7 @@ def calculate_niche(  # noqa: PLR0917, deprecated and removed in v1.9.0
         stacklevel=3,
     )
 
+    flavor = normalize_choice(flavor, ("neighborhood", "utag", "cellcharter", "spatialleiden"), name="flavor")
     # cellcharter-only defaults stay guarded: filling them for other flavors would trip
     # the "not used for flavor" warning in _check_unnecessary_args
     if mask is not None and flavor == "spatialleiden":
@@ -927,8 +928,6 @@ def _validate_niche_args(  # noqa: PLR0917, deprecated and removed in v1.9.0
     """
     assert_isinstance(data, (AnnData, SpatialData), name="data")
 
-    assert_one_of(flavor, ["neighborhood", "utag", "cellcharter", "spatialleiden"], name="flavor")
-
     if isinstance(data, SpatialData) and table_key is None:
         raise TypeError("missing required keyword-only argument: 'table_key'")
 
@@ -1051,7 +1050,7 @@ def _validate_niche_args(  # noqa: PLR0917, deprecated and removed in v1.9.0
 
         if aggregation is not None:
             assert_isinstance(aggregation, str, name="aggregation")
-            assert_one_of(aggregation, ["mean", "variance"], name="aggregation")
+            normalize_choice(aggregation, ["mean", "variance"], name="aggregation")
 
         assert_isinstance(n_components, int, name="n_components")
         if n_components < 1:
@@ -1202,8 +1201,7 @@ def _nhop_pca_embedding(
     n_jobs: int | None = None,
 ) -> Array:
     """Reduced features and their ring aggregates, concatenated as in CellCharter."""
-    if aggregation not in ("mean", "variance"):
-        raise ValueError(f"'aggregation' must be 'mean' or 'variance', got {aggregation!r}")
+    aggregation = normalize_choice(aggregation, ("mean", "variance"), name="aggregation")
     if distance < 1:
         raise ValueError(f"'distance' must be >= 1, got {distance}")
 

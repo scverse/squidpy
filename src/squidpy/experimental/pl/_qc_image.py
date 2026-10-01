@@ -8,6 +8,7 @@ from scipy.stats import gaussian_kde
 from spatialdata import SpatialData
 from spatialdata._logging import logger as logg
 
+from squidpy._validators import normalize_choice
 from squidpy.experimental.im._qc_metrics import QCMetric
 
 
@@ -33,7 +34,7 @@ def qc_image(
         SpatialData object containing QC results.
     image_key : str
         Image key used in qc_image function.
-    metrics : QCMetric or list of QCMetric, optional
+    metrics : str or list of str, optional
         Specific metrics to plot. If None, plots all calculated metrics.
     figsize : tuple, optional
         Figure size (width, height). Auto-calculated if None.
@@ -65,12 +66,7 @@ def qc_image(
 
     if metrics is not None:
         metrics_list = metrics if isinstance(metrics, list) else [metrics]
-        metrics_to_plot = []
-        for metric in metrics_list:
-            metric_name = metric.value if isinstance(metric, QCMetric) else metric
-            if metric_name not in calculated_metrics:
-                raise ValueError(f"Metric '{metric_name}' not found. Available: {calculated_metrics}")
-            metrics_to_plot.append(metric_name)
+        metrics_to_plot = [normalize_choice(m, calculated_metrics, name="metrics") for m in metrics_list]
     else:
         metrics_to_plot = calculated_metrics
 

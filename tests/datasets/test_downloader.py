@@ -29,13 +29,13 @@ class TestVisiumValidation:
     """Offline validation of the ``visium()`` sample-name guard (no network)."""
 
     def test_unknown_sample_raises(self):
-        with pytest.raises(ValueError, match="Unknown Visium sample"):
+        with pytest.raises(ValueError, match="Expected `sample_id` to be one of"):
             visium("definitely_not_a_sample")
 
     def test_valid_but_wrong_type_rejected(self):
         # `imc` is a valid registry entry but an AnnData dataset, not a Visium 10x
         # sample. It must be rejected before any download is attempted.
-        with pytest.raises(ValueError, match="Unknown Visium sample"):
+        with pytest.raises(ValueError, match="Expected `sample_id` to be one of"):
             visium("imc")
 
 

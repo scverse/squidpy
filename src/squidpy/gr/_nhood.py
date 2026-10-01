@@ -41,7 +41,7 @@ from squidpy._utils import (
     numba_threads,
     parallelize,
 )
-from squidpy._validators import assert_key_in_adata, assert_positive
+from squidpy._validators import assert_key_in_adata, assert_positive, normalize_choice
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
@@ -383,10 +383,8 @@ def nhood_enrichment(
     _assert_connectivity_key(adata, key=connectivity_key)
     assert_positive(n_perms, name="n_perms")
 
-    if normalization not in _NORM_CODES:
-        raise ValueError(f"Invalid normalization mode `{normalization}`. Choose from {sorted(_NORM_CODES)}.")
-    if handle_nan not in ("keep", "zero"):
-        raise ValueError(f"Invalid `handle_nan` mode `{handle_nan}`. Choose from 'keep', 'zero'.")
+    normalization = normalize_choice(normalization, _NORM_CODES, name="normalization")
+    handle_nan = normalize_choice(handle_nan, ("keep", "zero"), name="handle_nan")
 
     adj = adata.obsp[connectivity_key]
     if not issparse(adj):
@@ -1034,11 +1032,9 @@ def _aggregate_over(
 
     if aggregation == "mean":
         return mean_over(features)
-    if aggregation == "variance":
-        mean = to_dense(mean_over(features))
-        dense = to_dense(features)
-        return to_dense(mean_over(dense * dense)) - mean * mean
-    raise ValueError(f"'aggregation' must be 'mean', 'sum' or 'variance', got {aggregation!r}")
+    mean = to_dense(mean_over(features))  # "variance": both callers normalize `aggregation`
+    dense = to_dense(features)
+    return to_dense(mean_over(dense * dense)) - mean * mean
 
 
 def _assert_hop_request(adata: AnnData, *, connectivity_key: str, hops: Sequence[int]) -> None:
@@ -1067,8 +1063,7 @@ def nhood_aggregate(
     reach counts once: a cell two paths away is still one cell.
     """
     _assert_hop_request(adata, connectivity_key=connectivity_key, hops=hops)
-    if aggregation not in ("mean", "sum", "variance"):
-        raise ValueError(f"'aggregation' must be 'mean', 'sum' or 'variance', got {aggregation!r}")
+    aggregation = normalize_choice(aggregation, ("mean", "sum", "variance"), name="aggregation")
     weights = [1.0] * len(hops) if hop_weights is None else list(hop_weights)
     if len(weights) != len(hops):
         raise ValueError(f"'hop_weights' has {len(weights)} value(s) but there are {len(hops)} hop(s)")

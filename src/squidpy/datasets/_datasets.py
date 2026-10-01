@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+from squidpy._validators import normalize_choice
 from squidpy.datasets._downloader import download
 from squidpy.datasets._registry import dataset_names, get_registry
 from squidpy.read._utils import PathLike
@@ -123,9 +124,7 @@ def visium(
     # guard against the visium_10x names specifically: a valid-but-wrong-type name
     # (e.g. "imc", an AnnData dataset) would otherwise pass and fail deep in the
     # anndata loader with a confusing ``unexpected keyword argument 'include_hires_tiff'``.
-    visium_samples = dataset_names("visium_10x")
-    if sample_id not in visium_samples:
-        raise ValueError(f"Unknown Visium sample: {sample_id}. Available samples: {visium_samples}")
+    sample_id = normalize_choice(sample_id, dataset_names("visium_10x"), name="sample_id")
 
     # downloads land in <datasetdir>/visium_10x/<sample_id>/
     return download(sample_id, base_dir, include_hires_tiff=include_hires_tiff)
