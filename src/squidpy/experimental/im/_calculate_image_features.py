@@ -31,7 +31,6 @@ from squidpy.experimental.im._tiling import (
     _run_tiled,
     build_tile_specs,
     compute_cell_info,
-    compute_cell_info_multiscale,
     compute_cell_info_tiled,
     extract_labels_tile_lazy,
     extract_tile_lazy,
@@ -106,6 +105,14 @@ _CPMEASURE_FLAGS: dict[str, dict[str, bool]] = {
     "cp_measure:correlation_manders_fold": {"correlation_manders_fold": True},
     "cp_measure:correlation_rwc": {"correlation_rwc": True},
 }
+
+# cp_measure granularity samples each crop on a 1/4 then 1/16 grid anchored at the crop
+# origin and estimates background with an opening reaching ~320 px. Tiles that request it
+# are aligned to that grid (1 / (subsample_size * image_sample_size) at cp_measure's
+# defaults) and padded for context; on real images this makes the lower granularity bins
+# match an untiled run closely.
+_GRANULARITY_ALIGN = 16
+_GRANULARITY_PAD = 256
 
 # cp_measure correlation features need >=2 channels (they correlate channel pairs).
 _CP_CORRELATION_KEYS = frozenset(_CPMEASURE_FLAGS["cp_measure:correlation"])
@@ -314,6 +321,35 @@ def _build_cp_config(cp_flags: dict[str, bool], channel_names: list[str]) -> dic
 # ---------------------------------------------------------------------------
 # Per-tile dispatcher
 # ---------------------------------------------------------------------------
+
+# Coordinate-valued feature columns (prefixes) by the axis they measure. Tiles are
+# featurized on crops, so these come out crop-local and are shifted by the crop origin.
+_Y_POSITION_COLS = (
+    "Center_Y",
+    "BoundingBoxMinimum_Y",
+    "BoundingBoxMaximum_Y",
+    "Location_CenterMassIntensity_Y__",
+    "Location_MaxIntensity_Y__",
+    "centroid-0",
+)
+_X_POSITION_COLS = (
+    "Center_X",
+    "BoundingBoxMinimum_X",
+    "BoundingBoxMaximum_X",
+    "Location_CenterMassIntensity_X__",
+    "Location_MaxIntensity_X__",
+    "centroid-1",
+)
+
+
+def _shift_positions(df: pd.DataFrame, dy: int, dx: int) -> pd.DataFrame:
+    """Shift coordinate-valued feature columns by ``(dy, dx)`` pixels (in place)."""
+    for col in df.columns:
+        if col.startswith(_Y_POSITION_COLS):
+            df[col] += dy
+        elif col.startswith(_X_POSITION_COLS):
+            df[col] += dx
+    return df
 
 
 def _featurize_tile(
@@ -639,12 +675,13 @@ def _align_to_image_grid(
     image_da: xr.DataArray,
     labels_da: xr.DataArray,
     align_mode: Literal["strict", "rasterize"],
-) -> tuple[xr.DataArray, xr.DataArray]:
+) -> tuple[xr.DataArray, xr.DataArray, tuple[int, int]]:
     """Crop image and labels to their pixel-grid overlap, honoring transforms.
 
     Cells falling outside the overlap rectangle are dropped (logged). Under
     ``align_mode='strict'`` a non-pixel-aligned relative transform raises; under
-    ``'rasterize'`` the labels are resampled onto the image grid.
+    ``'rasterize'`` the labels are resampled onto the image grid. Also returns
+    the ``(y, x)`` origin of the labels crop in the labels' pixel grid.
     """
     cs = _shared_coordinate_system(sdata, image_key, labels_key)
     affine = _relative_affine(sdata, image_key, labels_key, cs)
@@ -706,7 +743,7 @@ def _align_to_image_grid(
             f"Dropped {cells_outside} cell(s) fully and {len(partial_ids)} cell(s) partially outside the image extent."
         )
 
-    return image_crop, labels_crop
+    return image_crop, labels_crop, (lbl_y0, lbl_x0)
 
 
 # ---------------------------------------------------------------------------
@@ -762,13 +799,15 @@ def _prepare_lazy(
     scale: str | None,
     channels: list[str] | None,
     align_mode: Literal["strict", "rasterize"],
-) -> tuple[xr.DataArray | None, xr.DataArray, list[str]]:
-    """Return lazy image and labels DataArrays, plus channel names.
+) -> tuple[xr.DataArray | None, xr.DataArray, list[str], tuple[int, int]]:
+    """Return lazy image and labels DataArrays, channel names, and the labels origin.
 
     ``image_da`` is ``None`` (and ``channel_names`` empty) for a morphology-only
-    run with no ``image_key``.  Does NOT call ``.compute()`` - arrays stay lazy
-    for on-demand tile reads.  For the shapes->labels path, labels are
-    materialized but wrapped in a DataArray for a uniform interface.
+    run with no ``image_key``.  The origin is the ``(y, x)`` offset of
+    ``labels_da`` in the labels' pixel grid (non-zero only when alignment
+    crops).  Does NOT call ``.compute()`` - arrays stay lazy for on-demand
+    tile reads.  For the shapes->labels path, labels are materialized but
+    wrapped in a DataArray for a uniform interface.
     """
     _validate_inputs(sdata, image_key, labels_key, shapes_key, scale)
 
@@ -798,11 +837,14 @@ def _prepare_lazy(
     # Align labels to the image pixel grid via SpatialData transformations.
     # Only meaningful with a real labels element + an image; the shapes->labels
     # path already rasterized onto the image grid (identity transform -> no-op).
+    origin = (0, 0)
     if image_da is not None and labels_key is not None:
-        image_da, labels_da = _align_to_image_grid(sdata, image_key, labels_key, image_da, labels_da, align_mode)
+        image_da, labels_da, origin = _align_to_image_grid(
+            sdata, image_key, labels_key, image_da, labels_da, align_mode
+        )
 
     if image_da is None:
-        return image_da, labels_da, []
+        return image_da, labels_da, [], origin
 
     # Resolve channel names through spatialdata's canonical accessor so we
     # honor c_coords set at parse time. Always cast to str.
@@ -830,29 +872,11 @@ def _prepare_lazy(
     else:
         ch_names = all_ch
 
-    return image_da, labels_da, ch_names
+    return image_da, labels_da, ch_names, origin
 
 
-def _compute_centroids(
-    sdata: SpatialData,
-    labels_key: str | None,
-    labels_da: xr.DataArray,
-    scale: str | None,
-) -> dict[int, CellInfo]:
-    """Compute cell centroids using the most efficient strategy available."""
-    # Multiscale: the coarse-scale fast path is only valid when alignment did not
-    # crop labels_da; after a crop, recompute from it so centroids and tiling
-    # share one frame.
-    if labels_key is not None and isinstance(sdata.labels[labels_key], xr.DataTree):
-        full = _select_scale_array(sdata.labels[labels_key], scale)
-        full_grid = (full.sizes.get("y"), full.sizes.get("x"))
-        cur_grid = (labels_da.sizes.get("y"), labels_da.sizes.get("x"))
-        if cur_grid == full_grid:
-            logg.info("Computing centroids from coarse scale.")
-            return compute_cell_info_multiscale(sdata.labels[labels_key], target_scale=scale or "scale0")
-        logg.info("Computing centroids in tiled mode (aligned multiscale labels).")
-        return compute_cell_info_tiled(labels_da)
-
+def _compute_centroids(labels_da: xr.DataArray) -> dict[int, CellInfo]:
+    """Compute cell centroids and bounding boxes on the featurized labels grid."""
     # Small enough to fit in memory - direct regionprops
     n_pixels = labels_da.sizes.get("y", 1) * labels_da.sizes.get("x", 1)
     if n_pixels <= 4096 * 4096:
@@ -861,9 +885,47 @@ def _compute_centroids(
             lbl_np = lbl_np.squeeze()
         return compute_cell_info(lbl_np)
 
-    # Large single-scale - tiled centroid computation
-    logg.info("Computing centroids in tiled mode (large single-scale labels).")
+    # Large - tiled centroid computation
+    logg.info("Computing centroids in tiled mode (large labels).")
     return compute_cell_info_tiled(labels_da)
+
+
+def _stack_tiles(tile_dfs: list[pd.DataFrame], drop_constant: bool) -> tuple[np.ndarray, np.ndarray, list[str]]:
+    """Stack per-tile float32 features into one label-sorted matrix; return ``(labels, X, columns)``.
+
+    Fills a single preallocated array instead of concat -> sort -> cast, which
+    copied the full table three times. With ``drop_constant``, zero-variance
+    columns (all-NaN, or NaN-free with a single value) are found from per-tile
+    min/max and never copied. Skipped for a single cell, where every column is
+    trivially constant.
+    """
+    # Peak is tiles + output (~2 copies); freeing tiles while filling would halve it if ever needed.
+    columns = list(dict.fromkeys(c for df in tile_dfs for c in df.columns))
+    blocks = [(df if list(df.columns) == columns else df.reindex(columns=columns)).to_numpy() for df in tile_dfs]
+    labels = np.concatenate([df.index.to_numpy() for df in tile_dfs])
+
+    keep = np.ones(len(columns), dtype=bool)
+    if drop_constant and len(labels) > 1:
+        # min/max propagate NaN (so a NaN-mixed column never compares equal);
+        # nanmax is NaN only where a column is all-NaN.
+        col_min = np.min([b.min(axis=0) for b in blocks], axis=0)
+        col_max = np.max([b.max(axis=0) for b in blocks], axis=0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)  # all-NaN slices
+            all_nan = np.isnan(np.nanmax([np.nanmax(b, axis=0) for b in blocks], axis=0))
+        keep = ~(all_nan | (col_min == col_max))
+        if not keep.all():
+            logg.warning(f"Dropped {int((~keep).sum())} constant feature(s) with no variance across cells.")
+
+    order = np.argsort(labels, kind="stable")
+    rows = np.empty_like(order)
+    rows[order] = np.arange(len(order))  # output row of each stacked cell
+    X = np.empty((len(labels), int(keep.sum())), dtype=np.float32)
+    start = 0
+    for b in blocks:
+        X[rows[start : start + len(b)]] = b[:, keep]
+        start += len(b)
+    return labels[order], X, [c for c, k in zip(columns, keep, strict=True) if k]
 
 
 # ---------------------------------------------------------------------------
@@ -949,7 +1011,9 @@ def calculate_image_features(
         the skimage-only props (``centroid_local``, ``feret_diameter_max``) are
         kept. cp_measure computes its groups all-or-nothing, so it wins.
     tile_size
-        Side length of the tiling grid (pixels).
+        Side length of the tiling grid (pixels). With ``"cp_measure:granularity"``
+        each tile is padded by 256 px of image context, so prefer
+        ``tile_size >= 2048`` there to keep the extra reads small.
     align_mode
         How to handle image/labels whose pixel grids do not match (via their
         SpatialData transformations).
@@ -993,6 +1057,16 @@ def calculate_image_features(
     Cells dropped during alignment (fully/partially outside the image) and
     constant features removed by ``drop_constant_features`` are logged at
     WARNING level.
+
+    Positional features (cp_measure ``Center_*``, ``BoundingBox*``,
+    ``Location_*``; skimage ``centroid-*``) are in pixel units of the labels
+    grid at ``scale`` (the image grid when labels are resampled via
+    ``align_mode="rasterize"`` or ``shapes_key``), independent of ``tile_size``.
+    ``"cp_measure:granularity"`` depends on the image around each cell. Tiles
+    that compute it are aligned to its sampling grid and padded, which keeps
+    the lower (fine-granule) bins close to an untiled run; the higher bins
+    depend on image context far beyond any tile (as they do across CellProfiler
+    fields of view) and still vary with ``tile_size``.
 
     With ``n_jobs > 1`` a ``LocalCluster`` is started, which spawns worker
     processes. On macOS/Windows (spawn start method) the calling code must be
@@ -1049,7 +1123,7 @@ def calculate_image_features(
         if channels is not None:
             raise ValueError("`channels` selection requires `image_key`.")
 
-    image_da, labels_da, channel_names = _prepare_lazy(
+    image_da, labels_da, channel_names, origin = _prepare_lazy(
         sdata, image_key, labels_key, shapes_key, scale, channels, align_mode
     )
 
@@ -1074,16 +1148,24 @@ def calculate_image_features(
     cp_config = _build_cp_config(parsed.cp_flags, channel_names) if parsed.cp_flags is not None else None
 
     # --- Warmup: compute centroids without materializing full arrays ---
-    cell_info = _compute_centroids(sdata, labels_key, labels_da, scale)
+    cell_info = _compute_centroids(labels_da)
     if not cell_info:
         raise ValueError("No cells found in labels (all zeros).")
 
     H, W = yx_size(labels_da)
 
     # --- Tile ---
-    # overlap_margin="auto" derives the minimum safe margin from the largest cell;
-    # not exposed -- any manual value either truncates boundary cells or wastes reads.
-    specs = build_tile_specs((H, W), cell_info, tile_size=tile_size, overlap_margin="auto")
+    # overlap_margin="auto" crops each tile to its owned cells' bounding boxes (+1 px);
+    # not exposed -- a fixed margin either truncates boundary cells or wastes reads.
+    granularity = parsed.cp_flags is not None and (not parsed.cp_flags or parsed.cp_flags.get("granularity", False))
+    specs = build_tile_specs(
+        (H, W),
+        cell_info,
+        tile_size=tile_size,
+        overlap_margin="auto",
+        pad=_GRANULARITY_PAD if granularity else 1,
+        align=_GRANULARITY_ALIGN if granularity else 1,
+    )
     total_tiles = len(specs)
     logg.info(f"Tiling input into {total_tiles} tile(s) of size {tile_size} px.")
 
@@ -1092,10 +1174,13 @@ def calculate_image_features(
     def _process_one(spec, image_da, labels_da):
         with threadpool_limits(limits=1):
             if image_da is None:
-                tile_lbl = extract_labels_tile_lazy(labels_da, spec)
-                return _featurize_tile(None, tile_lbl, parsed, channel_names, cp_config=cp_config)
-            tile_img, tile_lbl = extract_tile_lazy(image_da, labels_da, spec)
-            return _featurize_tile(tile_img, tile_lbl, parsed, channel_names, cp_config=cp_config)
+                tile_img, tile_lbl = None, extract_labels_tile_lazy(labels_da, spec)
+            else:
+                tile_img, tile_lbl = extract_tile_lazy(image_da, labels_da, spec)
+            df = _featurize_tile(tile_img, tile_lbl, parsed, channel_names, cp_config=cp_config)
+        # Report positions in the labels' pixel grid, not the tile crop's. The output
+        # is float32, so cast here: half the memory and transfer per tile.
+        return _shift_positions(df, origin[0] + spec.crop[0], origin[1] + spec.crop[1]).astype(np.float32)
 
     # cp_measure is GIL-bound, so kind="processes" (an active Client wins if set).
     results = _run_tiled(
@@ -1107,28 +1192,16 @@ def calculate_image_features(
     if not tile_dfs:
         raise ValueError("No features computed for any tile.")
 
-    # Sort by cell label for deterministic output.  inf/NaN handling happens
-    # in one numpy pass below to avoid two extra full-table allocations.
-    combined = pd.concat(tile_dfs, axis=0).sort_index()
-
-    # Drop zero-variance features (nunique(dropna=False) treats an all-NaN column
-    # as constant too). Skipped for a single cell, where every column is trivially
-    # constant and the filter would drop everything.
-    if drop_constant_features and len(combined) > 1:
-        constant_cols = list(combined.columns[combined.nunique(dropna=False) <= 1])
-        if constant_cols:
-            logg.warning(f"Dropped {len(constant_cols)} constant feature(s) with no variance across cells.")
-            combined = combined.drop(columns=constant_cols)
+    labels, arr, columns = _stack_tiles(tile_dfs, drop_constant_features)
 
     # --- Build AnnData ---
     # Exactly one of labels_key / shapes_key is set (enforced in _validate_inputs).
     region_key_value = labels_key or shapes_key
 
-    arr = combined.to_numpy(dtype=np.float32, copy=True)
     if invalid_as_zero:
         np.nan_to_num(arr, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
     adata = ad.AnnData(X=arr)
-    adata.var_names = list(combined.columns)
+    adata.var_names = columns
 
     adata.uns["spatialdata_attrs"] = {
         "region": region_key_value,
@@ -1140,7 +1213,7 @@ def calculate_image_features(
     if shapes_key is not None and len(sdata.shapes[shapes_key]) == len(adata):
         adata.obs["label_id"] = sdata.shapes[shapes_key].index.values
     else:
-        adata.obs["label_id"] = combined.index.values
+        adata.obs["label_id"] = labels
     # obs_names are the cell's label-image ID (the label_id), as str for AnnData.
     adata.obs_names = adata.obs["label_id"].astype(str).values
 

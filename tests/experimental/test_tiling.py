@@ -19,7 +19,6 @@ from squidpy.experimental.im._tiling import (
     _zero_non_owned,
     build_tile_specs,
     compute_cell_info,
-    compute_cell_info_multiscale,
     compute_cell_info_tiled,
     extract_tile_lazy,
 )
@@ -255,6 +254,21 @@ class TestBuildTileSpecs:
                     f"Cell {lid} x-range [{cell_x0:.0f},{cell_x1:.0f}] not in crop x-range [{cx0},{cx1}]"
                 )
 
+    def test_aligned_crops_on_grid(self, brick_labels):
+        """With ``align``, crops start and span on the alignment grid and still cover the unaligned crop."""
+        labels, _ = brick_labels
+        H, W = labels.shape
+        cell_info = compute_cell_info(labels)
+        plain = build_tile_specs(labels.shape, cell_info, tile_size=_TILE_SIZE)
+        aligned = build_tile_specs(labels.shape, cell_info, tile_size=_TILE_SIZE, align=16)
+        for p, a in zip(plain, aligned, strict=True):
+            (py0, px0, py1, px1), (ay0, ax0, ay1, ax1) = p.crop, a.crop
+            assert a.owned_ids == p.owned_ids
+            assert ay0 % 16 == 0 and ax0 % 16 == 0
+            assert (ay1 - ay0) % 16 == 0 or ay1 == H
+            assert (ax1 - ax0) % 16 == 0 or ax1 == W
+            assert ay0 <= py0 and ax0 <= px0 and ay1 >= py1 and ax1 >= px1
+
 
 class TestBuildTileSpecsEdgeCases:
     def test_empty_labels(self):
@@ -404,42 +418,7 @@ def _plot_tile_assignment(labels, specs, title=""):
     ax.set_ylabel("y")
 
 
-# Lazy / multiscale helpers
-
-
-def _make_multiscale_tree(labels: np.ndarray, n_scales: int = 3) -> xr.DataTree:
-    """Build a tiny multiscale DataTree by integer-downsampling."""
-    scales: dict[str, xr.DataTree] = {}
-    for i in range(n_scales):
-        step = 2**i
-        sub = labels[::step, ::step]
-        ds = xr.Dataset({"image": xr.DataArray(sub, dims=("y", "x"))})
-        scales[f"scale{i}"] = xr.DataTree(ds)
-    return xr.DataTree.from_dict(scales)
-
-
-class TestComputeCellInfoMultiscale:
-    def test_target_is_coarsest_matches_eager(self):
-        labels, _ = _make_brick_labels(gap=10)
-        tree = _make_multiscale_tree(labels, n_scales=3)
-        # scale2 is coarsest. Target it -> use that scale directly.
-        info_ms = compute_cell_info_multiscale(tree, target_scale="scale2")
-        info_eager = compute_cell_info(tree["scale2"].ds["image"].values)
-        assert set(info_ms.keys()) == set(info_eager.keys())
-        for lid in info_ms:
-            assert info_ms[lid].centroid_y == pytest.approx(info_eager[lid].centroid_y, abs=0.5)
-            assert info_ms[lid].centroid_x == pytest.approx(info_eager[lid].centroid_x, abs=0.5)
-
-    def test_rescale_to_finer(self):
-        labels, _ = _make_brick_labels(gap=10)
-        tree = _make_multiscale_tree(labels, n_scales=3)
-        info_ms = compute_cell_info_multiscale(tree, target_scale="scale0")
-        info_eager = compute_cell_info(labels)
-        # Centroids should be close (within ~1 px due to coarse-scale quantization)
-        assert set(info_ms.keys()) == set(info_eager.keys())
-        for lid in info_ms:
-            assert info_ms[lid].centroid_y == pytest.approx(info_eager[lid].centroid_y, abs=4.0)
-            assert info_ms[lid].centroid_x == pytest.approx(info_eager[lid].centroid_x, abs=4.0)
+# Lazy helpers
 
 
 class TestComputeCellInfoTiled:
