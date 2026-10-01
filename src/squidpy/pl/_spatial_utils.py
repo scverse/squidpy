@@ -119,6 +119,7 @@ to_hex = partial(colors.to_hex, keep_alpha=True)
 
 def _get_library_id(
     adata: AnnData,
+    *,
     shape: _AvailShapes | None,
     spatial_key: str = Key.uns.spatial,
     library_id: Sequence[str] | None = None,

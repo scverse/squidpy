@@ -560,7 +560,7 @@ def calculate_tiling_qc(
         raise ValueError(f"n_neighbors must be >= 1, got {n_neighbors}.")
     qc_params = _resolve_qc_params(tiling_qc_params)
 
-    labels_da = resolve_labels_array(sdata, labels_key, scale)
+    labels_da = resolve_labels_array(sdata, labels_key=labels_key, scale=scale)
 
     cell_info = _compute_centroids_for_labels(sdata, labels_key=labels_key, labels_da=labels_da, scale=scale)
     if not cell_info:

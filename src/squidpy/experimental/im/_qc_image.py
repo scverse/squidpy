@@ -166,8 +166,10 @@ def qc_image(
 
     _tissue_binary_da: da.Array | None = None
     if InputKind.MASK in groups or detect_tissue:
-        mask_key_resolved = resolve_tissue_mask(sdata, image_key, scale, tissue_mask_key)
-        raw_mask = get_mask_dask(sdata, mask_key_resolved, scale)
+        mask_key_resolved = resolve_tissue_mask(
+            sdata, image_key=image_key, scale=scale, tissue_mask_key=tissue_mask_key
+        )
+        raw_mask = get_mask_dask(sdata, mask_key=mask_key_resolved, scale=scale)
         _tissue_binary_da = (raw_mask > 0).astype(np.float32).rechunk((tg.ty, tg.tx))
 
     if InputKind.GRAYSCALE in groups:
@@ -302,7 +304,7 @@ def qc_image(
     shapes_key = f"qc_img_{image_key}_grid"
 
     # Build shapes first (need the index for tile_id linkage)
-    save_tile_grid_to_shapes(sdata, tg, shapes_key, copy_transforms_from_key=image_key)
+    save_tile_grid_to_shapes(sdata, tg=tg, shapes_key=shapes_key, copy_transforms_from_key=image_key)
 
     # Set spatialdata linkage on adata BEFORE TableModel.parse
     adata.obs["grid_name"] = pd.Categorical([shapes_key] * len(adata))
@@ -367,8 +369,10 @@ def _classify_tiles_by_tissue(
         Boolean arrays of shape ``(n_tiles,)``.
     """
     if binary_mask_da is None:
-        mask_key_resolved = resolve_tissue_mask(sdata, image_key, scale, tissue_mask_key)
-        raw_mask = get_mask_dask(sdata, mask_key_resolved, scale)
+        mask_key_resolved = resolve_tissue_mask(
+            sdata, image_key=image_key, scale=scale, tissue_mask_key=tissue_mask_key
+        )
+        raw_mask = get_mask_dask(sdata, mask_key=mask_key_resolved, scale=scale)
         binary_mask_da = (raw_mask > 0).astype(np.float32).rechunk((tg.ty, tg.tx))
 
     H, W = binary_mask_da.shape

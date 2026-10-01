@@ -56,7 +56,7 @@ def iter_chunked_regionprops(
                     yield lid, region, y0, x0
 
 
-def resolve_labels_array(sdata: sd.SpatialData, labels_key: str, scale: str | None) -> xr.DataArray:
+def resolve_labels_array(sdata: sd.SpatialData, *, labels_key: str, scale: str | None) -> xr.DataArray:
     """Resolve a labels element to its 2-D ``xarray.DataArray``.
 
     Single-scale elements pass through; multi-scale (``xarray.DataTree``)

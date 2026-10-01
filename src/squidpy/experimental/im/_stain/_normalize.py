@@ -85,7 +85,9 @@ def _resolve_mask_key_and_scale(
     :func:`!detect_tissue` labels element - raises if
     none exists.
     """
-    mask_key = resolve_tissue_mask(sdata, image_key, "auto", tissue_mask_key, auto_create=False)
+    mask_key = resolve_tissue_mask(
+        sdata, image_key=image_key, scale="auto", tissue_mask_key=tissue_mask_key, auto_create=False
+    )
     target_hw = (int(target_da.sizes["y"]), int(target_da.sizes["x"]))
     label_scale = _choose_label_scale_for_image(sdata.labels[mask_key], target_hw)
     return mask_key, label_scale, target_hw
@@ -103,7 +105,7 @@ def _resolve_tissue_bool_mask(
     mask_key, label_scale, target_hw = _resolve_mask_key_and_scale(
         sdata, image_key=image_key, target_da=fit_da, tissue_mask_key=tissue_mask_key
     )
-    mask = get_mask_materialized(sdata, mask_key, label_scale) > 0
+    mask = get_mask_materialized(sdata, mask_key=mask_key, scale=label_scale) > 0
     if mask.shape != target_hw:
         from skimage.transform import resize
 

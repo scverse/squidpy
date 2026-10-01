@@ -231,7 +231,7 @@ def flatten_channels(
         )
 
 
-def get_mask_dask(sdata: SpatialData, mask_key: str, scale: str) -> da.Array:
+def get_mask_dask(sdata: SpatialData, *, mask_key: str, scale: str) -> da.Array:
     """Extract mask as a lazy dask array from ``sdata.labels``."""
     if mask_key not in sdata.labels:
         raise KeyError(f"Mask key '{mask_key}' not found in sdata.labels")
@@ -249,9 +249,9 @@ def get_mask_dask(sdata: SpatialData, mask_key: str, scale: str) -> da.Array:
     return arr
 
 
-def get_mask_materialized(sdata: SpatialData, mask_key: str, scale: str) -> np.ndarray:
+def get_mask_materialized(sdata: SpatialData, *, mask_key: str, scale: str) -> np.ndarray:
     """Extract a 2D mask array from ``sdata.labels`` at the requested scale (materialized)."""
-    arr = get_mask_dask(sdata, mask_key, scale)
+    arr = get_mask_dask(sdata, mask_key=mask_key, scale=scale)
     return np.asarray(arr.compute())
 
 
@@ -275,10 +275,10 @@ def _choose_label_scale_for_image(label_node: Labels2DModel, target_hw: tuple[in
 
 def resolve_tissue_mask(
     sdata: SpatialData,
+    *,
     image_key: str,
     scale: str,
     tissue_mask_key: str | None = None,
-    *,
     auto_create: bool = True,
 ) -> str:
     """Return the key of a tissue mask in ``sdata.labels``, creating one if needed.
@@ -320,9 +320,9 @@ def resolve_tissue_mask(
 
 def save_tile_grid_to_shapes(
     sdata: SpatialData,
+    *,
     tg: TileGrid,
     shapes_key: str,
-    *,
     copy_transforms_from_key: str | None = None,
 ) -> None:
     """Save a TileGrid to ``sdata.shapes`` as a GeoDataFrame.

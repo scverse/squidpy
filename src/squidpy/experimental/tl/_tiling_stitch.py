@@ -813,7 +813,7 @@ def assign_stitch_groups(
     # Resolve which labels DataArray was used at QC time (multi-scale aware).
     qc_params = adata.uns.get("tiling_qc", {})
     scale = qc_params.get("scale")
-    labels_da = resolve_labels_array(sdata, labels_key, scale)
+    labels_da = resolve_labels_array(sdata, labels_key=labels_key, scale=scale)
 
     label_ids = adata.obs["label_id"].astype(int).to_numpy()
     is_outlier = adata.obs["is_outlier"].to_numpy(dtype=bool)

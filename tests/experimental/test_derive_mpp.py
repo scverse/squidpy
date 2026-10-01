@@ -74,7 +74,7 @@ def test_pitch(lattice, pitch, transform, expected_mpp):
     centers = lattice(pitch=pitch)
     transforms = {"global": transform} if transform is not None else None
     sdata = _make_sdata(_points_shapes(centers, radius=pitch / 4.0), transforms=transforms)
-    mpp = derive_mpp_from_shapes(sdata, "shapes", "global", um_between_centers=pitch)
+    mpp = derive_mpp_from_shapes(sdata, shapes_key="shapes", coordinate_system="global", um_between_centers=pitch)
     assert mpp == pytest.approx(expected_mpp, rel=1e-9)
 
 
@@ -85,41 +85,41 @@ def test_pitch_large_grid_subsampling():
     n = 120
     centers = _square_lattice(pitch=pitch, n=n)
     sdata = _make_sdata(_points_shapes(centers, radius=pitch / 4.0))
-    mpp = derive_mpp_from_shapes(sdata, "shapes", "global", um_between_centers=pitch)
+    mpp = derive_mpp_from_shapes(sdata, shapes_key="shapes", coordinate_system="global", um_between_centers=pitch)
     assert mpp == pytest.approx(1.0, rel=1e-9)
 
 
 def test_diameter_points():
     centers = _hex_lattice(pitch=100.0)
     sdata = _make_sdata(_points_shapes(centers, radius=27.5), transforms={"global": Scale([4.0, 4.0], axes=("x", "y"))})
-    mpp = derive_mpp_from_shapes(sdata, "shapes", "global", um_diameter=55.0)
+    mpp = derive_mpp_from_shapes(sdata, shapes_key="shapes", coordinate_system="global", um_diameter=55.0)
     assert mpp == pytest.approx(0.25, rel=1e-9)
 
 
 def test_square_edge_polygons():
     centers = _square_lattice(pitch=8.0)
     sdata = _make_sdata(_square_polygons_shapes(centers, edge=8.0))
-    mpp = derive_mpp_from_shapes(sdata, "shapes", "global", um_square_edge=8.0)
+    mpp = derive_mpp_from_shapes(sdata, shapes_key="shapes", coordinate_system="global", um_square_edge=8.0)
     assert mpp == pytest.approx(1.0, rel=1e-9)
 
 
 def test_um_diameter_on_polygons_rejected():
     sdata = _make_sdata(_square_polygons_shapes(_square_lattice(pitch=8.0), edge=8.0))
     with pytest.raises(ValueError, match=r"um_diameter.*Point geometries"):
-        derive_mpp_from_shapes(sdata, "shapes", "global", um_diameter=8.0)
+        derive_mpp_from_shapes(sdata, shapes_key="shapes", coordinate_system="global", um_diameter=8.0)
 
 
 def test_um_square_edge_on_points_rejected():
     sdata = _make_sdata(_points_shapes(_square_lattice(pitch=8.0), radius=1.0))
     with pytest.raises(ValueError, match=r"um_square_edge.*Polygon geometries"):
-        derive_mpp_from_shapes(sdata, "shapes", "global", um_square_edge=8.0)
+        derive_mpp_from_shapes(sdata, shapes_key="shapes", coordinate_system="global", um_square_edge=8.0)
 
 
 def test_um_square_edge_on_non_square_polygons_rejected():
     centers = _square_lattice(pitch=10.0)
     sdata = _make_sdata(_hex_polygons_shapes(centers, edge=3.0))
     with pytest.raises(ValueError, match=r"square/rectangular polygons"):
-        derive_mpp_from_shapes(sdata, "shapes", "global", um_square_edge=3.0)
+        derive_mpp_from_shapes(sdata, shapes_key="shapes", coordinate_system="global", um_square_edge=3.0)
 
 
 def test_coordinate_system_selection():
@@ -127,8 +127,10 @@ def test_coordinate_system_selection():
         _points_shapes(_square_lattice(pitch=8.0), radius=1.0),
         transforms={"native": Identity(), "downscaled": Scale([0.5, 0.5], axes=("x", "y"))},
     )
-    mpp_native = derive_mpp_from_shapes(sdata, "shapes", "native", um_between_centers=8.0)
-    mpp_down = derive_mpp_from_shapes(sdata, "shapes", "downscaled", um_between_centers=8.0)
+    mpp_native = derive_mpp_from_shapes(sdata, shapes_key="shapes", coordinate_system="native", um_between_centers=8.0)
+    mpp_down = derive_mpp_from_shapes(
+        sdata, shapes_key="shapes", coordinate_system="downscaled", um_between_centers=8.0
+    )
     assert mpp_down / mpp_native == pytest.approx(2.0, rel=1e-9)
 
 
@@ -138,7 +140,7 @@ def test_anisotropy_rejected():
         transforms={"global": Scale([2.0, 4.0], axes=("x", "y"))},
     )
     with pytest.raises(ValueError, match=r"anisotropic"):
-        derive_mpp_from_shapes(sdata, "shapes", "global", um_between_centers=8.0)
+        derive_mpp_from_shapes(sdata, shapes_key="shapes", coordinate_system="global", um_between_centers=8.0)
 
 
 def test_rotation_preserved():
@@ -153,7 +155,7 @@ def test_rotation_preserved():
         _points_shapes(_hex_lattice(pitch=100.0), radius=27.5),
         transforms={"global": Sequence([Scale([2.0, 2.0], axes=("x", "y")), rotation])},
     )
-    mpp = derive_mpp_from_shapes(sdata, "shapes", "global", um_between_centers=100.0)
+    mpp = derive_mpp_from_shapes(sdata, shapes_key="shapes", coordinate_system="global", um_between_centers=100.0)
     assert mpp == pytest.approx(0.5, rel=1e-6)
 
 
@@ -163,7 +165,7 @@ def test_three_d_rejected():
     )
     sdata = SpatialData(shapes={"shapes": gdf})
     with pytest.raises(ValueError, match=r"3D"):
-        derive_mpp_from_shapes(sdata, "shapes", "global", um_between_centers=1.0)
+        derive_mpp_from_shapes(sdata, shapes_key="shapes", coordinate_system="global", um_between_centers=1.0)
 
 
 def test_multipolygon_rejected():
@@ -172,18 +174,18 @@ def test_multipolygon_rejected():
     gdf = ShapesModel.parse(gpd.GeoDataFrame(geometry=[MultiPolygon([p1, p2])]))
     sdata = SpatialData(shapes={"shapes": gdf})
     with pytest.raises(ValueError, match=r"MultiPolygon"):
-        derive_mpp_from_shapes(sdata, "shapes", "global", um_diameter=1.0)
+        derive_mpp_from_shapes(sdata, shapes_key="shapes", coordinate_system="global", um_diameter=1.0)
 
 
 def test_single_shape_pitch_rejected():
     sdata = _make_sdata(_points_shapes(np.array([[0.0, 0.0]]), radius=1.0))
     with pytest.raises(ValueError, match=r"single shape"):
-        derive_mpp_from_shapes(sdata, "shapes", "global", um_between_centers=100.0)
+        derive_mpp_from_shapes(sdata, shapes_key="shapes", coordinate_system="global", um_between_centers=100.0)
 
 
 def test_single_shape_diameter_works():
     sdata = _make_sdata(_points_shapes(np.array([[0.0, 0.0]]), radius=27.5))
-    mpp = derive_mpp_from_shapes(sdata, "shapes", "global", um_diameter=55.0)
+    mpp = derive_mpp_from_shapes(sdata, shapes_key="shapes", coordinate_system="global", um_diameter=55.0)
     assert mpp == pytest.approx(1.0, rel=1e-9)
 
 
@@ -200,7 +202,7 @@ def test_single_shape_diameter_works():
 def test_mutex_args_rejected(kwargs):
     sdata = _make_sdata(_points_shapes(_square_lattice(pitch=8.0), radius=1.0))
     with pytest.raises(ValueError, match=r"exactly one"):
-        derive_mpp_from_shapes(sdata, "shapes", "global", **kwargs)
+        derive_mpp_from_shapes(sdata, shapes_key="shapes", coordinate_system="global", **kwargs)
 
 
 def test_unknown_coordinate_system():
@@ -209,4 +211,4 @@ def test_unknown_coordinate_system():
         transforms={"native": Identity(), "downscaled": Scale([0.5, 0.5], axes=("x", "y"))},
     )
     with pytest.raises(ValueError, match=r"native.*downscaled|downscaled.*native"):
-        derive_mpp_from_shapes(sdata, "shapes", "missing", um_between_centers=8.0)
+        derive_mpp_from_shapes(sdata, shapes_key="shapes", coordinate_system="missing", um_between_centers=8.0)

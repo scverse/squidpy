@@ -108,7 +108,7 @@ def _save_tiles_to_shapes(
     shapes_key: str,
 ) -> None:
     """Save a TileGrid to sdata.shapes as a GeoDataFrame."""
-    save_tile_grid_to_shapes(sdata, tg, shapes_key, copy_transforms_from_key=image_key)
+    save_tile_grid_to_shapes(sdata, tg=tg, shapes_key=shapes_key, copy_transforms_from_key=image_key)
 
 
 def _save_spot_tiles_to_shapes(
@@ -565,7 +565,7 @@ def _filter_tiles(
     else:
         raise ValueError("tissue_mask_key must be provided when image_key is None.")
     assert_key_in_sdata(sdata, mask_key, attr="labels")
-    mask = get_mask_materialized(sdata, mask_key, scale)
+    mask = get_mask_materialized(sdata, mask_key=mask_key, scale=scale)
     H_mask, W_mask = mask.shape
 
     # Check tissue coverage for each tile

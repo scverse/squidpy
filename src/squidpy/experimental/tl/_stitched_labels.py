@@ -516,7 +516,7 @@ def make_stitched_labels(
 
     qc_params = adata.uns.get("tiling_qc", {})
     scale = qc_params.get("scale")
-    labels_da = resolve_labels_array(sdata, labels_key, scale)
+    labels_da = resolve_labels_array(sdata, labels_key=labels_key, scale=scale)
 
     lut = _build_lookup(adata.obs, labels_da.dtype)
     new_data = _apply_lut(labels_da, lut)

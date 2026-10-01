@@ -283,7 +283,7 @@ class TestResolveLabelsArray:
     def test_single_scale_passthrough(self, sdata_clean):
         from squidpy.experimental.utils._labels import resolve_labels_array
 
-        da = resolve_labels_array(sdata_clean, "labels", scale=None)
+        da = resolve_labels_array(sdata_clean, labels_key="labels", scale=None)
         assert da is sdata_clean.labels["labels"]
 
     def test_multi_scale_without_scale_raises(self):
@@ -301,7 +301,7 @@ class TestResolveLabelsArray:
         sdata = SpatialData(labels={"labels": ms_labels})
 
         with pytest.raises(ValueError, match="multi-scale"):
-            resolve_labels_array(sdata, "labels", scale=None)
+            resolve_labels_array(sdata, labels_key="labels", scale=None)
 
 
 # Tiled centroid backend
