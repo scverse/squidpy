@@ -747,9 +747,8 @@ def calculate_niche_cellcharter(
         n_jobs=n_jobs,
     )
 
-    # `GaussianMixture` is a `Clusterer` as it stands, so a fixed K needs no wrapper.
-    # The default 'kmeans' init on purpose, unlike the sweep's pinned one: for one fit it
-    # finds the niches far more reliably than 'random_from_data' (the init squidpy 1.8 used)
+    # `GaussianMixture` is a `Clusterer` as it stands, so a fixed K needs no wrapper. Its default
+    # 'kmeans' init is CellCharter's too, for a fixed K and in the sweep alike.
     clusterer: Clusterer
     if isinstance(n_clusters, int | np.integer):
         clusterer = GaussianMixture(n_components=int(n_clusters))

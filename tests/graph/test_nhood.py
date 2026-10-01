@@ -455,15 +455,15 @@ class TestNhoodEntropy:
         h = -0.25 * np.log(0.25) - 0.75 * np.log(0.75)
         np.testing.assert_allclose(stripes[1:-1, 1:-1], h)
 
-    def test_isolated_observation_is_zero_not_nan(self):
+    def test_isolated_observation_is_nan(self):
         adata = self._grid(["a", "b"] * 18)
         conn = adata.obsp["spatial_connectivities"].tolil()
         conn[0, :] = 0
         adata.obsp["spatial_connectivities"] = conn.tocsr()
 
         ent = nhood_entropy(adata, cluster_key="ct", copy=True)
-        assert not ent.isna().any()
-        assert ent.iloc[0] == 0.0
+        assert np.isnan(ent.iloc[0])
+        assert not ent.iloc[1:].isna().any()
 
     def test_writes_to_obs(self):
         adata = self._grid(["a", "b"] * 18)

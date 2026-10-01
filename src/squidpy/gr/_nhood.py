@@ -766,7 +766,8 @@ def nhood_entropy(
     -------
     If ``copy = True``, returns a :class:`pandas.Series`. Otherwise, modifies the ``adata`` with the following key:
 
-        - :attr:`anndata.AnnData.obs` ``['{cluster_key}_nhood_entropy']`` - the per-observation entropy, in nats.
+        - :attr:`anndata.AnnData.obs` ``['{cluster_key}_nhood_entropy']`` - the per-observation entropy, in nats;
+          ``NaN`` for an observation without labelled neighbors.
 
     Notes
     -----
@@ -782,8 +783,10 @@ def nhood_entropy(
     profile = to_dense(
         nhood_aggregate(adata, groups=cluster_key, connectivity_key=connectivity_key, aggregation="mean")
     )
-    # observations without neighbors give 0/0 in `entropy`
-    ent = pd.Series(np.nan_to_num(entropy(np.asarray(profile), axis=1)), index=adata.obs_names)
+    # an observation without labelled neighbors has no composition: 0/0 in `entropy`, kept as
+    # NaN so it is left out of a mean instead of counting as a homogeneous neighborhood
+    with np.errstate(invalid="ignore"):
+        ent = pd.Series(entropy(np.asarray(profile), axis=1), index=adata.obs_names)
 
     if copy:
         return ent
