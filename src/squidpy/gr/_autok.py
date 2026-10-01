@@ -24,7 +24,6 @@ from squidpy.gr._clusterers import SweepableClusterer
 
 # `best_k` is a function of run-to-run variability, and therefore of the initialization.
 # Pinned so that the selected K does not silently change with a scikit-learn default.
-DEFAULT_INIT_PARAMS = "random_from_data"
 
 # The two spellings of the number-of-clusters parameter, in the order they are tried.
 # `n_clusters` first: SpectralClustering takes both, and there `n_components` is the
@@ -249,7 +248,7 @@ def _gmm(model_params: Mapping[str, object] | None = None, **overrides: object) 
     is never modified.
     """
     check_model_params(model_params or {})
-    return GaussianMixture(**{"init_params": DEFAULT_INIT_PARAMS, **(model_params or {})}, **overrides)
+    return GaussianMixture(**(model_params or {}), **overrides)
 
 
 def _fit_once(
