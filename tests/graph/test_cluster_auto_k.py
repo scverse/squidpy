@@ -12,7 +12,6 @@ from sklearn.metrics import fowlkes_mallows_score
 
 from squidpy.gr import cluster_auto_k, cluster_stability
 from squidpy.gr._autok import (
-    DEFAULT_INIT_PARAMS,
     AutoKClusterer,
     _gmm,
     _score_block,
@@ -143,24 +142,24 @@ def test_default_gmm_does_not_mutate_the_callers_model_params():
     assert model_params == {"max_iter": 10}
 
 
-def test_sweep_init_params_is_pinned_but_overridable(monkeypatch):
+def test_sweep_uses_kmeans_init_but_overridable(monkeypatch):
     from squidpy.gr import _autok
 
     seen: list[str] = []
     original = _autok.GaussianMixture
 
     def spy(*args, **kwargs):
-        seen.append(kwargs["init_params"])
+        seen.append(kwargs.get("init_params", "kmeans"))
         return original(*args, **kwargs)
 
     monkeypatch.setattr(_autok, "GaussianMixture", spy)
 
     sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, rng=0)
-    assert set(seen) == {DEFAULT_INIT_PARAMS}
+    assert set(seen) == {"kmeans"}
 
     seen.clear()
-    sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, clusterer=_gmm({"init_params": "kmeans"}), rng=0)
-    assert set(seen) == {"kmeans"}
+    sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, clusterer=_gmm({"init_params": "random_from_data"}), rng=0)
+    assert set(seen) == {"random_from_data"}
 
 
 def test_sweep_reg_covar_hint():
@@ -267,9 +266,9 @@ def test_cluster_auto_k_rejects_sparse_input():
         cluster_auto_k(adata, n_clusters=(2, 4), max_runs=2, rng=0)
 
 
-def test_cluster_auto_k_keep_all_labels_adds_every_fitted_k():
+def test_cluster_auto_k_store_labels_adds_every_fitted_k():
     adata = AnnData(make_blobs())
-    cluster_auto_k(adata, n_clusters=(2, 3), max_runs=2, rng=0, keep_all_labels=True)
+    cluster_auto_k(adata, n_clusters=(2, 3), max_runs=2, rng=0, store_labels=True)
 
     fitted = list(adata.uns["cluster_auto_k"]["table"].index)
     assert list(adata.obs.columns) == ["cluster_auto_k", *(f"cluster_auto_k_k{k}" for k in fitted)]

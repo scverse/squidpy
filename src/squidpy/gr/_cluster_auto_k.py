@@ -34,7 +34,7 @@ def cluster_auto_k(
     model_params: Mapping[str, Any] | None = None,
     clusterer: SweepableClusterer | None = None,
     rng: SeedLike | RNGLike | None = None,
-    keep_all_labels: bool = False,
+    store_labels: bool = False,
     key_added: str = "cluster_auto_k",
     copy: bool = False,
     table_key: str | None = None,
@@ -82,7 +82,7 @@ def cluster_auto_k(
         rejected rather than run.
     %(rng)s
         Seeds every individual fit.
-    keep_all_labels
+    store_labels
         Also keep the labeling of every fitted K, the selected one included, as
         ``{key_added}_k{K}``. The sweep fits them all anyway, so this is how a runner-up K is
         inspected without refitting.
@@ -98,7 +98,7 @@ def cluster_auto_k(
     is modified in place and ``None`` is returned. Either way it gains the following keys:
 
         - :attr:`anndata.AnnData.obs` ``['{key_added}']`` - the labeling at the selected K,
-          plus one ``['{key_added}_k{K}']`` per fitted K if ``keep_all_labels``.
+          plus one ``['{key_added}_k{K}']`` per fitted K if ``store_labels``.
         - :attr:`anndata.AnnData.uns` ``['{key_added}']`` - a dict with the selected
           ``best_k``, the per-K diagnostics ``table``, the full ``stability`` matrix,
           ``n_runs`` and ``converged``.
@@ -153,7 +153,7 @@ def cluster_auto_k(
     )
     logg.info(f"Selected K={result.best_k} after {result.n_runs} runs")
 
-    labels = pd.DataFrame(label_columns(result, key_added, all_labels=keep_all_labels), index=adata.obs_names)
+    labels = pd.DataFrame(label_columns(result, key_added, all_labels=store_labels), index=adata.obs_names)
 
     for column in labels:
         _save_data(adata, attr="obs", key=column, data=labels[column], prefix=column == key_added)
