@@ -3,6 +3,9 @@
 Pure DataArray/numpy layer: no ``sdata``, no public export. The stain-matrix
 fits run on tissue pixels (a bounded reduction at the chosen scale); the apply
 transform is a single per-pixel matmul and stays lazy.
+
+``params`` arguments must already be resolved by :func:`squidpy._params.resolve_params`
+(the public dispatchers do this once); they are not re-validated here.
 """
 
 from __future__ import annotations
@@ -171,11 +174,7 @@ def fit_decomposition(
     reference: dict[str, np.ndarray] = RUIFROK_HE,
     max_angle_deg: float = 45.0,
 ) -> StainReference:
-    """Fit a decomposition :class:`StainReference` (stain matrix + max concentrations).
-
-    ``params`` must already be resolved by :func:`squidpy._params.resolve_params`
-    (the public dispatchers do this once); it is not re-validated here.
-    """
+    """Fit a decomposition :class:`StainReference` (stain matrix + max concentrations)."""
     od = _tissue_od(image_rgb, white_point, params["beta"], tissue_mask=tissue_mask, image_key=image_key)
     matrix = _stain_matrix(od, method, params, image_key=image_key, reference=reference, max_angle_deg=max_angle_deg)
     return StainReference(
@@ -211,8 +210,6 @@ def apply_decomposition(
     coarse level) when given, while ``image_rgb`` (which may be full
     resolution) is only ever touched by the lazy operator - never
     materialised to fit a matrix.
-    ``params`` must already be resolved by :func:`squidpy._params.resolve_params`
-    (the public dispatchers do this once); it is not re-validated here.
     """
     _check_channel_dim(image_rgb)
     bg = reference.white_point

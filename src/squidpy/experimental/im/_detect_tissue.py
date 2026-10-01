@@ -289,7 +289,6 @@ def detect_tissue(
         raise ValueError(f"Unsupported method: {method}")
 
     manual_scale = scale.lower() != "auto"
-    normalized_margins_target = (0, 0, 0, 0)  # set after image load for shape-aware validation
 
     # Load smallest available or explicit scale
     img_node = sdata.images[image_key]
@@ -369,7 +368,6 @@ def detect_tissue(
     img_fg_labels = _apply_border_margin(img_fg_labels, normalized_margins)
 
     # Upscale to full resolution
-    target_shape = _get_target_upscale_shape(sdata, image_key=image_key)
     scale_matrix = _get_scaling_matrix(img_fg_labels.shape, target_shape)
     img_fg_labels_up = _affine_upscale_nearest(img_fg_labels, scale_matrix, target_shape)
 
@@ -651,13 +649,7 @@ def _segment_weka(
 
         training_labels[tissue_mask] = 2
 
-    # Ensure both classes exist for training
-    if not (training_labels == 1).any():
-        # Minimal case: force a tiny background block
-        h_block = max(1, H // 50)
-        w_block = max(1, W // 50)
-        training_labels[:h_block, :w_block] = 1
-
+    # Ensure a tissue class exists for training (background always does: corner_mask is never empty)
     if not (training_labels == 2).any():
         # No tissue seeds found: pick the most different non-corner pixel if possible
         flat_non_bg = np.flatnonzero(non_bg)

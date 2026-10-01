@@ -3,6 +3,9 @@
 Pure DataArray layer: every function takes and returns ``xr.DataArray`` (or
 numpy), stays lazy, touches no ``sdata``, and exposes no public surface. The
 thin ``sdata`` wrapper lives in :mod:`._normalize`.
+
+``params`` arguments must already be resolved by :func:`squidpy._params.resolve_params`
+(the public dispatchers do this once); they are not re-validated here.
 """
 
 from __future__ import annotations
@@ -98,8 +101,6 @@ def fit_reinhard(
     ``tissue_mask`` (a ``(y, x)`` boolean aligned to ``image_rgb``) selects the
     tissue pixels when given; otherwise the ``mask_background`` /
     ``luminosity_threshold`` params drive the mask.
-    ``params`` must already be resolved by :func:`squidpy._params.resolve_params`
-    (the public dispatchers do this once); it is not re-validated here.
     """
     _check_channel_dim(image_rgb)
     lab = rgb_to_lab_ruderman(image_rgb)
@@ -125,8 +126,6 @@ def apply_reinhard(
     full-resolution image is never materialised to compute them.
     ``tissue_mask`` (aligned to ``fit_rgb``) selects the source tissue pixels.
     Lazy if and only if ``image_rgb`` is lazy.
-    ``params`` must already be resolved by :func:`squidpy._params.resolve_params`
-    (the public dispatchers do this once); it is not re-validated here.
     """
     _check_channel_dim(image_rgb)
     fit_lab = rgb_to_lab_ruderman(fit_rgb if fit_rgb is not None else image_rgb)
