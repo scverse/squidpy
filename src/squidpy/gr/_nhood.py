@@ -1032,9 +1032,11 @@ def _aggregate_over(
 
     if aggregation == "mean":
         return mean_over(features)
-    mean = to_dense(mean_over(features))  # "variance": both callers normalize `aggregation`
-    dense = to_dense(features)
-    return to_dense(mean_over(dense * dense)) - mean * mean
+    if aggregation == "variance":
+        mean = to_dense(mean_over(features))
+        dense = to_dense(features)
+        return to_dense(mean_over(dense * dense)) - mean * mean
+    raise ValueError(f"'aggregation' must be 'mean', 'sum' or 'variance', got {aggregation!r}")
 
 
 def _assert_hop_request(adata: AnnData, *, connectivity_key: str, hops: Sequence[int]) -> None:

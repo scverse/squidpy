@@ -90,7 +90,7 @@ _CASES = {
     "gr.calculate_niche_cellcharter-aggregation": (
         "dummy_adata2",
         lambda a, v: sq.gr.calculate_niche_cellcharter(a, distance=2, aggregation=v, rng=0, copy=True),
-        "VARIANCE",
+        "MEAN",
         "`aggregation`",
     ),
     "gr.LeidenClusterer-flavor": (
