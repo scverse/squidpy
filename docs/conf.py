@@ -203,18 +203,6 @@ def _params_defaults() -> dict[str, dict[str, object]]:
     return defaults
 
 
-def _default_of(name: str) -> object:
-    """The declared default of a params key, or ``_NO_DEFAULT`` if it has none."""
-    cls_path, _, key = name.rpartition(".")
-    if not cls_path:
-        return _NO_DEFAULT
-    defaults = _params_defaults().get(cls_path.rpartition(".")[2], {})
-    return defaults.get(key, _NO_DEFAULT)
-
-
-_NO_DEFAULT = object()
-
-
 def _stack_attribute_defaults(app, doctree, docname) -> None:  # type: ignore[no-untyped-def]
     """Show a params key's default on its signature, as a parameter's is shown.
 
@@ -229,15 +217,13 @@ def _stack_attribute_defaults(app, doctree, docname) -> None:  # type: ignore[no
         parent = sig.parent
         if not isinstance(parent, addnodes.desc) or parent.get("objtype") != "attribute":
             continue
-        default = _default_of("".join(sig.get("ids", [""])[:1]))
-        if default is _NO_DEFAULT:
+        cls_path, _, key = "".join(sig.get("ids", [""])[:1]).rpartition(".")
+        if not cls_path:
             continue
-        sig += addnodes.desc_annotation("", "", nodes.Text(f" (default: {default!r})"))
-
-
-def _skip_dict_api(app, what, name, obj, skip, options) -> bool | None:  # type: ignore[no-untyped-def]
-    """Hide the mapping API a params TypedDict inherits from :class:`dict`."""
-    return True if getattr(obj, "__qualname__", "").startswith("dict.") else None
+        defaults = _params_defaults().get(cls_path.rpartition(".")[2], {})
+        if key not in defaults:
+            continue
+        sig += addnodes.desc_annotation("", "", nodes.Text(f" (default: {defaults[key]!r})"))
 
 
 def _stack_parameter_types(app, doctree, docname) -> None:  # type: ignore[no-untyped-def]
@@ -308,7 +294,6 @@ def _stack_parameter_types(app, doctree, docname) -> None:  # type: ignore[no-un
 
 def setup(app: Sphinx) -> None:
     app.connect("builder-inited", lambda _app: _params_defaults())
-    app.connect("autodoc-skip-member", _skip_dict_api)
     app.connect("doctree-resolved", _stack_parameter_types)
     app.connect("doctree-resolved", _stack_attribute_defaults)
     app.add_css_file("css/custom.css")
