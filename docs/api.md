@@ -165,6 +165,8 @@ Under active development: names and signatures here may change without a depreca
     :toctree: api
 
     im.calculate_image_features
+    im.rasterize_points
+    im.sample_volume
     im.make_tiles
     im.make_tiles_from_spots
     im.qc_image
@@ -182,6 +184,15 @@ Under active development: names and signatures here may change without a depreca
 .. autosummary::
     :toctree: api
 
+    tl.stalign_align_obs
+    tl.stalign_align_image
+    tl.stalign_align_volume
+    tl.align_landmarks
+    tl.apply_affine
+    tl.StalignFit
+    tl.StalignObsFit
+    tl.StalignImageFit
+    tl.StalignVolumeFit
     tl.calculate_tiling_qc
     tl.assign_stitch_groups
     tl.make_stitched_labels
@@ -213,6 +224,9 @@ All {class}`~typing.TypedDict`s: pass a plain `dict` literal or build one with t
 .. autosummary::
     :toctree: api
 
+    types.StalignObsParams
+    types.StalignImageParams
+    types.StalignVolumeParams
     types.FelzenszwalbParams
     types.WekaParams
     types.ReinhardParams

@@ -15,7 +15,8 @@ SPECS = pytest.mark.parametrize("spec", [getattr(types, name) for name in PARAMS
 def _matches(value: object, hint: Any) -> bool:
     """Whether ``value`` fits ``hint``; an ``int`` fits ``float``, a ``bool`` fits only ``bool``."""
     if get_origin(hint) in (Union, UnionType):
-        return any(_matches(value, arg) for arg in get_args(hint))
+        # an arm may not be `isinstance`-checkable (`npt.ArrayLike` holds non-runtime protocols)
+        return any(_safe_matches(value, arg) for arg in get_args(hint))
     origin = get_origin(hint) or hint
     if origin is bool:
         return isinstance(value, bool)
@@ -24,6 +25,14 @@ def _matches(value: object, hint: Any) -> bool:
     if origin is float:
         return isinstance(value, int | float) and not isinstance(value, bool)
     return isinstance(value, origin)
+
+
+def _safe_matches(value: object, hint: Any) -> bool:
+    """`_matches`, treating an un-checkable hint as "not this arm" instead of an error."""
+    try:
+        return _matches(value, hint)
+    except TypeError:
+        return False
 
 
 @SPECS
