@@ -94,6 +94,9 @@ suppress_warnings = ["download.not_readable", "git.too_shallow"]
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
+# no nav entry per documented object: a function page would list itself under its own nav
+# entry, and the theme's expand toggle would come and go with the page you are on
+toc_object_entries = False
 autosummary_generate = True
 autodoc_member_order = "groupwise"
 autodoc_typehints = "signature"

@@ -156,7 +156,7 @@ public API.
 
 Under active development: names and signatures here may change without a deprecation cycle.
 
-### Images `im`
+### Image `im`
 
 #### Features, tiling and rasterization
 
