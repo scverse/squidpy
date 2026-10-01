@@ -420,8 +420,6 @@ def fit_stalign_volume(
     ref: npt.ArrayLike,
     query: npt.ArrayLike,
     *,
-    ref_scale: tuple[float, float, float] = (1.0, 1.0, 1.0),
-    query_scale: tuple[float, float] = (1.0, 1.0),
     ref_axes: Sequence[npt.ArrayLike] | None = None,
     query_axes: Sequence[npt.ArrayLike] | None = None,
     initial_slice: int | None = None,
@@ -430,39 +428,7 @@ def fit_stalign_volume(
     initial_affine: npt.ArrayLike | None = None,
     **solver_params: Unpack[StalignVolumeParams],
 ) -> StalignVolumeFit:
-    """Fit a single 2D section into a 3D reference volume, array-in / array-out.
-
-    Internal: :func:`~squidpy.experimental.tl.stalign_align_volume` is the container-aware
-    entry point and carries the user-facing documentation.
-
-    Parameters
-    ----------
-    ref
-        Reference volume, channels-first ``(c, z, y, x)``; a bare ``(z, y, x)`` array is
-        promoted. Need not match ``query``'s channel count.
-    query
-        The section, channels-first ``(c, y, x)``; a bare ``(y, x)`` array is promoted.
-    ref_scale, query_scale
-        Physical size of one voxel/pixel, ``(z, y, x)`` and ``(y, x)``. Builds centred
-        axes when the matching ``*_axes`` is not given.
-    ref_axes, query_axes
-        Explicit physical axes, ``(z, y, x)`` and ``(y, x)``, resolved per side.
-    initial_slice
-        Index along the reference's first axis to centre the section on; sets the
-        translation's out-of-plane component. ``None`` centres on the middle.
-    initial_rotation, initial_scale
-        In-plane rotation (**radians**) and uniform scale of the initial affine.
-    initial_affine
-        Homogeneous ``(4, 4)`` affine in ``(x, y, z)`` order, replacing the three
-        ``initial_*`` arguments above and mutually exclusive with them. It maps the
-        reference volume onto the section, the reverse of the rank-2 fits.
-    solver_params
-        See :class:`StalignVolumeParams`.
-
-    Returns
-    -------
-    A :class:`StalignVolumeFit`.
-    """
+    """Array-in / array-out core of :func:`~squidpy.experimental.tl.stalign_align_volume`, which documents it."""
     _require_jax()
 
     import jax.numpy as jnp
@@ -491,8 +457,8 @@ def fit_stalign_volume(
 
     # The reference is the moving image: it is the volume that gets warped onto the
     # section, so it plays LDDMM's `I`/`xI` role and the section plays `J`/`xJ`.
-    source_grid = resolve_axes(ref_axes, ref_scale, source_image.shape[1:], "ref_axes")
-    section_grid = resolve_axes(query_axes, query_scale, target_image.shape[1:], "query_axes")
+    source_grid = resolve_axes(ref_axes, source_image.shape[1:], "ref_axes")
+    section_grid = resolve_axes(query_axes, target_image.shape[1:], "query_axes")
     # Upstream's whole 3D-to-slice special case: give the section a single-sample z axis
     # at the origin and a length-1 z extent, and the rank-3 solver does the rest.
     target_grid = (jnp.zeros(1, dtype=dtype), *section_grid)
@@ -544,18 +510,11 @@ def fit_stalign_volume(
         **{key: value for key, value in opts.items() if key not in _CONSUMED_KEYS},
     )
     return StalignVolumeFit(
-        affine=fit_result["A"],
-        velocity=fit_result["v"],
-        velocity_grid=fit_result["xv"],
+        **fit_result,
         # Indexed rather than passed whole: `resolve_axes` is rank-agnostic and returns a
         # variadic tuple, while the class documents the exact arity its rank implies.
         ref_axes=(source_grid[0], source_grid[1], source_grid[2]),
         query_axes=(section_grid[0], section_grid[1]),
-        match_weights=fit_result["WM"],
-        artifact_weights=fit_result["WA"],
-        background_weights=fit_result["WB"],
-        energies=fit_result["energies"],
-        n_iter=int(fit_result["n_iter"]),
     )
 
 
@@ -626,28 +585,7 @@ def fit_stalign_obs(
     landmarks_query: npt.ArrayLike | None = None,
     **solver_params: Unpack[StalignObsParams],
 ) -> StalignObsFit:
-    """Fit a deformation mapping the ``query`` cloud onto the ``ref`` cloud.
-
-    Internal: :func:`~squidpy.experimental.tl.stalign_align_obs` is the container-aware
-    entry point and carries the user-facing documentation.
-
-    Parameters
-    ----------
-    ref, query
-        ``(N, 2)`` / ``(M, 2)`` point clouds in ``(x, y)`` order; the query is aligned
-        onto the reference.
-    landmarks_ref, landmarks_query
-        Paired ``(x, y)`` landmark arrays initialising the affine, matched by row order.
-        Must be given together. Not exclusive with ``initial_affine``: landmarks always
-        contribute the point-matching term, and additionally derive the starting affine
-        when ``initial_affine`` is absent.
-    solver_params
-        See :class:`StalignObsParams`.
-
-    Returns
-    -------
-    A :class:`StalignObsFit`; its ``aligned_points`` is ``query`` already mapped.
-    """
+    """Array-in / array-out core of :func:`~squidpy.experimental.tl.stalign_align_obs`, which documents it."""
     _require_jax()
 
     from ._stalign_impl._core import lddmm, transform_points_row_col
@@ -677,18 +615,11 @@ def fit_stalign_obs(
         **{key: value for key, value in opts.items() if key not in _CONSUMED_KEYS},
     )
     aligned_rc = transform_points_row_col(
-        fit_result["xv"], fit_result["v"], fit_result["A"], source_rc, direction="forward"
+        fit_result["velocity_grid"], fit_result["velocity"], fit_result["affine"], source_rc, direction="forward"
     )
     return StalignObsFit(
-        affine=fit_result["A"],
-        velocity=fit_result["v"],
-        velocity_grid=fit_result["xv"],
+        **fit_result,
         aligned_points=aligned_rc[:, ::-1],
-        match_weights=fit_result["WM"],
-        artifact_weights=fit_result["WA"],
-        background_weights=fit_result["WB"],
-        energies=fit_result["energies"],
-        n_iter=int(fit_result["n_iter"]),
         # No raster axes: the grids here are the internal density rasters at `dx`
         # resolution, not a frame any real image lives on. Offering `warp_image`
         # off them would quietly resample the caller's image onto a coarse, unrelated grid.
@@ -699,41 +630,13 @@ def fit_stalign_image(
     ref: npt.ArrayLike,
     query: npt.ArrayLike,
     *,
-    ref_scale: tuple[float, float] = (1.0, 1.0),
-    query_scale: tuple[float, float] = (1.0, 1.0),
     ref_axes: Sequence[npt.ArrayLike] | None = None,
     query_axes: Sequence[npt.ArrayLike] | None = None,
     landmarks_ref: npt.ArrayLike | None = None,
     landmarks_query: npt.ArrayLike | None = None,
     **solver_params: Unpack[StalignImageParams],
 ) -> StalignImageFit:
-    """Fit a deformation mapping the ``query`` image onto the ``ref`` image.
-
-    Internal: :func:`~squidpy.experimental.tl.stalign_align_image` is the container-aware
-    entry point and carries the user-facing documentation.
-
-    Parameters
-    ----------
-    ref, query
-        Channels-first ``(c, y, x)`` rasters; a bare ``(y, x)`` array is promoted. They
-        need not share a shape nor a channel count.
-    ref_scale, query_scale
-        Physical size of one pixel as ``(y, x)``, defaulting to pixel units. Builds
-        centred axes when the matching ``*_axes`` is not given.
-    ref_axes, query_axes
-        Explicit physical row/column axes, resolved per side: either may be given alone,
-        and each is mutually exclusive with a non-unit scale on *its own* side only.
-    landmarks_ref, landmarks_query
-        Paired ``(x, y)`` landmark arrays in the *images'* physical units, matched by row
-        order. See :func:`_initial_affine_and_landmarks` for how they combine with
-        ``initial_affine``.
-    solver_params
-        See :class:`StalignImageParams`.
-
-    Returns
-    -------
-    A :class:`StalignImageFit`.
-    """
+    """Array-in / array-out core of :func:`~squidpy.experimental.tl.stalign_align_image`, which documents it."""
     _require_jax()
 
     from ._stalign_impl._core import lddmm
@@ -747,10 +650,8 @@ def fit_stalign_image(
     source_image = as_chw(query, name="query")
     target_image = as_chw(ref, name="ref")
 
-    # Explicit axes and a non-unit scale are mutually exclusive within a side; see
-    # `resolve_axes`, which both ranks share so the rule cannot differ between them.
-    source_grid = resolve_axes(query_axes, query_scale, source_image.shape[1:], "query_axes")
-    target_grid = resolve_axes(ref_axes, ref_scale, target_image.shape[1:], "ref_axes")
+    source_grid = resolve_axes(query_axes, source_image.shape[1:], "query_axes")
+    target_grid = resolve_axes(ref_axes, target_image.shape[1:], "ref_axes")
 
     fit_result = lddmm(
         source_grid,
@@ -764,14 +665,7 @@ def fit_stalign_image(
         **{key: value for key, value in opts.items() if key not in _CONSUMED_KEYS},
     )
     return StalignImageFit(
-        affine=fit_result["A"],
-        velocity=fit_result["v"],
-        velocity_grid=fit_result["xv"],
+        **fit_result,
         query_axes=(source_grid[0], source_grid[1]),
         ref_axes=(target_grid[0], target_grid[1]),
-        match_weights=fit_result["WM"],
-        artifact_weights=fit_result["WA"],
-        background_weights=fit_result["WB"],
-        energies=fit_result["energies"],
-        n_iter=int(fit_result["n_iter"]),
     )
