@@ -15,13 +15,13 @@ from spatialdata.transformations import Scale, get_transformation, set_transform
 import squidpy as sq
 from squidpy._params import defaults_of
 from squidpy.experimental.im import (
-    ReinhardParams,
     StainReference,
     fit_stain_reference,
     normalize_stains,
 )
 from squidpy.experimental.im._stain._validation import StainFittingError
 from squidpy.experimental.im._utils import get_element_data
+from squidpy.types import ReinhardParams
 from tests.conftest import PlotTester, PlotTesterMeta
 
 _ = sdp  # registers the `.pl` spatialdata accessor

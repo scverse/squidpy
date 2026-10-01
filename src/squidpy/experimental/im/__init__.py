@@ -1,19 +1,12 @@
 from __future__ import annotations
 
 from ._calculate_image_features import calculate_image_features
-from ._detect_tissue import (
-    FelzenszwalbParams,
-    WekaParams,
-    detect_tissue,
-)
+from ._detect_tissue import detect_tissue
 from ._make_tiles import make_tiles, make_tiles_from_spots
 from ._qc_image import qc_image
 from ._qc_metrics import QCMetric
 from ._stain import (
-    MacenkoParams,
-    ReinhardParams,
     StainReference,
-    VahadaneParams,
     decompose_stains,
     estimate_white_point,
     fit_stain_reference,
@@ -21,13 +14,8 @@ from ._stain import (
 )
 
 __all__ = [
-    "FelzenszwalbParams",
-    "MacenkoParams",
     "QCMetric",
-    "ReinhardParams",
     "StainReference",
-    "VahadaneParams",
-    "WekaParams",
     "calculate_image_features",
     "normalize_stains",
     "decompose_stains",

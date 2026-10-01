@@ -5,7 +5,7 @@ import pytest
 import spatialdata_plot as sdp
 
 import squidpy as sq
-from squidpy.experimental.im import FelzenszwalbParams, WekaParams
+from squidpy.types import FelzenszwalbParams, WekaParams
 from tests.conftest import PlotTester, PlotTesterMeta
 
 _ = sdp
