@@ -430,14 +430,14 @@ def test_best_k_matches_cellcharter():
 
 
 def test_sweep_pins_its_stability_curve():
-    # guards mirror_stability/_score_block/the seeding against silent drift. these are the
-    # values this rng produces, not the ground truth: on these three blobs the selected K
-    # still depends on the rng at max_runs=5 (anywhere from 2 to 5 across rngs 0-19).
+    # guards mirror_stability/_score_block/the seeding/the init against silent drift. these are
+    # the values this rng produces, not the ground truth: with the kmeans init, these three blobs
+    # select K=4 for 17 of rngs 0-19 at max_runs=5.
     result = sweep_auto_k(make_blobs(), list(range(1, 7)), max_runs=5, rng=0)
-    assert result.best_k == 3
+    assert result.best_k == 4
     np.testing.assert_allclose(
         result.table["stability_mean"].to_numpy(),
-        [np.nan, 0.749475, 0.832067, 0.828912, 0.718767, np.nan],
+        [np.nan, 0.742245, 0.831742, 0.89621, 0.807942, np.nan],
         rtol=1e-5,
     )
 
