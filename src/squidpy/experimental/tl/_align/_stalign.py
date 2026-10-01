@@ -118,7 +118,6 @@ class StalignFit:
         key_added: str = "spatial_aligned",
         spatial_key: str = "spatial",
         table_key: str | None = None,
-        coordinate_system: str | None = None,
         inplace: bool = True,
     ) -> np.ndarray | None:
         """Write the fit's transformed coordinates into a container's ``obsm``.
@@ -138,10 +137,6 @@ class StalignFit:
             ``obsm`` key holding the coordinates to map.
         table_key
             For a :class:`~spatialdata.SpatialData`, which table to read and write.
-        coordinate_system
-            The frame ``spatial_key`` is expected to sit in. ``None`` (default) uses the
-            one the fit's own units came from, which is the frame that actually has to
-            match; a different one is refused. Needed only for a fit that records none.
         inplace
             ``True`` (default) writes ``obsm[key_added]`` and returns ``None``. ``False``
             leaves ``data`` untouched and returns the transformed coordinates.
@@ -156,14 +151,6 @@ class StalignFit:
         from ._api import _assert_table_coords_share_frame, _resolve_table, _write_coords
 
         fitted_in = getattr(self, "coordinate_system", None)  # only the raster fits record one
-        if coordinate_system is not None and fitted_in not in (None, coordinate_system):
-            # the fit's units come from `self.coordinate_system`; checking the table against any
-            # other frame would pass and then write coordinates in the wrong units
-            raise ValueError(
-                f"The fit was made in coordinate system {fitted_in!r}, so its units only "
-                f"apply there; `coordinate_system={coordinate_system!r}` would pass the check and write "
-                f"wrong coordinates. Bring the coordinates into {fitted_in!r} first."
-            )
         if isinstance(data, SpatialData) and fitted_in is not None:
             # a raster fit took its units from an image element's transformation, so the
             # coordinates it is applied to have to sit in the fit's frame
@@ -171,7 +158,7 @@ class StalignFit:
                 data,
                 adata=_resolve_table(data, table_key, side="query"),
                 spatial_key=spatial_key,
-                coordinate_system=fitted_in if coordinate_system is None else coordinate_system,
+                coordinate_system=fitted_in,
             )
         return _write_coords(
             data,
