@@ -34,10 +34,9 @@ from spatialdata import SpatialData
 
 from squidpy._validators import normalize_choice
 
-from ._io import fit_from_uns, fit_to_uns, writeback_affine_sdata
+from ._io import writeback_affine_sdata
 from ._landmark import apply_affine, fit_affine, fit_similarity
 from ._stalign import (
-    StalignFit,
     StalignImageFit,
     StalignImageParams,
     StalignObsParams,
@@ -476,72 +475,6 @@ def stalign_align_volume(
         ),
         coordinate_system=query_coordinate_system,
     )
-
-
-def apply_fit_to_container(
-    fit: StalignFit,
-    data: AnnData | SpatialData,
-    *,
-    key_added: str = "spatial_aligned",
-    spatial_key: str = "spatial",
-    table_key: str | None = None,
-    coordinate_system: str | None = None,
-    inplace: bool = True,
-) -> np.ndarray | None:
-    """Back :meth:`~squidpy.experimental.tl.StalignFit.transform`, which carries the docs.
-
-    Container-level, so it lives here rather than on the fit: the estimators in
-    :mod:`._stalign` never see a container, and the method is a thin delegator to this.
-    """
-    fitted_in = getattr(fit, "coordinate_system", None)  # only the raster fits record one
-    if coordinate_system is not None and fitted_in not in (None, coordinate_system):
-        # the fit's units come from `fit.coordinate_system`; checking the table against any
-        # other frame would pass and then write coordinates in the wrong units
-        raise ValueError(
-            f"The fit was made in coordinate system {fitted_in!r}, so its units only "
-            f"apply there; `coordinate_system={coordinate_system!r}` would pass the check and write "
-            f"wrong coordinates. Bring the coordinates into {fitted_in!r} first."
-        )
-    if isinstance(data, SpatialData) and isinstance(fit, StalignImageFit | StalignVolumeFit):
-        # A fit carrying raster axes took its units from an image element's transformation,
-        # so the coordinates it is applied to have to sit in that same frame: and it is the
-        # *fit's* frame that has to match, not a default the caller never chose.
-        _assert_table_coords_share_frame(
-            data,
-            adata=_resolve_table(data, table_key, side="query"),
-            spatial_key=spatial_key,
-            coordinate_system=fit.coordinate_system if coordinate_system is None else coordinate_system,
-        )
-    return _write_coords(
-        data,
-        table_key,
-        spatial_key,
-        key_added,
-        transform=fit.transform_points,
-        spatial_key_name="spatial_key",
-        inplace=inplace,
-    )
-
-
-def store_fit_on_container(
-    fit: StalignFit,
-    data: AnnData | SpatialData,
-    *,
-    key: str = "stalign",
-    table_key: str | None = None,
-) -> None:
-    """Back :meth:`~squidpy.experimental.tl.StalignFit.to_uns`, which carries the docs."""
-    fit_to_uns(fit, _resolve_table(data, table_key, side="query"), key)
-
-
-def load_fit_from_container(
-    data: AnnData | SpatialData,
-    *,
-    key: str = "stalign",
-    table_key: str | None = None,
-) -> StalignFit:
-    """Back :meth:`~squidpy.experimental.tl.StalignFit.from_uns`, which carries the docs."""
-    return fit_from_uns(_resolve_table(data, table_key, side="query"), key)
 
 
 def align_landmarks(

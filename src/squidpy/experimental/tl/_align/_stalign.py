@@ -151,15 +151,35 @@ class StalignFit:
         ``None``, or the ``(N, 2)`` / ``(N, 3)`` transformed coordinates when
         ``inplace=False``.
         """
-        from ._api import apply_fit_to_container
+        from spatialdata import SpatialData
 
-        return apply_fit_to_container(
-            self,
+        from ._api import _assert_table_coords_share_frame, _resolve_table, _write_coords
+
+        fitted_in = getattr(self, "coordinate_system", None)  # only the raster fits record one
+        if coordinate_system is not None and fitted_in not in (None, coordinate_system):
+            # the fit's units come from `self.coordinate_system`; checking the table against any
+            # other frame would pass and then write coordinates in the wrong units
+            raise ValueError(
+                f"The fit was made in coordinate system {fitted_in!r}, so its units only "
+                f"apply there; `coordinate_system={coordinate_system!r}` would pass the check and write "
+                f"wrong coordinates. Bring the coordinates into {fitted_in!r} first."
+            )
+        if isinstance(data, SpatialData) and fitted_in is not None:
+            # a raster fit took its units from an image element's transformation, so the
+            # coordinates it is applied to have to sit in the fit's frame
+            _assert_table_coords_share_frame(
+                data,
+                adata=_resolve_table(data, table_key, side="query"),
+                spatial_key=spatial_key,
+                coordinate_system=fitted_in if coordinate_system is None else coordinate_system,
+            )
+        return _write_coords(
             data,
-            key_added=key_added,
-            spatial_key=spatial_key,
-            table_key=table_key,
-            coordinate_system=coordinate_system,
+            table_key,
+            spatial_key,
+            key_added,
+            transform=self.transform_points,
+            spatial_key_name="spatial_key",
             inplace=inplace,
         )
 
@@ -176,9 +196,10 @@ class StalignFit:
         SpatialData transformation. Not automatic, because a rank-3 velocity field runs to
         hundreds of megabytes.
         """
-        from ._api import store_fit_on_container
+        from ._api import _resolve_table
+        from ._io import fit_to_uns
 
-        store_fit_on_container(self, data, key=key, table_key=table_key)
+        fit_to_uns(self, _resolve_table(data, table_key, side="query"), key)
 
     @classmethod
     def from_uns(
@@ -192,9 +213,10 @@ class StalignFit:
 
         Returns whichever class the stored ``kind`` names, whatever class this is called on.
         """
-        from ._api import load_fit_from_container
+        from ._api import _resolve_table
+        from ._io import fit_from_uns
 
-        return load_fit_from_container(data, key=key, table_key=table_key)
+        return fit_from_uns(_resolve_table(data, table_key, side="query"), key)
 
 
 @dataclass(frozen=True, kw_only=True)
