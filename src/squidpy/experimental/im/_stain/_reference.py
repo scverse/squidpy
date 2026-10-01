@@ -11,6 +11,10 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
+from squidpy._params import resolve_params
+from squidpy.experimental.im._stain._conversion import cast_to_image_dtype
+from squidpy.experimental.im._stain._white_point import validate_rgb_range
+
 if TYPE_CHECKING:
     import spatialdata as sd
     import xarray as xr
@@ -21,6 +25,7 @@ if TYPE_CHECKING:
 StainMethod = Literal["macenko", "vahadane", "reinhard"]
 _DECOMPOSITION_METHODS: frozenset[str] = frozenset({"macenko", "vahadane"})
 _VALID_METHODS: frozenset[str] = _DECOMPOSITION_METHODS | {"reinhard"}
+_CONCENTRATION_CHANNELS = ["hematoxylin", "eosin", "residual"]
 
 
 def _coerce_finite(arr: Any, *, shape: tuple[int, ...], name: str) -> np.ndarray:
@@ -172,20 +177,60 @@ class StainFit:
         ``None`` if ``inplace=True`` (the image is written), otherwise the lazy
         normalized :class:`xarray.DataArray`.
         """
-        from squidpy.experimental.im._stain._normalize import _normalize_stains
-
-        return _normalize_stains(
-            sdata,
-            image_key=image_key,
-            reference=self,
-            scale=scale,
-            method_params=method_params,
-            image_key_added=image_key_added,
-            inplace=inplace,
-            output_dtype=output_dtype,
-            tissue_mask_key=tissue_mask_key,
-            preserve_background=preserve_background,
+        from squidpy.experimental.im._stain._decomposition import apply_decomposition
+        from squidpy.experimental.im._stain._normalize import (
+            _METHOD_PARAMS,
+            _resolve_image,
+            _resolve_output_tissue_mask,
+            _resolve_tissue_bool_mask,
+            _write_image,
         )
+        from squidpy.experimental.im._stain._reinhard import apply_reinhard
+
+        da = _resolve_image(sdata, image_key=image_key, scale=scale, prefer="finest")
+        target_key = image_key_added if image_key_added is not None else f"{image_key}_normalized"
+        if inplace and target_key in sdata.images:
+            raise ValueError(f"image_key_added={target_key!r} already exists in sdata.images.")
+        params = resolve_params(method_params, _METHOD_PARAMS[self.method])
+        # Source statistics (Reinhard mu/sigma or the decomposition source matrix)
+        # are reduced on a coarse level with a tissue mask; the lazy transform is
+        # then applied to the full-resolution `da`.
+        fit_rgb = _resolve_image(sdata, image_key=image_key, scale=scale, prefer="coarsest")
+        # reject mis-typed source (e.g. 0-255 float) before the dtype-clipped reconstruction
+        validate_rgb_range(fit_rgb)
+        tissue_mask = _resolve_tissue_bool_mask(
+            sdata, image_key=image_key, fit_da=fit_rgb, tissue_mask_key=tissue_mask_key
+        )
+        out_dtype = da.dtype if output_dtype is None else np.dtype(output_dtype)  # clip range + final cast
+        if self.method == "reinhard":
+            normalized = apply_reinhard(da, self, params, fit_rgb=fit_rgb, tissue_mask=tissue_mask, out_dtype=out_dtype)
+        else:
+            normalized = apply_decomposition(
+                da, self, params, fit_rgb=fit_rgb, tissue_mask=tissue_mask, out_dtype=out_dtype
+            )
+
+        if preserve_background:
+            # Keep non-tissue pixels byte-identical to the source: the global colour
+            # map would otherwise recolour background/white pixels (HistomicsTK's
+            # `mask_out`). Stays lazy - the mask aligns to `da` without materialising.
+            keep = _resolve_output_tissue_mask(
+                sdata, image_key=image_key, target_da=da, tissue_mask_key=tissue_mask_key
+            )
+            normalized = normalized.where(keep, da)
+
+        # Deferred cast at the write boundary: the reconstruction was kept in float
+        # (clipped to `out_dtype`'s range); round + cast here so the stored image is
+        # the requested dtype and integer background stays byte-identical.
+        normalized = cast_to_image_dtype(normalized, out_dtype)
+
+        # The output is a 3-channel RGB image; tag it r/g/b so RGB-aware viewers
+        # (spatialdata-plot) use one hue-preserving scale, not per-channel auto-contrast.
+        normalized = normalized.assign_coords(c=["r", "g", "b"])
+
+        if not inplace:
+            return normalized
+        _write_image(sdata, source_node=sdata.images[image_key], image_key_added=target_key, data_array=normalized)
+        return None
 
     def decompose(
         self,
@@ -238,15 +283,32 @@ class StainFit:
         :class:`~xarray.DataArray` (``"hematoxylin"``, ``"eosin"``, and
         ``"residual"`` unless dropped).
         """
-        from squidpy.experimental.im._stain._normalize import _decompose_stains
+        from squidpy.experimental.im._stain._decomposition import decompose_to_concentrations
+        from squidpy.experimental.im._stain._normalize import _resolve_image, _write_image
 
-        return _decompose_stains(
-            sdata,
-            image_key=image_key,
-            reference=self,
-            scale=scale,
-            image_key_added=image_key_added,
-            inplace=inplace,
-            output_dtype=output_dtype,
-            include_residual=include_residual,
-        )
+        da = _resolve_image(sdata, image_key=image_key, scale=scale, prefer="finest")
+        if self.method not in _DECOMPOSITION_METHODS or self.stain_matrix is None:
+            raise ValueError("decompose requires a macenko/vahadane reference with a stain matrix.")
+        stain_matrix, bg = self.stain_matrix, self.white_point
+
+        names = ["hematoxylin", "eosin"] + (["residual"] if include_residual else [])
+        prefix = image_key_added if image_key_added is not None else image_key
+        target_keys = [f"{prefix}_{name}" for name in names]
+        if inplace:  # validate all keys free up front, so a partial write can't leave a half-decomposed sdata
+            clashes = [k for k in target_keys if k in sdata.images]
+            if clashes:
+                raise ValueError(f"decompose would overwrite existing image(s): {clashes}.")
+
+        concentrations = decompose_to_concentrations(da, stain_matrix, bg).assign_coords(c=_CONCENTRATION_CHANNELS)
+        concentrations = concentrations.astype(np.dtype(output_dtype))
+
+        if not inplace:
+            return {name: concentrations.sel(c=name) for name in names}
+
+        source = sdata.images[image_key]
+        for name, key in zip(names, target_keys, strict=True):
+            # keep the c dim (length 1) so Image2DModel.parse accepts it
+            _write_image(
+                sdata, source_node=source, image_key_added=key, data_array=concentrations.sel(c=[name]), c_coords=[name]
+            )
+        return None
