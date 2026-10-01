@@ -9,6 +9,7 @@ from dask_image.ndfilters import gaussian_filter as dask_gf
 from scanpy import logging as logg
 from scipy.ndimage import gaussian_filter as scipy_gf
 
+from squidpy._compat import old_positionals
 from squidpy._constants._constants import Processing
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
@@ -20,8 +21,12 @@ __all__ = ["process"]
 
 @d.dedent
 @inject_docs(p=Processing)
+@old_positionals(
+    "layer", "library_id", "method", "chunks", "lazy", "layer_added", "channel_dim", "copy", "apply_kwargs"
+)
 def process(
     img: ImageContainer,
+    *,
     layer: str | None = None,
     library_id: str | Sequence[str] | None = None,
     method: str | Callable[..., NDArrayA] = "smooth",

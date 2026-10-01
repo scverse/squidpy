@@ -12,6 +12,7 @@ from scanpy import logging as logg
 from sklearn.metrics import DistanceMetric
 from sklearn.neighbors import KDTree
 
+from squidpy._compat import old_positionals
 from squidpy._docs import d
 from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _save_data
@@ -20,8 +21,20 @@ __all__ = ["var_by_distance"]
 
 
 @d.dedent
+@old_positionals(
+    "groups",
+    "cluster_key",
+    "library_key",
+    "library_id",
+    "design_matrix_key",
+    "covariates",
+    "metric",
+    "spatial_key",
+    "copy",
+)
 def var_by_distance(
     adata: AnnData,
+    *,
     groups: str | list[str] | NDArrayA,
     cluster_key: str | None = None,
     library_key: str | None = None,
@@ -108,22 +121,32 @@ def var_by_distance(
         if batch_var is not None:
             if cluster_key is not None:
                 if anchor_var in pd.unique(adata[adata.obs[library_key] == batch_var].obs[cluster_key]):
-                    df = _init_design_matrix(adata, cluster_key, library_key, batch_var)
+                    df = _init_design_matrix(
+                        adata, cluster_key=cluster_key, library_key=library_key, batch_var=batch_var
+                    )
                     anchor_coord, batch_coord, nan_ids = _get_coordinates(
-                        adata[adata.obs[library_key] == batch_var], anchor_var, cluster_key, spatial_key
+                        adata[adata.obs[library_key] == batch_var],
+                        anchor=anchor_var,
+                        annotation=cluster_key,
+                        spatial_key=spatial_key,
                     )
                 else:
                     continue
             else:
-                df = _init_design_matrix(adata, cluster_key, library_key, batch_var)
+                df = _init_design_matrix(adata, cluster_key=cluster_key, library_key=library_key, batch_var=batch_var)
                 anchor_coord, batch_coord, nan_ids = _get_coordinates(
-                    adata[adata.obs[library_key] == batch_var], anchor_var, cluster_key, spatial_key
+                    adata[adata.obs[library_key] == batch_var],
+                    anchor=anchor_var,
+                    annotation=cluster_key,
+                    spatial_key=spatial_key,
                 )
                 anchor_col_id = 1
 
         else:
-            df = _init_design_matrix(adata, cluster_key, None, None)
-            anchor_coord, batch_coord, nan_ids = _get_coordinates(adata, anchor_var, cluster_key, spatial_key)
+            df = _init_design_matrix(adata, cluster_key=cluster_key, library_key=None, batch_var=None)
+            anchor_coord, batch_coord, nan_ids = _get_coordinates(
+                adata, anchor=anchor_var, annotation=cluster_key, spatial_key=spatial_key
+            )
             anchor_col_id = 1
 
         tree = KDTree(
@@ -199,6 +222,7 @@ def var_by_distance(
 
 def _init_design_matrix(
     adata: AnnData,
+    *,
     cluster_key: str | None,
     library_key: str | None,
     batch_var: str | None,
@@ -219,7 +243,7 @@ def _init_design_matrix(
 
 
 def _get_coordinates(
-    adata: AnnData, anchor: str | list[int | float], annotation: str | None, spatial_key: str
+    adata: AnnData, *, anchor: str | list[int | float], annotation: str | None, spatial_key: str
 ) -> tuple[Any, Any, Any]:
     """Get anchor point coordinates and coordinates of all observations, excluding nan values."""
     # since amount of distances have to match n_obs, the nan ids are stored an inserted after KDTree construction

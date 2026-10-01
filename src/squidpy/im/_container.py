@@ -771,7 +771,7 @@ class ImageContainer(FeatureMixin):
         """
         self._assert_not_empty()
         assert_positive(spot_scale, name="scale")
-        _assert_spatial_basis(adata, spatial_key)
+        _assert_spatial_basis(adata, key=spatial_key)
 
         # limit to obs_names
         if obs_names is None:
@@ -1235,7 +1235,7 @@ class ImageContainer(FeatureMixin):
         if c == _NULL_COORDS:  # not a crop
             return adata.copy() if copy else adata
 
-        _assert_spatial_basis(adata, spatial_key)
+        _assert_spatial_basis(adata, key=spatial_key)
         coordinates = adata.obsm[spatial_key]
         coordinates = coordinates * self.data.attrs.get(Key.img.scale, 1)
 

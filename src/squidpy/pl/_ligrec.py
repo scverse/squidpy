@@ -14,6 +14,7 @@ from matplotlib.colorbar import ColorbarBase
 from scanpy import logging as logg
 from scipy.cluster import hierarchy as sch
 
+from squidpy._compat import old_positionals
 from squidpy._constants._constants import DendrogramAxis
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
@@ -129,8 +130,25 @@ class CustomDotplot(sc.pl.DotPlot):
 
 
 @d.dedent
+@old_positionals(
+    "cluster_key",
+    "source_groups",
+    "target_groups",
+    "means_range",
+    "pvalue_threshold",
+    "remove_empty_interactions",
+    "remove_nonsig_interactions",
+    "dendrogram",
+    "alpha",
+    "swap_axes",
+    "title",
+    "figsize",
+    "dpi",
+    "save",
+)
 def ligrec(
     adata: AnnData | Mapping[str, pd.DataFrame],
+    *,
     cluster_key: str | None = None,
     source_groups: str | Sequence[str] | None = None,
     target_groups: str | Sequence[str] | None = None,

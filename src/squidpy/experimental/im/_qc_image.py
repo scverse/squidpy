@@ -44,8 +44,8 @@ _DEFAULT_GENERIC_METRICS: list[QCMetric] = [
 
 def qc_image(
     sdata: SpatialData,
-    image_key: str,
     *,
+    image_key: str,
     scale: str = "scale0",
     metrics: QCMetric | list[QCMetric] | None = None,
     tile_size: Literal["auto"] | tuple[int, int] = "auto",
@@ -145,7 +145,7 @@ def qc_image(
     gray = _to_gray_dask_yx(img_yxc)
     H, W = int(gray.shape[0]), int(gray.shape[1])
 
-    tg = TileGrid(H, W, tile_size)
+    tg = TileGrid(H, W, tile_size=tile_size)
     obs_names = tg.names()
 
     logger.info("Quantifying image quality.")

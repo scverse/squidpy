@@ -71,7 +71,7 @@ class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):
 
 @pytest.mark.parametrize("is_view", [False, True])
 def test_extract(adata: AnnData, cont: ImageContainer, caplog, is_view: bool):
-    sq.im.calculate_image_features(adata, cont, features=["summary"])
+    sq.im.calculate_image_features(adata, img=cont, features=["summary"])
 
     # extract columns (default values)
     extr_adata = sq.pl.extract(adata[:10] if is_view else adata)

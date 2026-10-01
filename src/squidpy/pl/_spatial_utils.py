@@ -151,6 +151,7 @@ def _get_library_id(
 
 def _get_image(
     adata: AnnData,
+    *,
     library_id: Sequence[str],
     spatial_key: str = Key.obsm.spatial,
     img: bool | _SeqArray | None = None,
@@ -188,6 +189,7 @@ def _get_image(
 
 def _get_segment(
     adata: AnnData,
+    *,
     library_id: Sequence[str],
     seg_cell_id: str | None = None,
     library_key: str | None = None,
@@ -213,6 +215,7 @@ def _get_segment(
 
 def _get_scalefactor_size(
     adata: AnnData,
+    *,
     library_id: Sequence[str],
     spatial_key: str = Key.obsm.spatial,
     img_res_key: str | None = None,
@@ -265,6 +268,7 @@ def _get_scalefactor_size(
 
 def _image_spatial_attrs(
     adata: AnnData,
+    *,
     shape: _AvailShapes | None = None,
     spatial_key: str = Key.obsm.spatial,
     library_id: Sequence[str] | None = None,
@@ -338,6 +342,7 @@ def _image_spatial_attrs(
 
 def _set_coords_crops(
     adata: AnnData,
+    *,
     spatial_params: SpatialParams,
     spatial_key: str,
     crop_coord: Sequence[_CoordTuple] | _CoordTuple | None = None,
@@ -359,6 +364,7 @@ def _set_coords_crops(
 
 def _subs(
     adata: AnnData,
+    *,
     coords: NDArrayA,
     img: NDArrayA | None = None,
     library_key: str | None = None,
@@ -446,6 +452,7 @@ def _get_list(
 
 def _set_color_source_vec(
     adata: AnnData,
+    *,
     value_to_plot: str | None,
     use_raw: bool | None = None,
     alt_var: str | None = None,
@@ -494,6 +501,7 @@ def _shaped_scatter(
     y: NDArrayA,
     s: float,
     c: NDArrayA | str,
+    *,
     shape: _AvailShapes | ScatterShape | None = ScatterShape.CIRCLE,
     norm: _Normalize | None = None,
     **kwargs: Any,
@@ -541,6 +549,7 @@ def _make_poly(x: NDArrayA, y: NDArrayA, r: float, n: int, i: int) -> tuple[NDAr
 
 def _plot_edges(
     adata: AnnData,
+    *,
     coords: NDArrayA,
     connectivity_key: str,
     ax: Axes,
@@ -610,6 +619,7 @@ def _get_scalebar(
 
 def _decorate_axs(
     ax: Axes,
+    *,
     cax: PatchCollection,
     lib_count: int,
     fig_params: FigParams,
@@ -694,6 +704,7 @@ def _map_color_seg(
     color_vector: NDArrayA | pd.Categorical,
     color_source_vector: pd.Categorical,
     cmap_params: CmapParams,
+    *,
     seg_erosionpx: int | None = None,
     seg_boundaries: bool = False,
     na_color: str | tuple[float, ...] = (0, 0, 0, 0),
@@ -733,6 +744,7 @@ def _map_color_seg(
 
 def _prepare_args_plot(
     adata: AnnData,
+    *,
     shape: _AvailShapes | None = None,
     color: Sequence[str | None] | str | None = None,
     groups: _SeqStr | None = None,
@@ -776,6 +788,7 @@ def _prepare_args_plot(
 def _prepare_params_plot(
     color_params: ColorParams,
     spatial_params: SpatialParams,
+    *,
     spatial_key: str = Key.obsm.spatial,
     wspace: float | None = None,
     hspace: float = 0.25,
@@ -874,6 +887,7 @@ def _panel_grid(
     wspace: float,
     ncols: int,
     figsize: tuple[float, float],
+    *,
     dpi: int | None = None,
 ) -> tuple[Figure, GridSpec]:
     n_panels_x = min(ncols, num_panels)
@@ -933,6 +947,7 @@ def _set_outline(
 
 def _plot_scatter(
     coords: NDArrayA,
+    *,
     ax: Axes,
     outline_params: OutlineParams,
     cmap_params: CmapParams,
@@ -989,6 +1004,7 @@ def _plot_scatter(
 
 def _plot_segment(
     seg: NDArrayA,
+    *,
     cell_id: NDArrayA,
     color_vector: NDArrayA | pd.Series[CategoricalDtype],
     color_source_vector: pd.Series[CategoricalDtype],

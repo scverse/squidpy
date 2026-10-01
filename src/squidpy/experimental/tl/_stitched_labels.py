@@ -275,6 +275,7 @@ def _aggregate_X(
 
 def _collapse_groups(
     adata: ad.AnnData,
+    *,
     new_labels_key: str,
     merge_strategy: str | Callable[[pd.Series], object],
 ) -> ad.AnnData:
@@ -392,6 +393,7 @@ def _collapse_groups(
 
 def make_stitched_labels(
     sdata: sd.SpatialData,
+    *,
     labels_key: str,
     qc_table_key: str | None = None,
     labels_key_added: str | None = None,
@@ -534,7 +536,7 @@ def make_stitched_labels(
     )
     new_table = None
     if write_table:
-        collapsed = _collapse_groups(adata, out_key, merge_strategy)
+        collapsed = _collapse_groups(adata, new_labels_key=out_key, merge_strategy=merge_strategy)
         new_table = TableModel.parse(collapsed)
 
     if not inplace:

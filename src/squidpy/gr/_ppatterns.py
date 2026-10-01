@@ -19,6 +19,7 @@ from sklearn.preprocessing import normalize
 from spatialdata import SpatialData
 from statsmodels.stats.multitest import multipletests
 
+from squidpy._compat import old_positionals
 from squidpy._constants._constants import SpatialAutocorr
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
@@ -55,9 +56,27 @@ bl = nt.boolean
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn(), sp=SpatialAutocorr)
+@old_positionals(
+    "connectivity_key",
+    "genes",
+    "mode",
+    "transformation",
+    "n_perms",
+    "two_tailed",
+    "corr_method",
+    "attr",
+    "layer",
+    "seed",
+    "use_raw",
+    "copy",
+    "n_jobs",
+    "backend",
+    "show_progress_bar",
+)
 @deprecated_randomness_param
 def spatial_autocorr(
     adata: AnnData | SpatialData,
+    *,
     connectivity_key: str = Key.obsp.spatial_conn(),
     genes: str | int | Sequence[str] | Sequence[int] | None = None,
     mode: SpatialAutocorr | Literal["moran", "geary"] = "moran",
@@ -73,7 +92,6 @@ def spatial_autocorr(
     n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
-    *,
     table_key: str | None = None,
 ) -> pd.DataFrame | None:
     """
@@ -154,7 +172,7 @@ def spatial_autocorr(
         - :attr:`anndata.AnnData.uns` ``['gearyC']`` - the above mentioned dataframe, if ``mode = {sp.GEARY.s!r}``.
     """
     adata = extract_adata_if_sdata(adata, table_key=table_key)
-    _assert_connectivity_key(adata, connectivity_key)
+    _assert_connectivity_key(adata, key=connectivity_key)
 
     def extract_X(adata: AnnData, genes: str | Sequence[str] | None) -> tuple[NDArrayA | spmatrix, Sequence[Any]]:
         if genes is None:
@@ -225,7 +243,7 @@ def spatial_autocorr(
     if n_perms is not None:
         assert_positive(n_perms, name="n_perms")
         perms = list(np.arange(n_perms))
-        generators = np.random.default_rng(rng).spawn(n_perms)
+        rngs = np.random.default_rng(rng).spawn(n_perms)
 
         score_perms = parallelize(
             _score_helper,
@@ -234,7 +252,7 @@ def spatial_autocorr(
             n_jobs=n_jobs,
             backend=backend,
             show_progress_bar=show_progress_bar,
-        )(mode=mode, g=g, vals=vals, generators=generators)
+        )(mode=mode, g=g, vals=vals, rngs=rngs)
     else:
         score_perms = None
 
@@ -265,14 +283,15 @@ def _score_helper(
     mode: SpatialAutocorr,
     g: spmatrix,
     vals: NDArrayA,
-    generators: Sequence[np.random.Generator],
+    rngs: Sequence[np.random.Generator],
+    *,
     queue: SigQueue | None = None,
 ) -> pd.DataFrame:
     score_perms = np.empty((len(perms), vals.shape[0]))
     func = morans_i if mode == SpatialAutocorr.MORAN else gearys_c
 
     for i, p in enumerate(perms):
-        rng = generators[p]
+        rng = rngs[p]
         idx_shuffle = rng.permutation(g.shape[0])
         score_perms[i, :] = func(g[idx_shuffle, :], vals)
 
@@ -286,7 +305,7 @@ def _score_helper(
 
 
 @njit(parallel=True, fastmath=True, cache=True)
-def _occur_count(
+def _occur_count(  # noqa: PLR0917, numba requires positional arguments
     spatial_x: NDArrayA, spatial_y: NDArrayA, thresholds: NDArrayA, label_idx: NDArrayA, n: int, k: int, l_val: int
 ) -> NDArrayA:
     # Allocate a 2D array to store a flat local result per point.
@@ -365,13 +384,14 @@ def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs
 
 @d.dedent
 @deprecated_params({"n_splits": "1.10.0", "n_jobs": "1.10.0", "backend": "1.10.0", "show_progress_bar": "1.10.0"})
+@old_positionals("cluster_key", "spatial_key", "interval", "copy")
 def co_occurrence(
     adata: AnnData | SpatialData,
+    *,
     cluster_key: str,
     spatial_key: str = Key.obsm.spatial,
     interval: int | NDArrayA = 50,
     copy: bool = False,
-    *,
     table_key: str | None = None,
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """
