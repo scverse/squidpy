@@ -198,9 +198,11 @@ def stalign_align_obs(
         to both sides; a ``(ref, query)`` pair addresses each side separately (entries
         may be ``None`` for an AnnData side).
     landmarks_ref, landmarks_query
-        Optional paired ``(x, y)`` landmark arrays (matched by row order) used to
-        initialise the affine: translation-only for fewer than 3 pairs, and 3 or more
-        must not be collinear unless ``initial_affine`` is given.
+        Optional paired ``(x, y)`` landmark arrays (matched by row order). They contribute
+        the point-matching term the solver weights by ``sigmaP``, and derive the starting
+        affine unless ``initial_affine`` is given, in which case that wins and the matching
+        term stays. The derived start is translation-only for fewer than 3 pairs, and 3 or
+        more must not be collinear.
     solver_params
         LDDMM solver tuning; see
         :class:`~squidpy.types.StalignObsParams` for the accepted
