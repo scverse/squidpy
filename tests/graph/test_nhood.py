@@ -133,6 +133,67 @@ def test_centrality_scores_networkx_parity(nhood_data: AnnData):
         np.testing.assert_allclose(df.loc[cat, "average_clustering"], nx.average_clustering(graph, idx))
 
 
+def _random_graph_adata(n: int, density: float, *, isolated: int = 0, nan: int = 0, unused: bool = False) -> AnnData:
+    rng = np.random.default_rng(0)
+    adj = sp.random(n, n, density=density, random_state=0, format="csr")
+    adj.data[:] = 1
+    adj = (adj + adj.T).tolil()
+    adj.setdiag(0)
+    adj[:isolated, :] = 0
+    adj[:, :isolated] = 0
+    labels = rng.integers(0, 3, n).astype(str).astype(object)
+    labels[n - nan :] = np.nan
+    cats = ["0", "1", "2"] + (["unused"] if unused else [])
+    adata = AnnData(np.zeros((n, 1)), obs=pd.DataFrame({_CK: pd.Categorical(labels, categories=cats)}))
+    adata.obsp["spatial_connectivities"] = sp.csr_matrix(adj)
+    return adata
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"density": 0.01},
+        {"density": 0.06, "isolated": 10},
+        {"density": 0.06, "nan": 7},
+        {"density": 0.08, "unused": True},
+    ],
+    ids=["disconnected", "isolated", "nan_labels", "unused_category"],
+)
+def test_centrality_scores_networkx_parity_edge_cases(kwargs: dict):
+    import networkx as nx
+
+    adata = _random_graph_adata(80, **kwargs)
+    df = centrality_scores(adata, cluster_key=_CK, copy=True)
+    np.testing.assert_array_equal(df.index, adata.obs[_CK].cat.categories)
+
+    graph = nx.Graph(adata.obsp["spatial_connectivities"])
+    labels = adata.obs[_CK].to_numpy()
+    for cat in df.index:
+        idx = list(np.flatnonzero(labels == cat))
+        if not idx:  # an unused category scores 0 everywhere
+            np.testing.assert_array_equal(df.loc[cat].values, 0.0)
+            continue
+        np.testing.assert_allclose(df.loc[cat, "closeness_centrality"], nx.group_closeness_centrality(graph, idx))
+        np.testing.assert_allclose(df.loc[cat, "degree_centrality"], nx.group_degree_centrality(graph, idx))
+        np.testing.assert_allclose(df.loc[cat, "average_clustering"], nx.average_clustering(graph, idx))
+
+
+def test_centrality_scores_n_jobs_invariance():
+    adata = _random_graph_adata(200, 0.03, isolated=5)
+    expected = centrality_scores(adata, cluster_key=_CK, copy=True, n_jobs=1)
+    pd.testing.assert_frame_equal(centrality_scores(adata, cluster_key=_CK, copy=True, n_jobs=2), expected)
+
+
+def test_centrality_scores_v183_positional_backend():
+    """A v1.8.3 positional call through ``backend`` binds every value and warns about ``backend``."""
+    adata = _random_graph_adata(60, 0.06)
+    expected = centrality_scores(adata, cluster_key=_CK, score="degree_centrality", copy=True, n_jobs=1)
+    with pytest.warns(FutureWarning) as record:
+        got = centrality_scores(adata, _CK, "degree_centrality", None, True, 1, "loky", False)
+    assert any("`backend`" in str(w.message) for w in record)
+    pd.testing.assert_frame_equal(got, expected)
+
+
 @pytest.mark.parametrize("copy", [True, False])
 def test_interaction_matrix_copy(nhood_data: AnnData, copy: bool):
     adata = nhood_data
