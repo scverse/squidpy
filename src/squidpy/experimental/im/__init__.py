@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from ._calculate_image_features import calculate_image_features
 from ._detect_tissue import (
-    BackgroundDetectionParams,
     FelzenszwalbParams,
     WekaParams,
     detect_tissue,
@@ -22,7 +21,6 @@ from ._stain import (
 )
 
 __all__ = [
-    "BackgroundDetectionParams",
     "FelzenszwalbParams",
     "MacenkoParams",
     "QCMetric",
