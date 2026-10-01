@@ -928,8 +928,6 @@ def _validate_niche_args(  # noqa: PLR0917, deprecated and removed in v1.9.0
     """
     assert_isinstance(data, (AnnData, SpatialData), name="data")
 
-    normalize_choice(flavor, ["neighborhood", "utag", "cellcharter", "spatialleiden"], name="flavor")
-
     if isinstance(data, SpatialData) and table_key is None:
         raise TypeError("missing required keyword-only argument: 'table_key'")
 
