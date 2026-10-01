@@ -17,7 +17,6 @@ from numba import get_num_threads, njit, prange
 from numba.typed import List
 from numba_progress import ProgressBar
 from numpy.typing import NDArray
-from pandas import CategoricalDtype
 from scanpy import logging as logg
 from scipy.sparse import csr_array, csr_matrix, issparse
 from spatialdata import SpatialData
@@ -467,7 +466,11 @@ def nhood_enrichment(
     # Group structure for within-group shuffling, as a CSR-like (offsets, indices) pair in category
     # order with ascending indices per group. Without a `library_key` there is a single group
     # spanning all cells, which reproduces a plain global shuffle.
-    group_offsets, group_indices = _build_shuffle_groups(libraries, len(int_clust))
+    if libraries is None:
+        n_cells = len(int_clust)
+        group_offsets, group_indices = np.array([0, n_cells], dtype=np.int64), np.arange(n_cells, dtype=np.int64)
+    else:
+        group_offsets, group_indices = _group_offsets(libraries)
 
     # A single numba ``prange`` kernel shuffles + counts + normalizes per thread with the GIL
     # released, and ticks the progress bar from inside the loop; numba owns the parallelism.
@@ -858,22 +861,6 @@ def _local_clustering(indptr: NDArrayA, indices: NDArrayA, n: int) -> NDArrayA:
                     j += 1
         out[v] = two_triangles / (k * (k - 1))
     return out
-
-
-def _build_shuffle_groups(
-    libraries: pd.Series[CategoricalDtype] | None,
-    n_cells: int,
-) -> tuple[NDArrayA, NDArrayA]:
-    """Build a CSR-like ``(offsets, indices)`` description of the within-group shuffling.
-
-    ``indices[offsets[g]:offsets[g + 1]]`` are the cell indices of group ``g`` in ascending order,
-    with groups in category order. Without a ``library_key`` there is a single group spanning all
-    cells, which reproduces a global shuffle.
-    """
-    if libraries is None:
-        return np.array([0, n_cells], dtype=np.int64), np.arange(n_cells, dtype=np.int64)
-
-    return _group_offsets(libraries)
 
 
 @njit(inline="always", cache=True)
