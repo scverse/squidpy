@@ -22,9 +22,6 @@ from spatialdata._logging import logger as logg
 from squidpy._utils import RNGLike, SeedLike, legacy_random
 from squidpy.gr._clusterers import SweepableClusterer
 
-# `best_k` is a function of run-to-run variability, and therefore of the initialization.
-# Pinned so that the selected K does not silently change with a scikit-learn default.
-
 # The two spellings of the number-of-clusters parameter, in the order they are tried.
 # `n_clusters` first: SpectralClustering takes both, and there `n_components` is the
 # width of the spectral embedding, not the number of clusters.
@@ -241,7 +238,7 @@ def check_sweepable(clusterer: SweepableClusterer) -> str:
 
 
 def _gmm(model_params: Mapping[str, object] | None = None, **overrides: object) -> GaussianMixture:
-    """The default clusterer: a :class:`~sklearn.mixture.GaussianMixture` with a pinned init.
+    """The default clusterer: a :class:`~sklearn.mixture.GaussianMixture` with the kmeans init CellCharter uses.
 
     The parameters in ``_GMM_OWNED`` are the caller's, not *model_params*': the sweep sets
     them per fit, and a single-fit caller passes them as *overrides*. The caller's mapping
