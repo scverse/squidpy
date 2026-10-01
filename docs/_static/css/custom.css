@@ -3,197 +3,25 @@ div.cell_output table.dataframe {
     font-size: 0.8em;
 }
 
-.small {
-    font-size: 55%;
+/* the theme's primary colour (links, linked types, API names, the current page's bar in the nav) in the
+   logo's purple; a lighter shade in dark mode so it keeps its contrast */
+html[data-theme="light"] {
+    --pst-color-primary: #5b64b1;
+    --pst-color-inline-code-links: #5b64b1;
+}
+html[data-theme="dark"] {
+    --pst-color-primary: #949df0;
+    --pst-color-inline-code-links: #949df0;
 }
 
-div.version {
-    color: #ffd92c !important;
+/* a wider left nav, so the longer function names fit on one line */
+.bd-sidebar-primary {
+    flex-basis: 24%;
+    max-width: 400px;
 }
 
-.wy-nav-side {
-    background: #242335;
-}
-
-.wy-side-nav-search {
-    background-color: #242335;
-}
-
-.wy-side-nav-search input[type="text"] {
-    border-radius: 6px !important;
-}
-
-.wy-nav-content {
-    max-width: 950px;
-}
-
-.wy-menu-vertical a {
-    color: #eceef4;
-}
-
-.wy-menu-vertical li.current {
-    background: #f1f5fb;
-}
-
-.wy-menu-vertical li.toctree-l2.current > a {
-    background: #34377d2e;
-}
-
-.wy-menu-vertical li.toctree-l2.current li.toctree-l3 > a {
-    background: #34377d4a;
-}
-
-.wy-menu-vertical li.toctree-l3.current li.toctree-l4 > a {
-    background: #34377d7d;
-}
-
-.wy-menu-vertical a:hover {
-    background-color: #6b86b0;
-}
-
-.wy-menu-vertical li.current a:hover {
-    background: #bdcde6a3;
-}
-
-a {
-    color: #5b64b1;
-}
-
-.rst-content .viewcode-link {
-    color: #7013e1d9;
-}
-
-.highlight {
-    background: #f1f5fb !important;
-}
-
-.rst-content div[class^="highlight"] {
-    border: 1px solid #e4eaf2;
-}
-
-.wy-menu-vertical p.caption {
-    color: #ffd92c;
-}
-
-div.output_subarea.output_html.rendered_html.output_result {
-    overflow: auto;
-}
-
-/* function/class top bar */
-html.writer-html5
-    .rst-content
-    dl[class]:not(.option-list):not(.field-list):not(.footnote):not(
-        .glossary
-    ):not(.simple)
-    > dt {
-    color: #404040;
-    border-top: solid 4px #7013e1d9;
-    background: #ffd833a8;
-}
-
-/* class params */
-html.writer-html5
-    .rst-content
-    dl[class]:not(.option-list):not(.field-list):not(.footnote):not(
-        .glossary
-    ):not(.simple)
-    dl:not(.field-list)
-    > dt {
-    color: #404040;
-    border-left: solid 4px #7013e1d9;
-    background: #ffd8338f;
-}
-
-/* the other elements, but more specific - leave them be */
-code.docutils.literal.notranslate > span[class="pre"] {
-    font-weight: bold;
-    color: #404040;
-}
-
-/* odd rows in API */
-.rst-content table.docutils:not(.field-list) tr:nth-child(2n - 1) td {
-    background-color: #f6f6f3;
-}
-
-.rst-content div[class^="highlight"] pre {
-    padding: 8px;
-}
-
-.rst-content .seealso {
-    background: #fafae2 !important;
-}
-
-.rst-content .seealso .admonition-title {
-    background: #7013e1d9 !important;
-}
-
-/* Parameter entries render as `name : type` with the description on the next line
-   (see `_stack_parameter_types` in conf.py). Indent the description under its term. */
-.rst-content dl.field-list p.param-term {
-    margin-bottom: 0;
-}
-.rst-content dl.field-list p.param-desc {
-    margin-left: 1.5em;
-    margin-top: 0;
-}
-
-/* Signature line: the name is what a reader scans for, so give it size and let the module
-   path recede; a little air between parameters keeps a long signature readable. */
-.rst-content dl.py > dt.sig .sig-name {
-    font-size: 1.15em;
-    font-weight: 700;
-}
-.rst-content dl.py > dt.sig .sig-prename {
-    font-weight: 400;
-    opacity: 0.65;
-}
-.rst-content dl.py > dt.sig .sig-param {
-    padding: 0 0.12em;
-}
-.rst-content dl.py > dt.sig .sig-paren {
-    padding: 0 0.08em;
-}
-
-/* The theme lays a field list out as a two-column grid, which pushes every parameter to
-   the right of the "Parameters" label. Stack them instead: the label flush left as a
-   heading, the entries indented beneath it. */
-html.writer-html5 .rst-content dl.field-list {
-    display: block;
-}
-html.writer-html5 .rst-content dl.field-list > dt {
-    display: block;
-    padding-left: 0;
-    margin-bottom: 0.6em;
-}
-html.writer-html5 .rst-content dl.field-list > dd {
-    margin-left: 1.5em;
-    padding-left: 0;
-}
-.rst-content dl.field-list > dd > ul {
-    list-style: none;
-    margin-left: 0;
-    padding-left: 0;
-}
-.rst-content dl.field-list > dd > ul > li {
-    list-style: none;
-    margin-left: 0;
-}
-
-/* "Parameters", "Returns", "Notes" and friends divide a docstring into sections, so give
-   them a section heading's treatment (a rule and the palette's purple) rather than
-   leaving them looking like one more inline label. */
-html.writer-html5 .rst-content dl.field-list > dt,
-.rst-content dl.py p.rubric {
-    color: #5b3fa8;
-    font-size: 0.8em;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.09em;
-    border-bottom: 1px solid #ddd8ec;
-    padding-bottom: 0.35em;
-    margin-top: 1.8em;
-    margin-bottom: 0.9em;
-}
-html.writer-html5 .rst-content dl.field-list > dt .colon {
-    display: none;
+/* in the left nav, functions and classes (their pages are named `squidpy.*`) in code font */
+.bd-sidebar-primary a.reference[href*="squidpy."] {
+    font-family: var(--pst-font-family-monospace);
+    font-size: 0.9em;
 }

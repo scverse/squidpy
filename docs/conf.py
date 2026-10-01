@@ -27,6 +27,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
     "sphinx_autodoc_typehints",
+    "scanpydoc",
     "sphinx.ext.intersphinx",
     "sphinx.ext.autosummary",
     "sphinx.ext.mathjax",
@@ -67,7 +68,6 @@ intersphinx_mapping = dict(  # noqa: C408
 templates_path = ["_templates"]
 source_suffix = {".rst": "restructuredtext", ".ipynb": "myst-nb"}
 master_doc = "index"
-pygments_style = "sphinx"
 
 # myst
 nb_execution_mode = "off"
@@ -94,8 +94,7 @@ suppress_warnings = ["download.not_readable", "git.too_shallow"]
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-# no nav entry per documented object: a function page would list itself under its own nav
-# entry, and the theme's expand toggle would come and go with the page you are on
+# no nav entry per documented object: a function page would list itself under its own nav entry
 toc_object_entries = False
 autosummary_generate = True
 autodoc_member_order = "groupwise"
@@ -169,10 +168,16 @@ linkcheck_ignore = [
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_theme = "sphinx_rtd_theme"
+html_theme = "scanpydoc"
 html_static_path = ["_static"]
 html_logo = "_static/img/squidpy_horizontal.png"
-html_theme_options = {"navigation_depth": 5, "logo_only": True, "collapse_navigation": False}
+html_theme_options = {
+    "repository_url": "https://github.com/scverse/squidpy",
+    "repository_branch": "main",
+    "use_repository_button": True,
+    # the default of 4 drops the methods of the fit classes and the gr.neighbors classes from the nav
+    "max_navbar_depth": 5,
+}
 html_show_sphinx = False
 
 
@@ -187,7 +192,7 @@ def _params_defaults() -> dict[str, dict[str, object]]:
 
     Autodoc renders `Annotated` metadata verbatim (`Annotated[float, Default(1.0)]`),
     so once the defaults are in hand each annotation is replaced by its bare type.
-    `_stack_attribute_defaults` puts the default back, on the key's signature.
+    `_append_default` puts the default back where it belongs, in the description.
     """
     from typing import get_type_hints
 
@@ -206,100 +211,20 @@ def _params_defaults() -> dict[str, dict[str, object]]:
     return defaults
 
 
-def _stack_attribute_defaults(app, doctree, docname) -> None:  # type: ignore[no-untyped-def]
-    """Show a params key's default on its signature, as a parameter's is shown.
-
-    A key and a parameter are the same thing to a caller, so they should read the same:
-    ``name : type (default: value)``. Autodoc gives an attribute no default of its own
-    (a `TypedDict` key holds no value), so it is appended to the signature here.
-    """
-    from docutils import nodes
-    from sphinx import addnodes
-
-    for sig in doctree.findall(addnodes.desc_signature):
-        parent = sig.parent
-        if not isinstance(parent, addnodes.desc) or parent.get("objtype") != "attribute":
-            continue
-        cls_path, _, key = "".join(sig.get("ids", [""])[:1]).rpartition(".")
-        if not cls_path:
-            continue
-        defaults = _params_defaults().get(cls_path.rpartition(".")[2], {})
-        if key not in defaults:
-            continue
-        sig += addnodes.desc_annotation("", "", nodes.Text(f" (default: {defaults[key]!r})"))
-
-
-def _stack_parameter_types(app, doctree, docname) -> None:  # type: ignore[no-untyped-def]
-    """Render a parameter as ``name : type`` with its description on the next line.
-
-    Sphinx's Python domain renders a typed field inline (``name (type) - description``),
-    which puts the three things a reader scans for on one run-on line. Rewrite each entry
-    into two paragraphs so the name and its type read as a term and the prose sits under it.
-    """
-    from docutils import nodes
-
-    for field in doctree.findall(nodes.field):
-        name = field.next_node(nodes.field_name)
-        if name is None or not name.astext().startswith("Parameters"):
-            continue
-        # only the field's own entries: a description may itself contain a bullet list,
-        # and its items are prose, not parameters
-        entries = field.next_node(nodes.bullet_list)
-        if entries is None:
-            continue
-        for item in entries.children:
-            if not isinstance(item, nodes.list_item):
-                continue
-            para = item.next_node(nodes.paragraph)
-            if para is None or not para.children:
-                continue
-            split = None
-            for i, child in enumerate(para.children):
-                if isinstance(child, nodes.Text) and "\u2013" in child:
-                    split = i
-                    break
-            if split is None:
-                continue
-            sep = para.children[split].astext()
-            head = para.children[:split]
-            # the separator text also carries the closing paren of the type
-            rest = sep.split("\u2013", 1)[1].lstrip()
-            tail = ([nodes.Text(rest)] if rest else []) + para.children[split + 1 :]
-            # `name (type)` -> `name : type`, leaving any inner parens (a default) alone
-            parens = [i for i, c in enumerate(head) if isinstance(c, nodes.Text) and c.astext().strip() in "()"]
-            opening = next((i for i in parens if head[i].astext().strip() == "("), None)
-            closing = next((i for i in reversed(parens) if head[i].astext().strip() == ")"), None)
-            if opening is not None:
-                head[opening] = nodes.Text(" : ")
-            if closing is not None:
-                del head[closing]
-
-            # A long parameter runs to several blocks. Only the inline run belongs in the
-            # description paragraph: nesting a block inside it produces a `<p>` within a
-            # `<p>`. So blocks stay siblings, and every piece is classed as description.
-            def _is_block(node: object) -> bool:
-                # `Body` is no help: an `image` is both a `Body` and inline
-                return isinstance(node, nodes.Element) and not isinstance(node, nodes.Inline)
-
-            cut = next((i for i, node in enumerate(tail) if _is_block(node)), len(tail))
-            inline, blocks = tail[:cut], tail[cut:]
-            blocks += [child for child in item.children if child is not para]
-            if not head:  # nothing before the separator: not a `name (type) - desc` entry
-                continue
-            term = nodes.paragraph("", "", *head, classes=["param-term"])
-            body = nodes.paragraph("", "", *inline, classes=["param-desc"])
-            for block in blocks:
-                if isinstance(block, nodes.Element):  # a stray Text carries no classes
-                    block["classes"] = [*block.get("classes", []), "param-desc"]
-            item.clear()
-            item += ([term, body] if inline else [term]) + blocks
+def _append_default(app, what, name, obj, options, lines) -> None:  # type: ignore[no-untyped-def]
+    """Append ``Default: <repr>`` to each documented params key."""
+    cls_path, _, key = name.rpartition(".")
+    if what != "attribute" or not cls_path:
+        return
+    defaults = _params_defaults().get(cls_path.rpartition(".")[2], {})
+    if key in defaults:
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines.append(f"Default: ``{defaults[key]!r}``")
 
 
 def setup(app: Sphinx) -> None:
     app.connect("builder-inited", lambda _app: _params_defaults())
-    app.connect("doctree-resolved", _stack_parameter_types)
-    app.connect("doctree-resolved", _stack_attribute_defaults)
+    app.connect("autodoc-process-docstring", _append_default)
     app.add_css_file("css/custom.css")
-    app.add_css_file("css/sphinx_gallery.css")
-    app.add_css_file("css/nbsphinx.css")
     app.add_css_file("css/dataframe.css")  # had to add this manually
