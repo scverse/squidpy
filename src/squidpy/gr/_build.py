@@ -438,9 +438,9 @@ def spatial_neighbors_from_builder(
     %(adata)s
     builder
         Graph construction strategy to execute. Built-in builders subclass
-        {{class}}`~squidpy.gr.neighbors.GraphBuilderCSR`, while custom backends
+        :class:`~squidpy.gr.neighbors.GraphBuilderCSR`, while custom backends
         can implement the more generic
-        {{class}}`~squidpy.gr.neighbors.GraphBuilder` interface directly.
+        :class:`~squidpy.gr.neighbors.GraphBuilder` interface directly.
         Reusable post-build operations are also exposed via
         :class:`~squidpy.gr.neighbors.DistanceIntervalPostprocessor`,
         :class:`~squidpy.gr.neighbors.PercentilePostprocessor`, and
