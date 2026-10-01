@@ -7,7 +7,7 @@ primitive (:mod:`._reinhard`, :mod:`._mask`, :mod:`._conversion`).
 
 Both entry points dispatch on the fitting ``method`` (``"reinhard"`` colour
 transfer, or ``"macenko"``/``"vahadane"`` absorbance decomposition); a third
-entry, :func:`decompose_stains`, projects an image onto its stain matrix.
+entry, :meth:`~squidpy.experimental.im.StainFit.decompose`, projects an image onto its stain matrix.
 """
 
 from __future__ import annotations
@@ -18,25 +18,21 @@ from typing import Any, Literal
 import numpy as np
 import spatialdata as sd
 import xarray as xr
-from numpy.typing import DTypeLike
 from spatialdata.models import Image2DModel
 from spatialdata.transformations import get_transformation
 
 from squidpy._params import resolve_params
 from squidpy._utils import _get_scale_factors
 from squidpy.experimental.im._stain._constants import RUIFROK_HE
-from squidpy.experimental.im._stain._conversion import _check_channel_dim, cast_to_image_dtype
+from squidpy.experimental.im._stain._conversion import _check_channel_dim
 from squidpy.experimental.im._stain._decomposition import (
     MacenkoParams,
     VahadaneParams,
-    apply_decomposition,
-    decompose_to_concentrations,
     fit_decomposition,
 )
-from squidpy.experimental.im._stain._reference import StainMethod, StainReference
+from squidpy.experimental.im._stain._reference import StainFit, StainMethod
 from squidpy.experimental.im._stain._reinhard import (
     ReinhardParams,
-    apply_reinhard,
     fit_reinhard,
 )
 from squidpy.experimental.im._stain._white_point import (
@@ -58,8 +54,6 @@ _METHOD_PARAMS: dict[str, type[ReinhardParams | MacenkoParams | VahadaneParams]]
     "vahadane": VahadaneParams,
 }
 _VALID_METHODS = tuple(_METHOD_PARAMS)
-_DECOMPOSITION_METHODS = ("macenko", "vahadane")
-_CONCENTRATION_CHANNELS = ["hematoxylin", "eosin", "residual"]
 
 # Public union accepted by the method_params argument of the dispatchers.
 MethodParams = ReinhardParams | MacenkoParams | VahadaneParams | Mapping[str, Any] | None
@@ -198,7 +192,7 @@ def estimate_white_point(
     Returns
     -------
     Shape-``(3,)`` white point; pass it as ``white_point`` to
-    :func:`fit_stain_reference` / :func:`decompose_stains`.
+    :func:`fit_stain_reference` / :meth:`~squidpy.experimental.im.StainFit.decompose`.
     """
     da = _resolve_image(sdata, image_key=image_key, scale=scale, prefer="coarsest")
     validate_rgb_range(da)
@@ -217,7 +211,7 @@ def fit_stain_reference(
     tissue_mask_key: str | None = None,
     max_angle_deg: float = 45.0,
     canonical_reference: Mapping[str, np.ndarray] | None = None,
-) -> StainReference:
+) -> StainFit:
     """Fit a stain reference from an image in a :class:`~spatialdata.SpatialData` object.
 
     Parameters
@@ -228,8 +222,8 @@ def fit_stain_reference(
         Key of the RGB image in ``sdata.images`` to fit on.
     method
         Fitting method: ``"macenko"`` (default) or ``"vahadane"`` (physical
-        stain-matrix decomposition, usable by both :func:`normalize_stains` and
-        :func:`decompose_stains`), or ``"reinhard"`` (faster statistical colour
+        stain-matrix decomposition, usable by both :meth:`~squidpy.experimental.im.StainFit.transform` and
+        :meth:`~squidpy.experimental.im.StainFit.decompose`), or ``"reinhard"`` (faster statistical colour
         transfer, no stain separation). Macenko is the default because its one
         documented weakness - artifact pixels contaminating the fit - is removed
         by the mandatory tissue mask.
@@ -264,7 +258,7 @@ def fit_stain_reference(
 
     Returns
     -------
-    The fitted :class:`StainReference`. Nothing is written to ``sdata``.
+    The fitted :class:`~squidpy.experimental.im.StainFit`. Nothing is written to ``sdata``.
     """
     if method not in _VALID_METHODS:
         raise ValueError(f"Unknown method {method!r}; expected one of {list(_VALID_METHODS)}.")
@@ -286,204 +280,3 @@ def fit_stain_reference(
         reference=reference,
         max_angle_deg=max_angle_deg,
     )
-
-
-def normalize_stains(
-    sdata: sd.SpatialData,
-    *,
-    image_key: str,
-    reference: StainReference,
-    scale: str | Literal["auto"] = "auto",
-    method_params: MethodParams = None,
-    image_key_added: str | None = None,
-    inplace: bool = True,
-    output_dtype: DTypeLike | None = None,
-    tissue_mask_key: str | None = None,
-    preserve_background: bool = True,
-) -> xr.DataArray | None:
-    """Normalize an image to a fitted stain reference.
-
-    Parameters
-    ----------
-    sdata
-        SpatialData object containing the source image.
-    image_key
-        Key of the RGB image in ``sdata.images`` to normalize.
-    reference
-        A :class:`StainReference` fitted with :func:`fit_stain_reference`.
-        Dispatch is on ``reference.method``.
-    scale
-        Scale level to normalize. ``"auto"`` (default) uses the finest level
-        so the result is not downsampled; source statistics are reduced
-        lazily so memory stays bounded.
-    method_params
-        Params matching ``reference.method`` (mapping or ``None``).
-    image_key_added
-        Key for the written image when ``inplace=True``. If ``None`` (default),
-        ``f"{image_key}_normalized"`` is used. Ignored when ``inplace=False``.
-    inplace
-        If ``True`` (default), write the normalized image to
-        ``sdata.images[image_key_added]`` (rebuilding the pyramid for multiscale
-        sources, preserving transforms) and return ``None``; raises if the key
-        already exists. If ``False``, leave ``sdata`` untouched and return the
-        lazy normalized :class:`~xarray.DataArray`.
-    output_dtype
-        Dtype of the result. If ``None`` (default), the source image's dtype is
-        used. The reconstruction is clipped to that dtype's valid range and
-        rounded (for integer dtypes) at the write boundary.
-    tissue_mask_key
-        Key of a tissue-label element in ``sdata.labels`` restricting the
-        *source* statistics to tissue pixels. As for
-        :func:`fit_stain_reference`, a tissue mask is required (defaults to
-        ``f"{image_key}_tissue"``; raises if missing).
-    preserve_background
-        If ``True`` (default), non-tissue (background) pixels are passed through
-        unchanged from the source image, so the normalization recolours only
-        tissue. The colour map is a global linear transform that would otherwise
-        tint background/white pixels. Set ``False`` for full-frame normalization.
-
-    Returns
-    -------
-    ``None`` if ``inplace=True`` (the image is written), otherwise the lazy
-    normalized :class:`xarray.DataArray`.
-    """
-    da = _resolve_image(sdata, image_key=image_key, scale=scale, prefer="finest")
-    target_key = image_key_added if image_key_added is not None else f"{image_key}_normalized"
-    if inplace and target_key in sdata.images:
-        raise ValueError(f"image_key_added={target_key!r} already exists in sdata.images.")
-    params = resolve_params(method_params, _METHOD_PARAMS[reference.method])
-    # Source statistics (Reinhard mu/sigma or the decomposition source matrix)
-    # are reduced on a coarse level with a tissue mask; the lazy transform is
-    # then applied to the full-resolution `da`.
-    fit_rgb = _resolve_image(sdata, image_key=image_key, scale=scale, prefer="coarsest")
-    validate_rgb_range(fit_rgb)  # reject mis-typed source (e.g. 0-255 float) before the dtype-clipped reconstruction
-    tissue_mask = _resolve_tissue_bool_mask(sdata, image_key=image_key, fit_da=fit_rgb, tissue_mask_key=tissue_mask_key)
-    out_dtype = da.dtype if output_dtype is None else np.dtype(output_dtype)  # clip range + final cast
-    if reference.method == "reinhard":
-        normalized = apply_reinhard(
-            da, reference, params, fit_rgb=fit_rgb, tissue_mask=tissue_mask, out_dtype=out_dtype
-        )
-    else:
-        normalized = apply_decomposition(
-            da, reference, params, fit_rgb=fit_rgb, tissue_mask=tissue_mask, out_dtype=out_dtype
-        )
-
-    if preserve_background:
-        # Keep non-tissue pixels byte-identical to the source: the global colour
-        # map would otherwise recolour background/white pixels (HistomicsTK's
-        # `mask_out`). Stays lazy - the mask aligns to `da` without materialising.
-        keep = _resolve_output_tissue_mask(sdata, image_key=image_key, target_da=da, tissue_mask_key=tissue_mask_key)
-        normalized = normalized.where(keep, da)
-
-    # Deferred cast at the write boundary: the reconstruction was kept in float
-    # (clipped to `out_dtype`'s range); round + cast here so the stored image is
-    # the requested dtype and integer background stays byte-identical.
-    normalized = cast_to_image_dtype(normalized, out_dtype)
-
-    # The output is a 3-channel RGB image; tag it r/g/b so RGB-aware viewers
-    # (spatialdata-plot) use one hue-preserving scale, not per-channel auto-contrast.
-    normalized = normalized.assign_coords(c=["r", "g", "b"])
-
-    if not inplace:
-        return normalized
-    _write_image(sdata, source_node=sdata.images[image_key], image_key_added=target_key, data_array=normalized)
-    return None
-
-
-def decompose_stains(
-    sdata: sd.SpatialData,
-    *,
-    image_key: str,
-    reference_or_method: StainReference | Literal["macenko", "vahadane"],
-    scale: str | Literal["auto"] = "auto",
-    method_params: MethodParams = None,
-    white_point: np.ndarray | None = None,
-    image_key_added: str | None = None,
-    inplace: bool = True,
-    output_dtype: DTypeLike = np.float16,
-    tissue_mask_key: str | None = None,
-    include_residual: bool = True,
-) -> dict[str, xr.DataArray] | None:
-    """Decompose an image into separate per-stain concentration maps.
-
-    Parameters
-    ----------
-    sdata, image_key
-        The SpatialData object and the RGB image key to decompose.
-    reference_or_method
-        Either a decomposition :class:`StainReference` (its stain matrix and
-        white point are used) or a method name (``"macenko"``/``"vahadane"``)
-        to fit on this image first. The reference is the provenance record of
-        how the maps were produced (method, stain matrix, white point).
-    scale, method_params, white_point, tissue_mask_key
-        As for :func:`fit_stain_reference` (only used when a method name is
-        given; a reference is projected as-is and needs no tissue mask).
-    image_key_added
-        Key *prefix* for the written images when ``inplace=True``. If ``None``
-        (default), ``image_key`` is used, so each stain is written as its own
-        single-channel image ``sdata.images[f"{image_key}_{stain}"]`` (e.g.
-        ``f"{image_key}_hematoxylin"``). Ignored when ``inplace=False``.
-    inplace
-        If ``True`` (default), write each stain as a separate single-channel
-        image under the ``image_key_added`` prefix and return ``None``; the
-        write is atomic (all target keys are validated free before any is
-        written). If ``False``, leave ``sdata`` untouched and return the maps
-        as a dict.
-    output_dtype
-        Dtype of the concentration maps. Defaults to ``float16`` (half the
-        storage; ~3 significant figures, adequate for concentrations); pass
-        ``float32`` for strict quantification.
-    include_residual
-        If ``True`` (default), also produce the ``"residual"`` map. The residual
-        is the absorbance along the complement direction - a diagnostic of
-        decomposition quality (extra chromogen, artifacts, or a poor fit), not a
-        biological stain. Set ``False`` to keep only ``hematoxylin``/``eosin``.
-
-    Returns
-    -------
-    ``None`` if ``inplace=True`` (the maps are written as separate images),
-    otherwise a ``dict`` mapping each stain name to its ``(y, x)`` concentration
-    :class:`~xarray.DataArray` (``"hematoxylin"``, ``"eosin"``, and
-    ``"residual"`` unless dropped).
-    """
-    da = _resolve_image(sdata, image_key=image_key, scale=scale, prefer="finest")
-    if isinstance(reference_or_method, StainReference):
-        reference = reference_or_method
-        if reference.method not in _DECOMPOSITION_METHODS or reference.stain_matrix is None:
-            raise ValueError("decompose_stains requires a macenko/vahadane reference with a stain matrix.")
-        stain_matrix, bg = reference.stain_matrix, reference.white_point
-    else:
-        if reference_or_method not in _DECOMPOSITION_METHODS:
-            raise ValueError(f"method must be one of {list(_DECOMPOSITION_METHODS)}; got {reference_or_method!r}.")
-        reference = fit_stain_reference(
-            sdata,
-            image_key=image_key,
-            method=reference_or_method,
-            scale=scale,
-            method_params=method_params,
-            white_point=white_point,
-            tissue_mask_key=tissue_mask_key,
-        )
-        stain_matrix, bg = reference.stain_matrix, reference.white_point
-
-    names = ["hematoxylin", "eosin"] + (["residual"] if include_residual else [])
-    prefix = image_key_added if image_key_added is not None else image_key
-    target_keys = [f"{prefix}_{name}" for name in names]
-    if inplace:  # validate all keys free up front, so a partial write can't leave a half-decomposed sdata
-        clashes = [k for k in target_keys if k in sdata.images]
-        if clashes:
-            raise ValueError(f"decompose_stains would overwrite existing image(s): {clashes}.")
-
-    concentrations = decompose_to_concentrations(da, stain_matrix, bg).assign_coords(c=_CONCENTRATION_CHANNELS)
-    concentrations = concentrations.astype(np.dtype(output_dtype))
-
-    if not inplace:
-        return {name: concentrations.sel(c=name) for name in names}
-
-    source = sdata.images[image_key]
-    for name, key in zip(names, target_keys, strict=True):
-        # keep the c dim (length 1) so Image2DModel.parse accepts it
-        _write_image(
-            sdata, source_node=source, image_key_added=key, data_array=concentrations.sel(c=[name]), c_coords=[name]
-        )
-    return None
