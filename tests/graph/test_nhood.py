@@ -117,8 +117,8 @@ def test_centrality_scores(nhood_data: AnnData):
 
 
 def test_centrality_scores_networkx_parity(nhood_data: AnnData):
-    # centrality_scores swapped networkx for rustworkx (+ a numba clustering kernel); pin the
-    # numeric parity of all three group measures against networkx (still a dependency).
+    # centrality_scores computes the group measures in numba; pin their numeric parity
+    # against networkx (still a dependency).
     import networkx as nx
 
     adata = nhood_data
