@@ -189,7 +189,7 @@ def _permutation_moments_counts(  # noqa: PLR0917, numba requires positional arg
     group_indices: NDArrayA,
     n_cls: int,
     observed: NDArrayA,
-    generators: Any,
+    rngs: Any,
     progress: Any,
 ) -> tuple[NDArrayA, NDArrayA]:
     """Exact integer moments of the permutation distribution for ``normalization='none'``.
@@ -202,13 +202,13 @@ def _permutation_moments_counts(  # noqa: PLR0917, numba requires positional arg
 
     Returns ``(sum_d, sum_d2)``; the caller turns these into the mean, std and z-score.
     """
-    n_perms = len(generators)
+    n_perms = len(rngs)
     sum_d = np.zeros((n_cls, n_cls), dtype=np.int64)
     sum_d2 = np.zeros((n_cls, n_cls), dtype=np.int64)
     for p in prange(n_perms):
         # explicit int64 index: under prange the loop var is uint64 and indexing the typed list
         # would otherwise trigger a (harmless) uint64->int64 NumbaTypeSafetyWarning
-        rng = generators[np.int64(p)]
+        rng = rngs[np.int64(p)]
         shuffled = _shuffled_labels(int_clust, group_offsets, group_indices, rng)
         out = _nenrich(indices, indptr, shuffled, n_cls)
 
@@ -238,7 +238,7 @@ def _permutation_moments_normalized(  # noqa: PLR0917, numba requires positional
     norm_code: int,
     sizes: NDArrayA,
     observed: NDArrayA,
-    generators: Any,
+    rngs: Any,
     progress: Any,
 ) -> tuple[NDArrayA, NDArrayA]:
     """Moments of the permutation distribution for the ``'total'`` / ``'conditional'`` modes.
@@ -251,11 +251,11 @@ def _permutation_moments_normalized(  # noqa: PLR0917, numba requires positional
 
     Returns ``(sum_d, sum_d2)``; the caller turns these into the mean, std and z-score.
     """
-    n_perms = len(generators)
+    n_perms = len(rngs)
     sum_d = np.zeros((n_cls, n_cls), dtype=np.float64)
     sum_d2 = np.zeros((n_cls, n_cls), dtype=np.float64)
     for p in prange(n_perms):
-        rng = generators[np.int64(p)]
+        rng = rngs[np.int64(p)]
         shuffled = _shuffled_labels(int_clust, group_offsets, group_indices, rng)
 
         if norm_code == 1:  # total
@@ -467,7 +467,7 @@ def nhood_enrichment(
     start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` thread(s)")
     norm_code = _NORM_CODES[normalization]
 
-    generators = List(np.random.default_rng(rng).spawn(n_perms))
+    rngs = List(np.random.default_rng(rng).spawn(n_perms))
 
     # Group structure for within-group shuffling, as a CSR-like (offsets, indices) pair in category
     # order with ascending indices per group. Without a `library_key` there is a single group
@@ -490,7 +490,7 @@ def nhood_enrichment(
                 group_indices,
                 n_cls,
                 np.ascontiguousarray(count_normalized, dtype=np.int64),
-                generators,
+                rngs,
                 progress,
             )
         else:
@@ -504,7 +504,7 @@ def nhood_enrichment(
                 norm_code,
                 cluster_sizes,
                 np.ascontiguousarray(count_normalized, dtype=np.float64),
-                generators,
+                rngs,
                 progress,
             )
 

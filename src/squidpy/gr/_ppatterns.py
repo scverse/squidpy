@@ -243,7 +243,7 @@ def spatial_autocorr(
     if n_perms is not None:
         assert_positive(n_perms, name="n_perms")
         perms = list(np.arange(n_perms))
-        generators = np.random.default_rng(rng).spawn(n_perms)
+        rngs = np.random.default_rng(rng).spawn(n_perms)
 
         score_perms = parallelize(
             _score_helper,
@@ -252,7 +252,7 @@ def spatial_autocorr(
             n_jobs=n_jobs,
             backend=backend,
             show_progress_bar=show_progress_bar,
-        )(mode=mode, g=g, vals=vals, generators=generators)
+        )(mode=mode, g=g, vals=vals, rngs=rngs)
     else:
         score_perms = None
 
@@ -283,7 +283,7 @@ def _score_helper(
     mode: SpatialAutocorr,
     g: spmatrix,
     vals: NDArrayA,
-    generators: Sequence[np.random.Generator],
+    rngs: Sequence[np.random.Generator],
     *,
     queue: SigQueue | None = None,
 ) -> pd.DataFrame:
@@ -291,7 +291,7 @@ def _score_helper(
     func = morans_i if mode == SpatialAutocorr.MORAN else gearys_c
 
     for i, p in enumerate(perms):
-        rng = generators[p]
+        rng = rngs[p]
         idx_shuffle = rng.permutation(g.shape[0])
         score_perms[i, :] = func(g[idx_shuffle, :], vals)
 
