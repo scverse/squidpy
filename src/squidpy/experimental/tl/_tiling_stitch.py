@@ -55,7 +55,6 @@ _SHAPE_FEATURES: tuple[str, ...] = ("merge_compactness", "merge_solidity")
 _METHOD_KEY = "tiling_stitch"
 
 
-
 # Dataclasses
 
 

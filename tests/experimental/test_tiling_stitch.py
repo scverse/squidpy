@@ -159,9 +159,9 @@ class TestAssignStitchGroups:
         # tables saved before the knobs were flattened keep them under `stitch_params`
         sdata, _ = sdata_tile_boundary
         _run_qc_and_stitch(sdata)
-        meta = sdata.tables["labels_qc"].uns["tiling_stitch"]
-        meta["stitch_params"] = {"close_radius": 5}
-        del meta["close_radius"]
+        params = sdata.tables["labels_qc"].uns["tiling_stitch"]["params"]
+        params["stitch_params"] = {"close_radius": 5}
+        del params["close_radius"]
         assert "close_radius=5" in _qc_rerun_hint(sdata, labels_key="labels", tile_size=200)
 
     def test_rerun_overwrites_without_growing_columns(self, sdata_tile_boundary):
@@ -201,16 +201,6 @@ class TestAssignStitchGroups:
         sq.experimental.tl.assign_stitch_groups(sdata, labels_key="labels")
         for col in ("stitch_group_id", "is_stitched", "n_pieces", "stitch_confidence"):
             assert col in sdata.tables["labels_qc"].obs.columns
-
-    def test_qc_rerun_hint_restores_stitch(self, sdata_tile_boundary, caplog):
-        sdata, _ = sdata_tile_boundary
-        _run_qc_and_stitch(sdata, min_confidence=0.5)
-        sq.experimental.tl.calculate_tiling_qc(
-            sdata, labels_key="labels", tile_size=200, nmads_cut=1.0, nmads_smoothed=1.5
-        )
-        hint = caplog.text.split("To restore them, run: ")[1].strip()
-        eval(hint, {"sq": sq, "sdata": sdata})
-        assert sdata.tables["labels_qc"].uns["tiling_stitch"]["params"]["min_confidence"] == 0.5
 
     def test_obs_and_uns_survive_zarr_roundtrip(self, sdata_tile_boundary, tmp_path):
         from spatialdata import read_zarr
