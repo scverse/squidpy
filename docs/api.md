@@ -158,8 +158,6 @@ Under active development: names and signatures here may change without a depreca
 
 ### Image `im`
 
-#### Features, tiling and rasterization
-
 ```{eval-rst}
 .. module:: squidpy.experimental.im
 .. currentmodule:: squidpy.experimental
@@ -169,35 +167,8 @@ Under active development: names and signatures here may change without a depreca
     im.calculate_image_features
     im.make_tiles
     im.make_tiles_from_spots
-```
-
-#### Quality control
-
-```{eval-rst}
-.. currentmodule:: squidpy.experimental
-.. autosummary::
-    :toctree: api
-
     im.qc_image
-```
-
-#### Tissue detection
-
-```{eval-rst}
-.. currentmodule:: squidpy.experimental
-.. autosummary::
-    :toctree: api
-
     im.detect_tissue
-```
-
-#### Stain normalization
-
-```{eval-rst}
-.. currentmodule:: squidpy.experimental
-.. autosummary::
-    :toctree: api
-
     im.fit_stain_reference
     im.estimate_white_point
     im.StainFit
