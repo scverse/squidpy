@@ -1,8 +1,9 @@
 """Alignment for :mod:`squidpy.experimental.tl`.
 
-Layered so the numerics never touch a container: :mod:`._api` holds the public
-``align_*`` functions, which resolve the ``*_key`` arguments to plain arrays and hand
-them to the array-in / array-out estimators in :mod:`._landmark` and :mod:`._stalign`.
+:mod:`._api` holds the public ``align_*`` functions, which resolve the ``*_key``
+arguments to plain arrays and hand them to the array-in / array-out estimators in
+:mod:`._landmark` and :mod:`._stalign`; the fit classes' container methods call back
+into :mod:`._api` and :mod:`._io`.
 Importing stays cheap: JAX is pulled in only when a STalign fit actually runs.
 """
 

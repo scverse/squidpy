@@ -3,8 +3,7 @@
 Holds the writes that are *not* plain array writes: registering a fitted affine as a
 SpatialData transformation, and encoding a fit for ``uns``.
 
-The fit estimators in :mod:`._stalign` / :mod:`._landmark` operate on plain arrays and
-never see a container.
+The fit estimators in :mod:`._stalign` / :mod:`._landmark` operate on plain arrays.
 """
 
 from __future__ import annotations
