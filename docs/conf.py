@@ -172,7 +172,7 @@ linkcheck_ignore = [
 html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
 html_logo = "_static/img/squidpy_horizontal.png"
-html_theme_options = {"navigation_depth": 5, "logo_only": True}
+html_theme_options = {"navigation_depth": 5, "logo_only": True, "collapse_navigation": False}
 html_show_sphinx = False
 
 
