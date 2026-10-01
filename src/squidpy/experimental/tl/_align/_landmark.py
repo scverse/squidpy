@@ -19,7 +19,11 @@ def check_spans_plane(points: np.ndarray, *, name: str, method: str) -> None:
         )
 
 
-def _fit(ref: np.ndarray, query: np.ndarray, *, method: Literal["similarity", "affine"]) -> NDArrayA:
+def fit_landmarks(ref: np.ndarray, query: np.ndarray, *, method: Literal["similarity", "affine"]) -> NDArrayA:
+    """Fit the homogeneous ``(3, 3)`` ``(x, y)`` affine mapping paired ``query`` landmarks onto ``ref``.
+
+    The core of :func:`~squidpy.experimental.tl.align_landmarks`, which documents ``method``.
+    """
     ref = validate_xy(ref, name="ref")
     query = validate_xy(query, name="query")
     if ref.shape != query.shape:
@@ -67,39 +71,3 @@ def apply_affine(matrix: np.ndarray, points: np.ndarray) -> NDArrayA:
     if coords.ndim != 2 or coords.shape[1] != 2:
         raise ValueError(f"Expected an (N, 2) coordinate array, found shape {coords.shape}.")
     return coords @ matrix[:2, :2].T + matrix[:2, 2]
-
-
-def fit_similarity(ref: np.ndarray, query: np.ndarray) -> NDArrayA:
-    """4-DOF similarity fit (rotation + uniform scale + translation), via skimage.
-
-    Never a reflection: a mirrored query is fitted by the best rotation instead. This differs
-    from napari-spatialdata, whose similarity may reflect, so the two can disagree when the
-    landmarks are mirrored (or nearly collinear).
-
-    Parameters
-    ----------
-    ref, query
-        Pre-paired ``(N, 2)`` ``(x, y)`` landmark arrays (``N >= 2``), at two distinct
-        places at least: a line determines a similarity.
-
-    Returns
-    -------
-    The homogeneous ``(3, 3)`` affine mapping query onto ref, in ``(x, y)``.
-    """
-    return _fit(ref, query, method="similarity")
-
-
-def fit_affine(ref: np.ndarray, query: np.ndarray) -> NDArrayA:
-    """6-DOF affine fit (rotation + non-uniform scale + shear + translation), via skimage.
-
-    Parameters
-    ----------
-    ref, query
-        Pre-paired ``(N, 2)`` ``(x, y)`` landmark arrays (``N >= 3``), not collinear:
-        a line leaves the 6 degrees of freedom underdetermined.
-
-    Returns
-    -------
-    The homogeneous ``(3, 3)`` affine mapping query onto ref, in ``(x, y)``.
-    """
-    return _fit(ref, query, method="affine")

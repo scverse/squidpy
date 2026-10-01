@@ -1,10 +1,8 @@
 """The public alignment functions, built on the array-in / array-out estimators.
 
 Thin orchestrators: resolve the ``*_key`` arguments to in-memory arrays and call the
-estimator. The estimators in :mod:`._stalign` never see a container: which is why the
-container-level helpers here back the fit's methods rather than being public themselves,
-leaving those methods thin delegators and the layering intact. SpatialData transformation
-write-back lives in :mod:`._io`.
+estimator, which never sees a container. SpatialData transformation write-back lives in
+:mod:`._io`.
 
 Fitting and writing are separate calls for STalign. A diffeomorphism has no SpatialData
 representation, so the fit cannot live in a container: it is the return value, and its
@@ -26,22 +24,21 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-from typing import TYPE_CHECKING, Literal, Unpack
+from typing import TYPE_CHECKING, Any, Literal, Unpack
 
 import numpy as np
 from anndata import AnnData
 from spatialdata import SpatialData
 
 from squidpy._validators import normalize_choice
+from squidpy.types import StalignImageParams, StalignObsParams, StalignVolumeParams
 
 from ._io import writeback_affine_sdata
-from ._landmark import apply_affine, fit_affine, fit_similarity
+from ._landmark import apply_affine, fit_landmarks
 from ._stalign import (
+    StalignFit,
     StalignImageFit,
-    StalignImageParams,
-    StalignObsParams,
     StalignVolumeFit,
-    StalignVolumeParams,
     fit_stalign_image,
     fit_stalign_obs,
     fit_stalign_volume,
@@ -287,17 +284,43 @@ def stalign_align_image(
     The fit, carrying both images' physical axes, so warping and the dense deformation
     need no axes from the caller.
     """
+    return _fit_raster(
+        fit_stalign_image,
+        sdata_ref,
+        sdata_query,
+        image_key,
+        ref_coordinate_system=ref_coordinate_system,
+        query_coordinate_system=query_coordinate_system,
+        ref_ndim=2,
+        landmarks_ref=landmarks_ref,
+        landmarks_query=landmarks_query,
+        **solver_params,
+    )
+
+
+def _fit_raster[F: StalignFit](
+    fit_fn: Callable[..., F],
+    sdata_ref: SpatialData,
+    sdata_query: SpatialData | None,
+    image_key: str | tuple[str, str],
+    *,
+    ref_coordinate_system: str,
+    query_coordinate_system: str,
+    ref_ndim: int,
+    **fit_kwargs: Any,
+) -> F:
+    """Read both image elements, fit them on their physical axes and stamp the query frame on the fit."""
     ref_image, query_image = _resolve_pair(image_key, name="image_key")
     query_container = _query_of(
         sdata_ref, sdata_query, ref_address=(ref_image,), query_address=(query_image,), key_name="image_key"
     )
 
-    ref_array = _read_image(sdata_ref, ref_image, side="reference")
+    ref_array = _read_image(sdata_ref, ref_image, side="reference", ndim=ref_ndim)
     query_array = _read_image(query_container, query_image, side="query")
     # The estimator is container-agnostic, so the query frame is stamped on here rather
     # than threaded through it: it is what `transform` has to check coordinates against.
     return dataclasses.replace(
-        fit_stalign_image(
+        fit_fn(
             ref=ref_array,
             query=query_array,
             ref_axes=_element_axes(
@@ -306,9 +329,7 @@ def stalign_align_image(
             query_axes=_element_axes(
                 query_container, query_image, query_array, coordinate_system=query_coordinate_system, side="query"
             ),
-            landmarks_ref=landmarks_ref,
-            landmarks_query=landmarks_query,
-            **solver_params,
+            **fit_kwargs,
         ),
         coordinate_system=query_coordinate_system,
     )
@@ -447,33 +468,19 @@ def stalign_align_volume(
     The fit, carrying the reference volume's ``(z, y, x)`` axes and the section's ``(y, x)``.
     Maps section points into the volume; there is no image to warp at rank 3.
     """
-    ref_image, query_image = _resolve_pair(image_key, name="image_key")
-    query_container = _query_of(
-        sdata_ref, sdata_query, ref_address=(ref_image,), query_address=(query_image,), key_name="image_key"
-    )
-
-    ref_array = _read_image(sdata_ref, ref_image, side="reference", ndim=3)
-    query_array = _read_image(query_container, query_image, side="query")
-
-    # The estimator is container-agnostic, so the query frame is stamped on here rather
-    # than threaded through it: it is what `transform` has to check coordinates against.
-    return dataclasses.replace(
-        fit_stalign_volume(
-            ref=ref_array,
-            query=query_array,
-            ref_axes=_element_axes(
-                sdata_ref, ref_image, ref_array, coordinate_system=ref_coordinate_system, side="reference"
-            ),
-            query_axes=_element_axes(
-                query_container, query_image, query_array, coordinate_system=query_coordinate_system, side="query"
-            ),
-            initial_slice=initial_slice,
-            initial_rotation=initial_rotation,
-            initial_scale=initial_scale,
-            initial_affine=initial_affine,
-            **solver_params,
-        ),
-        coordinate_system=query_coordinate_system,
+    return _fit_raster(
+        fit_stalign_volume,
+        sdata_ref,
+        sdata_query,
+        image_key,
+        ref_coordinate_system=ref_coordinate_system,
+        query_coordinate_system=query_coordinate_system,
+        ref_ndim=3,
+        initial_slice=initial_slice,
+        initial_rotation=initial_rotation,
+        initial_scale=initial_scale,
+        initial_affine=initial_affine,
+        **solver_params,
     )
 
 
@@ -542,7 +549,7 @@ def align_landmarks(
     the query container itself. Copy it first if the original must survive.
     """
     method = normalize_choice(method, ("similarity", "affine"), name="method")
-    fit_fn = fit_similarity if method == "similarity" else fit_affine
+    fit_fn = functools.partial(fit_landmarks, method=method)
     if key_added is not None and target_coordinate_system is not None:
         raise ValueError(
             "`key_added` and `target_coordinate_system` are mutually exclusive: the first materialises "
@@ -553,7 +560,7 @@ def align_landmarks(
         # The landmarks themselves, not containers holding them. There is no key to address
         # and nothing to write into, so this returns the matrix and refuses the arguments that
         # only mean something for a container rather than silently ignoring them.
-        # `fit_similarity` / `fit_affine` validate the pair, so nothing is re-checked here.
+        # `fit_landmarks` validates the pair, so nothing is re-checked here.
         if data_query is None:
             raise ValueError(
                 "`data_ref` is an array of landmarks, so `data_query` must be the matching "
@@ -598,18 +605,41 @@ def align_landmarks(
     query_lm = _read_landmarks(query_container, query_lm_key, query_table, side="query")
 
     if target_coordinate_system is not None:
-        return _register_transformation(
-            fit_fn,
-            ref_lm,
-            query_lm,
-            data_ref=data_ref,
-            query_container=query_container,
-            ref_lm_key=ref_lm_key,
-            query_lm_key=query_lm_key,
-            ref_table=ref_table,
-            query_table=query_table,
-            target_coordinate_system=target_coordinate_system,
+        # Register the fit into a coordinate system instead of materialising it.
+        if not isinstance(query_container, SpatialData):
+            raise TypeError("`target_coordinate_system` registers a transformation, which only a SpatialData has.")
+        if query_table is not None:
+            raise ValueError(
+                "`target_coordinate_system` needs the query landmarks in a shapes element, but "
+                "`table_key` reads them from a table, which has no coordinate system of its own. "
+                "Store the landmarks as a shapes element, or write to `key_added` to move only the "
+                "query's coordinates."
+            )
+
+        moving_cs = _coordinate_system_of(query_container, element=query_lm_key, side="query")
+        # Registering moves *everything* in `moving_cs`. If the reference sits in that same
+        # coordinate system of the same object, it would be dragged along with the query:
+        # silently producing a wrong answer rather than failing.
+        if (
+            data_ref is query_container
+            and ref_table is None
+            and _coordinate_system_of(data_ref, element=ref_lm_key, side="reference") == moving_cs
+        ):
+            raise ValueError(
+                f"The reference and query are both in coordinate system {moving_cs!r}, so registering "
+                f"the fit there would move the reference too. Put each sample in its own coordinate "
+                f"system (what napari-spatialdata does when landmarks are picked per sample), or "
+                f"read the landmarks from a table with `table_key` and write to `key_added` to move "
+                f"only the query's coordinates."
+            )
+
+        writeback_affine_sdata(
+            fit_fn(ref_lm, query_lm),
+            query_container,
+            moving_cs=moving_cs,
+            target_cs=target_coordinate_system,
         )
+        return None
 
     matrix = fit_fn(ref_lm, query_lm)
     if key_added is None:
@@ -650,56 +680,6 @@ def _read_landmarks(
     coordinate_system = _coordinate_system_of(container, element=landmark_key, side=side)
     geometry = transform(container.shapes[landmark_key], to_coordinate_system=coordinate_system).geometry
     return np.column_stack([geometry.x.to_numpy(), geometry.y.to_numpy()])
-
-
-def _register_transformation(
-    fit_fn: Callable[..., np.ndarray],
-    ref_lm: np.ndarray,
-    query_lm: np.ndarray,
-    *,
-    data_ref: AnnData | SpatialData,
-    query_container: AnnData | SpatialData,
-    ref_lm_key: str | None,
-    query_lm_key: str | None,
-    ref_table: str | None,
-    query_table: str | None,
-    target_coordinate_system: str,
-) -> None:
-    """Register an affine fit into a coordinate system instead of materialising it."""
-    if not isinstance(query_container, SpatialData):
-        raise TypeError("`target_coordinate_system` registers a transformation, which only a SpatialData has.")
-    if query_table is not None:
-        raise ValueError(
-            "`target_coordinate_system` needs the query landmarks in a shapes element, but "
-            "`table_key` reads them from a table, which has no coordinate system of its own. "
-            "Store the landmarks as a shapes element, or write to `key_added` to move only the "
-            "query's coordinates."
-        )
-
-    moving_cs = _coordinate_system_of(query_container, element=query_lm_key, side="query")
-    # Registering moves *everything* in `moving_cs`. If the reference sits in that same
-    # coordinate system of the same object, it would be dragged along with the query:
-    # silently producing a wrong answer rather than failing.
-    if (
-        data_ref is query_container
-        and ref_table is None
-        and _coordinate_system_of(data_ref, element=ref_lm_key, side="reference") == moving_cs
-    ):
-        raise ValueError(
-            f"The reference and query are both in coordinate system {moving_cs!r}, so registering "
-            f"the fit there would move the reference too. Put each sample in its own coordinate "
-            f"system (what napari-spatialdata does when landmarks are picked per sample), or "
-            f"read the landmarks from a table with `table_key` and write to `key_added` to move "
-            f"only the query's coordinates."
-        )
-
-    writeback_affine_sdata(
-        fit_fn(ref_lm, query_lm),
-        query_container,
-        moving_cs=moving_cs,
-        target_cs=target_coordinate_system,
-    )
-    return None
 
 
 def _coordinate_system_of(sdata: SpatialData, *, element: str, side: str) -> str:

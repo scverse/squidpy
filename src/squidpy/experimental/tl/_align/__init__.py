@@ -18,11 +18,8 @@ from ._landmark import apply_affine
 from ._stalign import (
     StalignFit,
     StalignImageFit,
-    StalignImageParams,
     StalignObsFit,
-    StalignObsParams,
     StalignVolumeFit,
-    StalignVolumeParams,
 )
 
 __all__ = [

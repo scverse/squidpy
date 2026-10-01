@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from collections.abc import Sequence
 from functools import partial
 from typing import Any, Literal
@@ -65,16 +64,10 @@ def interp(
     x: Axes,
     image: jax.Array,
     phii: jax.Array,
-    *,
-    order: int = 1,
 ) -> jax.Array:
-    """Interpolate a channels-first image on physical coordinates, at any rank.
+    """Linearly interpolate a channels-first image on physical coordinates, at any rank.
 
-    ``mode`` is the out-of-domain rule, ``"nearest"`` being upstream's
-    ``padding_mode="border"``. ``order`` is the interpolation: 1 for the linear sampling
-    the objective uses, 0 for nearest-neighbour, which is what reading integer structure
-    ids off an annotation volume requires: averaging two ids yields a third, unrelated
-    one.
+    Out-of-domain samples take the nearest edge value, upstream's ``padding_mode="border"``.
     """
     arr = jnp.asarray(image)
     coords = jnp.asarray(phii)
@@ -100,7 +93,7 @@ def interp(
     idx = jnp.stack([((coords[axis] - x[axis][0]) / (x[axis][1] - x[axis][0])).reshape(-1) for axis in range(ndim)])
 
     def _sample(channel: jax.Array) -> jax.Array:
-        values = jsp.ndimage.map_coordinates(channel, idx, order=order, mode="nearest")
+        values = jsp.ndimage.map_coordinates(channel, idx, order=1, mode="nearest")
         return values.reshape(coords.shape[1:])
 
     return jax.vmap(_sample)(arr)
@@ -294,36 +287,6 @@ def _velocity_axes(velocity: jax.Array) -> tuple[int, ...]:
     return tuple(range(1, velocity.ndim - 1))
 
 
-#: Comparison-only escape hatch, read once at trace time so it stays a static branch.
-#: Set it and the regularisation *energy* transforms only the first two spatial axes,
-#: reproducing upstream's rank-3 line (``STalign.py:1504``) instead of the correct one.
-#: Never set this for real work: see :func:`_reg_energy_axes`.
-_UPSTREAM_REG_ENERGY_AXES = "SQUIDPY_STALIGN_UPSTREAM_REG_ENERGY_AXES"
-
-
-def _reg_energy_axes(velocity: jax.Array) -> tuple[int, ...]:
-    """The spatial axes the regularisation *energy* transforms.
-
-    Every spatial axis, matching :func:`_velocity_axes` and therefore the Sobolev smoothing
-    applied to this energy's gradient. That agreement is the whole point, so this returns the
-    same axes: unless :envvar:`SQUIDPY_STALIGN_UPSTREAM_REG_ENERGY_AXES` is set, in which
-    case it returns only the first two and squidpy reproduces upstream's rank-3 energy.
-
-    That switch exists to *measure* the divergence, not to offer it. Upstream's rank-3 energy
-    line is byte-identical to its rank-2 one, where two axes is all of them; the gradient it
-    descends was updated to three (``:1527``) and the energy was not, so it reports one
-    objective and descends another. Reproducing it here is the only way to attribute a
-    volume-to-section difference to that line rather than to everything else that differs at
-    rank 3. See row D11 of squidpy-ports' divergence ledger.
-
-    Inert at rank 2, where the first two spatial axes are every spatial axis.
-    """
-    axes = _velocity_axes(velocity)
-    if os.environ.get(_UPSTREAM_REG_ENERGY_AXES):
-        return axes[:2]
-    return axes
-
-
 def _lddmm_loss(
     linear: jax.Array,
     translation: jax.Array,
@@ -349,18 +312,13 @@ def _lddmm_loss(
     contrast_source = _contrast_transform(warped_source, target_image, match_weights)
 
     match_energy = jnp.sum((contrast_source - target_image) ** 2 * match_weights) / (2.0 * sigmaM**2)
-    spatial = _reg_energy_axes(velocity)
+    spatial = _velocity_axes(velocity)
     fft_velocity = jnp.fft.fftn(velocity, axes=spatial)
     # Sum over time and the vector component, leaving one term per velocity-grid cell.
     reg_energy = jnp.sum(jnp.sum(jnp.abs(fft_velocity) ** 2, axis=(0, velocity.ndim - 1)) * ll) * dv_prod / 2.0
     # One division per axis rather than one by their product: `(x / n) / m` and
     # `x / (n * m)` differ in the last bit, and the 2D path is pinned bit-for-bit against
     # the reference bundle.
-    # One division per *transformed* axis, in axis order. With the default axes this is
-    # `velocity.shape[1:-1]` exactly as before, so the rank-2 path stays bit-for-bit; under
-    # the upstream switch it divides by two of three, which is upstream's `/v.shape[1]
-    # /v.shape[2]` (`:1504`). `(x / n) / m` and `x / (n * m)` differ in the last bit and the
-    # 2D path is pinned against the reference bundle, so the loop stays a loop.
     for axis in spatial:
         reg_energy = reg_energy / velocity.shape[axis]
     reg_energy = reg_energy / sigmaR**2
@@ -586,8 +544,9 @@ def lddmm(
 
     Returns
     -------
-    A dict with the fitted ``A``/``v``/``xv``, the mixture weights, the per-iteration
-    ``energies`` trace, and ``n_iter`` actually run.
+    A dict keyed by the ``StalignFit`` field names: the fitted ``affine``,
+    ``velocity`` and ``velocity_grid``, the mixture weights, the per-iteration
+    ``energies`` trace, and the ``n_iter`` actually run.
     """
     x_source = tuple(jnp.asarray(axis) for axis in xI)
     x_target = tuple(jnp.asarray(axis) for axis in xJ)
@@ -695,14 +654,14 @@ def lddmm(
 
     affine = _to_affine(linear, translation)
     return {
-        "A": affine,
-        "v": velocity,
-        "xv": xv,
-        "WM": match_weights,
-        "WB": background_weights,
-        "WA": artifact_weights,
+        "affine": affine,
+        "velocity": velocity,
+        "velocity_grid": xv,
+        "match_weights": match_weights,
+        "background_weights": background_weights,
+        "artifact_weights": artifact_weights,
         # Per-iteration objective, so a caller can tell a converged run from a diverged
         # one without running it again. Trailing entries stay NaN if `tol` stopped early.
         "energies": energies[:niter],
-        "n_iter": completed,
+        "n_iter": int(completed),
     }

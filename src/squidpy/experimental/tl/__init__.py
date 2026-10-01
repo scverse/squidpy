@@ -1,15 +1,10 @@
 from __future__ import annotations
 
-# The fit classes and the solver-tuning TypedDicts are exported because callers need them:
-# a fit is what an alignment returns, and the TypedDicts document the solver knobs.
 from ._align import (
     StalignFit,
     StalignImageFit,
-    StalignImageParams,
     StalignObsFit,
-    StalignObsParams,
     StalignVolumeFit,
-    StalignVolumeParams,
     align_landmarks,
     apply_affine,
     stalign_align_image,

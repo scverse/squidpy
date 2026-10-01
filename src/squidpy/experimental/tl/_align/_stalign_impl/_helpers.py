@@ -59,23 +59,10 @@ def as_chw(image: npt.ArrayLike, *, name: str, ndim: int = 2) -> jax.Array:
     return arr
 
 
-def resolve_axes(
-    axes: Sequence[npt.ArrayLike] | None,
-    scale: tuple[float, ...],
-    shape: tuple[int, ...],
-    name: str,
-) -> tuple[jax.Array, ...]:
-    """Physical axes for one side: explicit if given, otherwise centred on ``scale``.
-
-    Rank-agnostic, and shared by the rank-2 and rank-3 entry points so they cannot drift.
-    They did: the image path raised when explicit axes were combined with a non-unit scale
-    while the slice path silently ignored the scale, so the same mistake was an error at
-    rank 2 and a wrong answer at rank 3.
-    """
+def resolve_axes(axes: Sequence[npt.ArrayLike] | None, shape: tuple[int, ...], name: str) -> tuple[jax.Array, ...]:
+    """Physical axes for one side, at any rank: explicit if given, otherwise centred pixel units."""
     if axes is None:
-        return centred_axes(shape, scale)
-    if any(s != 1.0 for s in scale):
-        raise ValueError(f"`{name}` is mutually exclusive with a non-unit `{name.replace('_axes', '_scale')}`.")
+        return centred_axes(shape, (1.0,) * len(shape))
     return explicit_axes(axes, shape, name)
 
 
