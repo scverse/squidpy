@@ -30,7 +30,6 @@ __all__ = ["sepal"]
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn())
-@deprecated_params({"backend": "1.10.0"})
 @old_positionals(
     "max_neighs",
     "genes",
@@ -45,6 +44,7 @@ __all__ = ["sepal"]
     "n_jobs",
     "show_progress_bar",
 )
+@deprecated_params({"backend": "1.10.0"})
 def sepal(
     adata: AnnData | SpatialData,
     *,

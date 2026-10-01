@@ -555,8 +555,6 @@ class PermutationTest(PermutationTestABC):
 
 
 @d.dedent
-@deprecated_params({"numba_parallel": "1.10.0", "backend": "1.10.0"})
-@deprecated_randomness_param
 @old_positionals(
     "cluster_key",
     "interactions",
@@ -569,6 +567,8 @@ class PermutationTest(PermutationTestABC):
     "key_added",
     "gene_symbols",
 )
+@deprecated_params({"numba_parallel": "1.10.0", "backend": "1.10.0"})
+@deprecated_randomness_param
 def ligrec(
     adata: AnnData | SpatialData,
     *,
