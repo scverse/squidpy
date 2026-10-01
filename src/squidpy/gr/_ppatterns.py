@@ -373,7 +373,7 @@ def _score_perms(
     # Match the casts scanpy applies to its own inputs, so the kernel sees the same numbers.
     g = g.astype(np.float64, copy=False)
     w = g.data.sum()
-    generators = np.random.default_rng(rng).spawn(n_perms)
+    rngs = np.random.default_rng(rng).spawn(n_perms)
     # ponytail: permutations are drawn in blocks of at most 256 MB (int32), and every feature is
     # re-extracted once per block; the block count only exceeds 1 past ~250k cells x 256 perms.
     block = int(np.clip(_PERM_BLOCK_SIZE // max(n_cells, 1), 1, n_perms))
@@ -398,7 +398,7 @@ def _score_perms(
         for lo in range(0, n_perms, block):
             perms = buffer[: min(block, n_perms - lo)]
             for i in range(len(perms)):
-                perms[i] = generators[lo + i].permutation(n_cells)
+                perms[i] = rngs[lo + i].permutation(n_cells)
             for m in range(n_features):
                 pbar.update()
                 x = vals[m].toarray().ravel() if sparse_vals else vals[m]
