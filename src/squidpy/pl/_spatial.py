@@ -68,6 +68,7 @@ def _spatial_plot(
     use_raw: bool | None = None,
     layer: str | None = None,
     alt_var: str | None = None,
+    sort_order: bool = True,
     # size, coords, cmap, palette
     size: _SeqFloat | None = None,
     size_key: str | None = Key.uns.size_key,
@@ -238,7 +239,7 @@ def _spatial_plot(
         _cell_id = spatial_params.cell_id[_lib_count]
         _crops = crops[_lib_count]
         _lib = spatial_params.library_id[_lib_count]
-        _coords = coords[_lib_count]  # TODO: do we want to order points? for now no, skip
+        _coords = coords[_lib_count]
         adata_sub, coords_sub, image_sub = _subs(
             adata,
             _coords,
@@ -293,6 +294,7 @@ def _spatial_plot(
                 color_params=color_params,
                 size=_size,
                 color_vector=color_vector,
+                sort_order=sort_order and value_to_plot is not None and not categorical,
                 na_color=na_color,
                 **kwargs,
             )
@@ -363,7 +365,7 @@ def _wrap_signature(wrapper: Callable[[Any], Any]) -> Callable[[Any], Any]:
         ]
         wrapper_remove = ["shape"]
     elif name == "spatial_segment":
-        params_remove = ["shape", "size", "size_key", "scale_factor"]
+        params_remove = ["shape", "size", "size_key", "scale_factor", "sort_order"]
         wrapper_remove = [
             "seg_cell_id",
             "seg",
@@ -428,6 +430,12 @@ def spatial_scatter(
     %(spatial_key)s
     %(plotting_image)s
     %(plotting_features)s
+
+    sort_order
+        Whether to draw points in ascending order of continuous color values, placing higher values on top.
+        Defaults to ``True``. Missing values are drawn first and equal values retain their original order.
+        Categorical colors and plots without a color variable retain their original order.
+        Set to ``False`` to draw all points in observation order.
 
     Returns
     -------
