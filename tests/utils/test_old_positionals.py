@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 import warnings
+from contextlib import contextmanager
 from importlib import import_module
 
 import numpy as np
@@ -11,6 +12,7 @@ import pytest
 from anndata import AnnData
 
 import squidpy as sq
+from squidpy._compat import _PositionalArgumentWarning
 from squidpy.gr import interaction_matrix
 
 # Every shimmed function with the parameters it took positionally after the first one in v1.8.3.
@@ -45,21 +47,40 @@ V1_8_3_POSITIONALS = [
 # fmt: on
 
 
+@contextmanager
+def _record_body_calls(func):
+    """Swap the undecorated body for a recorder, keeping every wrapper around it."""
+    body = inspect.unwrap(func)
+    last = func
+    while last.__wrapped__ is not body:
+        last = last.__wrapped__
+    cell = next(c for c in last.__closure__ if c.cell_contents is body)
+    calls = []
+    cell.cell_contents = lambda *args, **kwargs: calls.append((args, kwargs))
+    try:
+        yield calls
+    finally:
+        cell.cell_contents = body
+
+
 @pytest.mark.parametrize(("module", "name", "old"), V1_8_3_POSITIONALS, ids=lambda x: x if isinstance(x, str) else "")
-def test_formerly_positional_args_are_now_keyword_only(module: str, name: str, old: tuple[str, ...]) -> None:
-    # The lint rule (PLR0917) only catches functions with too many positional arguments; this checks
-    # that every argument that was positional in v1.8.3 is now keyword-only, however short the signature.
+def test_v1_8_3_positional_call_binds_like_v1_8_3(module: str, name: str, old: tuple[str, ...]) -> None:
     func = getattr(import_module(module), name)
-    assert hasattr(func, "__wrapped__"), f"{name} is missing its @old_positionals shim"
-    params = inspect.signature(inspect.unwrap(func)).parameters
-    # `seed` was renamed to `rng`; names no longer in the signature are deprecated no-ops the shim drops.
-    survivors = []
-    for name_1_8_3 in old:
-        current = "rng" if name_1_8_3 == "seed" and "rng" in params else name_1_8_3
-        if current in params:
-            survivors.append(current)
-    still_positional = [n for n in survivors if params[n].kind is not inspect.Parameter.KEYWORD_ONLY]
-    assert not still_positional, f"{name}: expected keyword-only, still positional: {still_positional}"
+    body_params = inspect.signature(inspect.unwrap(func)).parameters
+    values = {n: f"<{n}>" for n in old}
+    # `seed` became `rng`; anything else missing from the body is a deprecated no-op that is dropped
+    expected = {("rng" if n == "seed" else n): v for n, v in values.items() if n == "seed" or n in body_params}
+
+    with _record_body_calls(func) as calls, warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        func("<data>", *values.values())
+
+    assert calls == [(("<data>",), expected)]
+    # Only the positional-argument warning is ours to check; ignore unrelated GC noise such as a
+    # ResourceWarning from a file handle collected mid-call (its stacklevel points outside this file).
+    positional = [w for w in caught if issubclass(w.category, _PositionalArgumentWarning)]
+    assert positional
+    assert {w.filename for w in positional} == {__file__}, [(w.filename, str(w.message)) for w in caught]
 
 
 def test_old_positional_call_warns_and_still_works(nhood_data: AnnData) -> None:
