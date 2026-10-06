@@ -21,6 +21,8 @@ import xarray as xr
 from scanpy import logging as logg
 from spatialdata.models import Image2DModel, Labels2DModel
 
+from squidpy._compat import SKIP_OWN_FRAMES
+
 if TYPE_CHECKING:
     from numba_progress import ProgressBar
 
@@ -88,6 +90,7 @@ class Signal(Enum):
 def parallelize(
     callback: Callable[..., Any],
     collection: Sequence[Any],
+    *,
     n_jobs: int | None = 1,
     n_split: int | None = None,
     unit: str = "",
@@ -394,7 +397,7 @@ def deprecated_randomness_param(func: Callable[..., Any]) -> Callable[..., Any]:
                 f"removed in squidpy v1.9.0. It is now seeding a generator, i.e. `{old}={value!r}` "
                 f"is used as `numpy.random.default_rng({value!r})`, which may change the result.",
                 FutureWarning,
-                stacklevel=2,
+                skip_file_prefixes=SKIP_OWN_FRAMES,
             )
             kwargs["rng"] = value
         return func(*args, **kwargs)
@@ -423,7 +426,7 @@ def deprecated_params(
                         f"Parameter `{k}` of `{func.__name__}()` is deprecated "
                         f"and has no effect. It will be removed in squidpy v{params[k]}.",
                         FutureWarning,
-                        stacklevel=2,
+                        skip_file_prefixes=SKIP_OWN_FRAMES,
                     )
                     kwargs.pop(k)
             return func(*args, **kwargs)

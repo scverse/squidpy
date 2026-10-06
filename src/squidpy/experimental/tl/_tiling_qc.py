@@ -402,6 +402,7 @@ def _score_tile(
 
 def _compute_centroids_for_labels(
     sdata: sd.SpatialData,
+    *,
     labels_key: str,
     labels_da: xr.DataArray,
     scale: str | None,
@@ -430,6 +431,7 @@ _METHOD_KEY = "tiling_qc"
 
 def calculate_tiling_qc(
     sdata: sd.SpatialData,
+    *,
     labels_key: str,
     scale: str | None = None,
     tile_size: int = 2048,
@@ -558,9 +560,9 @@ def calculate_tiling_qc(
         raise ValueError(f"n_neighbors must be >= 1, got {n_neighbors}.")
     qc_params = _resolve_qc_params(tiling_qc_params)
 
-    labels_da = resolve_labels_array(sdata, labels_key, scale)
+    labels_da = resolve_labels_array(sdata, labels_key=labels_key, scale=scale)
 
-    cell_info = _compute_centroids_for_labels(sdata, labels_key, labels_da, scale)
+    cell_info = _compute_centroids_for_labels(sdata, labels_key=labels_key, labels_da=labels_da, scale=scale)
     if not cell_info:
         raise ValueError("No cells found in labels (all zeros).")
 
@@ -686,13 +688,13 @@ def calculate_tiling_qc(
 
     if inplace:
         table_key = table_key_added if table_key_added is not None else f"{labels_key}_qc"
-        _warn_if_dropping_stitch_columns(sdata, table_key, labels_key)
+        _warn_if_dropping_stitch_columns(sdata, table_key=table_key, labels_key=labels_key)
         sdata.tables[table_key] = TableModel.parse(adata)
         return None
     return adata
 
 
-def _warn_if_dropping_stitch_columns(sdata: sd.SpatialData, table_key: str, labels_key: str) -> None:
+def _warn_if_dropping_stitch_columns(sdata: sd.SpatialData, *, table_key: str, labels_key: str) -> None:
     """Warn if re-running QC would drop downstream stitch results.
 
     ``calculate_tiling_qc`` replaces the QC table wholesale, so any columns

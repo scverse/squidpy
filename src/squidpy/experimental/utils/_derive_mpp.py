@@ -21,9 +21,9 @@ _SQUARENESS_TOL = 0.98
 
 def derive_mpp_from_shapes(
     sdata: sd.SpatialData,
+    *,
     shapes_key: str,
     coordinate_system: str,
-    *,
     um_between_centers: float | None = None,
     um_diameter: float | None = None,
     um_square_edge: float | None = None,
