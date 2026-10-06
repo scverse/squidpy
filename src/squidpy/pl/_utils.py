@@ -36,6 +36,7 @@ from scipy.sparse import issparse, spmatrix
 from skimage import img_as_float32
 from skimage.color import rgb2gray
 
+from squidpy._compat import old_positionals
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
 from squidpy._utils import NDArrayA
@@ -97,8 +98,10 @@ def save_fig(
 
 
 @d.dedent
+@old_positionals("obsm_key", "prefix")
 def extract(
     adata: AnnData,
+    *,
     obsm_key: list[str] | str = "img_features",
     prefix: list[str] | str | None = None,
 ) -> AnnData:
@@ -131,7 +134,7 @@ def extract(
     If :attr:`anndata.AnnData.obs` ``['{column}']`` already exists, it will be overwritten and a warning will be issued.
     """
 
-    def _warn_if_exists_obs(adata: AnnData, obs_key: str) -> None:
+    def _warn_if_exists_obs(adata: AnnData, *, obs_key: str) -> None:
         if obs_key in adata.obs.columns:
             logg.warning(f"Overwriting `adata.obs[{obs_key!r}]`")
 
@@ -163,13 +166,13 @@ def extract(
             # names will be column_names
             for col in obsm.columns:
                 obs_key = f"{prefix[i]}{col}"
-                _warn_if_exists_obs(tmp_adata, obs_key)
+                _warn_if_exists_obs(tmp_adata, obs_key=obs_key)
                 tmp_adata.obs[obs_key] = obsm[col]
         else:
             # names will be integer indices
             for j in range(obsm.shape[1]):
                 obs_key = f"{prefix[i]}{j}"
-                _warn_if_exists_obs(tmp_adata, obs_key)
+                _warn_if_exists_obs(tmp_adata, obs_key=obs_key)
                 # https://github.com/scverse/squidpy/issues/646
                 tmp_adata.obs[obs_key] = pd.Series(obsm[:, j], index=tmp_adata.obs_names)
 
@@ -506,6 +509,7 @@ def _annotate_heatmap(
 
 def _get_cmap_norm(
     adata: AnnData,
+    *,
     key: str,
     order: tuple[list[int], list[int]] | None | None = None,
 ) -> tuple[
@@ -536,6 +540,7 @@ def _get_cmap_norm(
 
 def _heatmap(
     adata: AnnData,
+    *,
     key: str,
     title: str = "",
     method: str | None = None,
@@ -565,7 +570,7 @@ def _heatmap(
     row_labels = adata.obs[key].iloc[row_order]
     data = adata[row_order, col_order].X
 
-    row_cmap, col_cmap, row_norm, col_norm, n_cls = _get_cmap_norm(adata, key, order=(row_order, col_order))
+    row_cmap, col_cmap, row_norm, col_norm, n_cls = _get_cmap_norm(adata, key=key, order=(row_order, col_order))
 
     row_sm = mpl.cm.ScalarMappable(cmap=row_cmap, norm=row_norm)
     col_sm = mpl.cm.ScalarMappable(cmap=col_cmap, norm=col_norm)
@@ -653,7 +658,7 @@ def sanitize_anndata(adata: AnnData) -> None:
     adata._sanitize()
 
 
-def _assert_value_in_obs(adata: AnnData, key: str, val: Sequence[Any] | Any) -> None:
+def _assert_value_in_obs(adata: AnnData, *, key: str, val: Sequence[Any] | Any) -> None:
     assert_key_in_adata(adata, key, attr="obs")
     if not isinstance(val, list):
         val = [val]

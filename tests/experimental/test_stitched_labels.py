@@ -490,7 +490,7 @@ class TestReviewFixes:
         sq.experimental.tl.assign_stitch_groups(sdata, labels_key="labels")
         res = sq.experimental.tl.make_stitched_labels(sdata, labels_key="labels", write_table=False, inplace=False)
         out = res["labels"]
-        resolved = resolve_labels_array(sdata, "labels", "scale1")
+        resolved = resolve_labels_array(sdata, labels_key="labels", scale="scale1")
 
         def _affine(elem):
             t = next(iter(get_transformation(elem, get_all=True).values()))

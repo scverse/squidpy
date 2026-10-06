@@ -13,6 +13,7 @@ from squidpy.experimental.im._qc_metrics import QCMetric
 
 def qc_image(
     sdata: SpatialData,
+    *,
     image_key: str,
     metrics: QCMetric | list[QCMetric] | None = None,
     figsize: tuple[int, int] | None = None,

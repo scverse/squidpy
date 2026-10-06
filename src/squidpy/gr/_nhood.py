@@ -24,6 +24,7 @@ from scanpy import logging as logg
 from scipy.sparse import csr_array, csr_matrix, issparse
 from spatialdata import SpatialData
 
+from squidpy._compat import SKIP_OWN_FRAMES, old_positionals
 from squidpy._constants._constants import Centrality
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
@@ -180,7 +181,7 @@ def _shuffled_labels(
 
 
 @njit(parallel=True, nogil=True, cache=True)
-def _permutation_moments_counts(
+def _permutation_moments_counts(  # noqa: PLR0917, numba requires positional arguments
     indices: NDArrayA,
     indptr: NDArrayA,
     int_clust: NDArrayA,
@@ -188,7 +189,7 @@ def _permutation_moments_counts(
     group_indices: NDArrayA,
     n_cls: int,
     observed: NDArrayA,
-    generators: Any,
+    rngs: Any,
     progress: Any,
 ) -> tuple[NDArrayA, NDArrayA]:
     """Exact integer moments of the permutation distribution for ``normalization='none'``.
@@ -201,13 +202,13 @@ def _permutation_moments_counts(
 
     Returns ``(sum_d, sum_d2)``; the caller turns these into the mean, std and z-score.
     """
-    n_perms = len(generators)
+    n_perms = len(rngs)
     sum_d = np.zeros((n_cls, n_cls), dtype=np.int64)
     sum_d2 = np.zeros((n_cls, n_cls), dtype=np.int64)
     for p in prange(n_perms):
         # explicit int64 index: under prange the loop var is uint64 and indexing the typed list
         # would otherwise trigger a (harmless) uint64->int64 NumbaTypeSafetyWarning
-        rng = generators[np.int64(p)]
+        rng = rngs[np.int64(p)]
         shuffled = _shuffled_labels(int_clust, group_offsets, group_indices, rng)
         out = _nenrich(indices, indptr, shuffled, n_cls)
 
@@ -227,7 +228,7 @@ def _permutation_moments_counts(
 
 
 @njit(parallel=True, nogil=True, cache=True)
-def _permutation_moments_normalized(
+def _permutation_moments_normalized(  # noqa: PLR0917, numba requires positional arguments
     indices: NDArrayA,
     indptr: NDArrayA,
     int_clust: NDArrayA,
@@ -237,7 +238,7 @@ def _permutation_moments_normalized(
     norm_code: int,
     sizes: NDArrayA,
     observed: NDArrayA,
-    generators: Any,
+    rngs: Any,
     progress: Any,
 ) -> tuple[NDArrayA, NDArrayA]:
     """Moments of the permutation distribution for the ``'total'`` / ``'conditional'`` modes.
@@ -250,11 +251,11 @@ def _permutation_moments_normalized(
 
     Returns ``(sum_d, sum_d2)``; the caller turns these into the mean, std and z-score.
     """
-    n_perms = len(generators)
+    n_perms = len(rngs)
     sum_d = np.zeros((n_cls, n_cls), dtype=np.float64)
     sum_d2 = np.zeros((n_cls, n_cls), dtype=np.float64)
     for p in prange(n_perms):
-        rng = generators[np.int64(p)]
+        rng = rngs[np.int64(p)]
         shuffled = _shuffled_labels(int_clust, group_offsets, group_indices, rng)
 
         if norm_code == 1:  # total
@@ -296,10 +297,23 @@ def _filter_clusters_by_min_cell_count(
 
 @d.get_sections(base="nhood_ench", sections=["Parameters"])
 @d.dedent
+@old_positionals(
+    "cluster_key",
+    "library_key",
+    "connectivity_key",
+    "n_perms",
+    "numba_parallel",
+    "seed",
+    "copy",
+    "n_jobs",
+    "backend",
+    "show_progress_bar",
+)
 @deprecated_randomness_param
 @deprecated_params({"numba_parallel": "1.10.0", "backend": "1.10.0"})
 def nhood_enrichment(
     adata: AnnData | SpatialData,
+    *,
     cluster_key: str,
     library_key: str | None = None,
     connectivity_key: str | None = None,
@@ -311,7 +325,6 @@ def nhood_enrichment(
     normalization: str = "none",
     min_cell_count: int = 0,
     handle_nan: Literal["keep", "zero"] = "keep",
-    *,
     table_key: str | None = None,
 ) -> NhoodEnrichmentResult | None:
     """
@@ -366,8 +379,8 @@ def nhood_enrichment(
     """
     adata = extract_adata_if_sdata(adata, table_key=table_key)
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
-    _assert_categorical_obs(adata, cluster_key)
-    _assert_connectivity_key(adata, connectivity_key)
+    _assert_categorical_obs(adata, key=cluster_key)
+    _assert_connectivity_key(adata, key=connectivity_key)
     assert_positive(n_perms, name="n_perms")
 
     if normalization not in _NORM_CODES:
@@ -422,8 +435,7 @@ def nhood_enrichment(
             f"{n_filtered / n_total_cells * 100:.3f}% of cells were excluded because their clusters "
             f"had fewer than {min_cell_count} cells.",
             UserWarning,
-            # +2 for the `deprecated_randomness_param` and `deprecated_params` wrappers
-            stacklevel=4,
+            skip_file_prefixes=SKIP_OWN_FRAMES,
         )
 
     indices, indptr = (adj.indices.astype(ndt), adj.indptr.astype(ndt))
@@ -455,7 +467,7 @@ def nhood_enrichment(
     start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` thread(s)")
     norm_code = _NORM_CODES[normalization]
 
-    generators = List(np.random.default_rng(rng).spawn(n_perms))
+    rngs = List(np.random.default_rng(rng).spawn(n_perms))
 
     # Group structure for within-group shuffling, as a CSR-like (offsets, indices) pair in category
     # order with ascending indices per group. Without a `library_key` there is a single group
@@ -478,7 +490,7 @@ def nhood_enrichment(
                 group_indices,
                 n_cls,
                 np.ascontiguousarray(count_normalized, dtype=np.int64),
-                generators,
+                rngs,
                 progress,
             )
         else:
@@ -492,7 +504,7 @@ def nhood_enrichment(
                 norm_code,
                 cluster_sizes,
                 np.ascontiguousarray(count_normalized, dtype=np.float64),
-                generators,
+                rngs,
                 progress,
             )
 
@@ -539,8 +551,10 @@ def nhood_enrichment(
 
 @d.dedent
 @inject_docs(c=Centrality)
+@old_positionals("cluster_key", "score", "connectivity_key", "copy", "n_jobs", "backend", "show_progress_bar")
 def centrality_scores(
     adata: AnnData | SpatialData,
+    *,
     cluster_key: str,
     score: str | Iterable[str] | None = None,
     connectivity_key: str | None = None,
@@ -548,7 +562,6 @@ def centrality_scores(
     n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = False,
-    *,
     table_key: str | None = None,
 ) -> pd.DataFrame | None:
     """
@@ -582,8 +595,8 @@ def centrality_scores(
     """
     adata = extract_adata_if_sdata(adata, table_key=table_key)
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
-    _assert_categorical_obs(adata, cluster_key)
-    _assert_connectivity_key(adata, connectivity_key)
+    _assert_categorical_obs(adata, key=cluster_key)
+    _assert_connectivity_key(adata, key=connectivity_key)
 
     if isinstance(score, str | Centrality):
         centrality = [score]
@@ -641,14 +654,15 @@ def centrality_scores(
 
 
 @d.dedent
+@old_positionals("cluster_key", "connectivity_key", "normalized", "copy", "weights")
 def interaction_matrix(
     adata: AnnData | SpatialData,
+    *,
     cluster_key: str,
     connectivity_key: str | None = None,
     normalized: bool = False,
     copy: bool = False,
     weights: bool = False,
-    *,
     table_key: str | None = None,
 ) -> NDArrayA | None:
     """
@@ -676,8 +690,8 @@ def interaction_matrix(
     """
     adata = extract_adata_if_sdata(adata, table_key=table_key)
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
-    _assert_categorical_obs(adata, cluster_key)
-    _assert_connectivity_key(adata, connectivity_key)
+    _assert_categorical_obs(adata, key=cluster_key)
+    _assert_connectivity_key(adata, key=connectivity_key)
 
     cats = adata.obs[cluster_key]
     mask = ~pd.isnull(cats).values
@@ -829,7 +843,7 @@ def _build_shuffle_groups(
 
 
 @njit(inline="always", cache=True)
-def _expand(
+def _expand(  # noqa: PLR0917, numba requires positional arguments
     indptr: NDArrayA,
     indices: NDArrayA,
     stamp: NDArrayA,
@@ -857,7 +871,7 @@ def _expand(
 
 
 @njit(parallel=True, cache=True)
-def _bfs_shells(
+def _bfs_shells(  # noqa: PLR0917, numba requires positional arguments
     indptr: NDArrayA,
     indices: NDArrayA,
     max_hop: int,
@@ -1027,9 +1041,9 @@ def _aggregate_over(
     raise ValueError(f"'aggregation' must be 'mean', 'sum' or 'variance', got {aggregation!r}")
 
 
-def _assert_hop_request(adata: AnnData, connectivity_key: str, hops: Sequence[int]) -> None:
+def _assert_hop_request(adata: AnnData, *, connectivity_key: str, hops: Sequence[int]) -> None:
     """Verify a hop request against the graph it is about to run on."""
-    _assert_connectivity_key(adata, connectivity_key)
+    _assert_connectivity_key(adata, key=connectivity_key)
     if len(hops) == 0:
         raise ValueError("'hops' must name at least one hop")
     if any(hop < 0 for hop in hops):
@@ -1052,7 +1066,7 @@ def nhood_aggregate(
     Matrix powers, not disjoint rings, so a hop restates the ones below it. Each cell in
     reach counts once: a cell two paths away is still one cell.
     """
-    _assert_hop_request(adata, connectivity_key, hops)
+    _assert_hop_request(adata, connectivity_key=connectivity_key, hops=hops)
     if aggregation not in ("mean", "sum", "variance"):
         raise ValueError(f"'aggregation' must be 'mean', 'sum' or 'variance', got {aggregation!r}")
     weights = [1.0] * len(hops) if hop_weights is None else list(hop_weights)
