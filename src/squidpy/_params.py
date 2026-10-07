@@ -1,4 +1,4 @@
-"""Defaults, validation and resolution for the parameter TypedDicts. Private."""
+"""Defaults and resolution for the parameter TypedDicts. Private."""
 
 from __future__ import annotations
 
@@ -29,32 +29,19 @@ def defaults_of[T: Mapping[str, Any]](spec: type[T]) -> T:
 # never handed out, only merged from, so caching it is safe
 _cached_defaults = cache(defaults_of)
 
-_VALIDATORS: dict[type, Callable[[dict[str, Any]], None]] = {}
-
-
-def validates[F: Callable[[dict[str, Any]], None]](spec: type) -> Callable[[F], F]:
-    """Register the decorated function as *spec*'s validator, run by :func:`resolve_params`.
-
-    It coerces the merged mapping in place and raises on invalid values.
-    """
-
-    def register(validate: F) -> F:
-        _VALIDATORS[spec] = validate
-        return validate
-
-    return register
-
 
 def resolve_params[T: Mapping[str, Any]](
     params: T | Mapping[str, Any] | None,
     spec: type[T],
     *,
+    validate: Callable[[dict[str, Any]], None] | None = None,
     arg_name: str = "method_params",
 ) -> T:
-    """Merge *params* over the defaults of *spec*, then validate the result.
+    """Merge *params* over the defaults of *spec*, then optionally validate the result.
 
-    Unknown keys raise. The validator registered with :func:`validates` runs on the merged
-    mapping, so defaults are checked too. Returns a new mapping.
+    Unknown keys raise. *validate*, when given, runs on the merged mapping (so defaults
+    are checked too) and may coerce it in place. Passing it explicitly keeps validation
+    tied to the call site, not to an import-order-dependent registry. Returns a new mapping.
     """
     defaults = _cached_defaults(spec)
     if params is not None and not isinstance(params, Mapping):
@@ -64,6 +51,6 @@ def resolve_params[T: Mapping[str, Any]](
         if unknown:
             raise ValueError(f"Unknown `{arg_name}` field(s): {sorted(unknown)}; expected from {sorted(defaults)}.")
     merged = {**defaults, **(params or {})}
-    if (validate := _VALIDATORS.get(spec)) is not None:
+    if validate is not None:
         validate(merged)
     return cast("T", merged)

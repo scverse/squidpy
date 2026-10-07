@@ -283,10 +283,11 @@ def detect_tissue(
         if method_params is not None:
             raise ValueError("`method_params` are not supported for OTSU tissue detection.")
         resolved_method_params = None
-    elif (spec := _METHOD_PARAMS.get(method)) is not None:
-        resolved_method_params = resolve_params(method_params, spec)
     else:
-        raise ValueError(f"Unsupported method: {method}")
+        spec = _METHOD_PARAMS.get(method)
+        if spec is None:
+            raise ValueError(f"Unsupported method: {method}")
+        resolved_method_params = resolve_params(method_params, spec)
 
     manual_scale = scale.lower() != "auto"
 
