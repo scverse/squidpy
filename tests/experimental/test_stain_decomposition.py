@@ -9,8 +9,6 @@ from squidpy._params import resolve_params
 from squidpy.experimental.im._stain._constants import RUIFROK_HE
 from squidpy.experimental.im._stain._conversion import sda_to_rgb
 from squidpy.experimental.im._stain._decomposition import (
-    MacenkoParams,
-    VahadaneParams,
     apply_decomposition,
     fit_decomposition,
 )
@@ -20,6 +18,7 @@ from squidpy.experimental.im._stain._validation import (
     complement_third_column,
     reorder_to_canonical,
 )
+from squidpy.types import MacenkoParams, VahadaneParams
 
 _WHITE = np.array([255.0, 255.0, 255.0])
 

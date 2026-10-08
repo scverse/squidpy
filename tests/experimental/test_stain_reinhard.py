@@ -9,11 +9,11 @@ from squidpy._params import resolve_params
 from squidpy.experimental.im._stain._reference import StainReference
 from squidpy.experimental.im._stain._reinhard import (
     _SIGMA_FLOOR,
-    ReinhardParams,
     _masked_channel_stats,
     apply_reinhard,
     fit_reinhard,
 )
+from squidpy.types import ReinhardParams
 
 
 def _da(values: np.ndarray, *, chunked: bool) -> xr.DataArray:
