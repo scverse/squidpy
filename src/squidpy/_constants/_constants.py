@@ -18,21 +18,6 @@ class ImageFeature(ModeEnum):
 
 # _ligrec.py
 @unique
-class Processing(ModeEnum):
-    SMOOTH = "smooth"
-    GRAY = "gray"
-
-
-@unique
-class SegmentationBackend(ModeEnum):
-    LOG = "log"
-    DOG = "dog"
-    DOH = "doh"
-    WATERSHED = "watershed"
-    CUSTOM = "custom"  # callable function
-
-
-@unique
 class InferDimensions(ModeEnum):
     DEFAULT = "default"
     CHANNELS_LAST = "channels_last"

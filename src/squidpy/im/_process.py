@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
-from typing import Any
+from typing import Any, Literal
 
 import dask.array as da
 from dask_image.ndfilters import gaussian_filter as dask_gf
@@ -10,17 +10,16 @@ from scanpy import logging as logg
 from scipy.ndimage import gaussian_filter as scipy_gf
 
 from squidpy._compat import old_positionals
-from squidpy._constants._constants import Processing
 from squidpy._constants._pkg_constants import Key
-from squidpy._docs import d, inject_docs
+from squidpy._docs import d
 from squidpy._utils import NDArrayA
+from squidpy._validators import normalize_choice
 from squidpy.im._container import ImageContainer
 
 __all__ = ["process"]
 
 
 @d.dedent
-@inject_docs(p=Processing)
 @old_positionals(
     "layer", "library_id", "method", "chunks", "lazy", "layer_added", "channel_dim", "copy", "apply_kwargs"
 )
@@ -29,7 +28,7 @@ def process(
     *,
     layer: str | None = None,
     library_id: str | Sequence[str] | None = None,
-    method: str | Callable[..., NDArrayA] = "smooth",
+    method: Literal["smooth", "gray"] | Callable[..., NDArrayA] = "smooth",
     chunks: int | None = None,
     lazy: bool = False,
     layer_added: str | None = None,
@@ -50,16 +49,16 @@ def process(
     method
         Processing method to use. Valid options are:
 
-            - `{p.SMOOTH.s!r}` - :func:`skimage.filters.gaussian`.
-            - `{p.GRAY.s!r}` - :func:`skimage.color.rgb2gray`.
+            - `'smooth'` - :func:`skimage.filters.gaussian`.
+            - `'gray'` - :func:`skimage.color.rgb2gray`.
 
         %(custom_fn)s
     %(chunks_lazy)s
     %(layer_added)s
-        If `None`, use ``'{{layer}}_{{method}}'``.
+        If `None`, use ``'{layer}_{method}'``.
     channel_dim
         Name of the channel dimension of the new image layer. Default is the same as the original, if the
-        processing function does not change the number of channels, and ``'{{channel}}_{{processing}}'`` otherwise.
+        processing function does not change the number of channels, and ``'{channel}_{processing}'`` otherwise.
     %(copy_cont)s
     apply_kwargs
         Keyword arguments for :meth:`squidpy.im.ImageContainer.apply`.
@@ -68,11 +67,11 @@ def process(
 
     Returns
     -------
-    If ``copy = True``, returns a new container with the processed image in ``'{{layer_added}}'``.
+    If ``copy = True``, returns a new container with the processed image in ``'{layer_added}'``.
 
     Otherwise, modifies the ``img`` with the following key:
 
-        - :class:`squidpy.im.ImageContainer` ``['{{layer_added}}']`` - the processed image.
+        - :class:`squidpy.im.ImageContainer` ``['{layer_added}']`` - the processed image.
 
     Raises
     ------
@@ -82,7 +81,7 @@ def process(
     from squidpy.pl._utils import _to_grayscale
 
     layer = img._get_layer(layer)
-    method = Processing(method) if isinstance(method, str | Processing) else method  # type: ignore[assignment]
+    method = normalize_choice(method, ("smooth", "gray"), name="method") if isinstance(method, str) else method
     apply_kwargs = dict(apply_kwargs)
     apply_kwargs["lazy"] = lazy
 
@@ -92,7 +91,7 @@ def process(
 
     if callable(method):
         callback = method
-    elif method == Processing.SMOOTH:  # type: ignore[comparison-overlap]
+    elif method == "smooth":
         if library_id is None:
             expected_ndim = 4
             kwargs.setdefault("sigma", [1, 1, 0, 0])  # y, x, z, c
@@ -112,7 +111,7 @@ def process(
             callback = lambda arr, **kwargs: dask_gf(da.asarray(arr).rechunk(chunks_), **kwargs)  # noqa: E731
         else:
             callback = scipy_gf
-    elif method == Processing.GRAY:  # type: ignore[comparison-overlap]
+    elif method == "gray":
         apply_kwargs["drop_axis"] = 3
         callback = _to_grayscale
     else:
