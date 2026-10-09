@@ -17,6 +17,7 @@ from squidpy.gr import (
     spatial_neighbors,
     spatial_neighbors_delaunay,
     spatial_neighbors_from_builder,
+    spatial_neighbors_knn,
     spatial_neighbors_radius,
 )
 from squidpy.gr.neighbors import (
@@ -318,13 +319,34 @@ class TestSpatialNeighbors:
         assert result.distances.max() > result_filtered.distances.max()
 
         Adj, Dst = KNNBuilder(n_neighs=6, set_diag=False).build_graph(adata_hne.obsm["spatial"])
-        threshold = np.percentile(Dst.data, percentile)
+        threshold = np.percentile(Dst.data[Dst.data != 0], percentile)
         Adj[Dst > threshold] = 0.0
         Dst[Dst > threshold] = 0.0
         Adj.eliminate_zeros()
         Dst.eliminate_zeros()
 
         assert result_filtered.distances.max() == Dst.max()
+
+    @pytest.mark.parametrize(
+        ("func", "kwargs"),
+        [
+            (spatial_neighbors_knn, {"n_neighs": 6}),
+            (spatial_neighbors_radius, {"radius": 5.0}),
+            (spatial_neighbors_delaunay, {}),
+        ],
+        ids=["knn", "radius", "delaunay"],
+    )
+    def test_percentile_ignores_diagonal(self, func, kwargs: dict):
+        # the threshold is a percentile of the edge lengths, not of the explicit zeros on the diagonal
+        adata = ad.AnnData(shape=(1_000, 1))
+        adata.obsm["spatial"] = np.random.default_rng(0).uniform(0, 100, size=(1_000, 2))
+
+        full = func(adata, copy=True, **kwargs).distances
+        pruned = func(adata, percentile=98.0, copy=True, **kwargs)
+
+        n_kept = np.sum(full.data <= np.percentile(full.data, 98.0))
+        assert pruned.distances.nnz == n_kept
+        assert pruned.connectivities.nnz == n_kept
 
     @pytest.mark.parametrize("n_neighs", [5, 10, 20])
     def test_spatial_neighbors_generic(self, n_neighs: int):
@@ -412,8 +434,8 @@ class TestSpatialNeighbors:
 
         mask_graph(
             sdata,
-            "table",
-            mask_polygon,
+            table_key="table",
+            polygon_mask=mask_polygon,
             negative_mask=False,
             key_added=key_added,
         )
@@ -422,8 +444,8 @@ class TestSpatialNeighbors:
         graph_positive_filter = sdata["table"].obsp[mask_conns_key].copy()
         mask_graph(
             sdata,
-            "table",
-            mask_polygon,
+            table_key="table",
+            polygon_mask=mask_polygon,
             negative_mask=True,
             key_added=key_added,
         )
@@ -451,8 +473,8 @@ class TestSpatialNeighbors:
         ):
             mask_graph(
                 sdata,
-                "table",
-                Point((0, 1)),
+                table_key="table",
+                polygon_mask=Point((0, 1)),
                 negative_mask=True,
                 key_added=key_added,
             )

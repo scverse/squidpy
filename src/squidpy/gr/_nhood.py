@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Callable, Iterable, Sequence
-from functools import partial
+from collections.abc import Iterable, Sequence
 from typing import Any, Literal, NamedTuple
 
 import numpy as np
 import pandas as pd
-import rustworkx as rx
 from anndata import AnnData
 from fast_array_utils import stats as fau_stats
 from fast_array_utils.conv import to_dense
@@ -19,11 +17,11 @@ from numba import get_num_threads, njit, prange
 from numba.typed import List
 from numba_progress import ProgressBar
 from numpy.typing import NDArray
-from pandas import CategoricalDtype
 from scanpy import logging as logg
 from scipy.sparse import csr_array, csr_matrix, issparse
 from spatialdata import SpatialData
 
+from squidpy._compat import SKIP_OWN_FRAMES, old_positionals
 from squidpy._constants._constants import Centrality
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
@@ -31,19 +29,16 @@ from squidpy._utils import (
     NDArrayA,
     RNGLike,
     SeedLike,
-    Signal,
-    SigQueue,
     deprecated_params,
     deprecated_randomness_param,
     get_n_numba_threads,
-    get_n_processes,
     numba_threads,
-    parallelize,
 )
 from squidpy._validators import assert_key_in_adata, assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
+    _group_offsets,
     _save_data,
     extract_adata_if_sdata,
 )
@@ -180,7 +175,7 @@ def _shuffled_labels(
 
 
 @njit(parallel=True, nogil=True, cache=True)
-def _permutation_moments_counts(
+def _permutation_moments_counts(  # noqa: PLR0917, numba requires positional arguments
     indices: NDArrayA,
     indptr: NDArrayA,
     int_clust: NDArrayA,
@@ -188,7 +183,7 @@ def _permutation_moments_counts(
     group_indices: NDArrayA,
     n_cls: int,
     observed: NDArrayA,
-    generators: Any,
+    rngs: Any,
     progress: Any,
 ) -> tuple[NDArrayA, NDArrayA]:
     """Exact integer moments of the permutation distribution for ``normalization='none'``.
@@ -201,13 +196,13 @@ def _permutation_moments_counts(
 
     Returns ``(sum_d, sum_d2)``; the caller turns these into the mean, std and z-score.
     """
-    n_perms = len(generators)
+    n_perms = len(rngs)
     sum_d = np.zeros((n_cls, n_cls), dtype=np.int64)
     sum_d2 = np.zeros((n_cls, n_cls), dtype=np.int64)
     for p in prange(n_perms):
         # explicit int64 index: under prange the loop var is uint64 and indexing the typed list
         # would otherwise trigger a (harmless) uint64->int64 NumbaTypeSafetyWarning
-        rng = generators[np.int64(p)]
+        rng = rngs[np.int64(p)]
         shuffled = _shuffled_labels(int_clust, group_offsets, group_indices, rng)
         out = _nenrich(indices, indptr, shuffled, n_cls)
 
@@ -227,7 +222,7 @@ def _permutation_moments_counts(
 
 
 @njit(parallel=True, nogil=True, cache=True)
-def _permutation_moments_normalized(
+def _permutation_moments_normalized(  # noqa: PLR0917, numba requires positional arguments
     indices: NDArrayA,
     indptr: NDArrayA,
     int_clust: NDArrayA,
@@ -237,7 +232,7 @@ def _permutation_moments_normalized(
     norm_code: int,
     sizes: NDArrayA,
     observed: NDArrayA,
-    generators: Any,
+    rngs: Any,
     progress: Any,
 ) -> tuple[NDArrayA, NDArrayA]:
     """Moments of the permutation distribution for the ``'total'`` / ``'conditional'`` modes.
@@ -250,11 +245,11 @@ def _permutation_moments_normalized(
 
     Returns ``(sum_d, sum_d2)``; the caller turns these into the mean, std and z-score.
     """
-    n_perms = len(generators)
+    n_perms = len(rngs)
     sum_d = np.zeros((n_cls, n_cls), dtype=np.float64)
     sum_d2 = np.zeros((n_cls, n_cls), dtype=np.float64)
     for p in prange(n_perms):
-        rng = generators[np.int64(p)]
+        rng = rngs[np.int64(p)]
         shuffled = _shuffled_labels(int_clust, group_offsets, group_indices, rng)
 
         if norm_code == 1:  # total
@@ -296,10 +291,23 @@ def _filter_clusters_by_min_cell_count(
 
 @d.get_sections(base="nhood_ench", sections=["Parameters"])
 @d.dedent
+@old_positionals(
+    "cluster_key",
+    "library_key",
+    "connectivity_key",
+    "n_perms",
+    "numba_parallel",
+    "seed",
+    "copy",
+    "n_jobs",
+    "backend",
+    "show_progress_bar",
+)
 @deprecated_randomness_param
 @deprecated_params({"numba_parallel": "1.10.0", "backend": "1.10.0"})
 def nhood_enrichment(
     adata: AnnData | SpatialData,
+    *,
     cluster_key: str,
     library_key: str | None = None,
     connectivity_key: str | None = None,
@@ -311,7 +319,6 @@ def nhood_enrichment(
     normalization: str = "none",
     min_cell_count: int = 0,
     handle_nan: Literal["keep", "zero"] = "keep",
-    *,
     table_key: str | None = None,
 ) -> NhoodEnrichmentResult | None:
     """
@@ -366,8 +373,8 @@ def nhood_enrichment(
     """
     adata = extract_adata_if_sdata(adata, table_key=table_key)
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
-    _assert_categorical_obs(adata, cluster_key)
-    _assert_connectivity_key(adata, connectivity_key)
+    _assert_categorical_obs(adata, key=cluster_key)
+    _assert_connectivity_key(adata, key=connectivity_key)
     assert_positive(n_perms, name="n_perms")
 
     if normalization not in _NORM_CODES:
@@ -422,8 +429,7 @@ def nhood_enrichment(
             f"{n_filtered / n_total_cells * 100:.3f}% of cells were excluded because their clusters "
             f"had fewer than {min_cell_count} cells.",
             UserWarning,
-            # +2 for the `deprecated_randomness_param` and `deprecated_params` wrappers
-            stacklevel=4,
+            skip_file_prefixes=SKIP_OWN_FRAMES,
         )
 
     indices, indptr = (adj.indices.astype(ndt), adj.indptr.astype(ndt))
@@ -455,12 +461,16 @@ def nhood_enrichment(
     start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` thread(s)")
     norm_code = _NORM_CODES[normalization]
 
-    generators = List(np.random.default_rng(rng).spawn(n_perms))
+    rngs = List(np.random.default_rng(rng).spawn(n_perms))
 
     # Group structure for within-group shuffling, as a CSR-like (offsets, indices) pair in category
     # order with ascending indices per group. Without a `library_key` there is a single group
     # spanning all cells, which reproduces a plain global shuffle.
-    group_offsets, group_indices = _build_shuffle_groups(libraries, len(int_clust))
+    if libraries is None:
+        n_cells = len(int_clust)
+        group_offsets, group_indices = np.array([0, n_cells], dtype=np.int64), np.arange(n_cells, dtype=np.int64)
+    else:
+        group_offsets, group_indices = _group_offsets(libraries)
 
     # A single numba ``prange`` kernel shuffles + counts + normalizes per thread with the GIL
     # released, and ticks the progress bar from inside the loop; numba owns the parallelism.
@@ -478,7 +488,7 @@ def nhood_enrichment(
                 group_indices,
                 n_cls,
                 np.ascontiguousarray(count_normalized, dtype=np.int64),
-                generators,
+                rngs,
                 progress,
             )
         else:
@@ -492,7 +502,7 @@ def nhood_enrichment(
                 norm_code,
                 cluster_sizes,
                 np.ascontiguousarray(count_normalized, dtype=np.float64),
-                generators,
+                rngs,
                 progress,
             )
 
@@ -539,16 +549,17 @@ def nhood_enrichment(
 
 @d.dedent
 @inject_docs(c=Centrality)
+@old_positionals("cluster_key", "score", "connectivity_key", "copy", "n_jobs", "backend", "show_progress_bar")
+@deprecated_params({"backend": "1.10.0"})
 def centrality_scores(
     adata: AnnData | SpatialData,
+    *,
     cluster_key: str,
     score: str | Iterable[str] | None = None,
     connectivity_key: str | None = None,
     copy: bool = False,
     n_jobs: int | None = None,
-    backend: str = "loky",
     show_progress_bar: bool = False,
-    *,
     table_key: str | None = None,
 ) -> pd.DataFrame | None:
     """
@@ -556,13 +567,17 @@ def centrality_scores(
 
     Inspired by usage in Gene Regulatory Networks (GRNs) in :cite:`celloracle`.
 
+    .. versionchanged:: 1.8.4
+        The scores run on numba threads, and ``n_jobs = None`` now uses all ``NUMBA_NUM_THREADS``
+        threads instead of one process. Pass ``n_jobs = 1`` for the old serial default.
+
     Parameters
     ----------
     %(adata)s
     %(table_key)s
     %(cluster_key)s
     score
-        Group centrality measures as implemented in ``rustworkx`` :cite:`rustworkx`.
+        Group centrality measures as described in :mod:`networkx.algorithms.centrality` :cite:`networkx`.
         If `None`, use all the options below. Valid options are:
 
             - `{c.CLOSENESS.s!r}` - measure of how close the group is to other nodes.
@@ -571,7 +586,8 @@ def centrality_scores(
 
     %(conn_key)s
     %(copy)s
-    %(parallelize)s
+    %(n_jobs_threads)s
+    %(show_progress_bar)s
 
     Returns
     -------
@@ -582,52 +598,61 @@ def centrality_scores(
     """
     adata = extract_adata_if_sdata(adata, table_key=table_key)
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
-    _assert_categorical_obs(adata, cluster_key)
-    _assert_connectivity_key(adata, connectivity_key)
+    _assert_categorical_obs(adata, key=cluster_key)
+    _assert_connectivity_key(adata, key=connectivity_key)
 
     if isinstance(score, str | Centrality):
         centrality = [score]
     elif score is None:
         centrality = [c.s for c in Centrality]
+    else:
+        centrality = list(score)
 
     centralities = [Centrality(c) for c in centrality]
 
-    # a rustworkx graph mirrors the undirected connectivity graph for the group closeness/degree
-    # measures; a symmetric, self-loop-free CSR feeds the clustering-coefficient kernel.
-    graph, adj = _build_graph(adata.obsp[connectivity_key])
-
-    cat = adata.obs[cluster_key].cat.categories.values
-    clusters = adata.obs[cluster_key].values
-
-    fun_dict = {}
     for c in centralities:
-        if c == Centrality.CLOSENESS:
-            fun_dict[c.s] = partial(rx.group_closeness_centrality, graph)
-        elif c == Centrality.DEGREE:
-            fun_dict[c.s] = partial(rx.group_degree_centrality, graph)
-        elif c == Centrality.CLUSTERING:
-            # average the per-node clustering coefficients over the group (0 if the group is empty).
-            node_clustering = _local_clustering(adj.indptr, adj.indices, adj.shape[0])
-            fun_dict[c.s] = lambda idx, cc=node_clustering: float(cc[idx].mean()) if len(idx) else 0.0
-        else:
+        if c not in (Centrality.CLOSENESS, Centrality.DEGREE, Centrality.CLUSTERING):
             raise NotImplementedError(f"Centrality `{c}` is not yet implemented.")
 
-    n_jobs = get_n_processes(n_jobs)
-    start = logg.info(f"Calculating centralities `{centralities}` using `{n_jobs}` core(s)")
+    # every measure reads the same symmetric, self-loop-free, index-sorted CSR.
+    adj = _symmetric_adjacency(adata.obsp[connectivity_key])
+    n_cells = adj.shape[0]
+    cat = adata.obs[cluster_key].cat.categories.values
 
-    res_list = []
-    for k, v in fun_dict.items():
-        df = parallelize(
-            _centrality_scores_helper,
-            collection=cat,
-            extractor=pd.concat,
-            n_jobs=n_jobs,
-            backend=backend,
-            show_progress_bar=show_progress_bar,
-        )(clusters=clusters, fun=v, method=k)
-        res_list.append(df)
+    n_jobs = get_n_numba_threads(n_jobs)
+    start = logg.info(f"Calculating centralities `{centralities}` using `{n_jobs}` thread(s)")
 
-    df = pd.concat(res_list, axis=1)
+    # cells with a missing label join no group but stay in the graph, so they still count as non-group
+    offsets, members = _group_offsets(adata.obs[cluster_key])
+
+    scores: dict[str, NDArrayA] = {}
+    with numba_threads(n_jobs):
+        if Centrality.CLOSENESS in centralities or Centrality.DEGREE in centralities:
+            # one BFS per group yields both measures, so it runs even if only one was asked for
+            with ProgressBar(
+                total=len(cat), unit="group", desc="centrality_scores", disable=not show_progress_bar
+            ) as progress:
+                degree, closeness = _group_degree_closeness(
+                    adj.indptr, adj.indices, offsets, members, n_cells, progress
+                )
+            if Centrality.DEGREE in centralities:
+                scores[Centrality.DEGREE.s] = degree
+            if Centrality.CLOSENESS in centralities:
+                scores[Centrality.CLOSENESS.s] = closeness
+        if Centrality.CLUSTERING in centralities:
+            # average the per-node clustering coefficients over the group (0 if the group is empty).
+            node_clustering = _local_clustering(adj.indptr, adj.indices, n_cells)
+            scores[Centrality.CLUSTERING.s] = np.array(
+                [
+                    float(node_clustering[members[offsets[g] : offsets[g + 1]]].mean())
+                    if offsets[g + 1] > offsets[g]
+                    else 0.0
+                    for g in range(len(cat))
+                ]
+            )
+
+    # keep the column order the caller asked for, which the measure-by-measure dict above loses.
+    df = pd.DataFrame({c.s: scores[c.s] for c in centralities}, index=cat)
 
     if copy:
         return df
@@ -641,14 +666,15 @@ def centrality_scores(
 
 
 @d.dedent
+@old_positionals("cluster_key", "connectivity_key", "normalized", "copy", "weights")
 def interaction_matrix(
     adata: AnnData | SpatialData,
+    *,
     cluster_key: str,
     connectivity_key: str | None = None,
     normalized: bool = False,
     copy: bool = False,
     weights: bool = False,
-    *,
     table_key: str | None = None,
 ) -> NDArrayA | None:
     """
@@ -676,8 +702,8 @@ def interaction_matrix(
     """
     adata = extract_adata_if_sdata(adata, table_key=table_key)
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
-    _assert_categorical_obs(adata, cluster_key)
-    _assert_connectivity_key(adata, connectivity_key)
+    _assert_categorical_obs(adata, key=cluster_key)
+    _assert_connectivity_key(adata, key=connectivity_key)
 
     cats = adata.obs[cluster_key]
     mask = ~pd.isnull(cats).values
@@ -724,29 +750,85 @@ def _interaction_matrix(
     return output
 
 
-def _build_graph(conn: Any) -> tuple[rx.PyGraph, csr_matrix]:
-    """Build the graph representations used by :func:`centrality_scores`.
+def _symmetric_adjacency(conn: Any) -> csr_matrix:
+    """Symmetric, self-loop-free, index-sorted CSR view of a connectivity graph.
 
-    Returns a :class:`rustworkx.PyGraph` mirroring the undirected connectivity graph
-    (used by the group closeness/degree measures) and a symmetric, self-loop-free,
-    index-sorted CSR matrix feeding the clustering-coefficient kernel.
+    Matches :class:`networkx.Graph` topology, which is what the centrality kernels assume.
     """
-    from scipy.sparse import triu
-
     adj = csr_matrix(conn)
-    # undirected, unweighted, no self-loops: matches ``networkx.Graph(conn)`` topology.
     adj = (adj + adj.T).tocsr()
     adj.setdiag(0)
     adj.eliminate_zeros()
-    adj.sort_indices()  # the clustering kernel merges neighbor lists, which must be sorted.
+    adj.sort_indices()  # both kernels walk neighbor lists that must be sorted.
+    return adj
 
-    n = adj.shape[0]
-    graph = rx.PyGraph(multigraph=False)
-    graph.add_nodes_from(range(n))
-    # the strict upper triangle lists each undirected edge exactly once.
-    rows, cols = triu(adj, k=1).nonzero()
-    graph.add_edges_from_no_data([(int(i), int(j)) for i, j in zip(rows, cols, strict=True)])
-    return graph, adj
+
+@njit(parallel=True, nogil=True, cache=True)
+def _group_degree_closeness(  # noqa: PLR0917, numba requires positional arguments
+    indptr: NDArrayA,
+    indices: NDArrayA,
+    offsets: NDArrayA,
+    members: NDArrayA,
+    n: int,
+    progress: Any,
+) -> tuple[NDArrayA, NDArrayA]:
+    """Group degree and group closeness per group, over a symmetric CSR graph.
+
+    ``members[offsets[g]:offsets[g + 1]]`` holds group ``g``'s nodes. One multi-source BFS per group
+    gives both: its distance-1 nodes are the group's non-member neighbours, its distance sum is the
+    closeness denominator.
+
+        ``degree = |non-group nodes adjacent to the group| / (n - |S|)``
+        ``closeness = (n - |S|) / sum_v d(S, v)``, or 0 when that sum is 0
+
+    Unreachable nodes count towards ``n - |S|`` but add no distance, matching :mod:`networkx`,
+    which is why a disconnected graph can score above 1.
+    """
+    n_groups = len(offsets) - 1
+    degree = np.zeros(n_groups, dtype=np.float64)
+    closeness = np.zeros(n_groups, dtype=np.float64)
+
+    # parallel over groups, not within a BFS: each group's BFS is serial, so a key with few
+    # categories caps at that many busy threads. That is the common case and keeps the kernel simple;
+    # splitting a single BFS across threads is the only way past it, and not worth the complexity.
+    for g in prange(n_groups):
+        start, end = offsets[g], offsets[g + 1]
+        size = end - start
+        if size == 0 or size >= n:
+            progress.update(1)
+            continue
+
+        # private per iteration, so nothing is shared; int32 halves the bytes touched for ~1.35x
+        dist = np.full(n, -1, dtype=np.int32)
+        queue = np.empty(n, dtype=np.int32)
+        tail = 0
+        for t in range(start, end):
+            dist[members[t]] = 0
+            queue[tail] = members[t]
+            tail += 1
+
+        adjacent = 0  # nodes at distance 1, i.e. the group's non-member neighbors
+        dist_sum = 0
+        head = 0
+        while head < tail:
+            v = queue[head]
+            head += 1
+            d = dist[v] + 1
+            for e in range(indptr[v], indptr[v + 1]):
+                u = indices[e]
+                if dist[u] < 0:
+                    dist[u] = d
+                    dist_sum += d
+                    if d == 1:
+                        adjacent += 1
+                    queue[tail] = u
+                    tail += 1
+
+        degree[g] = adjacent / (n - size)
+        closeness[g] = 0.0 if dist_sum == 0 else (n - size) / dist_sum
+        progress.update(1)
+
+    return degree, closeness
 
 
 @njit(parallel=True, cache=True)
@@ -786,50 +868,8 @@ def _local_clustering(indptr: NDArrayA, indices: NDArrayA, n: int) -> NDArrayA:
     return out
 
 
-def _centrality_scores_helper(
-    cat: Iterable[Any],
-    clusters: Sequence[str],
-    fun: Callable[..., float],
-    method: str,
-    queue: SigQueue | None = None,
-) -> pd.DataFrame:
-    res_list = []
-    for c in cat:
-        idx = np.where(clusters == c)[0]
-        res = fun(idx)
-        res_list.append(res)
-
-        if queue is not None:
-            queue.put(Signal.UPDATE)
-
-    if queue is not None:
-        queue.put(Signal.FINISH)
-
-    return pd.DataFrame(res_list, columns=[method], index=cat)
-
-
-def _build_shuffle_groups(
-    libraries: pd.Series[CategoricalDtype] | None,
-    n_cells: int,
-) -> tuple[NDArrayA, NDArrayA]:
-    """Build a CSR-like ``(offsets, indices)`` description of the within-group shuffling.
-
-    ``indices[offsets[g]:offsets[g + 1]]`` are the cell indices of group ``g`` in ascending order,
-    with groups in category order. Without a ``library_key`` there is a single group spanning all
-    cells, which reproduces a global shuffle.
-    """
-    if libraries is None:
-        return np.array([0, n_cells], dtype=np.int64), np.arange(n_cells, dtype=np.int64)
-
-    codes = libraries.cat.codes.to_numpy()
-    n_groups = len(libraries.cat.categories)
-    group_indices = np.argsort(codes, kind="stable").astype(np.int64)
-    group_offsets = np.concatenate(([0], np.cumsum(np.bincount(codes, minlength=n_groups)))).astype(np.int64)
-    return group_offsets, group_indices
-
-
 @njit(inline="always", cache=True)
-def _expand(
+def _expand(  # noqa: PLR0917, numba requires positional arguments
     indptr: NDArrayA,
     indices: NDArrayA,
     stamp: NDArrayA,
@@ -857,7 +897,7 @@ def _expand(
 
 
 @njit(parallel=True, cache=True)
-def _bfs_shells(
+def _bfs_shells(  # noqa: PLR0917, numba requires positional arguments
     indptr: NDArrayA,
     indices: NDArrayA,
     max_hop: int,
@@ -1027,9 +1067,9 @@ def _aggregate_over(
     raise ValueError(f"'aggregation' must be 'mean', 'sum' or 'variance', got {aggregation!r}")
 
 
-def _assert_hop_request(adata: AnnData, connectivity_key: str, hops: Sequence[int]) -> None:
+def _assert_hop_request(adata: AnnData, *, connectivity_key: str, hops: Sequence[int]) -> None:
     """Verify a hop request against the graph it is about to run on."""
-    _assert_connectivity_key(adata, connectivity_key)
+    _assert_connectivity_key(adata, key=connectivity_key)
     if len(hops) == 0:
         raise ValueError("'hops' must name at least one hop")
     if any(hop < 0 for hop in hops):
@@ -1052,7 +1092,7 @@ def nhood_aggregate(
     Matrix powers, not disjoint rings, so a hop restates the ones below it. Each cell in
     reach counts once: a cell two paths away is still one cell.
     """
-    _assert_hop_request(adata, connectivity_key, hops)
+    _assert_hop_request(adata, connectivity_key=connectivity_key, hops=hops)
     if aggregation not in ("mean", "sum", "variance"):
         raise ValueError(f"'aggregation' must be 'mean', 'sum' or 'variance', got {aggregation!r}")
     weights = [1.0] * len(hops) if hop_weights is None else list(hop_weights)
