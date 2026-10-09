@@ -7,8 +7,17 @@ import pytest
 
 from squidpy import types
 from squidpy._params import Default, defaults_of, resolve_params
+from squidpy.experimental.im._stain._decomposition import validate_macenko_params, validate_vahadane_params
+from squidpy.experimental.im._stain._reinhard import validate_reinhard_params
 
 SPECS = pytest.mark.parametrize("spec", [getattr(types, name) for name in types.__all__], ids=types.__all__)
+
+#: The validator each spec is resolved with, mirroring the method dispatch in the public functions.
+VALIDATORS = {
+    types.MacenkoParams: validate_macenko_params,
+    types.VahadaneParams: validate_vahadane_params,
+    types.ReinhardParams: validate_reinhard_params,
+}
 
 
 def _matches(value: object, hint: Any) -> bool:
@@ -52,7 +61,7 @@ def test_missing_default_raises() -> None:
 def test_resolve_fills_defaults_without_leaking_the_cache(spec: type) -> None:
     defaults = defaults_of(spec)
     key = next(k for k, v in defaults.items() if isinstance(v, int | float) and not isinstance(v, bool))
-    override = defaults[key] / 2  # stays inside every validator's range
+    override = defaults[key] / 2  # a plain in-range override; this test checks merging, not validation
     assert resolve_params({key: override}, spec) == {**defaults, key: override}
     resolve_params(None, spec).clear()
     assert resolve_params(None, spec) == defaults
@@ -85,7 +94,7 @@ def test_resolve_rejects(spec: type, params: Any, error: type[Exception], match:
 def test_validator_rejects_out_of_range(spec: type, params: dict[str, Any]) -> None:
     (key,) = params
     with pytest.raises(ValueError, match=key):
-        resolve_params(params, spec)
+        resolve_params(params, spec, validate=VALIDATORS[spec])
 
 
 @pytest.mark.parametrize(
@@ -101,7 +110,7 @@ def test_validator_rejects_out_of_range(spec: type, params: dict[str, Any]) -> N
     ],
 )
 def test_validator_coerces(spec: type, params: dict[str, Any], expected: dict[str, Any]) -> None:
-    resolved = resolve_params(params, spec)
+    resolved = resolve_params(params, spec, validate=VALIDATORS[spec])
     for key, value in expected.items():
         assert resolved[key] == value
         assert type(resolved[key]) is type(value)

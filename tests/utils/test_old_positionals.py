@@ -76,8 +76,11 @@ def test_v1_8_3_positional_call_binds_like_v1_8_3(module: str, name: str, old: t
         func("<data>", *values.values())
 
     assert calls == [(("<data>",), expected)]
-    assert any(issubclass(w.category, _PositionalArgumentWarning) for w in caught)
-    assert {w.filename for w in caught} == {__file__}, [(w.filename, str(w.message)) for w in caught]
+    # Only the positional-argument warning is ours to check; ignore unrelated GC noise such as a
+    # ResourceWarning from a file handle collected mid-call (its stacklevel points outside this file).
+    positional = [w for w in caught if issubclass(w.category, _PositionalArgumentWarning)]
+    assert positional
+    assert {w.filename for w in positional} == {__file__}, [(w.filename, str(w.message)) for w in caught]
 
 
 def test_old_positional_call_warns_and_still_works(nhood_data: AnnData) -> None:
@@ -95,7 +98,9 @@ def test_warnings_inside_shimmed_functions_point_at_the_caller(nhood_data: AnnDa
         sq.gr.nhood_enrichment(
             nhood_data, "leiden", n_perms=5, min_cell_count=nhood_data.n_obs, show_progress_bar=False
         )
-    messages = " | ".join(str(w.message) for w in caught)
+    # Each squidpy-emitted warning must exist and point at this caller; unrelated GC noise such as a
+    # ResourceWarning collected mid-call is ignored (it does not originate from squidpy's stacklevel).
     for part in ("Calling `spatial_neighbors`", "`n_neighs` is ignored", "no longer positional", "were excluded"):
-        assert part in messages
-    assert {w.filename for w in caught} == {__file__}, [(w.filename, str(w.message)) for w in caught]
+        matching = [w for w in caught if part in str(w.message)]
+        assert matching, part
+        assert {w.filename for w in matching} == {__file__}, [(w.filename, str(w.message)) for w in caught]

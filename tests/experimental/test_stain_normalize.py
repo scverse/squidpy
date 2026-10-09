@@ -170,13 +170,12 @@ class TestApplyStainNormalization:
     def test_method_params_validated_once_per_call(
         self, rgb_values: np.ndarray, method: str, partial: bool, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from squidpy._params import _VALIDATORS
-        from squidpy.experimental.im._stain._normalize import _METHOD_PARAMS
+        from squidpy.experimental.im._stain._normalize import _METHOD_PARAMS, _METHOD_VALIDATORS
 
         spec = _METHOD_PARAMS[method]
         calls = []
-        validate = _VALIDATORS[spec]
-        monkeypatch.setitem(_VALIDATORS, spec, lambda merged: (calls.append(dict(merged)), validate(merged)))
+        validate = _METHOD_VALIDATORS[method]
+        monkeypatch.setitem(_METHOD_VALIDATORS, method, lambda merged: (calls.append(dict(merged)), validate(merged)))
         params = ({"mask_background": False} if method == "reinhard" else {"beta": 0.2}) if partial else None
         sdata = _make_sdata(rgb_values)
         ref = fit_stain_reference(sdata, image_key="img", method=method, method_params=params, max_angle_deg=180.0)

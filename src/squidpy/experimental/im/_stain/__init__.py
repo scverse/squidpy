@@ -15,8 +15,6 @@ from squidpy.experimental.im._stain._conversion import (
     sda_to_rgb,
 )
 from squidpy.experimental.im._stain._decomposition import (
-    MacenkoParams,
-    VahadaneParams,
     apply_decomposition,
     fit_decomposition,
 )
@@ -32,7 +30,6 @@ from squidpy.experimental.im._stain._normalize import (
 )
 from squidpy.experimental.im._stain._reference import StainMethod, StainReference
 from squidpy.experimental.im._stain._reinhard import (
-    ReinhardParams,
     apply_reinhard,
     fit_reinhard,
 )
@@ -50,12 +47,9 @@ __all__ = [
     "RUDERMAN_RGB_TO_LMS",
     "RUIFROK_HE",
     "SDA_SCALE",
-    "MacenkoParams",
-    "ReinhardParams",
     "StainFittingError",
     "StainMethod",
     "StainReference",
-    "VahadaneParams",
     "absorbance_foreground_mask",
     "apply_decomposition",
     "apply_reinhard",

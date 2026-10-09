@@ -15,7 +15,6 @@ from typing import Any
 import numpy as np
 import xarray as xr
 
-from squidpy._params import validates
 from squidpy._utils import legacy_random
 from squidpy._validators import assert_non_negative, assert_positive
 from squidpy.experimental.im._stain._constants import RUIFROK_HE
@@ -35,16 +34,12 @@ from squidpy.experimental.im._stain._validation import (
     reorder_to_canonical,
     validate_stain_matrix,
 )
-from squidpy.types import (
-    MacenkoParams,
-    VahadaneParams,
-)
+from squidpy.types import VahadaneParams
 
 _MAXC_PERCENTILE = 99.0
 _MAXC_FLOOR = 1e-6
 
 
-@validates(MacenkoParams)
 def validate_macenko_params(params: dict[str, Any]) -> None:
     """Coerce ``params`` in place and range-check it. Raises on invalid values."""
     params["alpha"] = float(params["alpha"])
@@ -54,7 +49,6 @@ def validate_macenko_params(params: dict[str, Any]) -> None:
     assert_non_negative(params["beta"], name="beta")
 
 
-@validates(VahadaneParams)
 def validate_vahadane_params(params: dict[str, Any]) -> None:
     """Coerce ``params`` in place and range-check it. Raises on invalid values."""
     params["beta"] = float(params["beta"])

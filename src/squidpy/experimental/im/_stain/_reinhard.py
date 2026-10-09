@@ -15,7 +15,6 @@ from typing import Any
 import numpy as np
 import xarray as xr
 
-from squidpy._params import validates
 from squidpy.experimental.im._stain._conversion import (
     _apply_along_channel,
     _check_channel_dim,
@@ -32,7 +31,6 @@ from squidpy.types import ReinhardParams
 _SIGMA_FLOOR: float = 1e-6
 
 
-@validates(ReinhardParams)
 def validate_reinhard_params(params: dict[str, Any]) -> None:
     """Coerce ``params`` in place and range-check it. Raises on invalid values."""
     params["luminosity_threshold"] = float(params["luminosity_threshold"])
