@@ -131,12 +131,9 @@ def qc_image(
     else:
         metrics = list(metrics)
 
-    unknown, resolved = [], []
-    for m in metrics:
-        try:
-            resolved.append(normalize_choice(m, get_args(QCMetric), name="metrics"))
-        except ValueError:
-            unknown.append(m)
+    matches = [normalize_choice(m, get_args(QCMetric), name="metrics", default=None) for m in metrics]
+    unknown = [m for m, match in zip(metrics, matches, strict=True) if match is None]
+    resolved = [match for match in matches if match is not None]
     if unknown:
         available = ", ".join(get_args(QCMetric))
         raise ValueError(f"Unknown metrics {unknown}. Available: {available}")

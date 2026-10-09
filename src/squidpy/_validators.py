@@ -90,10 +90,16 @@ def assert_isinstance(value: Any, expected_type: type | tuple[type, ...], *, nam
         raise TypeError(f"Expected `{name}` to be of type `{type_names}`, got `{type(value).__name__}`.")
 
 
-def normalize_choice(value: Any, options: Iterable[Any], *, name: str) -> Any:
+_RAISE = object()
+"""Sentinel: `normalize_choice` raises rather than returning a miss."""
+
+
+def normalize_choice(value: Any, options: Iterable[Any], *, name: str, default: Any = _RAISE) -> Any:
     """Return the option in *options* matching *value*, ignoring the case of strings.
 
-    Raise ValueError naming the valid options if nothing matches.
+    Raise ValueError naming the valid options if nothing matches, or return *default*
+    if one was given. `None` is a legal option, so misses are signalled by *default*
+    alone, never by a `None` return.
     """
     options = list(options)
     if isinstance(value, str):
@@ -102,6 +108,8 @@ def normalize_choice(value: Any, options: Iterable[Any], *, name: str) -> Any:
                 return opt
     elif value in options:
         return value
+    if default is not _RAISE:
+        return default
     raise ValueError(f"Expected `{name}` to be one of `{options}`, got `{value!r}`.")
 
 

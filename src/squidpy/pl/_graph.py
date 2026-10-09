@@ -102,9 +102,8 @@ def centrality_scores(
     score = scores if score is None else score
     score = assert_non_empty_sequence(score, name="centrality scores")
 
-    # Match the column names case-insensitively; unknown names stay as-is and get dropped below.
-    by_fold = {str(s).casefold(): s for s in scores}
-    score = sorted(get_valid_values([by_fold.get(str(s).casefold(), s) for s in score], scores))
+    # Names that match no computed column keep their spelling and get dropped by get_valid_values.
+    score = sorted(get_valid_values([normalize_choice(s, scores, name="score", default=s) for s in score], scores))
 
     fig, axs = plt.subplots(1, len(score), figsize=figsize, dpi=dpi, constrained_layout=True)
     axs = np.ravel(axs)  # make into iterable

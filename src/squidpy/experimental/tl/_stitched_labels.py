@@ -191,10 +191,13 @@ def _check_strategy(strategy: str | Callable[[pd.Series], object]) -> str | Call
     """Return a callable unchanged, or the built-in strategy name matching *strategy*."""
     if callable(strategy):
         return strategy
-    try:
-        return normalize_choice(strategy, _BUILTIN_STRATEGIES, name="merge_strategy")
-    except ValueError as e:
-        raise ValueError(f"{e} Or pass a callable.") from None
+    match = normalize_choice(strategy, _BUILTIN_STRATEGIES, name="merge_strategy", default=None)
+    if match is None:
+        raise ValueError(
+            f"Expected `merge_strategy` to be one of `{list(_BUILTIN_STRATEGIES)}`, "
+            f"got `{strategy!r}`. Or pass a callable."
+        )
+    return match
 
 
 # Strategies whose result is always one of the input values, so an integer
