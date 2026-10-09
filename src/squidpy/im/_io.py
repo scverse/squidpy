@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Literal, get_args
+from typing import Literal
 
 import dask.array as da
 import numpy as np
@@ -14,9 +14,10 @@ from skimage.io import imread
 from tifffile import TiffFile
 
 from squidpy._utils import NDArrayA
+from squidpy._validators import options_of
 
 _InferDim = Literal["default", "channels_last", "z_last"]
-_INFER_DIMS = get_args(_InferDim)
+_INFER_DIMS = options_of(_InferDim)
 InferDims_t = _InferDim | Sequence[str]
 
 

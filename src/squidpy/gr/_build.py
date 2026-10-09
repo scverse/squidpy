@@ -193,8 +193,12 @@ def spatial_neighbors(
         `adata` is a :class:`spatialdata.SpatialData`.
     %(library_key)s
     coord_type
-        Type of coordinate system. If `None`, use `'grid'` when ``spatial_key`` is in
-        :attr:`anndata.AnnData.uns` with ``n_neighs = 6`` (Visium), otherwise `'generic'`.
+        Type of coordinate system. Valid options are:
+
+            - `'grid'` - grid coordinates.
+            - `'generic'` - generic coordinates.
+            - `None` - `'grid'` if ``spatial_key`` is in :attr:`anndata.AnnData.uns`
+              with ``n_neighs = 6`` (Visium), otherwise use `'generic'`.
     n_neighs
         Depending on the ``coord_type``:
 
@@ -217,7 +221,12 @@ def spatial_neighbors(
     percentile
         Percentile of the distances to use as threshold. Only used when ``coord_type = 'generic'``.
     transform
-        Adjacency matrix transform, or `None` for no transform.
+        Type of adjacency matrix transform.
+        Valid options are:
+
+            - `'spectral'` - spectral transformation of the adjacency matrix.
+            - `'cosine'` - cosine transformation of the adjacency matrix.
+            - `None` - no transformation of the adjacency matrix.
     set_diag
         Whether to set the diagonal of the spatial connectivities to `1.0`.
     key_added

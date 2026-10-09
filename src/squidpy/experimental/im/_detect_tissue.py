@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, Sequence
-from typing import Any, Literal, cast, get_args
+from typing import Any, Literal, cast
 
 import dask.array as da
 import numpy as np
@@ -27,7 +27,7 @@ from squidpy._utils import (
     _yx_from_shape,
     legacy_random,
 )
-from squidpy._validators import normalize_choice
+from squidpy._validators import normalize_choice, options_of
 from squidpy.types import (
     FelzenszwalbParams,
     WekaParams,
@@ -261,7 +261,7 @@ def detect_tissue(
     Processing is performed at an appropriate resolution and then upscaled to match
     the original image dimensions.
     """
-    method = normalize_choice(method, get_args(DetectTissueMethod), name="method")
+    method = normalize_choice(method, options_of(DetectTissueMethod), name="method")
 
     logger.info(f"Detecting tissue with method: {method}")
 

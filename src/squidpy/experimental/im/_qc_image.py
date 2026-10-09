@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable
-from typing import Literal, get_args
+from typing import Literal
 
 import dask
 import dask.array as da
@@ -16,7 +16,7 @@ from spatialdata._logging import logger
 from spatialdata.models import TableModel
 
 from squidpy._utils import _ensure_dim_order
-from squidpy._validators import normalize_choice
+from squidpy._validators import normalize_choice, options_of
 from squidpy.experimental.im._intensity_metrics import hed_metrics
 from squidpy.experimental.im._qc_metrics import _HNE_METRICS, InputKind, QCMetric, get_metric_info
 from squidpy.experimental.im._utils import (
@@ -131,9 +131,9 @@ def qc_image(
     else:
         metrics = list(metrics)
 
-    resolved = [normalize_choice(m, get_args(QCMetric), name="metrics", default=None) for m in metrics]
+    resolved = [normalize_choice(m, options_of(QCMetric), name="metrics", default=None) for m in metrics]
     if unknown := [m for m, match in zip(metrics, resolved, strict=True) if match is None]:
-        raise ValueError(f"Unknown metrics {unknown}. Available: {', '.join(get_args(QCMetric))}")
+        raise ValueError(f"Unknown metrics {unknown}. Available: {', '.join(options_of(QCMetric))}")
     metrics = resolved
 
     # Validate H&E constraint

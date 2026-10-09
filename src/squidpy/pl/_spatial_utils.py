@@ -6,7 +6,7 @@ from copy import copy
 from functools import partial
 from numbers import Number
 from types import MappingProxyType
-from typing import Any, Literal, NamedTuple, get_args
+from typing import Any, Literal, NamedTuple
 
 import dask.array as da
 import numpy as np
@@ -37,13 +37,13 @@ from skimage.util import map_array
 from squidpy._compat import add_categorical_legend, default_frameon, get_vector, vector_friendly
 from squidpy._constants._pkg_constants import Key
 from squidpy._utils import NDArrayA
-from squidpy._validators import assert_key_in_adata, normalize_choice
+from squidpy._validators import assert_key_in_adata, normalize_choice, options_of
 from squidpy.im._coords import CropCoords
 from squidpy.pl._color_utils import _get_palette, _maybe_set_colors
 from squidpy.pl._utils import _assert_value_in_obs
 
 _AvailShapes = Literal["circle", "square", "hex"]
-_SHAPES = get_args(_AvailShapes)
+_SHAPES = options_of(_AvailShapes)
 type Palette_t = str | ListedColormap | None
 type _Normalize = Normalize | Sequence[Normalize]
 type _SeqStr = str | Sequence[str]

@@ -43,6 +43,35 @@ def _pl_ripley(adata, mode):
     sq.pl.ripley(adata, cluster_key="leiden", mode=mode)
 
 
+def _ligrec(adata, **kw):
+    from itertools import product
+
+    inter = tuple(product(adata.raw.var_names[:3], adata.raw.var_names[:3]))
+    return sq.gr.ligrec(adata, cluster_key="leiden", interactions=inter, n_perms=1, rng=0, copy=True, **kw)
+
+
+def _pl_ligrec(adata, dendrogram):
+    res = _ligrec(adata)
+    sq.pl.ligrec(res, dendrogram=dendrogram, remove_empty_interactions=False)
+
+
+def _im_features(_, features):
+    sq.im.calculate_image_features(_feature_adata(), _img(), features=features)
+
+
+def _img():
+    return sq.im.ImageContainer(np.random.default_rng(0).integers(0, 255, (50, 50, 3), dtype=np.uint8))
+
+
+def _feature_adata():
+    import anndata as ad
+
+    a = ad.AnnData(np.zeros((2, 2), dtype=np.float32))
+    a.obsm["spatial"] = np.array([[10.0, 10.0], [30.0, 30.0]])
+    a.uns["spatial"] = {"libid": {"scalefactors": {"spot_diameter_fullres": 10.0}}}
+    return a
+
+
 # (data factory name, call(data, value), upper-case spelling, error name in the message)
 _CASES = {
     "gr.nhood_enrichment-normalization": (
@@ -56,6 +85,44 @@ _CASES = {
         lambda a, v: sq.gr.nhood_enrichment(a, cluster_key="leiden", handle_nan=v, n_perms=2, rng=0, copy=True),
         "ZERO",
         "`handle_nan`",
+    ),
+    "pl.spatial_scatter-shape": (
+        "nhood_data",
+        lambda a, v: sq.pl.spatial_scatter(a, color="leiden", shape=v, library_id=None),
+        "SQUARE",
+        "`shape`",
+    ),
+    "gr.ligrec-corr_axis": (
+        "adata",
+        lambda a, v: _ligrec(a, corr_axis=v, corr_method="fdr_bh"),
+        "CLUSTERS",
+        "`corr_axis`",
+    ),
+    "gr.ligrec-complex_policy": (
+        "adata",
+        lambda a, v: _ligrec(a, complex_policy=v),
+        "ALL",
+        "`complex_policy`",
+    ),
+    "pl.ligrec-dendrogram": ("adata", _pl_ligrec, "BOTH", "`dendrogram`"),
+    "im.calculate_image_features-features": (None, _im_features, "HISTOGRAM", "`features`"),
+    "im.process-method": (
+        None,
+        lambda _, v: sq.im.process(_img(), method=v),
+        "GRAY",
+        "`method`",
+    ),
+    "im.segment-method": (
+        None,
+        lambda _, v: sq.im.segment(_img(), method=v),
+        "WATERSHED",
+        "`method`",
+    ),
+    "im.ImageContainer-dims": (
+        None,
+        lambda _, v: sq.im.ImageContainer(np.zeros((4, 4, 3), dtype=np.uint8), dims=v),
+        "CHANNELS_LAST",
+        "`dims`",
     ),
     "gr.centrality_scores-score": (
         "nhood_data",

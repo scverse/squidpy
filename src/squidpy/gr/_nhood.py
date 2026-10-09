@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Sequence
-from typing import Any, Literal, NamedTuple, get_args
+from typing import Any, Literal, NamedTuple
 
 import numpy as np
 import pandas as pd
@@ -33,7 +33,7 @@ from squidpy._utils import (
     get_n_numba_threads,
     numba_threads,
 )
-from squidpy._validators import assert_key_in_adata, assert_positive, normalize_choice
+from squidpy._validators import assert_key_in_adata, assert_positive, normalize_choice, options_of
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
@@ -45,7 +45,7 @@ from squidpy.gr._utils import (
 __all__ = ["nhood_enrichment", "NhoodEnrichmentResult", "centrality_scores", "interaction_matrix"]
 
 CentralityScore = Literal["degree_centrality", "average_clustering", "closeness_centrality"]
-_CENTRALITY_SCORES = get_args(CentralityScore)
+_CENTRALITY_SCORES = options_of(CentralityScore)
 
 
 class NhoodEnrichmentResult(NamedTuple):

@@ -194,8 +194,7 @@ def _check_strategy(strategy: str | Callable[[pd.Series], object]) -> str | Call
     match = normalize_choice(strategy, _BUILTIN_STRATEGIES, name="merge_strategy", default=None)
     if match is None:
         raise ValueError(
-            f"Expected `merge_strategy` to be one of `{list(_BUILTIN_STRATEGIES)}`, "
-            f"got `{strategy!r}`. Or pass a callable."
+            f"Expected `merge_strategy` to be a callable or one of `{list(_BUILTIN_STRATEGIES)}`, got `{strategy!r}`."
         )
     return match
 

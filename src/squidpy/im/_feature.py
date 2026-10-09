@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, get_args
+from typing import TYPE_CHECKING, Any, Literal
 
 import pandas as pd
 from anndata import AnnData
@@ -11,12 +11,12 @@ from scanpy import logging as logg
 from squidpy._compat import old_positionals
 from squidpy._docs import d
 from squidpy._utils import Signal, SigQueue, get_n_processes, parallelize
-from squidpy._validators import normalize_choice
+from squidpy._validators import normalize_choice, options_of
 from squidpy.gr._utils import _save_data
 from squidpy.im._container import ImageContainer
 
 _Feature = Literal["texture", "summary", "histogram", "segmentation", "custom"]
-_FEATURES = get_args(_Feature)
+_FEATURES = options_of(_Feature)
 
 __all__ = ["calculate_image_features"]
 

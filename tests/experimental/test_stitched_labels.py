@@ -223,7 +223,7 @@ class TestMakeStitchedLabels:
             (
                 "qc_and_stitch",
                 {"labels_key": "labels", "merge_strategy": "bogus"},
-                "Expected `merge_strategy` to be one of.*Or pass a callable",
+                "Expected `merge_strategy` to be a callable or one of",
             ),
             (
                 "qc_and_stitch",
@@ -465,7 +465,7 @@ class TestReviewFixes:
         """M9: merge_strategy is validated eagerly even when write_table=False."""
         sdata, _ = sdata_tile_boundary
         _qc_and_stitch(sdata)
-        with pytest.raises(ValueError, match="Expected `merge_strategy` to be one of.*Or pass a callable"):
+        with pytest.raises(ValueError, match="Expected `merge_strategy` to be a callable or one of"):
             sq.experimental.tl.make_stitched_labels(
                 sdata, labels_key="labels", write_table=False, merge_strategy="bogus"
             )

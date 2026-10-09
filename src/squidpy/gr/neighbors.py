@@ -27,7 +27,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.neighbors import NearestNeighbors
 
 from squidpy._utils import NDArrayA
-from squidpy._validators import assert_positive, normalize_choice
+from squidpy._validators import assert_positive, normalize_choice, options_of
 from squidpy.gr._nhood import compute_hop_adjacency_matrices
 
 __all__ = [
@@ -44,13 +44,15 @@ __all__ = [
     "GridBuilder",
 ]
 
-TransformLike = Literal["spectral", "cosine"] | None
+_Transform = Literal["spectral", "cosine"]
+TransformLike = _Transform | None
 """Adjacency-matrix transform, or `None` for no transform. Case-insensitive."""
+_TRANSFORMS = (*options_of(_Transform), None)
 
 
 def _as_transform(transform: TransformLike) -> TransformLike:
     """Resolve the ``transform`` argument to its canonical spelling, accepting any casing."""
-    return normalize_choice(transform, ("spectral", "cosine", None), name="transform")
+    return normalize_choice(transform, _TRANSFORMS, name="transform")
 
 
 # Kept module-level (not folded into GraphBuilder's params): types the public

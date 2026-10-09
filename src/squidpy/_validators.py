@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Hashable, Iterable, Sequence
-from typing import TYPE_CHECKING, Any, cast, overload
+from typing import TYPE_CHECKING, Any, cast, get_args, overload
 
 from squidpy._utils import _unique_order_preserving
 
@@ -88,6 +88,14 @@ def assert_isinstance(value: Any, expected_type: type | tuple[type, ...], *, nam
         else:
             type_names = expected_type.__name__
         raise TypeError(f"Expected `{name}` to be of type `{type_names}`, got `{type(value).__name__}`.")
+
+
+def options_of(literal: Any) -> tuple[Any, ...]:
+    """Return the members of a `Literal`, so an option list is never retyped beside its annotation.
+
+    Accepts a `type X = Literal[...]` alias too, whose lazy value `typing.get_args` alone would miss.
+    """
+    return get_args(getattr(literal, "__value__", literal))
 
 
 _RAISE = object()
