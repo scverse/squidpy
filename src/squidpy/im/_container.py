@@ -23,15 +23,15 @@ from skimage.transform import rescale
 from skimage.util import img_as_float
 
 from squidpy._compat import default_palette
-from squidpy._constants._constants import InferDimensions
 from squidpy._constants._pkg_constants import Key
-from squidpy._docs import d, inject_docs
+from squidpy._docs import d
 from squidpy._utils import NDArrayA, singledispatchmethod
 from squidpy._validators import (
     assert_in_range,
     assert_non_empty_sequence,
     assert_non_negative,
     assert_positive,
+    normalize_choice,
 )
 from squidpy.gr._utils import _assert_spatial_basis
 from squidpy.im._coords import (
@@ -44,12 +44,11 @@ from squidpy.im._coords import (
     _update_attrs_scale,
 )
 from squidpy.im._feature_mixin import FeatureMixin
-from squidpy.im._io import _assert_dims_present, _infer_dimensions, _lazy_load_image
+from squidpy.im._io import _INFER_DIMS, InferDims_t, _assert_dims_present, _infer_dimensions, _lazy_load_image
 
 type FoI_t = int | float
 type Pathlike_t = str | Path
 type Arraylike_t = NDArrayA | xr.DataArray
-type InferDims_t = Literal["default", "prefer_channels", "prefer_z"] | Sequence[str]
 type Input_t = Pathlike_t | Arraylike_t | Literal["ImageContainer"]
 _ERROR_NOTIMPLEMENTED_LIBID = f"It seems there are multiple `library_id` in `adata.uns[{Key.uns.spatial!r}]`.\n \
                                 Loading multiple images is not implemented (yet), please specify a `library_id`."
@@ -224,12 +223,11 @@ class ImageContainer(FeatureMixin):
 
     @d.get_sections(base="add_img", sections=["Parameters", "Raises"])
     @d.dedent
-    @inject_docs(id=InferDimensions)
     def add_img(
         self,
         img: Input_t,
         layer: str | None = None,
-        dims: InferDims_t = InferDimensions.DEFAULT.s,
+        dims: InferDims_t = "default",
         library_id: str | Sequence[str] | None = None,
         lazy: bool = True,
         chunks: str | tuple[int, ...] | None = None,
@@ -248,9 +246,9 @@ class ImageContainer(FeatureMixin):
         dims
             Where to save channel dimension when reading from a file or loading an array. Valid options are:
 
-                - `{id.CHANNELS_LAST.s!r}` - load the last non-spatial dimension as channels.
-                - `{id.Z_LAST.s!r}` - load the last non-spatial dimension as Z-dimension.
-                - `{id.DEFAULT.s!r}` - same as `{id.CHANNELS_LAST.s!r}`, but for 4-dimensional arrays,
+                - `'channels_last'` - load the last non-spatial dimension as channels.
+                - `'z_last'` - load the last non-spatial dimension as Z-dimension.
+                - `'default'` - same as `'channels_last'`, but for 4-dimensional arrays,
                   tries to also load the first dimension as channels if the last non-spatial dimension is 1.
                 - a sequence of dimension names matching the shape of ``img``, e.g. ``('y', 'x', 'z', 'channels')``.
                   `'y'`, `'x'` and `'z'` must always be present.
@@ -276,9 +274,7 @@ class ImageContainer(FeatureMixin):
             If loading a specific data type has not been implemented.
         """
         layer = self._get_next_image_id("image") if layer is None else layer
-        dims: InferDimensions | Sequence[str] = (  # type: ignore[no-redef]
-            InferDimensions(dims) if isinstance(dims, str) else dims
-        )
+        dims = normalize_choice(dims, _INFER_DIMS, name="dims") if isinstance(dims, str) else dims
         res: xr.DataArray | None = self._load_img(img, chunks=chunks, layer=layer, copy=copy, dims=dims, **kwargs)
 
         if res is not None:
@@ -327,7 +323,7 @@ class ImageContainer(FeatureMixin):
         self,
         img_path: Pathlike_t,
         chunks: int | None = None,
-        dims: InferDimensions | tuple[str, ...] = InferDimensions.DEFAULT,
+        dims: InferDims_t = "default",
         **_: Any,
     ) -> xr.DataArray | None:
         def transform_metadata(data: xr.Dataset) -> xr.Dataset:
@@ -373,7 +369,7 @@ class ImageContainer(FeatureMixin):
         self,
         img: NDArrayA,
         copy: bool = True,
-        dims: InferDimensions | tuple[str, ...] = InferDimensions.DEFAULT,
+        dims: InferDims_t = "default",
         **_: Any,
     ) -> xr.DataArray:
         logg.debug(f"Loading `numpy.array` of shape `{img.shape}`")
@@ -386,7 +382,7 @@ class ImageContainer(FeatureMixin):
         img: xr.DataArray,
         copy: bool = True,
         warn: bool = True,
-        dims: InferDimensions | tuple[str, ...] = InferDimensions.DEFAULT,
+        dims: InferDims_t = "default",
         **_: Any,
     ) -> xr.DataArray:
         logg.debug(f"Loading `xarray.DataArray` of shape `{img.shape}`")

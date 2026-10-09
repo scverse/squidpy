@@ -17,8 +17,3 @@ class ImageFeature(ModeEnum):
 
 
 # _ligrec.py
-@unique
-class InferDimensions(ModeEnum):
-    DEFAULT = "default"
-    CHANNELS_LAST = "channels_last"
-    Z_LAST = "z_last"
