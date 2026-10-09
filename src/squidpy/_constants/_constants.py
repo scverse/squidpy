@@ -56,5 +56,3 @@ class ScatterShape(ModeEnum):
     CIRCLE = "circle"
     SQUARE = "square"
     HEX = "hex"
-
-
