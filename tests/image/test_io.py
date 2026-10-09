@@ -11,6 +11,10 @@ from skimage.io import imread
 from squidpy._constants._constants import InferDimensions
 from squidpy.im._io import _get_image_shape_dtype, _infer_dimensions, _lazy_load_image
 
+# `ImageContainer` reads images through `skimage.io`'s plugin interface, which is on its way out.
+# The container is itself slated for removal, so this is noise rather than a finding.
+pytestmark = pytest.mark.filterwarnings("ignore:The plugin infrastructure in `skimage.io`:FutureWarning")
+
 
 class TestIO:
     @staticmethod

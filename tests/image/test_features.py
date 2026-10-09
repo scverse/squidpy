@@ -12,6 +12,10 @@ from squidpy._constants._constants import ImageFeature
 from squidpy.im._container import ImageContainer
 from squidpy.im._feature import calculate_image_features
 
+# `ImageContainer` reads images through `skimage.io`'s plugin interface, which is on its way out.
+# The container is itself slated for removal, so this is noise rather than a finding.
+pytestmark = pytest.mark.filterwarnings("ignore:The plugin infrastructure in `skimage.io`:FutureWarning")
+
 
 class TestFeatureMixin:
     def test_container_empty(self):

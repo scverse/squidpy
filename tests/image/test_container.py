@@ -25,6 +25,10 @@ from squidpy._constants._pkg_constants import Key
 from squidpy.im import ImageContainer
 from squidpy.im._coords import _NULL_COORDS, CropCoords, CropPadding
 
+# `ImageContainer` reads images through `skimage.io`'s plugin interface, which is on its way out.
+# The container is itself slated for removal, so this is noise rather than a finding.
+pytestmark = pytest.mark.filterwarnings("ignore:The plugin infrastructure in `skimage.io`:FutureWarning")
+
 
 class SimpleHTMLValidator(HTMLParser):  # modified from CellRank
     def __init__(self, n_expected_rows: int, expected_tags: Set[str], **kwargs: Any):

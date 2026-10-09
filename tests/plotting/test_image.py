@@ -11,6 +11,10 @@ import squidpy as sq
 from squidpy.im import ImageContainer
 from tests.conftest import ACTUAL, DPI, EXPECTED, TOL, PlotTester, PlotTesterMeta
 
+# `ImageContainer` reads images through `skimage.io`'s plugin interface, which is on its way out.
+# The container is itself slated for removal, so this is noise rather than a finding.
+pytestmark = pytest.mark.filterwarnings("ignore:The plugin infrastructure in `skimage.io`:FutureWarning")
+
 
 class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):
     def test_channelwise_wrong_number_of_axes(self, cont: ImageContainer):
