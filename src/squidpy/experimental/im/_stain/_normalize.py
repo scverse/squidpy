@@ -23,7 +23,7 @@ from spatialdata.models import Image2DModel
 from spatialdata.transformations import get_transformation
 
 from squidpy._params import resolve_params
-from squidpy._utils import _get_scale_factors, _unique_order_preserving
+from squidpy._utils import _get_scale_factors
 from squidpy.experimental.im._stain._constants import RUIFROK_HE
 from squidpy.experimental.im._stain._conversion import _check_channel_dim, cast_to_image_dtype
 from squidpy.experimental.im._stain._decomposition import (
@@ -33,7 +33,12 @@ from squidpy.experimental.im._stain._decomposition import (
     validate_macenko_params,
     validate_vahadane_params,
 )
-from squidpy.experimental.im._stain._reference import StainFit, StainMethod
+from squidpy.experimental.im._stain._reference import (
+    _DECOMPOSITION_METHODS,
+    _VALID_METHODS,
+    StainFit,
+    StainMethod,
+)
 from squidpy.experimental.im._stain._reinhard import (
     apply_reinhard,
     fit_reinhard,
@@ -64,8 +69,6 @@ _METHOD_VALIDATORS: dict[str, Callable[[dict[str, Any]], None]] = {
     "macenko": validate_macenko_params,
     "vahadane": validate_vahadane_params,
 }
-_VALID_METHODS = tuple(_METHOD_PARAMS)
-_DECOMPOSITION_METHODS = ("macenko", "vahadane")
 _CONCENTRATION_CHANNELS = ["hematoxylin", "eosin", "residual"]
 
 # Public union accepted by the method_params argument of the dispatchers.
@@ -122,6 +125,14 @@ def _resolve_tissue_bool_mask(
 
         mask = resize(mask, target_hw, order=0, preserve_range=True) > 0.5
     return mask
+
+
+def _resolve_fit_inputs(
+    sdata: sd.SpatialData, *, image_key: str, scale: str, tissue_mask_key: str | None
+) -> tuple[xr.DataArray, np.ndarray]:
+    da = _resolve_image(sdata, image_key=image_key, scale=scale, prefer="coarsest")
+    validate_rgb_range(da)
+    return da, _resolve_tissue_bool_mask(sdata, image_key=image_key, fit_da=da, tissue_mask_key=tissue_mask_key)
 
 
 def _resolve_output_tissue_mask(
@@ -209,9 +220,7 @@ def estimate_white_point(
     Shape-``(3,)`` white point; pass it as ``white_point`` to
     :func:`fit_stain_reference` / :meth:`~squidpy.experimental.im.StainFit.decompose`.
     """
-    da = _resolve_image(sdata, image_key=image_key, scale=scale, prefer="coarsest")
-    validate_rgb_range(da)
-    tissue_mask = _resolve_tissue_bool_mask(sdata, image_key=image_key, fit_da=da, tissue_mask_key=tissue_mask_key)
+    da, tissue_mask = _resolve_fit_inputs(sdata, image_key=image_key, scale=scale, tissue_mask_key=tissue_mask_key)
     return white_point_from_background(da, ~tissue_mask)
 
 
@@ -236,7 +245,10 @@ def fit_stain_reference(
     image_key
         Key of the RGB image in ``sdata.images`` to fit on, or a **list of keys**
         to fit one reference from the pooled tissue pixels of several images
-        (e.g. a representative cohort). Pooled images must share a dtype.
+        (e.g. a representative cohort). Pooled images must share a dtype. The
+        pool is a pool of *pixels*: each image contributes in proportion to its
+        tissue pixel count at the resolved ``scale``, not equally, so images
+        whose pyramids bottom out at different sizes carry different weight.
     method
         Fitting method: ``"macenko"`` (default) or ``"vahadane"`` (physical
         stain-matrix decomposition, usable by both :meth:`~squidpy.experimental.im.StainFit.transform` and
@@ -280,14 +292,14 @@ def fit_stain_reference(
     The fitted :class:`~squidpy.experimental.im.StainFit`. Nothing is written to ``sdata``.
     """
     if method not in _VALID_METHODS:
-        raise ValueError(f"Unknown method {method!r}; expected one of {list(_VALID_METHODS)}.")
+        raise ValueError(f"Unknown method {method!r}; expected one of {sorted(_VALID_METHODS)}.")
     # Normalise to lists: a single image is a pool of one, so both cases share one path.
     keys = [image_key] if isinstance(image_key, str) else list(image_key)
     if not keys:
         raise ValueError("`image_key` is empty; pass at least one image key.")
-    unique_keys, _ = _unique_order_preserving(keys)
-    if len(unique_keys) != len(keys):
-        raise ValueError("`image_key` has duplicate keys.")
+    if len(set(keys)) != len(keys):
+        dupes = sorted({k for k in keys if keys.count(k) > 1})
+        raise ValueError(f"`image_key` has duplicate keys: {dupes}; each image may be pooled only once.")
     if tissue_mask_key is None:
         mask_keys: list[str | None] = [None] * len(keys)
     else:
@@ -299,16 +311,14 @@ def fit_stain_reference(
         )
 
     params = resolve_params(method_params, _METHOD_PARAMS[method], validate=_METHOD_VALIDATORS[method])
-    das = [_resolve_image(sdata, image_key=k, scale=scale, prefer="coarsest") for k in keys]
-    for da in das:
-        validate_rgb_range(da)
+    resolved = [
+        _resolve_fit_inputs(sdata, image_key=k, scale=scale, tissue_mask_key=mk)
+        for k, mk in zip(keys, mask_keys, strict=True)
+    ]
+    das, masks = [d for d, _ in resolved], [m for _, m in resolved]
     dtypes = {str(da.dtype) for da in das}
     if len(dtypes) != 1:
         raise ValueError(f"pooled images must share a dtype; got {sorted(dtypes)}.")
-    masks = [
-        _resolve_tissue_bool_mask(sdata, image_key=k, fit_da=da, tissue_mask_key=mk)
-        for k, da, mk in zip(keys, das, mask_keys, strict=True)
-    ]
 
     if method == "reinhard":
         return fit_reinhard(das, params, tissue_mask=masks, image_key=keys)
@@ -350,9 +360,8 @@ def _normalize_stains(
     # Source statistics (Reinhard mu/sigma or the decomposition source matrix)
     # are reduced on a coarse level with a tissue mask; the lazy transform is
     # then applied to the full-resolution `da`.
-    fit_rgb = _resolve_image(sdata, image_key=image_key, scale=scale, prefer="coarsest")
-    validate_rgb_range(fit_rgb)  # reject mis-typed source (e.g. 0-255 float) before the dtype-clipped reconstruction
-    tissue_mask = _resolve_tissue_bool_mask(sdata, image_key=image_key, fit_da=fit_rgb, tissue_mask_key=tissue_mask_key)
+    # the range check rejects a mis-typed source (e.g. 0-255 float) before the dtype-clipped reconstruction
+    fit_rgb, tissue_mask = _resolve_fit_inputs(sdata, image_key=image_key, scale=scale, tissue_mask_key=tissue_mask_key)
     out_dtype = da.dtype if output_dtype is None else np.dtype(output_dtype)  # clip range + final cast
     if reference.method == "reinhard":
         normalized = apply_reinhard(
