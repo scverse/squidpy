@@ -778,7 +778,6 @@ def _refine_with_background_classifier(
     # Simple logistic regression classifier
     clf = LogisticRegression(
         max_iter=10_000,
-        n_jobs=-1,
         solver="lbfgs",
     )
     clf.fit(X_train_z, y_train)
