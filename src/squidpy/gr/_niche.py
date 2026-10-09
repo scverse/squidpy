@@ -19,8 +19,7 @@ from sklearn.mixture import GaussianMixture
 from spatialdata import SpatialData, sanitize_table
 from spatialdata._logging import logger as logg
 
-from squidpy._constants._constants import NicheDefinitions
-from squidpy._docs import d, inject_docs
+from squidpy._docs import d
 from squidpy._utils import (
     RNGLike,
     SeedLike,
@@ -47,7 +46,6 @@ __all__ = [
 
 
 @d.dedent
-@inject_docs(fla=NicheDefinitions)
 @deprecated_randomness_param
 def calculate_niche(  # noqa: PLR0917, deprecated and removed in v1.9.0
     data: AnnData | SpatialData,
@@ -100,10 +98,10 @@ def calculate_niche(  # noqa: PLR0917, deprecated and removed in v1.9.0
     %(adata)s
     flavor
         Method to use for niche calculation. Available options are:
-            - `{fla.NEIGHBORHOOD.s!r}` - cluster the neighborhood profile.
-            - `{fla.UTAG.s!r}` - use utag algorithm (matrix multiplication).
-            - `{fla.SPATIALLEIDEN.s!r}` - cluster spatially resolved omics data using Multiplex Leiden.
-            - `{fla.CELLCHARTER.s!r}` - a simplified version of CellCharter's approach, using PCA for dimensionality reduction. An arbitrary embedding can be used instead of PCA by setting the `use_rep` parameter which will try to find the embedding in `adata.obsm`.
+            - `'neighborhood'` - cluster the neighborhood profile.
+            - `'utag'` - use utag algorithm (matrix multiplication).
+            - `'spatialleiden'` - cluster spatially resolved omics data using Multiplex Leiden.
+            - `'cellcharter'` - a simplified version of CellCharter's approach, using PCA for dimensionality reduction. An arbitrary embedding can be used instead of PCA by setting the `use_rep` parameter which will try to find the embedding in `adata.obsm`.
     library_key
         Deprecated, and removed with this function in v1.9.0; no flavor function takes it. Each
         library is fitted on its own and its labels are prefixed ``lib=<id>_``, so a niche in one
@@ -117,69 +115,69 @@ def calculate_niche(  # noqa: PLR0917, deprecated and removed in v1.9.0
             for lib in adata.obs["library"].unique():
                 sub = adata[adata.obs["library"] == lib].copy()
                 sq.gr.calculate_niche_utag(sub, resolutions=0.5)
-                adata.obs.loc[sub.obs_names, "niche"] = f"lib={{lib}}_" + sub.obs["utag_niche_res=0.5"].astype(str)
+                adata.obs.loc[sub.obs_names, "niche"] = f"lib={lib}_" + sub.obs["utag_niche_res=0.5"].astype(str)
     %(table_key)s
     mask
         Boolean array to filter cells which won't get assigned to a niche. Spelled
         ``cluster_mask`` on the three flavors that build an embedding, and
-        `{fla.SPATIALLEIDEN.s!r}` raises rather than accepting one it cannot honour.
+        `'spatialleiden'` raises rather than accepting one it cannot honour.
         Note that if you want to exclude these cells during neighborhood calculation already, you should subset your AnnData table before running 'sq.gr.spatial_neigbors'.
         Mask can look like the following. Here, the index values would correspond to adata.obs.index.
         The entries that are False are the ones ignored.
         mask = Series([False, False, True], index = ["a", "b", "c"])
     groups
         Groups based on which to calculate neighborhood profile (E.g. columns of cell type annotations in adata.obs).
-        Required if flavor == `{fla.NEIGHBORHOOD.s!r}`.
+        Required if flavor == `'neighborhood'`.
     n_neighbors
         Number of neighbors to use for 'scanpy.pp.neighbors' before clustering using leiden algorithm.
-        Required if flavor == `{fla.NEIGHBORHOOD.s!r}` or flavor == `{fla.UTAG.s!r}`.
+        Required if flavor == `'neighborhood'` or flavor == `'utag'`.
     resolutions
         List of resolutions to use for leiden clustering.
         In the case of spatialleiden you can pass a tuple. Resolution for the latent space and spatial layer, respectively. A single float applies to both layers.
-        Required if flavor == `{fla.NEIGHBORHOOD.s!r}` or flavor == `{fla.UTAG.s!r}`.
-        Optional if flavor == `{fla.SPATIALLEIDEN.s!r}`.
+        Required if flavor == `'neighborhood'` or flavor == `'utag'`.
+        Optional if flavor == `'spatialleiden'`.
     min_niche_size
         Minimum required size of a niche. Niches with fewer cells will be labeled as 'not_a_niche'.
-        Optional if flavor == `{fla.NEIGHBORHOOD.s!r}`.
+        Optional if flavor == `'neighborhood'`.
     scale
         If 'True', compute z-scores of neighborhood profiles.
-        Optional if flavor == `{fla.NEIGHBORHOOD.s!r}`.
+        Optional if flavor == `'neighborhood'`.
     abs_nhood
         If 'True', calculate niches based on absolute neighborhood profile.
-        Optional if flavor == `{fla.NEIGHBORHOOD.s!r}`.
+        Optional if flavor == `'neighborhood'`.
     distance
         n-hop neighbor adjacency matrices to use e.g. [1,2,3] for 1-hop,2-hop,3-hop neighbors respectively or "5" for 1-hop,...,5-hop neighbors. 0 (self) is always included.
-        Required if flavor == `{fla.CELLCHARTER.s!r}`.
-        Optional if flavor == `{fla.NEIGHBORHOOD.s!r}`.
+        Required if flavor == `'cellcharter'`.
+        Optional if flavor == `'neighborhood'`.
     n_hop_weights
         How to weight subsequent n-hop adjacency matrices. E.g. [1, 0.5, 0.25] for weights of 1-hop, 2-hop, 3-hop adjacency matrices respectively.
-        Optional if flavor == `{fla.NEIGHBORHOOD.s!r}` and `distance` > 1.
+        Optional if flavor == `'neighborhood'` and `distance` > 1.
     aggregation
         How to aggregate count matrices. Either 'mean' or 'variance'.
-        Required if flavor == `{fla.CELLCHARTER.s!r}`.
+        Required if flavor == `'cellcharter'`.
     n_components
         Number of components to use for GMM.
-        Required if flavor == `{fla.CELLCHARTER.s!r}`.
+        Required if flavor == `'cellcharter'`.
     %(rng)s
-        Optional if flavor == `{fla.CELLCHARTER.s!r}` or flavor == `{fla.SPATIALLEIDEN.s!r}`.
+        Optional if flavor == `'cellcharter'` or flavor == `'spatialleiden'`.
     spatial_connectivities_key
         Key in `adata.obsp` where spatial connectivities are stored.
-        Required if flavor == `{fla.SPATIALLEIDEN.s!r}`.
+        Required if flavor == `'spatialleiden'`.
     latent_connectivities_key
         Key in `adata.obsp` where gene expression connectivities are stored.
-        Required if flavor == `{fla.SPATIALLEIDEN.s!r}`.
+        Required if flavor == `'spatialleiden'`.
     layer_ratio
         The ratio of the weighting of the layers; latent space vs spatial. A higher ratio will increase relevance of the spatial neighbors and lead to more spatially homogeneous clusters.
-        Optional if flavor == `{fla.SPATIALLEIDEN.s!r}`.
+        Optional if flavor == `'spatialleiden'`.
     n_iterations
         Number of iterations to run the Leiden algorithm. If the number is negative it runs until convergence.
-        Optional if flavor == `{fla.SPATIALLEIDEN.s!r}`.
+        Optional if flavor == `'spatialleiden'`.
     use_weights
         Whether to use weights for the edges for latent space and spatial neighbors, respectively. A single bool applies to both layers.
-        Optional if flavor == `{fla.SPATIALLEIDEN.s!r}`.
+        Optional if flavor == `'spatialleiden'`.
     use_rep
         Key in `adata.obsm` where the embedding is stored. If provided, this embedding will be used instead of PCA for dimensionality reduction.
-        Optional if flavor == `{fla.CELLCHARTER.s!r}`.
+        Optional if flavor == `'cellcharter'`.
     inplace
         If 'True', perform the operation in place.
         If 'False', return a new AnnData object with the niche labels.

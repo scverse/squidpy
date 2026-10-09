@@ -45,13 +45,6 @@ class SegmentationBackend(ModeEnum):
 
 
 @unique
-class DendrogramAxis(ModeEnum):
-    INTERACTING_MOLS = "interacting_molecules"
-    INTERACTING_CLUSTERS = "interacting_clusters"
-    BOTH = "both"
-
-
-@unique
 class InferDimensions(ModeEnum):
     DEFAULT = "default"
     CHANNELS_LAST = "channels_last"
@@ -65,11 +58,3 @@ class ScatterShape(ModeEnum):
     HEX = "hex"
 
 
-@unique
-class NicheDefinitions(ModeEnum):
-    NEIGHBORHOOD = "neighborhood"
-    UTAG = "utag"
-    CELLCHARTER = "cellcharter"
-    SPATIALLEIDEN = "spatialleiden"
-    SPOT = "spot"
-    BANKSY = "banksy"
