@@ -211,10 +211,8 @@ def spatial_autocorr(
         vals, index = extract_X(adata, genes)  # type: ignore
     elif attr == "obs":
         vals, index = extract_obs(adata, genes)  # type: ignore
-    elif attr == "obsm":
-        vals, index = extract_obsm(adata, genes)  # type: ignore
     else:
-        raise NotImplementedError(f"Extracting from `adata.{attr}` is not yet implemented.")
+        vals, index = extract_obsm(adata, genes)  # type: ignore
 
     mode = normalize_choice(mode, ("moran", "geary"), name="mode")
     params = {"mode": mode, "transformation": transformation, "two_tailed": two_tailed}

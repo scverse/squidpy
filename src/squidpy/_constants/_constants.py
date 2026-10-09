@@ -52,19 +52,6 @@ class SegmentationBackend(ModeEnum):
 
 
 @unique
-class BlobModel(ModeEnum):
-    LOG = "log"
-    DOG = "dog"
-    DOH = "doh"
-
-
-@unique
-class Dataset(ModeEnum):
-    OB = "ob"
-    SVZ = "svz"
-
-
-@unique
 class Centrality(ModeEnum):
     DEGREE = "degree_centrality"
     CLUSTERING = "average_clustering"
@@ -79,12 +66,6 @@ class DendrogramAxis(ModeEnum):
 
 
 @unique
-class Symbol(ModeEnum):
-    DISC = "disc"
-    SQUARE = "square"
-
-
-@unique
 class InferDimensions(ModeEnum):
     DEFAULT = "default"
     CHANNELS_LAST = "channels_last"
@@ -96,14 +77,6 @@ class ScatterShape(str, ModeEnum):
     CIRCLE = "circle"
     SQUARE = "square"
     HEX = "hex"
-
-
-@unique
-class TenxVersions(str, ModeEnum):
-    # Version numbers as class objects of TenxVersions
-    V1 = "1.1.0"
-    V2 = "1.2.0"
-    V3 = "1.3.0"
 
 
 @unique

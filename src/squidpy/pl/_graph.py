@@ -101,14 +101,9 @@ def centrality_scores(
     score = scores if score is None else score
     score = assert_non_empty_sequence(score, name="centrality scores")
 
-    def _canonical(s: str) -> str:
-        # Case-insensitive match; unknown names pass through and are dropped by get_valid_values.
-        try:
-            return normalize_choice(s, scores, name="score")
-        except ValueError:
-            return s
-
-    score = sorted(get_valid_values([_canonical(s) for s in score], scores))
+    # Match the column names case-insensitively; unknown names stay as-is and get dropped below.
+    by_fold = {str(s).casefold(): s for s in scores}
+    score = sorted(get_valid_values([by_fold.get(str(s).casefold(), s) for s in score], scores))
 
     fig, axs = plt.subplots(1, len(score), figsize=figsize, dpi=dpi, constrained_layout=True)
     axs = np.ravel(axs)  # make into iterable
@@ -237,11 +232,7 @@ def nhood_enrichment(
     %(adata)s
     %(cluster_key)s
     mode
-        Which :func:`squidpy.gr.nhood_enrichment` result to plot. Valid options are:
-
-            - `'zscore'` - z-score values of enrichment statistic.
-            - `'count'` - enrichment count.
-
+        Which :func:`squidpy.gr.nhood_enrichment` result to plot.
     %(heatmap_plotting)s
     kwargs
         Keyword arguments for :func:`matplotlib.pyplot.text`.

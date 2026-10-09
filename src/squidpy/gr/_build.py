@@ -42,7 +42,6 @@ from squidpy.gr.neighbors import (
     KNNBuilder,
     RadiusBuilder,
     TransformLike,
-    _as_transform,
 )
 
 __all__ = [
@@ -84,7 +83,6 @@ def _resolve_graph_builder(
     assert_positive(n_rings, name="n_rings")
     assert_positive(n_neighs, name="n_neighs")
 
-    transform = _as_transform(transform)
     if coord_type is None:
         if radius is not None:
             logg.warning(
@@ -195,12 +193,8 @@ def spatial_neighbors(
         `adata` is a :class:`spatialdata.SpatialData`.
     %(library_key)s
     coord_type
-        Type of coordinate system. Valid options are:
-
-            - `'grid'` - grid coordinates.
-            - `'generic'` - generic coordinates.
-            - `None` - `'grid'` if ``spatial_key`` is in :attr:`anndata.AnnData.uns`
-              with ``n_neighs = 6`` (Visium), otherwise use `'generic'`.
+        Type of coordinate system. If `None`, use `'grid'` when ``spatial_key`` is in
+        :attr:`anndata.AnnData.uns` with ``n_neighs = 6`` (Visium), otherwise `'generic'`.
     n_neighs
         Depending on the ``coord_type``:
 
@@ -223,12 +217,7 @@ def spatial_neighbors(
     percentile
         Percentile of the distances to use as threshold. Only used when ``coord_type = 'generic'``.
     transform
-        Type of adjacency matrix transform.
-        Valid options are:
-
-            - `'spectral'` - spectral transformation of the adjacency matrix.
-            - `'cosine'` - cosine transformation of the adjacency matrix.
-            - `None` - no transformation of the adjacency matrix.
+        Adjacency matrix transform, or `None` for no transform.
     set_diag
         Whether to set the diagonal of the spatial connectivities to `1.0`.
     key_added
@@ -555,11 +544,10 @@ def spatial_neighbors_knn(
     spatial_neighbors_from_builder : Use :class:`~squidpy.gr.neighbors.KNNBuilder` directly for advanced customization.
     squidpy.gr.neighbors.KNNBuilder : k-nearest-neighbor builder class.
     """
-    transform_enum = _as_transform(transform)
     builder = KNNBuilder(
         n_neighs=n_neighs,
         percentile=percentile,
-        transform=transform_enum,
+        transform=transform,
         set_diag=set_diag,
     )
     adata, library_key = _prepare_spatial_neighbors_input(
@@ -628,11 +616,10 @@ def spatial_neighbors_radius(
     spatial_neighbors_from_builder : Use :class:`~squidpy.gr.neighbors.RadiusBuilder` directly for advanced customization.
     squidpy.gr.neighbors.RadiusBuilder : radius-based builder class.
     """
-    transform_enum = _as_transform(transform)
     builder = RadiusBuilder(
         radius=radius,
         percentile=percentile,
-        transform=transform_enum,
+        transform=transform,
         set_diag=set_diag,
     )
     adata, library_key = _prepare_spatial_neighbors_input(
@@ -705,11 +692,10 @@ def spatial_neighbors_delaunay(
     spatial_neighbors_from_builder : Use :class:`~squidpy.gr.neighbors.DelaunayBuilder` directly for advanced customization.
     squidpy.gr.neighbors.DelaunayBuilder : Delaunay triangulation builder class.
     """
-    transform_enum = _as_transform(transform)
     builder = DelaunayBuilder(
         radius=radius,
         percentile=percentile,
-        transform=transform_enum,
+        transform=transform,
         set_diag=set_diag,
     )
     adata, library_key = _prepare_spatial_neighbors_input(
@@ -794,12 +780,11 @@ def spatial_neighbors_grid(
     """
     assert_positive(n_rings, name="n_rings")
     assert_positive(n_neighs, name="n_neighs")
-    transform_enum = _as_transform(transform)
     builder = GridBuilder(
         n_neighs=n_neighs,
         n_rings=n_rings,
         delaunay=delaunay,
-        transform=transform_enum,
+        transform=transform,
         set_diag=set_diag,
     )
     adata, library_key = _prepare_spatial_neighbors_input(
