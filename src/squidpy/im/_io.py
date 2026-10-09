@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Literal
+from typing import Literal, get_args
 
 import dask.array as da
 import numpy as np
@@ -15,8 +15,9 @@ from tifffile import TiffFile
 
 from squidpy._utils import NDArrayA
 
-type InferDims_t = Literal["default", "channels_last", "z_last"] | Sequence[str]
-_INFER_DIMS = ("default", "channels_last", "z_last")
+_InferDim = Literal["default", "channels_last", "z_last"]
+_INFER_DIMS = get_args(_InferDim)
+InferDims_t = _InferDim | Sequence[str]
 
 
 def _assert_dims_present(dims: tuple[str, ...], include_z: bool = True) -> None:

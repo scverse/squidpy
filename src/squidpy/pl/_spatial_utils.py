@@ -42,8 +42,8 @@ from squidpy.im._coords import CropCoords
 from squidpy.pl._color_utils import _get_palette, _maybe_set_colors
 from squidpy.pl._utils import _assert_value_in_obs
 
-type _AvailShapes = Literal["circle", "square", "hex"]
-_SHAPES = get_args(_AvailShapes.__value__)  # get_args() is empty on a PEP 695 alias itself
+_AvailShapes = Literal["circle", "square", "hex"]
+_SHAPES = get_args(_AvailShapes)
 type Palette_t = str | ListedColormap | None
 type _Normalize = Normalize | Sequence[Normalize]
 type _SeqStr = str | Sequence[str]
