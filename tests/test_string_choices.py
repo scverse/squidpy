@@ -67,25 +67,25 @@ _CASES = {
         "nhood_data",
         lambda a, v: sq.gr.spatial_autocorr(a, mode=v, genes=a.var_names[:2], copy=True),
         "GEARY",
-        "`SpatialAutocorr`",
+        "`mode`",
     ),
     "gr.ripley-mode": (
         "nhood_data",
         lambda a, v: sq.gr.ripley(a, cluster_key="leiden", mode=v, n_simulations=2, n_steps=5, rng=0, copy=True),
         "l",
-        "`RipleyStat`",
+        "`mode`",
     ),
     "gr.spatial_neighbors-coord_type": (
         "nhood_data",
         lambda a, v: sq.gr.spatial_neighbors(a, coord_type=v, copy=True),
         "GENERIC",
-        "`CoordType`",
+        "`coord_type`",
     ),
     "gr.spatial_neighbors_knn-transform": (
         "nhood_data",
         lambda a, v: sq.gr.spatial_neighbors_knn(a, transform=v, copy=True),
         "COSINE",
-        "`Transform`",
+        "`transform`",
     ),
     "gr.calculate_niche_cellcharter-aggregation": (
         "dummy_adata2",
@@ -100,7 +100,7 @@ _CASES = {
         "`flavor`",
     ),
     "pl.nhood_enrichment-mode": ("nhood_data", _pl_nhood, "COUNT", "`mode`"),
-    "pl.ripley-mode": ("nhood_data", _pl_ripley, "g", "`RipleyStat`"),
+    "pl.ripley-mode": ("nhood_data", _pl_ripley, "g", "`mode`"),
     "experimental.pl.qc_image-metrics": (None, _pl_qc_image, "TENENGRAD", "`metrics`"),
     "datasets.visium-sample_id": (
         "monkeypatch",
@@ -171,3 +171,10 @@ def test_pl_centrality_scores_score_is_case_insensitive(nhood_data) -> None:
     sq.pl.centrality_scores(nhood_data, cluster_key="leiden", score="DEGREE_CENTRALITY")
     with pytest.raises(ValueError, match="No valid values"):
         sq.pl.centrality_scores(nhood_data, cluster_key="leiden", score="bogus")
+
+
+def test_enum_members_are_still_accepted(nhood_data) -> None:
+    """``Transform`` is private but was named in released signatures, so members keep working."""
+    from squidpy._constants._constants import Transform
+
+    sq.gr.spatial_neighbors_knn(nhood_data, transform=Transform.COSINE, copy=True)

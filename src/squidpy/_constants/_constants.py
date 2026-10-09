@@ -37,12 +37,6 @@ class Transform(ModeEnum):
 
 
 @unique
-class CoordType(ModeEnum):
-    GRID = "grid"
-    GENERIC = "generic"
-
-
-@unique
 class Processing(ModeEnum):
     SMOOTH = "smooth"
     GRAY = "gray"
@@ -91,23 +85,10 @@ class Symbol(ModeEnum):
 
 
 @unique
-class SpatialAutocorr(ModeEnum):
-    MORAN = "moran"
-    GEARY = "geary"
-
-
-@unique
 class InferDimensions(ModeEnum):
     DEFAULT = "default"
     CHANNELS_LAST = "channels_last"
     Z_LAST = "z_last"
-
-
-@unique
-class RipleyStat(ModeEnum):
-    F = "F"
-    G = "G"
-    L = "L"
 
 
 @unique

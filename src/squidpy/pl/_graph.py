@@ -6,7 +6,7 @@ import warnings
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -17,7 +17,6 @@ from anndata import AnnData
 from matplotlib.axes import Axes
 
 from squidpy._compat import old_positionals
-from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
 from squidpy._validators import assert_non_empty_sequence, get_valid_values, normalize_choice
@@ -431,10 +430,8 @@ def ripley(
     """
     _assert_categorical_obs(adata, key=cluster_key)
 
-    mode = RipleyStat(mode)  # type: ignore[assignment]
-    if TYPE_CHECKING:
-        assert isinstance(mode, RipleyStat)
-    res = _get_data(adata, cluster_key=cluster_key, func_name="ripley", mode=mode.s)
+    mode = normalize_choice(mode, ("F", "G", "L"), name="mode")
+    res = _get_data(adata, cluster_key=cluster_key, func_name="ripley", mode=mode)
 
     legend_kwargs = dict(legend_kwargs)
     if "loc" not in legend_kwargs:
@@ -451,7 +448,7 @@ def ripley(
         y="stats",
         x="bins",
         hue=cluster_key,
-        data=res[f"{mode.s}_stat"],
+        data=res[f"{mode}_stat"],
         hue_order=categories,
         palette=palette,
         ax=ax,
@@ -461,7 +458,7 @@ def ripley(
         sns.lineplot(y="stats", x="bins", errorbar="sd", alpha=0.01, color="gray", data=res["sims_stat"], ax=ax)
     ax.legend(**legend_kwargs)
     ax.set_ylabel("value")
-    ax.set_title(f"Ripley's {mode.s}")
+    ax.set_title(f"Ripley's {mode}")
 
     if save is not None:
         save_fig(fig, path=save)

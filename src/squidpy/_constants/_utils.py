@@ -65,16 +65,6 @@ class ABCEnumMeta(EnumMeta, ABCMeta):
 class ModeEnum(ErrorFormatterABC, PrettyEnum, metaclass=ABCEnumMeta):
     """Enum which prints available values when invalid value has been passed."""
 
-    @classmethod
-    def _missing_(cls, value: object) -> ModeEnum | None:
-        # String choices are case-insensitive; an unknown value still raises the formatted error.
-        from squidpy._validators import normalize_choice
-
-        try:
-            return cls(normalize_choice(value, [m.value for m in cls], name=cls.__name__))
-        except ValueError:
-            return None
-
     @property
     def s(self) -> str:
         """Return the :attr:`value` as :class:`str`."""

@@ -9,7 +9,7 @@ import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, TypeVar, cast
+from typing import Any, Literal, TypeVar, cast
 
 import numpy as np
 from fast_array_utils import stats as fau_stats
@@ -26,9 +26,9 @@ from scipy.spatial import Delaunay
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.neighbors import NearestNeighbors
 
-from squidpy._constants._constants import CoordType, Transform
+from squidpy._constants._constants import Transform
 from squidpy._utils import NDArrayA
-from squidpy._validators import assert_positive
+from squidpy._validators import assert_positive, normalize_choice
 from squidpy.gr._nhood import compute_hop_adjacency_matrices
 
 __all__ = [
@@ -44,6 +44,14 @@ __all__ = [
     "DelaunayBuilder",
     "GridBuilder",
 ]
+
+TransformLike = Literal["spectral", "cosine"] | None
+"""Adjacency-matrix transform, or `None` for no transform. Case-insensitive."""
+
+
+def _as_transform(transform: TransformLike | Transform) -> Transform:
+    """Resolve the ``transform`` argument to its enum member, accepting any casing."""
+    return Transform(normalize_choice(transform, [m.value for m in Transform], name="transform"))
 
 
 # Kept module-level (not folded into GraphBuilder's params): types the public
@@ -63,12 +71,12 @@ class GraphBuilder[CoordT, GraphMatrixT](ABC):
 
     def __init__(
         self,
-        transform: str | Transform | None = None,
+        transform: TransformLike = None,
         set_diag: bool = False,
         percentile: float | None = None,
         postprocessors: Sequence[GraphPostprocessor[GraphMatrixT]] = (),
     ) -> None:
-        self.transform = Transform.NONE if transform is None else Transform(transform)
+        self.transform = _as_transform(transform)
         self.set_diag = set_diag
         self.percentile = percentile
         self._postprocessors: list[GraphPostprocessor[GraphMatrixT]] = list(postprocessors)
@@ -166,7 +174,7 @@ class KNNBuilder(GraphBuilderCSR):
     def __init__(
         self,
         n_neighs: int = 6,
-        transform: str | Transform | None = None,
+        transform: TransformLike = None,
         set_diag: bool = False,
         percentile: float | None = None,
     ) -> None:
@@ -174,7 +182,7 @@ class KNNBuilder(GraphBuilderCSR):
         postprocessors: list[GraphPostprocessor[csr_matrix]] = []
         if percentile is not None:
             postprocessors.append(PercentilePostprocessor(percentile))
-        postprocessors.append(TransformPostprocessor(Transform.NONE if transform is None else Transform(transform)))
+        postprocessors.append(TransformPostprocessor(_as_transform(transform)))
         super().__init__(
             transform=transform,
             set_diag=set_diag,
@@ -185,7 +193,7 @@ class KNNBuilder(GraphBuilderCSR):
 
     def uns_params(self) -> dict[str, Any]:
         return {
-            "coord_type": CoordType.GENERIC.v,
+            "coord_type": "generic",
             "n_neighbors": self.n_neighs,
             "transform": self.transform.v,
         }
@@ -222,7 +230,7 @@ class RadiusBuilder(GraphBuilderCSR):
     def __init__(
         self,
         radius: float | tuple[float, float],
-        transform: str | Transform | None = None,
+        transform: TransformLike = None,
         set_diag: bool = False,
         percentile: float | None = None,
     ) -> None:
@@ -231,7 +239,7 @@ class RadiusBuilder(GraphBuilderCSR):
             postprocessors.append(DistanceIntervalPostprocessor(tuple(sorted(radius))))
         if percentile is not None:
             postprocessors.append(PercentilePostprocessor(percentile))
-        postprocessors.append(TransformPostprocessor(Transform.NONE if transform is None else Transform(transform)))
+        postprocessors.append(TransformPostprocessor(_as_transform(transform)))
         super().__init__(
             transform=transform,
             set_diag=set_diag,
@@ -243,7 +251,7 @@ class RadiusBuilder(GraphBuilderCSR):
 
     def uns_params(self) -> dict[str, Any]:
         return {
-            "coord_type": CoordType.GENERIC.v,
+            "coord_type": "generic",
             "radius": self.radius,
             "transform": self.transform.v,
         }
@@ -290,7 +298,7 @@ class DelaunayBuilder(GraphBuilderCSR):
     def __init__(
         self,
         radius: float | tuple[float, float] | None = None,
-        transform: str | Transform | None = None,
+        transform: TransformLike = None,
         set_diag: bool = False,
         percentile: float | None = None,
     ) -> None:
@@ -301,7 +309,7 @@ class DelaunayBuilder(GraphBuilderCSR):
             postprocessors.append(DistanceIntervalPostprocessor(tuple(sorted(radius))))
         if percentile is not None:
             postprocessors.append(PercentilePostprocessor(percentile))
-        postprocessors.append(TransformPostprocessor(Transform.NONE if transform is None else Transform(transform)))
+        postprocessors.append(TransformPostprocessor(_as_transform(transform)))
         super().__init__(
             transform=transform,
             set_diag=set_diag,
@@ -313,7 +321,7 @@ class DelaunayBuilder(GraphBuilderCSR):
 
     def uns_params(self) -> dict[str, Any]:
         return {
-            "coord_type": CoordType.GENERIC.v,
+            "coord_type": "generic",
             "radius": self.radius,
             "transform": self.transform.v,
         }
@@ -350,12 +358,12 @@ class GridBuilder(GraphBuilderCSR):
         n_neighs: int = 6,
         n_rings: int = 1,
         delaunay: bool = False,
-        transform: str | Transform | None = None,
+        transform: TransformLike = None,
         set_diag: bool = False,
     ) -> None:
         assert_positive(n_neighs, name="n_neighs")
         assert_positive(n_rings, name="n_rings")
-        postprocessors = [TransformPostprocessor(Transform.NONE if transform is None else Transform(transform))]
+        postprocessors = [TransformPostprocessor(_as_transform(transform))]
         super().__init__(transform=transform, set_diag=set_diag, percentile=None, postprocessors=postprocessors)
         self.n_neighs = n_neighs
         self.n_rings = n_rings
@@ -363,7 +371,7 @@ class GridBuilder(GraphBuilderCSR):
 
     def uns_params(self) -> dict[str, Any]:
         return {
-            "coord_type": CoordType.GRID.v,
+            "coord_type": "grid",
             "n_neighbors": self.n_neighs,
             "n_rings": self.n_rings,
             "delaunay": self.delaunay,

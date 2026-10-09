@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, NamedTuple
+from typing import Any, Literal, NamedTuple
 
 import geopandas as gpd
 import numpy as np
@@ -24,11 +24,10 @@ from spatialdata.models.models import (
 )
 
 from squidpy._compat import SKIP_OWN_FRAMES, old_positionals
-from squidpy._constants._constants import CoordType, Transform
 from squidpy._constants._pkg_constants import Key
-from squidpy._docs import d, inject_docs
+from squidpy._docs import d
 from squidpy._utils import NDArrayA, get_n_numba_threads, thread_map
-from squidpy._validators import assert_positive
+from squidpy._validators import assert_positive, normalize_choice
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_spatial_basis,
@@ -42,6 +41,8 @@ from squidpy.gr.neighbors import (
     GridBuilder,
     KNNBuilder,
     RadiusBuilder,
+    TransformLike,
+    _as_transform,
 )
 
 __all__ = [
@@ -64,13 +65,13 @@ class SpatialNeighborsResult[GraphMatrixT](NamedTuple):
 
 def _resolve_graph_builder(
     *,
-    coord_type: str | CoordType | None,
+    coord_type: Literal["grid", "generic"] | None,
     n_neighs: int | None,
     radius: float | tuple[float, float] | None,
     delaunay: bool | None,
     n_rings: int | None,
     percentile: float | None,
-    transform: str | Transform | None,
+    transform: TransformLike,
     set_diag: bool | None,
     has_spatial_uns: bool = False,
 ) -> GraphBuilder[Any, Any]:
@@ -83,20 +84,20 @@ def _resolve_graph_builder(
     assert_positive(n_rings, name="n_rings")
     assert_positive(n_neighs, name="n_neighs")
 
-    transform = Transform.NONE if transform is None else Transform(transform)
+    transform = _as_transform(transform)
     if coord_type is None:
         if radius is not None:
             logg.warning(
                 "Graph creation with `radius` is only available for generic coordinates. "
                 f"Ignoring parameter `radius = {radius}`."
             )
-        coord_type = CoordType.GRID if has_spatial_uns else CoordType.GENERIC
+        coord_type = "grid" if has_spatial_uns else "generic"
     else:
-        coord_type = CoordType(coord_type)
+        coord_type = normalize_choice(coord_type, ("grid", "generic"), name="coord_type")
 
     common: dict[str, Any] = {"transform": transform, "set_diag": set_diag}
 
-    if coord_type == CoordType.GRID:
+    if coord_type == "grid":
         if percentile is not None:
             raise ValueError(
                 "`percentile` is not supported for grid coordinates. It only applies to generic (non-grid) graphs."
@@ -130,7 +131,6 @@ def _resolve_graph_builder(
 
 
 @d.dedent
-@inject_docs(t=Transform, c=CoordType)
 @old_positionals(
     "spatial_key",
     "elements_to_coordinate_systems",
@@ -155,13 +155,13 @@ def spatial_neighbors(
     elements_to_coordinate_systems: dict[str, str] | None = None,
     table_key: str | None = None,
     library_key: str | None = None,
-    coord_type: str | CoordType | None = None,
+    coord_type: Literal["grid", "generic"] | None = None,
     n_neighs: int | None = None,
     radius: float | tuple[float, float] | None = None,
     delaunay: bool | None = None,
     n_rings: int | None = None,
     percentile: float | None = None,
-    transform: str | Transform | None = None,
+    transform: TransformLike = None,
     set_diag: bool = False,
     key_added: str = "spatial",
     copy: bool = False,
@@ -197,38 +197,38 @@ def spatial_neighbors(
     coord_type
         Type of coordinate system. Valid options are:
 
-            - `{c.GRID.s!r}` - grid coordinates.
-            - `{c.GENERIC.s!r}` - generic coordinates.
-            - `None` - `{c.GRID.s!r}` if ``spatial_key`` is in :attr:`anndata.AnnData.uns`
-              with ``n_neighs = 6`` (Visium), otherwise use `{c.GENERIC.s!r}`.
+            - `'grid'` - grid coordinates.
+            - `'generic'` - generic coordinates.
+            - `None` - `'grid'` if ``spatial_key`` is in :attr:`anndata.AnnData.uns`
+              with ``n_neighs = 6`` (Visium), otherwise use `'generic'`.
     n_neighs
         Depending on the ``coord_type``:
 
-            - `{c.GRID.s!r}` - number of neighboring tiles.
-            - `{c.GENERIC.s!r}` - number of neighborhoods for non-grid data. Only used when ``delaunay = False``.
+            - `'grid'` - number of neighboring tiles.
+            - `'generic'` - number of neighborhoods for non-grid data. Only used when ``delaunay = False``.
 
         Defaults to ``6``.
     radius
-        Only available when ``coord_type = {c.GENERIC.s!r}``.
+        Only available when ``coord_type = 'generic'``.
         Depending on the type:
 
             - :class:`float` - compute the graph based on neighborhood radius.
             - :class:`tuple` - prune the final graph to only contain edges in interval `[min(radius), max(radius)]`.
     delaunay
-        Whether to compute the graph from Delaunay triangulation. Only used when ``coord_type = {c.GENERIC.s!r}``.
+        Whether to compute the graph from Delaunay triangulation. Only used when ``coord_type = 'generic'``.
         Defaults to ``False``.
     n_rings
-        Number of rings of neighbors for grid data. Only used when ``coord_type = {c.GRID.s!r}``.
+        Number of rings of neighbors for grid data. Only used when ``coord_type = 'grid'``.
         Defaults to ``1``.
     percentile
-        Percentile of the distances to use as threshold. Only used when ``coord_type = {c.GENERIC.s!r}``.
+        Percentile of the distances to use as threshold. Only used when ``coord_type = 'generic'``.
     transform
         Type of adjacency matrix transform.
         Valid options are:
 
-            - `{t.SPECTRAL.s!r}` - spectral transformation of the adjacency matrix.
-            - `{t.COSINE.s!r}` - cosine transformation of the adjacency matrix.
-            - `{t.NONE.v}` - no transformation of the adjacency matrix.
+            - `'spectral'` - spectral transformation of the adjacency matrix.
+            - `'cosine'` - cosine transformation of the adjacency matrix.
+            - `None` - no transformation of the adjacency matrix.
     set_diag
         Whether to set the diagonal of the spatial connectivities to `1.0`.
     key_added
@@ -288,7 +288,7 @@ def spatial_neighbors(
     Grid-specific behavior
     ----------------------
     Grid mode currently does not validate ``n_neighs`` to a fixed set
-    such as ``{{4, 6}}``. Internally it first queries the
+    such as ``{4, 6}``. Internally it first queries the
     ``n_neighs`` nearest candidates and then applies a distance-based
     correction tuned for grid-like coordinates. As a result:
 
@@ -306,9 +306,9 @@ def spatial_neighbors(
 
     Otherwise, modifies the ``adata`` with the following keys:
 
-        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_connectivities']`` - the spatial connectivities.
-        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_distances']`` - the spatial distances.
-        - :attr:`anndata.AnnData.uns`  ``['{{key_added}}']`` - :class:`dict` containing parameters.
+        - :attr:`anndata.AnnData.obsp` ``['{key_added}_connectivities']`` - the spatial connectivities.
+        - :attr:`anndata.AnnData.obsp` ``['{key_added}_distances']`` - the spatial distances.
+        - :attr:`anndata.AnnData.uns`  ``['{key_added}']`` - :class:`dict` containing parameters.
     """
     warnings.warn(
         "Calling `spatial_neighbors` is deprecated and will be removed in squidpy "
@@ -521,7 +521,7 @@ def spatial_neighbors_knn(
     library_key: str | None = None,
     n_neighs: int = 6,
     percentile: float | None = None,
-    transform: str | Transform | None = None,
+    transform: TransformLike = None,
     set_diag: bool = False,
     key_added: str = "spatial",
     copy: bool = False,
@@ -555,7 +555,7 @@ def spatial_neighbors_knn(
     spatial_neighbors_from_builder : Use :class:`~squidpy.gr.neighbors.KNNBuilder` directly for advanced customization.
     squidpy.gr.neighbors.KNNBuilder : k-nearest-neighbor builder class.
     """
-    transform_enum = Transform.NONE if transform is None else Transform(transform)
+    transform_enum = _as_transform(transform)
     builder = KNNBuilder(
         n_neighs=n_neighs,
         percentile=percentile,
@@ -591,7 +591,7 @@ def spatial_neighbors_radius(
     table_key: str | None = None,
     library_key: str | None = None,
     percentile: float | None = None,
-    transform: str | Transform | None = None,
+    transform: TransformLike = None,
     set_diag: bool = False,
     key_added: str = "spatial",
     copy: bool = False,
@@ -628,7 +628,7 @@ def spatial_neighbors_radius(
     spatial_neighbors_from_builder : Use :class:`~squidpy.gr.neighbors.RadiusBuilder` directly for advanced customization.
     squidpy.gr.neighbors.RadiusBuilder : radius-based builder class.
     """
-    transform_enum = Transform.NONE if transform is None else Transform(transform)
+    transform_enum = _as_transform(transform)
     builder = RadiusBuilder(
         radius=radius,
         percentile=percentile,
@@ -664,7 +664,7 @@ def spatial_neighbors_delaunay(
     library_key: str | None = None,
     radius: float | tuple[float, float] | None = None,
     percentile: float | None = None,
-    transform: str | Transform | None = None,
+    transform: TransformLike = None,
     set_diag: bool = False,
     key_added: str = "spatial",
     copy: bool = False,
@@ -705,7 +705,7 @@ def spatial_neighbors_delaunay(
     spatial_neighbors_from_builder : Use :class:`~squidpy.gr.neighbors.DelaunayBuilder` directly for advanced customization.
     squidpy.gr.neighbors.DelaunayBuilder : Delaunay triangulation builder class.
     """
-    transform_enum = Transform.NONE if transform is None else Transform(transform)
+    transform_enum = _as_transform(transform)
     builder = DelaunayBuilder(
         radius=radius,
         percentile=percentile,
@@ -742,7 +742,7 @@ def spatial_neighbors_grid(
     n_neighs: int = 6,
     n_rings: int = 1,
     delaunay: bool = False,
-    transform: str | Transform | None = None,
+    transform: TransformLike = None,
     set_diag: bool = False,
     key_added: str = "spatial",
     copy: bool = False,
@@ -794,7 +794,7 @@ def spatial_neighbors_grid(
     """
     assert_positive(n_rings, name="n_rings")
     assert_positive(n_neighs, name="n_neighs")
-    transform_enum = Transform.NONE if transform is None else Transform(transform)
+    transform_enum = _as_transform(transform)
     builder = GridBuilder(
         n_neighs=n_neighs,
         n_rings=n_rings,
