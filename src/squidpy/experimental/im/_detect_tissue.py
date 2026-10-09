@@ -11,7 +11,7 @@ from dask.base import is_dask_collection
 from dask_image.ndinterp import affine_transform as da_affine
 from skimage import feature, future, measure
 from skimage.filters import gaussian, threshold_otsu
-from skimage.morphology import binary_closing, disk, remove_small_holes
+from skimage.morphology import closing, disk, remove_small_holes
 from skimage.segmentation import felzenszwalb
 from skimage.util import img_as_float
 from sklearn.ensemble import RandomForestClassifier
@@ -770,7 +770,6 @@ def _refine_with_background_classifier(
     # Simple logistic regression classifier
     clf = LogisticRegression(
         max_iter=10_000,
-        n_jobs=-1,
         solver="lbfgs",
     )
     clf.fit(X_train_z, y_train)
@@ -865,7 +864,7 @@ def _make_solid(mask: np.ndarray, close_holes_smaller_than_frac: float = 0.01) -
         mask = mask.astype(bool, copy=False)
 
     max_hole_area = int(close_holes_smaller_than_frac * mask.size)
-    return np.array(remove_small_holes(mask, area_threshold=max_hole_area))
+    return np.array(remove_small_holes(mask, max_size=max_hole_area))
 
 
 def _smooth_mask(mask: np.ndarray, cycles: int) -> np.ndarray:
@@ -882,7 +881,7 @@ def _smooth_mask(mask: np.ndarray, cycles: int) -> np.ndarray:
 
     sm = binary
     for i in range(cycles):
-        sm = binary_closing(sm, disk(r0 + i))
+        sm = closing(sm, disk(r0 + i))
 
     return np.asarray(measure.label(sm, connectivity=2).astype(np.int32, copy=False))
 

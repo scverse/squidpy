@@ -10,6 +10,7 @@ from pytest_mock import MockerFixture
 
 from squidpy.im._container import ImageContainer
 from squidpy.im._feature import calculate_image_features
+from tests.conftest import SKIMAGE_PLUGIN_DEPRECATION
 
 
 class TestFeatureMixin:
@@ -173,6 +174,7 @@ class TestHighLevel:
         with pytest.raises(ValueError, match=r"Expected `features` to be one of"):
             calculate_image_features(adata, img=cont, features="foo")
 
+    @SKIMAGE_PLUGIN_DEPRECATION
     def test_passing_spot_crops_kwargs(self, adata: AnnData, cont: ImageContainer, mocker: MockerFixture):
         spy = mocker.spy(cont, "generate_spot_crops")
         calculate_image_features(adata, img=cont, mask_circle=True)
@@ -181,6 +183,7 @@ class TestHighLevel:
         call = spy.call_args_list[0]
         assert call[-1]["mask_circle"]
 
+    @SKIMAGE_PLUGIN_DEPRECATION
     def test_passing_feature_kwargs(self, adata: AnnData, cont: ImageContainer):
         def dummy(_: np.ndarray, sentinel: bool = False) -> int:
             assert sentinel
@@ -200,6 +203,7 @@ class TestHighLevel:
         np.testing.assert_array_equal(res.columns, ["dummy_0"])
         np.testing.assert_array_equal(res["dummy_0"].values, 42)
 
+    @SKIMAGE_PLUGIN_DEPRECATION
     def test_key_added(self, adata: AnnData, cont: ImageContainer):
         assert "foo" not in adata.obsm
         res = calculate_image_features(adata, img=cont, key_added="foo", copy=False)
@@ -208,6 +212,7 @@ class TestHighLevel:
         assert "foo" in adata.obsm
         assert isinstance(adata.obsm["foo"], pd.DataFrame)
 
+    @SKIMAGE_PLUGIN_DEPRECATION
     def test_copy(self, adata: AnnData, cont: ImageContainer):
         orig_keys = set(adata.obsm.keys())
         res = calculate_image_features(adata, img=cont, key_added="foo", copy=True)
@@ -217,6 +222,7 @@ class TestHighLevel:
         assert set(adata.obsm.keys()) == orig_keys
 
     @pytest.mark.parametrize("n_jobs", [1, 2])
+    @SKIMAGE_PLUGIN_DEPRECATION
     def test_parallelize(self, adata: AnnData, cont: ImageContainer, n_jobs: int):
         features = ["texture", "summary", "histogram"]
         res = calculate_image_features(adata, img=cont, library_id=None, features=features, copy=True, n_jobs=n_jobs)

@@ -30,7 +30,7 @@ from matplotlib_scalebar.scalebar import ScaleBar
 from pandas import CategoricalDtype
 from scanpy import logging as logg
 from skimage.color import label2rgb
-from skimage.morphology import erosion, square
+from skimage.morphology import erosion, footprint_rectangle
 from skimage.segmentation import find_boundaries
 from skimage.util import map_array
 
@@ -723,7 +723,7 @@ def _map_color_seg(
             cols = colors.to_rgba_array(color_vector)
 
     if seg_erosionpx is not None:
-        val_im[val_im == erosion(val_im, square(seg_erosionpx))] = 0
+        val_im[val_im == erosion(val_im, footprint_rectangle((seg_erosionpx, seg_erosionpx)))] = 0
 
     seg_im: NDArrayA = label2rgb(
         label=val_im,

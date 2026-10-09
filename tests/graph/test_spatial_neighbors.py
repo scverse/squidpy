@@ -29,6 +29,10 @@ from squidpy.gr.neighbors import (
     KNNBuilder as PublicKNNBuilder,
 )
 
+# `spatial_neighbors` is deprecated but shipped until v1.9.0, and the tests below are its
+# coverage; they call it on purpose, so its own deprecation notice is not a finding here.
+pytestmark = pytest.mark.filterwarnings("ignore:Calling `spatial_neighbors` is deprecated:FutureWarning")
+
 
 class TestSpatialNeighbors:
     # ground-truth Delaunay distances

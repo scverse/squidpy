@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
-from squidpy._validators import normalize_choice
+from squidpy._validators import normalize_choice, options_of
 
 if TYPE_CHECKING:
     import spatialdata as sd
@@ -21,8 +21,9 @@ if TYPE_CHECKING:
     from squidpy.experimental.im._stain._normalize import MethodParams
 
 StainMethod = Literal["macenko", "vahadane", "reinhard"]
-_DECOMPOSITION_METHODS: frozenset[str] = frozenset({"macenko", "vahadane"})
-_VALID_METHODS: frozenset[str] = _DECOMPOSITION_METHODS | {"reinhard"}
+#: The method vocabulary, derived from ``StainMethod`` so the two cannot drift.
+_VALID_METHODS = options_of(StainMethod)
+_DECOMPOSITION_METHODS = tuple(m for m in _VALID_METHODS if m != "reinhard")
 
 
 def _coerce_finite(arr: Any, *, shape: tuple[int, ...], name: str) -> np.ndarray:
@@ -75,7 +76,7 @@ class StainFit:
     max_concentrations: np.ndarray | None = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "method", normalize_choice(self.method, sorted(_VALID_METHODS), name="method"))
+        object.__setattr__(self, "method", normalize_choice(self.method, _VALID_METHODS, name="method"))
 
         if self.method in _DECOMPOSITION_METHODS:
             if self.stain_matrix is None:

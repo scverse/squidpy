@@ -205,7 +205,7 @@ def _reshape_res(results: NDArrayA, columns: NDArrayA | list[str], index: NDArra
     df = pd.DataFrame(results, columns=columns, index=index)
     df.index.set_names(["bins"], inplace=True)
     df = df.melt(var_name=var_name, value_name="stats", ignore_index=False)
-    df[var_name] = df[var_name].astype("category", copy=True)
+    df[var_name] = df[var_name].astype("category")
     df.reset_index(inplace=True)
     return df
 

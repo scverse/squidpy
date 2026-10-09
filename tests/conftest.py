@@ -35,6 +35,13 @@ ACTUAL = HERE / "figures"
 TOL = 50
 DPI = 40
 
+# `ImageContainer` reads images through `skimage.io`'s plugin interface, which is on its way out.
+# The container is itself slated for removal, so this is noise rather than a finding. Applied per
+# test rather than per module, so a new occurrence elsewhere in those files still shows up.
+SKIMAGE_PLUGIN_DEPRECATION = pytest.mark.filterwarnings(
+    "ignore:The plugin infrastructure in `skimage.io`:FutureWarning"
+)
+
 C_KEY_PALETTE = "leiden"
 
 _adata = sc.read("tests/_data/test_data.h5ad")

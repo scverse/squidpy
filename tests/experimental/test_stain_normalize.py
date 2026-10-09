@@ -13,14 +13,19 @@ from spatialdata.models import Image2DModel, Labels2DModel
 from spatialdata.transformations import Scale, get_transformation, set_transformation
 
 import squidpy as sq
-from squidpy._params import defaults_of
+from squidpy._params import defaults_of, resolve_params
 from squidpy.experimental.im import (
     StainFit,
     fit_stain_reference,
 )
+from squidpy.experimental.im._stain._constants import RUIFROK_HE
+from squidpy.experimental.im._stain._decomposition import fit_decomposition
+from squidpy.experimental.im._stain._normalize import _resolve_image
+from squidpy.experimental.im._stain._reinhard import fit_reinhard
 from squidpy.experimental.im._stain._validation import StainFittingError
+from squidpy.experimental.im._stain._white_point import default_white_point
 from squidpy.experimental.im._utils import get_element_data
-from squidpy.types import ReinhardParams
+from squidpy.types import MacenkoParams, ReinhardParams
 from tests.conftest import PlotTester, PlotTesterMeta
 
 _ = sdp  # registers the `.pl` spatialdata accessor
@@ -285,3 +290,110 @@ class TestStainNormalizationVisual(PlotTester, metaclass=PlotTesterMeta):
         _, axes = plt.subplots(1, 2, figsize=(8, 4))
         sdata_hne.pl.render_images("hne_shifted").pl.show(ax=axes[0], title="before")
         sdata_hne.pl.render_images("hne_normalized").pl.show(ax=axes[1], title="after")
+
+
+# ---------------------------------------------------------------------------
+# Multi-slide pooled fit (one reference from several images in one sdata)
+# ---------------------------------------------------------------------------
+
+
+class TestPooledFit:
+    @staticmethod
+    def _he(seed: int, shape: tuple[int, int] = (48, 48), dtype=np.uint8) -> np.ndarray:
+        """Synthetic H&E from the Ruifrok H/E vectors so macenko/vahadane can fit."""
+        rng = np.random.default_rng(seed)
+        h, w = shape
+        wmat = np.stack([RUIFROK_HE["hematoxylin"], RUIFROK_HE["eosin"]], axis=1)  # (3, 2)
+        conc = rng.uniform(0.05, 1.3, (h * w, 2))
+        rgb = np.clip(255.0 * np.exp(-(conc @ wmat.T)), 0, 255).reshape(h, w, 3).transpose(2, 0, 1)
+        arr = rgb.astype(np.uint8)
+        return (arr.astype(np.uint16) * 257) if dtype == np.uint16 else arr
+
+    @classmethod
+    def _add(cls, sdata: sd.SpatialData, key: str, *, seed: int, dtype=np.uint8, tissue: np.ndarray | None = None):
+        arr = cls._he(seed=seed, dtype=dtype)
+        sdata.images[key] = Image2DModel.parse(arr, dims=("c", "y", "x"))
+        mask = np.ones(arr.shape[-2:], dtype=np.uint32) if tissue is None else tissue
+        sdata.labels[f"{key}_tissue"] = Labels2DModel.parse(mask, dims=("y", "x"))
+
+    def _cohort(self, n: int = 3) -> tuple[sd.SpatialData, list[str]]:
+        sdata = sd.SpatialData()
+        keys = [f"img{i}" for i in range(n)]
+        for i, k in enumerate(keys):
+            self._add(sdata, k, seed=i + 1)
+        return sdata, keys
+
+    @pytest.mark.parametrize("method", ["reinhard", "macenko", "vahadane"])
+    def test_pooled_fit(self, method: str) -> None:
+        sdata, keys = self._cohort(n=3)
+        pooled = fit_stain_reference(sdata, image_key=keys, method=method)
+        assert pooled.method == method
+        assert (pooled.mu.shape == (3,)) if method == "reinhard" else (pooled.stain_matrix.shape == (3, 3))
+        # a pool of one is the single-image fit, bit for bit (same code path)
+        single = fit_stain_reference(sdata, image_key=keys[0], method=method)
+        one = fit_stain_reference(sdata, image_key=keys[:1], method=method)
+        # NMF (vahadane) is not bit-reproducible even when seeded (threaded BLAS); the rest is
+        for attr in ("mu", "sigma") if method == "reinhard" else ("stain_matrix", "max_concentrations"):
+            if method == "vahadane":
+                np.testing.assert_allclose(getattr(one, attr), getattr(single, attr), rtol=1e-4)
+            else:
+                np.testing.assert_array_equal(getattr(one, attr), getattr(single, attr))
+
+    @pytest.mark.parametrize("method", ["reinhard", "macenko"])
+    def test_pool_of_duplicates_is_single(self, method: str) -> None:
+        # pooling an image with itself must not move the reference: catches a
+        # botched concatenate/weighting that `pool of one == single` cannot.
+        sdata, keys = self._cohort(n=1)
+        da = _resolve_image(sdata, image_key=keys[0], scale="auto", prefer="coarsest")
+        mask = np.ones(da.shape[-2:], dtype=bool)
+        if method == "reinhard":
+            single = fit_reinhard(da, resolve_params(None, ReinhardParams), tissue_mask=mask)
+            double = fit_reinhard([da, da], resolve_params(None, ReinhardParams), tissue_mask=[mask, mask])
+            attrs = ("mu", "sigma")
+        else:
+            params, wp = resolve_params(None, MacenkoParams), default_white_point(da)
+            single = fit_decomposition(da, method, params, wp, tissue_mask=mask)
+            double = fit_decomposition([da, da], method, params, wp, tissue_mask=[mask, mask])
+            attrs = ("stain_matrix", "max_concentrations")
+        # reinhard pools moments, so it is exact; macenko's angular percentile
+        # interpolates between order statistics, so doubling N shifts it slightly.
+        rtol = 1e-12 if method == "reinhard" else 1e-3
+        for attr in attrs:
+            np.testing.assert_allclose(getattr(double, attr), getattr(single, attr), rtol=rtol, atol=rtol)
+
+    def test_order_matched_non_convention_masks(self) -> None:
+        # non-convention mask names selecting different halves; swapping the order
+        # must change the fit (proves order is honoured, not name-matched).
+        sdata, keys = self._cohort(n=2)
+        h, w = 48, 48
+        top = np.zeros((h, w), np.uint32)
+        top[: h // 2] = 1
+        bot = np.zeros((h, w), np.uint32)
+        bot[h // 2 :] = 1
+        sdata.labels["m_a"] = Labels2DModel.parse(top, dims=("y", "x"))
+        sdata.labels["m_b"] = Labels2DModel.parse(bot, dims=("y", "x"))
+        ref = fit_stain_reference(sdata, image_key=keys, method="reinhard", tissue_mask_key=["m_a", "m_b"])
+        swapped = fit_stain_reference(sdata, image_key=keys, method="reinhard", tissue_mask_key=["m_b", "m_a"])
+        assert not np.allclose(ref.mu, swapped.mu)
+
+    @pytest.mark.parametrize(
+        ("kwargs", "extra", "match"),
+        [
+            ({"image_key": []}, None, "empty"),
+            ({"image_key": ["img0", "img0"]}, None, "duplicate"),
+            ({"image_key": ["img0", "img1"], "tissue_mask_key": "img0_tissue"}, None, "one mask key per image"),
+            ({"image_key": ["img0", "img1"], "tissue_mask_key": ["img0_tissue"]}, None, "one mask key per image"),
+            ({"image_key": "img0", "tissue_mask_key": ["img0_tissue", "img1_tissue"]}, None, "one mask key per image"),
+            ({"image_key": ["img0", "img16"]}, "uint16", "share a dtype"),
+            ({"image_key": ["img0", "blank"], "method": "macenko"}, "blank", r"^\[blank\] "),
+            ({"image_key": ["img0", "blank"], "method": "reinhard"}, "blank", r"^\[blank\] "),
+        ],
+    )
+    def test_validation(self, kwargs: dict, extra: str | None, match: str) -> None:
+        sdata, _ = self._cohort(n=2)
+        if extra == "uint16":
+            self._add(sdata, "img16", seed=9, dtype=np.uint16)
+        elif extra == "blank":  # empty tissue mask -> the error names the slide
+            self._add(sdata, "blank", seed=9, tissue=np.zeros((48, 48), np.uint32))
+        with pytest.raises((ValueError, StainFittingError), match=match):
+            fit_stain_reference(sdata, **{"method": "macenko", **kwargs})
