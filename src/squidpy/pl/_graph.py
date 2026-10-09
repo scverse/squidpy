@@ -232,7 +232,11 @@ def nhood_enrichment(
     %(adata)s
     %(cluster_key)s
     mode
-        Which :func:`squidpy.gr.nhood_enrichment` result to plot.
+        Which :func:`squidpy.gr.nhood_enrichment` result to plot. Valid options are:
+
+            - `'zscore'` - z-score values of enrichment statistic.
+            - `'count'` - enrichment count.
+
     %(heatmap_plotting)s
     kwargs
         Keyword arguments for :func:`matplotlib.pyplot.text`.

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Hashable, Iterable, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast, overload
 
 from squidpy._utils import _unique_order_preserving
 
@@ -94,7 +94,11 @@ _RAISE = object()
 """Sentinel: `normalize_choice` raises rather than returning a miss."""
 
 
-def normalize_choice(value: Any, options: Iterable[Any], *, name: str, default: Any = _RAISE) -> Any:
+@overload
+def normalize_choice[T](value: Any, options: Iterable[T], *, name: str) -> T: ...
+@overload
+def normalize_choice[T, D](value: Any, options: Iterable[T], *, name: str, default: D) -> T | D: ...
+def normalize_choice[T, D](value: Any, options: Iterable[T], *, name: str, default: D | object = _RAISE) -> T | D:
     """Return the option in *options* matching *value*, ignoring the case of strings.
 
     Raise ValueError naming the valid options if nothing matches, or return *default*
@@ -109,7 +113,7 @@ def normalize_choice(value: Any, options: Iterable[Any], *, name: str, default: 
     elif value in options:
         return value
     if default is not _RAISE:
-        return default
+        return cast("D", default)
     raise ValueError(f"Expected `{name}` to be one of `{options}`, got `{value!r}`.")
 
 
