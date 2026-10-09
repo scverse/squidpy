@@ -906,9 +906,9 @@ def _bfs_shells(  # noqa: PLR0917, numba requires positional arguments
     rowptr: NDArrayA,
     out: NDArrayA,
     fill: bool,
+    n_threads: int,
 ) -> None:
     n = indptr.shape[0] - 1
-    n_threads = get_num_threads()
     stamp = np.full((n_threads, n), -1, dtype=indices.dtype)
     queue = np.empty((n_threads, n), dtype=indices.dtype)
 
@@ -973,14 +973,17 @@ def compute_hop_adjacency_matrices(
     no_out = np.zeros(1, dtype=indices.dtype)
     n_jobs = get_n_numba_threads(n_jobs)
     with numba_threads(n_jobs):
-        _bfs_shells(indptr, indices, max_hop, counts, no_base, counts, no_out, False)
+        # read outside the kernel: `get_num_threads` is a ctypes call, and calling it from jitted
+        # code makes the function uncacheable, so it is recompiled on every fresh process
+        n_threads = get_num_threads()
+        _bfs_shells(indptr, indices, max_hop, counts, no_base, counts, no_out, False, n_threads)
 
         rowptr = np.zeros((max_hop - 1, n + 1), dtype=np.int64)
         np.cumsum(counts, axis=1, out=rowptr[:, 1:])
         base = np.concatenate((np.zeros(1, dtype=np.int64), np.cumsum(rowptr[:, -1])))
 
         out = np.empty(int(base[-1]), dtype=indices.dtype)  # shell column indices, same dtype as the input's
-        _bfs_shells(indptr, indices, max_hop, counts, base, rowptr, out, True)
+        _bfs_shells(indptr, indices, max_hop, counts, base, rowptr, out, True, n_threads)
 
     shells: list[CSBase] = [csr_matrix(adj)]
     for ring in range(max_hop - 1):
