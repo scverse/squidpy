@@ -319,7 +319,7 @@ class TestSpatialNeighbors:
         assert result.distances.max() > result_filtered.distances.max()
 
         Adj, Dst = KNNBuilder(n_neighs=6, set_diag=False).build_graph(adata_hne.obsm["spatial"])
-        threshold = np.percentile(result.distances.data, percentile)
+        threshold = np.percentile(Dst.data[Dst.data != 0], percentile)
         Adj[Dst > threshold] = 0.0
         Dst[Dst > threshold] = 0.0
         Adj.eliminate_zeros()
