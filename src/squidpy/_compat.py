@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import os
+from functools import partial
 from importlib.metadata import version
 from typing import TYPE_CHECKING
 
+import legacy_api_wrap
+from legacy_api_wrap import legacy_api
 from packaging.version import Version
 from scanpy.get import obs_df
 
@@ -11,6 +15,8 @@ if TYPE_CHECKING:
     from anndata import AnnData
 
 __all__ = [
+    "old_positionals",
+    "SKIP_OWN_FRAMES",
     # scanpy
     "set_default_colors_for_categorical_obs",
     "add_categorical_legend",
@@ -25,6 +31,26 @@ __all__ = [
     "SparseCSRView",
     "get_vector",
 ]
+
+
+class _PositionalArgumentWarning(FutureWarning):
+    """An argument that became keyword-only was passed positionally; that stops working in v1.9.0."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(f"{message}. Passing them positionally stops working in squidpy v1.9.0.")
+
+
+#: ``warnings.warn(..., skip_file_prefixes=SKIP_OWN_FRAMES)`` points at the first frame outside
+#: squidpy and the ``legacy_api`` shim, however many wrappers sit in between.
+SKIP_OWN_FRAMES = (
+    os.path.dirname(__file__) + os.sep,
+    os.path.dirname(legacy_api_wrap.__file__) + os.sep,
+)
+
+#: For arguments that became keyword-only: an old positional call still works, with a
+#: ``FutureWarning`` naming them (#1288). List the names in their v1.8.3 order, and put the
+#: shim outside ``deprecated_params`` / ``deprecated_randomness_param`` so they see old names.
+old_positionals = partial(legacy_api, category=_PositionalArgumentWarning, skip_file_prefixes=SKIP_OWN_FRAMES)
 
 # Scanpy 1.13 moved the pre-v2 plotting internals under ``scanpy.plotting.legacy``.
 # ``scanpy.plotting.__getattr__`` forwards attribute access there, but submodule

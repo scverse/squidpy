@@ -50,7 +50,6 @@ from squidpy.experimental.im._tiling import (
     compute_cell_info_tiled,
     extract_labels_tile_lazy,
 )
-from squidpy.experimental.tl._tiling_stitch import _STITCH_COLUMNS, _STITCH_PARAM_KEYS, StitchParams
 from squidpy.experimental.utils._labels import resolve_labels_array
 from squidpy.experimental.utils._params import resolve_params
 
@@ -403,6 +402,7 @@ def _score_tile(
 
 def _compute_centroids_for_labels(
     sdata: sd.SpatialData,
+    *,
     labels_key: str,
     labels_da: xr.DataArray,
     scale: str | None,
@@ -431,6 +431,7 @@ _METHOD_KEY = "tiling_qc"
 
 def calculate_tiling_qc(
     sdata: sd.SpatialData,
+    *,
     labels_key: str,
     scale: str | None = None,
     tile_size: int = 2048,
@@ -559,9 +560,9 @@ def calculate_tiling_qc(
         raise ValueError(f"n_neighbors must be >= 1, got {n_neighbors}.")
     qc_params = _resolve_qc_params(tiling_qc_params)
 
-    labels_da = resolve_labels_array(sdata, labels_key, scale)
+    labels_da = resolve_labels_array(sdata, labels_key=labels_key, scale=scale)
 
-    cell_info = _compute_centroids_for_labels(sdata, labels_key, labels_da, scale)
+    cell_info = _compute_centroids_for_labels(sdata, labels_key=labels_key, labels_da=labels_da, scale=scale)
     if not cell_info:
         raise ValueError("No cells found in labels (all zeros).")
 
@@ -687,13 +688,13 @@ def calculate_tiling_qc(
 
     if inplace:
         table_key = table_key_added if table_key_added is not None else f"{labels_key}_qc"
-        _warn_if_dropping_stitch_columns(sdata, table_key, labels_key)
+        _warn_if_dropping_stitch_columns(sdata, table_key=table_key, labels_key=labels_key)
         sdata.tables[table_key] = TableModel.parse(adata)
         return None
     return adata
 
 
-def _warn_if_dropping_stitch_columns(sdata: sd.SpatialData, table_key: str, labels_key: str) -> None:
+def _warn_if_dropping_stitch_columns(sdata: sd.SpatialData, *, table_key: str, labels_key: str) -> None:
     """Warn if re-running QC would drop downstream stitch results.
 
     ``calculate_tiling_qc`` replaces the QC table wholesale, so any columns
@@ -704,23 +705,12 @@ def _warn_if_dropping_stitch_columns(sdata: sd.SpatialData, table_key: str, labe
     """
     if table_key not in sdata.tables:
         return
-    existing = sdata.tables[table_key]
-    present = [c for c in _STITCH_COLUMNS if c in existing.obs.columns]
-    if not present:
+    stitch = sdata.tables[table_key].uns.get("tiling_stitch")
+    if stitch is None:
         return
-
-    prev_params = existing.uns.get("tiling_stitch", {}) if hasattr(existing, "uns") else {}
-    parts = [f"labels_key={labels_key!r}"]
-    parts.extend(f"{k}={v!r}" for k, v in prev_params.items() if k in _STITCH_PARAM_KEYS)
-    nested = prev_params.get("stitch_params")
-    if isinstance(nested, dict) and nested:
-        defaults = asdict(StitchParams())
-        diff = {k: v for k, v in nested.items() if k in defaults and defaults[k] != v}
-        if diff:
-            parts.append(f"stitch_params={diff!r}")
+    parts = [f"labels_key={labels_key!r}", *(f"{k}={v!r}" for k, v in stitch["params"].items())]
     rerun = f"sq.experimental.tl.assign_stitch_groups(sdata, {', '.join(parts)})"
     logg.warning(
-        f"Re-running calculate_tiling_qc dropped previous stitch columns "
-        f"({', '.join(present)}) from sdata.tables[{table_key!r}].  "
+        f"Re-running calculate_tiling_qc dropped the previous stitch columns from sdata.tables[{table_key!r}].  "
         f"To restore them, run: {rerun}"
     )

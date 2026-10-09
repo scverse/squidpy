@@ -23,6 +23,7 @@ from spatialdata.models.models import (
     get_model,
 )
 
+from squidpy._compat import SKIP_OWN_FRAMES, old_positionals
 from squidpy._constants._constants import CoordType, Transform
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
@@ -106,7 +107,7 @@ def _resolve_graph_builder(
             warnings.warn(
                 "Parameter `n_neighs` is ignored when `delaunay=True` use `spatial_neighbors_delaunay` instead.",
                 FutureWarning,
-                stacklevel=3,
+                skip_file_prefixes=SKIP_OWN_FRAMES,
             )
         # Preserve the documented legacy contract: under the deprecated
         # `spatial_neighbors`, a scalar `radius` with `delaunay=True` is silently
@@ -121,7 +122,7 @@ def _resolve_graph_builder(
             warnings.warn(
                 "Parameter `n_neighs` is ignored when `radius` is set use `spatial_neighbors_radius` instead.",
                 FutureWarning,
-                stacklevel=3,
+                skip_file_prefixes=SKIP_OWN_FRAMES,
             )
         return RadiusBuilder(**common, radius=radius, percentile=percentile)
     return KNNBuilder(n_neighs=n_neighs, **common, percentile=percentile)
@@ -129,8 +130,26 @@ def _resolve_graph_builder(
 
 @d.dedent
 @inject_docs(t=Transform, c=CoordType)
+@old_positionals(
+    "spatial_key",
+    "elements_to_coordinate_systems",
+    "table_key",
+    "library_key",
+    "coord_type",
+    "n_neighs",
+    "radius",
+    "delaunay",
+    "n_rings",
+    "percentile",
+    "transform",
+    "set_diag",
+    "key_added",
+    "copy",
+    "n_jobs",
+)
 def spatial_neighbors(
     adata: AnnData | SpatialData,
+    *,
     spatial_key: str = Key.obsm.spatial,
     elements_to_coordinate_systems: dict[str, str] | None = None,
     table_key: str | None = None,
@@ -296,7 +315,7 @@ def spatial_neighbors(
         "`spatial_neighbors_delaunay`, `spatial_neighbors_grid`, or "
         "`spatial_neighbors_from_builder` instead.",
         FutureWarning,
-        stacklevel=2,
+        skip_file_prefixes=SKIP_OWN_FRAMES,
     )
     adata, library_key = _prepare_spatial_neighbors_input(
         adata,
@@ -319,7 +338,7 @@ def spatial_neighbors(
 
     return _run_spatial_neighbors(
         adata,
-        builder,
+        builder=builder,
         spatial_key=spatial_key,
         library_key=library_key,
         key_added=key_added,
@@ -330,6 +349,7 @@ def spatial_neighbors(
 
 def _resolve_data(
     data: AnnData | SpatialData,
+    *,
     elements_to_coordinate_systems: dict[str, str] | None,
     table_key: str | None = None,
     spatial_key: str = Key.obsm.spatial,
@@ -385,10 +405,11 @@ def _resolve_data(
 
 
 @d.dedent
+@old_positionals("builder")
 def spatial_neighbors_from_builder(
     data: AnnData | SpatialData,
-    builder: GraphBuilder[Any, Any],
     *,
+    builder: GraphBuilder[Any, Any],
     spatial_key: str = Key.obsm.spatial,
     elements_to_coordinate_systems: dict[str, str] | None = None,
     table_key: str | None = None,
@@ -451,7 +472,7 @@ def spatial_neighbors_from_builder(
     )
     return _run_spatial_neighbors(
         adata,
-        builder,
+        builder=builder,
         spatial_key=spatial_key,
         library_key=library_key,
         key_added=key_added,
@@ -476,7 +497,7 @@ def _prepare_spatial_neighbors_input(
         table_key=table_key,
         library_key=library_key,
     )
-    _assert_spatial_basis(adata, spatial_key)
+    _assert_spatial_basis(adata, key=spatial_key)
     return adata, library_key
 
 
@@ -540,7 +561,7 @@ def spatial_neighbors_knn(
     )
     return _run_spatial_neighbors(
         adata,
-        builder,
+        builder=builder,
         spatial_key=spatial_key,
         library_key=library_key,
         key_added=key_added,
@@ -612,7 +633,7 @@ def spatial_neighbors_radius(
     )
     return _run_spatial_neighbors(
         adata,
-        builder,
+        builder=builder,
         spatial_key=spatial_key,
         library_key=library_key,
         key_added=key_added,
@@ -688,7 +709,7 @@ def spatial_neighbors_delaunay(
     )
     return _run_spatial_neighbors(
         adata,
-        builder,
+        builder=builder,
         spatial_key=spatial_key,
         library_key=library_key,
         key_added=key_added,
@@ -777,7 +798,7 @@ def spatial_neighbors_grid(
     )
     return _run_spatial_neighbors(
         adata,
-        builder,
+        builder=builder,
         spatial_key=spatial_key,
         library_key=library_key,
         key_added=key_added,
@@ -788,8 +809,8 @@ def spatial_neighbors_grid(
 
 def _run_spatial_neighbors(
     adata: AnnData,
-    builder: GraphBuilder[Any, Any],
     *,
+    builder: GraphBuilder[Any, Any],
     spatial_key: str = Key.obsm.spatial,
     library_key: str | None = None,
     key_added: str = "spatial",
@@ -850,8 +871,10 @@ def _run_spatial_neighbors(
 
 
 @d.dedent
+@old_positionals("table_key", "polygon_mask", "negative_mask", "spatial_key", "key_added", "copy")
 def mask_graph(
     sdata: SpatialData,
+    *,
     table_key: str,
     polygon_mask: Polygon | MultiPolygon,
     negative_mask: bool = False,

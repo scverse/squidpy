@@ -135,10 +135,10 @@ def _reference_nhood_enrichment(
     """
     observed = _ref_normalize(adj, int_clust, n_cls, normalization)
 
-    generators = np.random.default_rng(rng).spawn(n_perms)
+    rngs = np.random.default_rng(rng).spawn(n_perms)
     perms = np.empty((n_perms, n_cls, n_cls), dtype=np.float64)
     for p in range(n_perms):
-        gen = generators[p]
+        gen = rngs[p]
         if libraries is not None:
             shuffled = _ref_shuffle_group(int_clust, libraries, gen)
         else:
