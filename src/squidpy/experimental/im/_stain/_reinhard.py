@@ -96,11 +96,6 @@ def _tissue_lab_moments(
 
 def _stats_from_moments(n: np.ndarray, s: np.ndarray, s2: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     mu = s / n
-    # ponytail: one-pass. Two-pass would be robust even in float32, but the
-    # pooled mu is not known until every slide has been read, so it would cost a
-    # second traversal of the cohort. float64 one-pass lands at ~1e-13; the clamp
-    # absorbs the residual cancellation on a flat channel, where _SIGMA_FLOOR
-    # takes over downstream. Revisit only if a real slide shows drift.
     return mu, np.sqrt(np.maximum(s2 / n - mu**2, 0.0))
 
 
