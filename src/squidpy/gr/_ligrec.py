@@ -20,7 +20,6 @@ from scipy.sparse import csc_matrix
 from spatialdata import SpatialData
 
 from squidpy._compat import old_positionals
-from squidpy._constants._constants import ComplexPolicy, CorrAxis
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
 from squidpy._utils import (
@@ -32,7 +31,7 @@ from squidpy._utils import (
     get_n_numba_threads,
     numba_threads,
 )
-from squidpy._validators import assert_positive, check_tuple_needles
+from squidpy._validators import assert_positive, check_tuple_needles, normalize_choice
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _genesymbols,
@@ -64,7 +63,7 @@ class TempResult(NamedTuple):
 def _fdr_correct(
     pvals: pd.DataFrame,
     corr_method: str,
-    corr_axis: Literal["interactions", "clusters"] | CorrAxis,
+    corr_axis: Literal["interactions", "clusters"],
     alpha: float = 0.05,
 ) -> pd.DataFrame:
     """Correct p-values for FDR along specific axis in ``pvals``."""
@@ -83,12 +82,12 @@ def _fdr_correct(
 
         return SparseArray(qvals, dtype=qvals.dtype, fill_value=np.nan)
 
-    corr_axis = CorrAxis(corr_axis)
+    corr_axis = normalize_choice(corr_axis, ("interactions", "clusters"), name="corr_axis")
 
-    if corr_axis == CorrAxis.CLUSTERS:
+    if corr_axis == "clusters":
         # clusters are in columns
         pvals = pvals.apply(fdr)
-    elif corr_axis == CorrAxis.INTERACTIONS:
+    elif corr_axis == "interactions":
         pvals = pvals.T.apply(fdr).T
     else:
         raise NotImplementedError(f"FDR correction for `{corr_axis}` is not implemented.")
@@ -140,9 +139,9 @@ class PermutationTestABC(ABC):
 
     @d.get_full_description(base="PT_prepare")
     @d.get_sections(base="PT_prepare", sections=["Parameters", "Returns"])
-    @inject_docs(src=SOURCE, tgt=TARGET, cp=ComplexPolicy)
+    @inject_docs(src=SOURCE, tgt=TARGET)
     def prepare(
-        self, interactions: Interaction_t, complex_policy: Literal["min", "all"] | ComplexPolicy = ComplexPolicy.MIN.v
+        self, interactions: Interaction_t, complex_policy: Literal["min", "all"] = "min"
     ) -> PermutationTestABC:
         """
         Prepare self for running the permutation test.
@@ -162,9 +161,9 @@ class PermutationTestABC(ABC):
         complex_policy
             Policy on how to handle complexes. Valid options are:
 
-                - `{cp.MIN.s!r}` - select gene with the minimum average expression. This is the same as in
+                - `'min'` - select gene with the minimum average expression. This is the same as in
                   :cite:`cellphonedb`.
-                - `{cp.ALL.s!r}` - select all possible combinations between `{src!r}` and `{tgt!r}` complexes.
+                - `'all'` - select all possible combinations between `{src!r}` and `{tgt!r}` complexes.
 
         Returns
         -------
@@ -172,7 +171,7 @@ class PermutationTestABC(ABC):
 
             - :attr:`interactions` - filtered interactions whose `{src!r}` and `{tgt!r}` are both in the data.
         """
-        complex_policy = ComplexPolicy(complex_policy)
+        complex_policy = normalize_choice(complex_policy, ("min", "all"), name="complex_policy")
 
         if isinstance(interactions, Mapping):
             interactions = pd.DataFrame(interactions)
@@ -235,7 +234,7 @@ class PermutationTestABC(ABC):
     @d.get_full_description(base="PT_test")
     @d.get_sections(base="PT_test", sections=["Parameters"])
     @d.dedent
-    @inject_docs(src=SOURCE, tgt=TARGET, fa=CorrAxis)
+    @inject_docs(src=SOURCE, tgt=TARGET)
     @deprecated_params({"numba_parallel": "1.10.0", "backend": "1.10.0"})
     @deprecated_randomness_param
     def test(
@@ -247,7 +246,7 @@ class PermutationTestABC(ABC):
         threshold: float = 0.01,
         rng: SeedLike | RNGLike | None = None,
         corr_method: str | None = None,
-        corr_axis: Literal["interactions", "clusters"] | CorrAxis = CorrAxis.INTERACTIONS.v,
+        corr_axis: Literal["interactions", "clusters"] = "interactions",
         alpha: float = 0.05,
         copy: bool = False,
         key_added: str | None = None,
@@ -272,8 +271,8 @@ class PermutationTestABC(ABC):
         corr_axis
             Axis over which to perform the FDR correction. Only used when ``corr_method != None``. Valid options are:
 
-                - `{fa.INTERACTIONS.s!r}` - correct interactions by performing FDR correction across the clusters.
-                - `{fa.CLUSTERS.s!r}` - correct clusters by performing FDR correction across the interactions.
+                - `'interactions'` - correct interactions by performing FDR correction across the clusters.
+                - `'clusters'` - correct clusters by performing FDR correction across the interactions.
         alpha
             Significance level for FDR correction. Only used when ``corr_method != None``.
         %(copy)s
@@ -294,9 +293,7 @@ class PermutationTestABC(ABC):
         _assert_categorical_obs(self._adata, key=cluster_key)
 
         if corr_method is not None:
-            corr_axis = CorrAxis(corr_axis)
-        if TYPE_CHECKING:
-            assert isinstance(corr_axis, CorrAxis)
+            corr_axis = normalize_choice(corr_axis, ("interactions", "clusters"), name="corr_axis")
 
         if len(self._adata.obs[cluster_key].cat.categories) <= 1:
             raise ValueError(
@@ -369,7 +366,7 @@ class PermutationTestABC(ABC):
 
         if corr_method is not None:
             logg.info(
-                f"Performing FDR correction across the `{corr_axis.v}` using method `{corr_method}` at level `{alpha}`"
+                f"Performing FDR correction across the `{corr_axis}` using method `{corr_method}` at level `{alpha}`"
             )
             res["pvalues"] = _fdr_correct(res["pvalues"], corr_method, corr_axis, alpha=alpha)
 
@@ -402,8 +399,8 @@ class PermutationTestABC(ABC):
         if self.interactions.empty:
             raise ValueError("After filtering by genes, no interactions remain.")
 
-    @inject_docs(src=SOURCE, tgt=TARGET, cp=ComplexPolicy)
-    def _filter_interactions_complexes(self, complex_policy: ComplexPolicy) -> None:
+    @inject_docs(src=SOURCE, tgt=TARGET)
+    def _filter_interactions_complexes(self, complex_policy: Literal["min", "all"]) -> None:
         """
         Filter the :attr:`interactions` by extracting genes from complexes.
 
@@ -412,9 +409,9 @@ class PermutationTestABC(ABC):
         complex_policy
             Policy on how to handle complexes. Valid options are:
 
-                - `{cp.MIN.s!r}` - select gene with the minimum average expression. This is the same as in
+                - `'min'` - select gene with the minimum average expression. This is the same as in
                   :cite:`cellphonedb`.
-                - `{cp.ALL.s!r}` - select all possible combinations between `{src!r}` and `{tgt!r}` complexes.
+                - `'all'` - select all possible combinations between `{src!r}` and `{tgt!r}` complexes.
 
         Returns
         -------
@@ -422,7 +419,7 @@ class PermutationTestABC(ABC):
 
             - :attr:`interactions` - filtered interactions whose `{src!r}` and `{tgt!r}` are both in the data.
 
-        Note that for ``complex_policy={cp.ALL.s!r}``, all pairwise comparisons within a complex are created,
+        Note that for ``complex_policy='all'``, all pairwise comparisons within a complex are created,
         but no filtering happens at this stage - genes not present in the data are filtered at a later stage.
         """
 
@@ -451,11 +448,11 @@ class PermutationTestABC(ABC):
             assert isinstance(self._interactions, pd.DataFrame)
             assert isinstance(self.interactions, pd.DataFrame)
 
-        if complex_policy == ComplexPolicy.MIN:
+        if complex_policy == "min":
             logg.debug("DEBUG: Selecting genes from complexes based on minimum average expression")
             self.interactions[SOURCE] = self.interactions[SOURCE].apply(find_min_gene_in_complex)
             self.interactions[TARGET] = self.interactions[TARGET].apply(find_min_gene_in_complex)
-        elif complex_policy == ComplexPolicy.ALL:
+        elif complex_policy == "all":
             logg.debug("DEBUG: Creating all gene combinations within complexes")
             src = self.interactions.pop(SOURCE).apply(lambda s: str(s).split("_")).explode()
             src.name = SOURCE
@@ -497,7 +494,7 @@ class PermutationTest(PermutationTestABC):
     def prepare(
         self,
         interactions: Interaction_t | None = None,
-        complex_policy: Literal["min", "all"] = ComplexPolicy.MIN.v,
+        complex_policy: Literal["min", "all"] = "min",
         interactions_params: Mapping[str, Any] = MappingProxyType({}),
         transmitter_params: Mapping[str, Any] = MappingProxyType({"categories": "ligand"}),
         receiver_params: Mapping[str, Any] = MappingProxyType({"categories": "receptor"}),
@@ -574,10 +571,10 @@ def ligrec(
     *,
     cluster_key: str,
     interactions: Interaction_t | None = None,
-    complex_policy: Literal["min", "all"] = ComplexPolicy.MIN.v,
+    complex_policy: Literal["min", "all"] = "min",
     threshold: float = 0.01,
     corr_method: str | None = None,
-    corr_axis: Literal["interactions", "clusters"] = CorrAxis.CLUSTERS.v,
+    corr_axis: Literal["interactions", "clusters"] = "clusters",
     use_raw: bool = True,
     copy: bool = False,
     key_added: str | None = None,

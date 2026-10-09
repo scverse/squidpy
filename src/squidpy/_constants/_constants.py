@@ -18,18 +18,6 @@ class ImageFeature(ModeEnum):
 
 # _ligrec.py
 @unique
-class CorrAxis(ModeEnum):
-    INTERACTIONS = "interactions"
-    CLUSTERS = "clusters"
-
-
-@unique
-class ComplexPolicy(ModeEnum):
-    MIN = "min"
-    ALL = "all"
-
-
-@unique
 class Processing(ModeEnum):
     SMOOTH = "smooth"
     GRAY = "gray"
