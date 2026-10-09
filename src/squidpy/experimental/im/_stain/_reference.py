@@ -7,7 +7,7 @@ statistics (Reinhard).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, get_args
 
 import numpy as np
 
@@ -19,8 +19,9 @@ if TYPE_CHECKING:
     from squidpy.experimental.im._stain._normalize import MethodParams
 
 StainMethod = Literal["macenko", "vahadane", "reinhard"]
-_DECOMPOSITION_METHODS: frozenset[str] = frozenset({"macenko", "vahadane"})
-_VALID_METHODS: frozenset[str] = _DECOMPOSITION_METHODS | {"reinhard"}
+#: The method vocabulary, derived from ``StainMethod`` so the two cannot drift.
+_VALID_METHODS: frozenset[str] = frozenset(get_args(StainMethod))
+_DECOMPOSITION_METHODS: frozenset[str] = _VALID_METHODS - {"reinhard"}
 
 
 def _coerce_finite(arr: Any, *, shape: tuple[int, ...], name: str) -> np.ndarray:

@@ -16,11 +16,6 @@ from squidpy.experimental.im._stain._constants import (
     RUDERMAN_LMS_TO_LAB,
     RUDERMAN_RGB_TO_LMS,
 )
-from squidpy.experimental.im._stain._conversion import (
-    _check_channel_dim,
-    rgb_to_lab_ruderman,
-    rgb_to_sda,
-)
 
 
 def _white_luminosity() -> float:
@@ -51,31 +46,6 @@ def foreground_mask_from_lab(lab: xr.DataArray, threshold: float) -> xr.DataArra
     return luminosity <= threshold
 
 
-def luminosity_foreground_mask(rgb: xr.DataArray, threshold: float) -> xr.DataArray:
-    """Boolean tissue mask from normalised Ruderman Lab luminosity.
-
-    Pixels darker than ``threshold`` are tissue; brighter (near-white)
-    pixels are background and excluded from stain-statistic fitting.
-
-    Parameters
-    ----------
-    rgb
-        Image with a ``"c"`` dimension of length 3. May be numpy- or
-        dask-backed; the operation stays lazy.
-    threshold
-        Cutoff on normalised luminosity in ``[0, 1]``. Pixels with
-        luminosity ``<= threshold`` are tissue. Semantics follow
-        HistomicsTK's ``reinhard`` so literature thresholds transfer.
-
-    Returns
-    -------
-    Boolean ``(y, x)`` DataArray: ``True`` = tissue, ``False`` =
-    background. Lazy if and only if ``rgb`` was lazy.
-    """
-    _check_channel_dim(rgb)
-    return foreground_mask_from_lab(rgb_to_lab_ruderman(rgb), threshold)
-
-
 def as_spatial_mask(mask: np.ndarray, like: xr.DataArray) -> xr.DataArray:
     """Wrap a ``(y, x)`` boolean array as a DataArray aligned to ``like``'s y/x.
 
@@ -96,28 +66,3 @@ def foreground_mask_from_sda(sda: xr.DataArray, beta: float = 0.15) -> xr.DataAr
     RGB->SDA conversion once. ``True`` = tissue (mean absorbance ``> beta``).
     """
     return sda.mean(dim="c") > beta
-
-
-def absorbance_foreground_mask(rgb: xr.DataArray, white_point: np.ndarray, beta: float = 0.15) -> xr.DataArray:
-    """Boolean tissue mask in optical-density (absorbance) space.
-
-    The convention the Macenko/Vahadane fits expect: a pixel is tissue if its
-    mean absorbance across channels exceeds ``beta``. Near-white background
-    has near-zero absorbance and is excluded.
-
-    Parameters
-    ----------
-    rgb
-        Image with a ``"c"`` dimension of length 3. Numpy- or dask-backed.
-    white_point
-        Per-channel white point ``I_0`` (shape ``(3,)``), as used by
-        :func:`~squidpy.experimental.im._stain._conversion.rgb_to_sda`.
-    beta
-        Mean-absorbance cutoff. Pixels with mean SDA ``> beta`` are tissue.
-
-    Returns
-    -------
-    Boolean ``(y, x)`` DataArray: ``True`` = tissue. Lazy if ``rgb`` was lazy.
-    """
-    _check_channel_dim(rgb)
-    return foreground_mask_from_sda(rgb_to_sda(rgb, white_point), beta)
