@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+
 import dask.array as da
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,13 +13,15 @@ from spatialdata.models import Image2DModel, Labels2DModel
 from spatialdata.transformations import Scale, get_transformation, set_transformation
 
 import squidpy as sq
+from squidpy._params import defaults_of
 from squidpy.experimental.im import (
-    ReinhardParams,
     StainReference,
     fit_stain_reference,
     normalize_stains,
 )
+from squidpy.experimental.im._stain._validation import StainFittingError
 from squidpy.experimental.im._utils import get_element_data
+from squidpy.types import ReinhardParams
 from tests.conftest import PlotTester, PlotTesterMeta
 
 _ = sdp  # registers the `.pl` spatialdata accessor
@@ -150,6 +154,37 @@ class TestApplyStainNormalization:
             sdata, image_key="img", reference=ref, method_params=ReinhardParams(mask_background=False), inplace=False
         )
         assert isinstance(out, xr.DataArray)
+
+    @pytest.mark.parametrize("method", ["reinhard", "macenko", "vahadane"])
+    def test_unknown_method_params_key_raises(self, rgb_values: np.ndarray, method: str) -> None:
+        sdata = _make_sdata(rgb_values)
+        with pytest.raises(ValueError, match="Unknown `method_params` field"):
+            fit_stain_reference(sdata, image_key="img", method=method, method_params={"bogus": 1})
+        # random pixels are not H&E, so open the angle gate; only the params check is under test
+        ref = fit_stain_reference(sdata, image_key="img", method=method, max_angle_deg=180.0)
+        with pytest.raises(ValueError, match="Unknown `method_params` field"):
+            normalize_stains(sdata, image_key="img", reference=ref, method_params={"bogus": 1}, inplace=False)
+
+    @pytest.mark.parametrize("method", ["reinhard", "macenko", "vahadane"])
+    @pytest.mark.parametrize("partial", [False, True], ids=["none", "partial"])
+    def test_method_params_validated_once_per_call(
+        self, rgb_values: np.ndarray, method: str, partial: bool, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from squidpy.experimental.im._stain._normalize import _METHOD_PARAMS, _METHOD_VALIDATORS
+
+        spec = _METHOD_PARAMS[method]
+        calls = []
+        validate = _METHOD_VALIDATORS[method]
+        monkeypatch.setitem(_METHOD_VALIDATORS, method, lambda merged: (calls.append(dict(merged)), validate(merged)))
+        params = ({"mask_background": False} if method == "reinhard" else {"beta": 0.2}) if partial else None
+        sdata = _make_sdata(rgb_values)
+        ref = fit_stain_reference(sdata, image_key="img", method=method, method_params=params, max_angle_deg=180.0)
+        # random pixels are not H&E, so the source vahadane fit may trip the angle gate after validation ran
+        with contextlib.suppress(StainFittingError):
+            normalize_stains(sdata, image_key="img", reference=ref, method_params=params, inplace=False)
+        assert len(calls) == 2  # once in fit_stain_reference, once in normalize_stains
+        # defaults are merged under the partial dict
+        assert calls[0] == {**defaults_of(spec), **(params or {})}
 
 
 class TestTissueMaskMandate:
