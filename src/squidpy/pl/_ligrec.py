@@ -263,7 +263,7 @@ def ligrec(
             raise ValueError("Please provide `cluster_key` when supplying an `AnnData` object.")
 
         cluster_key = Key.uns.ligrec(cluster_key)
-        if cluster_key not in adata.uns_keys():
+        if cluster_key not in adata.uns:
             raise KeyError(f"Key `{cluster_key}` not found in `adata.uns`.")
         adata = adata.uns[cluster_key]
 
