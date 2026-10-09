@@ -12,7 +12,7 @@ entry, :func:`decompose_stains`, projects an image onto its stain matrix.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any, Literal
 
 import numpy as np
@@ -22,24 +22,22 @@ from numpy.typing import DTypeLike
 from spatialdata.models import Image2DModel
 from spatialdata.transformations import get_transformation
 
+from squidpy._params import resolve_params
 from squidpy._utils import _get_scale_factors
 from squidpy.experimental.im._stain._constants import RUIFROK_HE
 from squidpy.experimental.im._stain._conversion import _check_channel_dim, cast_to_image_dtype
 from squidpy.experimental.im._stain._decomposition import (
-    MacenkoParams,
-    VahadaneParams,
-    _resolve_macenko_params,
-    _resolve_vahadane_params,
     apply_decomposition,
     decompose_to_concentrations,
     fit_decomposition,
+    validate_macenko_params,
+    validate_vahadane_params,
 )
 from squidpy.experimental.im._stain._reference import StainMethod, StainReference
 from squidpy.experimental.im._stain._reinhard import (
-    ReinhardParams,
-    _resolve_reinhard_params,
     apply_reinhard,
     fit_reinhard,
+    validate_reinhard_params,
 )
 from squidpy.experimental.im._stain._white_point import (
     default_white_point,
@@ -52,8 +50,21 @@ from squidpy.experimental.im._utils import (
     get_mask_materialized,
     resolve_tissue_mask,
 )
+from squidpy.types import MacenkoParams, ReinhardParams, VahadaneParams
 
-_VALID_METHODS = ("reinhard", "macenko", "vahadane")
+#: The params type each method takes.
+_METHOD_PARAMS: dict[str, type[ReinhardParams | MacenkoParams | VahadaneParams]] = {
+    "reinhard": ReinhardParams,
+    "macenko": MacenkoParams,
+    "vahadane": VahadaneParams,
+}
+#: The validator each method's params are resolved with (coerces in place, raises on bad values).
+_METHOD_VALIDATORS: dict[str, Callable[[dict[str, Any]], None]] = {
+    "reinhard": validate_reinhard_params,
+    "macenko": validate_macenko_params,
+    "vahadane": validate_vahadane_params,
+}
+_VALID_METHODS = tuple(_METHOD_PARAMS)
 _DECOMPOSITION_METHODS = ("macenko", "vahadane")
 _CONCENTRATION_CHANNELS = ["hematoxylin", "eosin", "residual"]
 
@@ -135,17 +146,6 @@ def _resolve_output_tissue_mask(
 
     resized = resize(np.asarray(mask.data) > 0, target_hw, order=0, preserve_range=True) > 0.5
     return xr.DataArray(resized, dims=("y", "x"), coords=coords)
-
-
-def _resolve_method_params(method: str, method_params: MethodParams) -> Any:
-    """Pick the right Params dataclass for ``method`` and resolve a mapping/instance/None."""
-    if method == "reinhard":
-        return _resolve_reinhard_params(method_params)
-    if method == "macenko":
-        return _resolve_macenko_params(method_params)
-    if method == "vahadane":
-        return _resolve_vahadane_params(method_params)
-    raise ValueError(f"Unknown method {method!r}; expected one of {list(_VALID_METHODS)}.")
 
 
 def _write_image(
@@ -246,9 +246,8 @@ def fit_stain_reference(
         Scale level to fit on. ``"auto"`` (default) uses the coarsest level,
         which is cheap and sufficient for colour statistics.
     method_params
-        A :class:`ReinhardParams`/:class:`MacenkoParams`/:class:`VahadaneParams`
-        instance, a mapping of its fields, or ``None`` for defaults. Must match
-        ``method``.
+        A mapping of ``ReinhardParams``/``MacenkoParams``/``VahadaneParams`` keys,
+        or ``None`` for defaults. Must match ``method``.
     white_point
         Per-channel white point ``I_0`` ``(3,)`` for the decomposition methods.
         If ``None``, a fixed full-white ``[255, 255, 255]`` is used (the
@@ -280,7 +279,7 @@ def fit_stain_reference(
         raise ValueError(f"Unknown method {method!r}; expected one of {list(_VALID_METHODS)}.")
     da = _resolve_image(sdata, image_key=image_key, scale=scale, prefer="coarsest")
     validate_rgb_range(da)
-    params = _resolve_method_params(method, method_params)
+    params = resolve_params(method_params, _METHOD_PARAMS[method], validate=_METHOD_VALIDATORS[method])
     tissue_mask = _resolve_tissue_bool_mask(sdata, image_key=image_key, fit_da=da, tissue_mask_key=tissue_mask_key)
     if method == "reinhard":
         return fit_reinhard(da, params, tissue_mask=tissue_mask)
@@ -327,7 +326,7 @@ def normalize_stains(
         so the result is not downsampled; source statistics are reduced
         lazily so memory stays bounded.
     method_params
-        Params matching ``reference.method`` (instance, mapping, or ``None``).
+        Params matching ``reference.method`` (mapping or ``None``).
     image_key_added
         Key for the written image when ``inplace=True``. If ``None`` (default),
         ``f"{image_key}_normalized"`` is used. Ignored when ``inplace=False``.
@@ -361,7 +360,9 @@ def normalize_stains(
     target_key = image_key_added if image_key_added is not None else f"{image_key}_normalized"
     if inplace and target_key in sdata.images:
         raise ValueError(f"image_key_added={target_key!r} already exists in sdata.images.")
-    params = _resolve_method_params(reference.method, method_params)
+    params = resolve_params(
+        method_params, _METHOD_PARAMS[reference.method], validate=_METHOD_VALIDATORS[reference.method]
+    )
     # Source statistics (Reinhard mu/sigma or the decomposition source matrix)
     # are reduced on a coarse level with a tissue mask; the lazy transform is
     # then applied to the full-resolution `da`.
