@@ -147,6 +147,20 @@ def test_spatial_autocorr_perm_blocks(dummy_adata: AnnData, mode: str, monkeypat
         assert_frame_equal(spatial_autocorr(dummy_adata, n_jobs=n_jobs, **kw), expected)
 
 
+@pytest.mark.parametrize("mode", ["moran", "geary"])
+def test_spatial_autocorr_csc_connectivities(dummy_adata: AnnData, mode: str):
+    """A CSC graph must give the CSR result: the kernel reads CSR and sklearn's row-normalize skips CSC."""
+    key = Key.obsp.spatial_conn()
+    kw = {"mode": mode, "copy": True, "rng": 42, "n_perms": 50}
+    csc = dummy_adata.copy()
+    csc.obsp[key] = csc.obsp[key].tocsc()
+    before = csc.obsp[key].copy()
+
+    assert_frame_equal(spatial_autocorr(csc, **kw), spatial_autocorr(dummy_adata, **kw))
+    # row-normalization must not leak back into the caller's graph
+    np.testing.assert_array_equal(csc.obsp[key].toarray(), before.toarray())
+
+
 def test_spatial_autocorr_v183_positional_backend(dummy_adata: AnnData):
     """A v1.8.3 positional call through ``backend`` binds every value and warns about ``backend``."""
     kw = {"mode": "moran", "n_perms": 20, "rng": 0, "copy": True, "n_jobs": 1, "show_progress_bar": False}

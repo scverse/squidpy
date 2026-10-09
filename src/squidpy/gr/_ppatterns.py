@@ -238,7 +238,7 @@ def spatial_autocorr(
     else:
         raise NotImplementedError(f"Mode `{mode}` is not yet implemented.")
 
-    g = adata.obsp[connectivity_key].copy()
+    g = adata.obsp[connectivity_key].tocsr(copy=True)  # the permutation kernel reads CSR; sklearn's row-normalize is a no-op on CSC
     if transformation:  # row-normalize
         normalize(g, norm="l1", axis=1, copy=False)
 
