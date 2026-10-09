@@ -254,9 +254,11 @@ class TestSpatialStaticUtils:
                 }
             }
 
-        (img,) = _get_image(adata, ["lib"], spatial_key="spatial_trans", img_res_key="hires")
+        (img,) = _get_image(adata, library_id=["lib"], spatial_key="spatial_trans", img_res_key="hires")
         assert np.all(img == 1.0)
 
-        scale_factor, size = _get_scalefactor_size(adata, ["lib"], spatial_key="spatial_trans", img_res_key="hires")
+        scale_factor, size = _get_scalefactor_size(
+            adata, library_id=["lib"], spatial_key="spatial_trans", img_res_key="hires"
+        )
         assert scale_factor == [1.5]
         assert size == [3 * 1.5 * 0.5]
