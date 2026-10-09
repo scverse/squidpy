@@ -8,7 +8,6 @@ import pytest
 from anndata import AnnData
 from pytest_mock import MockerFixture
 
-from squidpy._constants._constants import ImageFeature
 from squidpy.im._container import ImageContainer
 from squidpy.im._feature import calculate_image_features
 
@@ -171,7 +170,7 @@ class TestHighLevel:
             calculate_image_features(adata, img=cont, layer="foo")
 
     def test_invalid_feature(self, adata: AnnData, cont: ImageContainer):
-        with pytest.raises(ValueError, match=r"Invalid option `foo` for `ImageFeature`"):
+        with pytest.raises(ValueError, match=r"Expected `features` to be one of"):
             calculate_image_features(adata, img=cont, features="foo")
 
     def test_passing_spot_crops_kwargs(self, adata: AnnData, cont: ImageContainer, mocker: MockerFixture):
@@ -191,8 +190,8 @@ class TestHighLevel:
             adata,
             img=cont,
             key_added="foo",
-            features=ImageFeature.CUSTOM.s,
-            features_kwargs={ImageFeature.CUSTOM.s: {"func": dummy, "sentinel": True, "channels": [0]}},
+            features="custom",
+            features_kwargs={"custom": {"func": dummy, "sentinel": True, "channels": [0]}},
             copy=True,
         )
 
