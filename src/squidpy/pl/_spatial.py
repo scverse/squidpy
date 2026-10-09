@@ -12,7 +12,6 @@ from matplotlib.colors import Colormap
 from matplotlib.figure import Figure
 
 from squidpy._compat import old_positionals
-from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
 from squidpy.gr._utils import _assert_spatial_basis
@@ -400,7 +399,7 @@ def _wrap_signature(wrapper: Callable[[Any], Any]) -> Callable[[Any], Any]:
 def spatial_scatter(
     adata: AnnData,
     *,
-    shape: _AvailShapes | None = ScatterShape.CIRCLE.v,
+    shape: _AvailShapes | None = "circle",
     **kwargs: Any,
 ) -> Axes | Sequence[Axes] | None:
     """

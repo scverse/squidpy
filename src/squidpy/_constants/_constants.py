@@ -22,10 +22,3 @@ class InferDimensions(ModeEnum):
     DEFAULT = "default"
     CHANNELS_LAST = "channels_last"
     Z_LAST = "z_last"
-
-
-@unique
-class ScatterShape(ModeEnum):
-    CIRCLE = "circle"
-    SQUARE = "square"
-    HEX = "hex"

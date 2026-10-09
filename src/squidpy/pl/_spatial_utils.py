@@ -6,7 +6,7 @@ from copy import copy
 from functools import partial
 from numbers import Number
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple
+from typing import Any, Literal, NamedTuple, get_args
 
 import dask.array as da
 import numpy as np
@@ -35,15 +35,15 @@ from skimage.segmentation import find_boundaries
 from skimage.util import map_array
 
 from squidpy._compat import add_categorical_legend, default_frameon, get_vector, vector_friendly
-from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
 from squidpy._utils import NDArrayA
-from squidpy._validators import assert_key_in_adata
+from squidpy._validators import assert_key_in_adata, normalize_choice
 from squidpy.im._coords import CropCoords
 from squidpy.pl._color_utils import _get_palette, _maybe_set_colors
 from squidpy.pl._utils import _assert_value_in_obs
 
 type _AvailShapes = Literal["circle", "square", "hex"]
+_SHAPES = get_args(_AvailShapes.__value__)  # get_args() is empty on a PEP 695 alias itself
 type Palette_t = str | ListedColormap | None
 type _Normalize = Normalize | Sequence[Normalize]
 type _SeqStr = str | Sequence[str]
@@ -503,7 +503,7 @@ def _shaped_scatter(
     s: float,
     c: NDArrayA | str,
     *,
-    shape: _AvailShapes | ScatterShape | None = ScatterShape.CIRCLE,
+    shape: _AvailShapes | None = "circle",
     norm: _Normalize | None = None,
     **kwargs: Any,
 ) -> PatchCollection:
@@ -513,16 +513,13 @@ def _shaped_scatter(
     Adapted from `here <https://gist.github.com/syrte/592a062c562cd2a98a83>`_.
     This code is under `The BSD 3-Clause License <http://opensource.org/licenses/BSD-3-Clause>`_.
     """
-    shape = ScatterShape(shape)
-    if TYPE_CHECKING:
-        assert isinstance(shape, ScatterShape)
-    shape = ScatterShape(shape)
+    shape = normalize_choice(shape, _SHAPES, name="shape")
 
-    if shape == ScatterShape.CIRCLE:
+    if shape == "circle":
         patches = [Circle((x, y), radius=s) for x, y, s in np.broadcast(x, y, s)]
-    elif shape == ScatterShape.SQUARE:
+    elif shape == "square":
         patches = [Rectangle((x - s, y - s), width=2 * s, height=2 * s) for x, y, s in np.broadcast(x, y, s)]
-    elif shape == ScatterShape.HEX:
+    elif shape == "hex":
         n = 6
         r = s / (2 * np.sin(np.pi / n))
         polys = np.stack([_make_poly(x, y, r, n, i) for i in range(n)], 1).swapaxes(0, 2)
@@ -779,9 +776,7 @@ def _prepare_args_plot(
         raise ValueError(f"`use_raw={use_raw}` but AnnData object does not have raw.")
 
     # logic for image v. non-image data is handled here
-    shape = ScatterShape(shape) if shape is not None else shape  # type: ignore
-    if TYPE_CHECKING:
-        assert isinstance(shape, ScatterShape) or shape is None
+    shape = normalize_choice(shape, _SHAPES, name="shape") if shape is not None else shape
 
     return ColorParams(shape, color, groups, alpha, img_alpha, use_raw)
 
