@@ -61,8 +61,8 @@ class ABCEnumMeta(EnumMeta, ABCMeta):
         return res
 
 
-# TODO(michalk8): subclass string; remove .s?
-class ModeEnum(ErrorFormatterABC, PrettyEnum, metaclass=ABCEnumMeta):
+# TODO(michalk8): members now compare equal to their value; `.s` is redundant at its 63 call sites.
+class ModeEnum(str, ErrorFormatterABC, PrettyEnum, metaclass=ABCEnumMeta):
     """Enum which prints available values when invalid value has been passed."""
 
     @property

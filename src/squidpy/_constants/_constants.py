@@ -66,7 +66,7 @@ class InferDimensions(ModeEnum):
 
 
 @unique
-class ScatterShape(str, ModeEnum):
+class ScatterShape(ModeEnum):
     CIRCLE = "circle"
     SQUARE = "square"
     HEX = "hex"
