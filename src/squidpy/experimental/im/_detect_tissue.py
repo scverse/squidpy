@@ -872,7 +872,7 @@ def _make_solid(mask: np.ndarray, close_holes_smaller_than_frac: float = 0.01) -
         mask = mask.astype(bool, copy=False)
 
     max_hole_area = int(close_holes_smaller_than_frac * mask.size)
-    return np.array(remove_small_holes(mask, area_threshold=max_hole_area))
+    return np.array(remove_small_holes(mask, max_size=max_hole_area))
 
 
 def _smooth_mask(mask: np.ndarray, cycles: int) -> np.ndarray:
