@@ -10,10 +10,7 @@ from skimage.io import imread
 
 from squidpy._constants._constants import InferDimensions
 from squidpy.im._io import _get_image_shape_dtype, _infer_dimensions, _lazy_load_image
-
-# `ImageContainer` reads images through `skimage.io`'s plugin interface, which is on its way out.
-# The container is itself slated for removal, so this is noise rather than a finding.
-pytestmark = pytest.mark.filterwarnings("ignore:The plugin infrastructure in `skimage.io`:FutureWarning")
+from tests.conftest import SKIMAGE_PLUGIN_DEPRECATION
 
 
 class TestIO:
@@ -115,6 +112,7 @@ class TestIO:
             _ = _lazy_load_image(path, dims=tuple(str(i) for i in range(n)))
 
     @pytest.mark.parametrize("n", [3, 4, 5])
+    @SKIMAGE_PLUGIN_DEPRECATION
     def test_read_tiff_skimage(self, tmpdir, n: int):
         path = str(tmpdir / "img.tiff")
         img = self._create_image(path, (n, 100, 100))
