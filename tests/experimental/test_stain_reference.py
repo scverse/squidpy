@@ -37,7 +37,7 @@ def test_reinhard_basic() -> None:
 
 
 def test_unknown_method_raises() -> None:
-    with pytest.raises(ValueError, match="Unknown method"):
+    with pytest.raises(ValueError, match="Expected `method` to be one of"):
         StainFit(method="not-a-method")  # type: ignore[arg-type]
 
 

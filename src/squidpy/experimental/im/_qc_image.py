@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable
 from typing import Literal
 
 import dask
@@ -15,6 +16,7 @@ from spatialdata._logging import logger
 from spatialdata.models import TableModel
 
 from squidpy._utils import _ensure_dim_order
+from squidpy._validators import normalize_choice, options_of
 from squidpy.experimental.im._intensity_metrics import hed_metrics
 from squidpy.experimental.im._qc_metrics import _HNE_METRICS, InputKind, QCMetric, get_metric_info
 from squidpy.experimental.im._utils import (
@@ -26,19 +28,19 @@ from squidpy.experimental.im._utils import (
 )
 
 _DEFAULT_HNE_METRICS: list[QCMetric] = [
-    QCMetric.TENENGRAD,
-    QCMetric.VAR_OF_LAPLACIAN,
-    QCMetric.ENTROPY,
-    QCMetric.BRIGHTNESS_MEAN,
-    QCMetric.HEMATOXYLIN_MEAN,
-    QCMetric.EOSIN_MEAN,
+    "tenengrad",
+    "var_of_laplacian",
+    "entropy",
+    "brightness_mean",
+    "hematoxylin_mean",
+    "eosin_mean",
 ]
 
 _DEFAULT_GENERIC_METRICS: list[QCMetric] = [
-    QCMetric.TENENGRAD,
-    QCMetric.VAR_OF_LAPLACIAN,
-    QCMetric.ENTROPY,
-    QCMetric.BRIGHTNESS_MEAN,
+    "tenengrad",
+    "var_of_laplacian",
+    "entropy",
+    "brightness_mean",
 ]
 
 
@@ -72,8 +74,16 @@ def qc_image(
     scale
         Scale level to use for processing. Defaults to ``"scale0"``.
     metrics
-        QC metrics to compute. Can be a single metric or list of metrics.
-        If ``None``, uses sensible defaults based on ``is_hne``.
+        QC metric name, or a list of them. ``None`` uses sensible defaults based on
+        ``is_hne``. Accepted values, by what they measure:
+
+        - sharpness: ``"tenengrad"``, ``"var_of_laplacian"``, ``"variance"``,
+          ``"fft_high_freq_energy"``, ``"haar_wavelet_energy"``
+        - intensity: ``"brightness_mean"``, ``"brightness_std"``, ``"entropy"``
+        - staining, H&E only: ``"hematoxylin_mean"``, ``"hematoxylin_std"``,
+          ``"eosin_mean"``, ``"eosin_std"``, ``"he_ratio"``
+        - artifacts, H&E only: ``"fold_fraction"``
+        - tissue coverage: ``"tissue_fraction"``
     tile_size
         Size of tiles for analysis. If ``"auto"``, automatically determines size.
     is_hne
@@ -116,20 +126,21 @@ def qc_image(
 
     if metrics is None:
         metrics = list(_DEFAULT_HNE_METRICS if is_hne else _DEFAULT_GENERIC_METRICS)
-    elif isinstance(metrics, QCMetric):
-        metrics = [metrics]
+    elif isinstance(metrics, str) or not isinstance(metrics, Iterable):
+        metrics = [metrics]  # a non-iterable then fails the name check below
     else:
         metrics = list(metrics)
 
-    if not isinstance(metrics, list) or not all(isinstance(m, QCMetric) for m in metrics):
-        available = ", ".join(m.value for m in QCMetric)
-        raise TypeError(f"metrics must be QCMetric or list of QCMetric. Available: {available}")
+    resolved = [normalize_choice(m, options_of(QCMetric), name="metrics", default=None) for m in metrics]
+    if unknown := [m for m, match in zip(metrics, resolved, strict=True) if match is None]:
+        raise ValueError(f"Unknown metrics {unknown}. Available: {', '.join(options_of(QCMetric))}")
+    metrics = resolved
 
     # Validate H&E constraint
     if not is_hne:
         hne_requested = _HNE_METRICS & set(metrics)
         if hne_requested:
-            names = ", ".join(m.value for m in hne_requested)
+            names = ", ".join(hne_requested)
             raise ValueError(
                 f"H&E-specific metrics ({names}) cannot be used when is_hne=False. "
                 f"Set is_hne=True or remove these metrics."
@@ -189,11 +200,11 @@ def qc_image(
     # Build all dask graphs lazily
     delayed_scores: dict[str, da.Array] = {}
     hed_metric_indices = {
-        QCMetric.HEMATOXYLIN_MEAN: 0,
-        QCMetric.HEMATOXYLIN_STD: 1,
-        QCMetric.EOSIN_MEAN: 2,
-        QCMetric.EOSIN_STD: 3,
-        QCMetric.HE_RATIO: 4,
+        "hematoxylin_mean": 0,
+        "hematoxylin_std": 1,
+        "eosin_mean": 2,
+        "eosin_std": 3,
+        "he_ratio": 4,
     }
     hed_scores: da.Array | None = None
 
@@ -208,20 +219,18 @@ def qc_image(
                     drop_axis=2,
                     new_axis=2,
                 )
-            delayed_scores[m.value] = hed_scores[..., hed_metric_indices[m]]
-            logger.info(f"- Calculating metric: '{m.value}'")
+            delayed_scores[m] = hed_scores[..., hed_metric_indices[m]]
+            logger.info(f"- Calculating metric: '{m}'")
             continue
 
         kind, metric_func = get_metric_info(m)
         source = prepared_inputs[kind]
 
         if kind == InputKind.RGB:
-            delayed_scores[m.value] = da.map_blocks(
-                metric_func, source, dtype=np.float32, chunks=out_chunks, drop_axis=2
-            )
+            delayed_scores[m] = da.map_blocks(metric_func, source, dtype=np.float32, chunks=out_chunks, drop_axis=2)
         else:
-            delayed_scores[m.value] = da.map_blocks(metric_func, source, dtype=np.float32, chunks=out_chunks)
-        logger.info(f"- Calculating metric: '{m.value}'")
+            delayed_scores[m] = da.map_blocks(metric_func, source, dtype=np.float32, chunks=out_chunks)
+        logger.info(f"- Calculating metric: '{m}'")
 
     # Single dask.compute() across all metric types
     if progress:
@@ -232,7 +241,7 @@ def qc_image(
     all_scores: dict[str, np.ndarray] = dict(zip(delayed_scores.keys(), results, strict=True))
 
     # Build AnnData
-    metric_names = [m.value for m in metrics]
+    metric_names = list(metrics)
     first = next(iter(all_scores.values()))
     cents, _ = tg.centroids_and_polygons()
     n_tiles = first.size

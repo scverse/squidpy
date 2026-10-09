@@ -26,6 +26,7 @@ from spatialdata.models import TableModel, get_channel_names
 from spatialdata.transformations import get_transformation
 from threadpoolctl import threadpool_limits
 
+from squidpy._validators import normalize_choice
 from squidpy.experimental.im._tiling import (
     CellInfo,
     _run_tiled,
@@ -775,8 +776,7 @@ def _prepare_lazy(
     """
     _validate_inputs(sdata, image_key=image_key, labels_key=labels_key, shapes_key=shapes_key, scale=scale)
 
-    if align_mode not in ("strict", "rasterize"):
-        raise ValueError(f"`align_mode` must be 'strict' or 'rasterize'; got {align_mode!r}.")
+    align_mode = normalize_choice(align_mode, ("strict", "rasterize"), name="align_mode")
 
     image_da = None
     if image_key is not None:

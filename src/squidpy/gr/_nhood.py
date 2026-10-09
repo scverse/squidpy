@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from typing import Any, Literal, NamedTuple
 
 import numpy as np
@@ -22,9 +22,8 @@ from scipy.sparse import csr_array, csr_matrix, issparse
 from spatialdata import SpatialData
 
 from squidpy._compat import SKIP_OWN_FRAMES, old_positionals
-from squidpy._constants._constants import Centrality
 from squidpy._constants._pkg_constants import Key
-from squidpy._docs import d, inject_docs
+from squidpy._docs import d
 from squidpy._utils import (
     NDArrayA,
     RNGLike,
@@ -34,7 +33,7 @@ from squidpy._utils import (
     get_n_numba_threads,
     numba_threads,
 )
-from squidpy._validators import assert_key_in_adata, assert_positive
+from squidpy._validators import assert_key_in_adata, assert_positive, normalize_choice, options_of
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
@@ -44,6 +43,9 @@ from squidpy.gr._utils import (
 )
 
 __all__ = ["nhood_enrichment", "NhoodEnrichmentResult", "centrality_scores", "interaction_matrix"]
+
+CentralityScore = Literal["degree_centrality", "average_clustering", "closeness_centrality"]
+_CENTRALITY_SCORES = options_of(CentralityScore)
 
 
 class NhoodEnrichmentResult(NamedTuple):
@@ -377,10 +379,8 @@ def nhood_enrichment(
     _assert_connectivity_key(adata, key=connectivity_key)
     assert_positive(n_perms, name="n_perms")
 
-    if normalization not in _NORM_CODES:
-        raise ValueError(f"Invalid normalization mode `{normalization}`. Choose from {sorted(_NORM_CODES)}.")
-    if handle_nan not in ("keep", "zero"):
-        raise ValueError(f"Invalid `handle_nan` mode `{handle_nan}`. Choose from 'keep', 'zero'.")
+    normalization = normalize_choice(normalization, _NORM_CODES, name="normalization")
+    handle_nan = normalize_choice(handle_nan, ("keep", "zero"), name="handle_nan")
 
     adj = adata.obsp[connectivity_key]
     if not issparse(adj):
@@ -548,14 +548,13 @@ def nhood_enrichment(
 
 
 @d.dedent
-@inject_docs(c=Centrality)
 @old_positionals("cluster_key", "score", "connectivity_key", "copy", "n_jobs", "backend", "show_progress_bar")
 @deprecated_params({"backend": "1.10.0"})
 def centrality_scores(
     adata: AnnData | SpatialData,
     *,
     cluster_key: str,
-    score: str | Iterable[str] | None = None,
+    score: CentralityScore | Sequence[CentralityScore] | None = None,
     connectivity_key: str | None = None,
     copy: bool = False,
     n_jobs: int | None = None,
@@ -580,9 +579,9 @@ def centrality_scores(
         Group centrality measures as described in :mod:`networkx.algorithms.centrality` :cite:`networkx`.
         If `None`, use all the options below. Valid options are:
 
-            - `{c.CLOSENESS.s!r}` - measure of how close the group is to other nodes.
-            - `{c.CLUSTERING.s!r}` - measure of the degree to which nodes cluster together.
-            - `{c.DEGREE.s!r}` - fraction of non-group members connected to group members.
+            - `'closeness_centrality'` - measure of how close the group is to other nodes.
+            - `'average_clustering'` - measure of the degree to which nodes cluster together.
+            - `'degree_centrality'` - fraction of non-group members connected to group members.
 
     %(conn_key)s
     %(copy)s
@@ -593,7 +592,7 @@ def centrality_scores(
     -------
     If ``copy = True``, returns a :class:`pandas.DataFrame`. Otherwise, modifies the ``adata`` with the following key:
 
-        - :attr:`anndata.AnnData.uns` ``['{{cluster_key}}_centrality_scores']`` - the centrality scores,
+        - :attr:`anndata.AnnData.uns` ``['{cluster_key}_centrality_scores']`` - the centrality scores,
           as mentioned above.
     """
     adata = extract_adata_if_sdata(adata, table_key=table_key)
@@ -601,18 +600,13 @@ def centrality_scores(
     _assert_categorical_obs(adata, key=cluster_key)
     _assert_connectivity_key(adata, key=connectivity_key)
 
-    if isinstance(score, str | Centrality):
+    if score is None:
+        centrality = list(_CENTRALITY_SCORES)
+    elif isinstance(score, str):
         centrality = [score]
-    elif score is None:
-        centrality = [c.s for c in Centrality]
     else:
         centrality = list(score)
-
-    centralities = [Centrality(c) for c in centrality]
-
-    for c in centralities:
-        if c not in (Centrality.CLOSENESS, Centrality.DEGREE, Centrality.CLUSTERING):
-            raise NotImplementedError(f"Centrality `{c}` is not yet implemented.")
+    centrality = [normalize_choice(c, _CENTRALITY_SCORES, name="score") for c in centrality]
 
     # every measure reads the same symmetric, self-loop-free, index-sorted CSR.
     adj = _symmetric_adjacency(adata.obsp[connectivity_key])
@@ -620,14 +614,14 @@ def centrality_scores(
     cat = adata.obs[cluster_key].cat.categories.values
 
     n_jobs = get_n_numba_threads(n_jobs)
-    start = logg.info(f"Calculating centralities `{centralities}` using `{n_jobs}` thread(s)")
+    start = logg.info(f"Calculating centralities `{centrality}` using `{n_jobs}` thread(s)")
 
     # cells with a missing label join no group but stay in the graph, so they still count as non-group
     offsets, members = _group_offsets(adata.obs[cluster_key])
 
     scores: dict[str, NDArrayA] = {}
     with numba_threads(n_jobs):
-        if Centrality.CLOSENESS in centralities or Centrality.DEGREE in centralities:
+        if "closeness_centrality" in centrality or "degree_centrality" in centrality:
             # one BFS per group yields both measures, so it runs even if only one was asked for
             with ProgressBar(
                 total=len(cat), unit="group", desc="centrality_scores", disable=not show_progress_bar
@@ -635,14 +629,14 @@ def centrality_scores(
                 degree, closeness = _group_degree_closeness(
                     adj.indptr, adj.indices, offsets, members, n_cells, progress
                 )
-            if Centrality.DEGREE in centralities:
-                scores[Centrality.DEGREE.s] = degree
-            if Centrality.CLOSENESS in centralities:
-                scores[Centrality.CLOSENESS.s] = closeness
-        if Centrality.CLUSTERING in centralities:
+            if "degree_centrality" in centrality:
+                scores["degree_centrality"] = degree
+            if "closeness_centrality" in centrality:
+                scores["closeness_centrality"] = closeness
+        if "average_clustering" in centrality:
             # average the per-node clustering coefficients over the group (0 if the group is empty).
             node_clustering = _local_clustering(adj.indptr, adj.indices, n_cells)
-            scores[Centrality.CLUSTERING.s] = np.array(
+            scores["average_clustering"] = np.array(
                 [
                     float(node_clustering[members[offsets[g] : offsets[g + 1]]].mean())
                     if offsets[g + 1] > offsets[g]
@@ -652,7 +646,7 @@ def centrality_scores(
             )
 
     # keep the column order the caller asked for, which the measure-by-measure dict above loses.
-    df = pd.DataFrame({c.s: scores[c.s] for c in centralities}, index=cat)
+    df = pd.DataFrame({c: scores[c] for c in centrality}, index=cat)
 
     if copy:
         return df
@@ -1096,8 +1090,7 @@ def nhood_aggregate(
     reach counts once: a cell two paths away is still one cell.
     """
     _assert_hop_request(adata, connectivity_key=connectivity_key, hops=hops)
-    if aggregation not in ("mean", "sum", "variance"):
-        raise ValueError(f"'aggregation' must be 'mean', 'sum' or 'variance', got {aggregation!r}")
+    aggregation = normalize_choice(aggregation, ("mean", "sum", "variance"), name="aggregation")
     weights = [1.0] * len(hops) if hop_weights is None else list(hop_weights)
     if len(weights) != len(hops):
         raise ValueError(f"'hop_weights' has {len(weights)} value(s) but there are {len(hops)} hop(s)")

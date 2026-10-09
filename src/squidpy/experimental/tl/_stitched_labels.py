@@ -24,6 +24,7 @@ from spatialdata._logging import logger as logg
 from spatialdata.models import Labels2DModel, TableModel
 from spatialdata.transformations import get_transformation
 
+from squidpy._validators import normalize_choice
 from squidpy.experimental.utils._labels import resolve_labels_array
 
 __all__ = ["make_stitched_labels"]
@@ -186,14 +187,16 @@ _QC_SCORE_COLS = frozenset(
 )
 
 
-def _resolve_strategy(strategy: str | Callable[[pd.Series], object]) -> Callable[[pd.Series], object]:
+def _check_strategy(strategy: str | Callable[[pd.Series], object]) -> str | Callable[[pd.Series], object]:
+    """Return a callable unchanged, or the built-in strategy name matching *strategy*."""
     if callable(strategy):
         return strategy
-    if strategy not in _BUILTIN_STRATEGIES:
+    match = normalize_choice(strategy, _BUILTIN_STRATEGIES, name="merge_strategy", default=None)
+    if match is None:
         raise ValueError(
-            f"Unknown merge_strategy {strategy!r}. Use one of {sorted(_BUILTIN_STRATEGIES)} or pass a callable."
+            f"Expected `merge_strategy` to be a callable or one of `{list(_BUILTIN_STRATEGIES)}`, got `{strategy!r}`."
         )
-    return _BUILTIN_STRATEGIES[strategy]
+    return match
 
 
 # Strategies whose result is always one of the input values, so an integer
@@ -254,7 +257,7 @@ def _aggregate_X(
 
     # General path: bounded per-group work, sparse-preserving output.
     reducer = _BUILTIN_X_REDUCERS[strategy] if isinstance(strategy, str) else None
-    strategy_fn = None if reducer is not None else _resolve_strategy(strategy)
+    strategy_fn = None if reducer is not None else (strategy if callable(strategy) else _BUILTIN_STRATEGIES[strategy])
     Xc = X.tocsr() if sparse_in else np.asarray(X)
     out = sp.lil_matrix((n_groups, n_cols), dtype=out_dtype) if sparse_in else np.zeros((n_groups, n_cols), out_dtype)
     for i, idx in enumerate(group_indices):
@@ -320,7 +323,7 @@ def _collapse_groups(
     if "label_id" not in obs.columns:
         raise ValueError("AnnData missing 'label_id'.")
 
-    _resolve_strategy(merge_strategy)  # validate strategy name early
+    merge_strategy = _check_strategy(merge_strategy)
     group_ids = obs["stitch_group_id"].astype(int).to_numpy()
     # Positional indices per group in one linear pass (sorted by group id),
     # instead of an O(n_cells * n_groups) per-group np.where scan.
@@ -492,7 +495,7 @@ def make_stitched_labels(
         )
     # Validate merge_strategy up front so an invalid value fails fast even when
     # write_table=False (the aggregation that would otherwise raise is skipped).
-    _resolve_strategy(merge_strategy)
+    merge_strategy = _check_strategy(merge_strategy)
     # table_key_added implies the user wants a table; reject the contradictory combo
     # rather than silently ignoring the key.
     if table_key_added is not None and not write_table:

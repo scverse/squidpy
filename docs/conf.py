@@ -146,10 +146,6 @@ nitpick_ignore = [
     ("py:class", "numpy._typing._array_like.NDArray"),
     ("py:class", "np.number"),
     ("py:class", "csr_matrix"),
-    # no idea why those aren’t exported
-    ("py:class", "squidpy._constants._constants.SpatialAutocorr"),
-    ("py:class", "squidpy._constants._constants.CoordType"),
-    ("py:class", "squidpy._constants._constants.Transform"),
     ("py:class", "pandas.core.frame.DataFrame"),
 ]
 # see the solution from: https://github.com/sphinx-doc/sphinx/issues/7369

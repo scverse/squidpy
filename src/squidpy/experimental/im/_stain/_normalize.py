@@ -24,6 +24,7 @@ from spatialdata.transformations import get_transformation
 
 from squidpy._params import resolve_params
 from squidpy._utils import _get_scale_factors
+from squidpy._validators import normalize_choice
 from squidpy.experimental.im._stain._constants import RUIFROK_HE
 from squidpy.experimental.im._stain._conversion import _check_channel_dim, cast_to_image_dtype
 from squidpy.experimental.im._stain._decomposition import (
@@ -291,8 +292,7 @@ def fit_stain_reference(
     -------
     The fitted :class:`~squidpy.experimental.im.StainFit`. Nothing is written to ``sdata``.
     """
-    if method not in _VALID_METHODS:
-        raise ValueError(f"Unknown method {method!r}; expected one of {sorted(_VALID_METHODS)}.")
+    method = normalize_choice(method, _VALID_METHODS, name="method")
     # Normalise to lists: a single image is a pool of one, so both cases share one path.
     keys = [image_key] if isinstance(image_key, str) else list(image_key)
     if not keys:

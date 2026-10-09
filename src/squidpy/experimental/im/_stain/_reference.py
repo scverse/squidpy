@@ -7,9 +7,11 @@ statistics (Reinhard).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, get_args
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
+
+from squidpy._validators import normalize_choice, options_of
 
 if TYPE_CHECKING:
     import spatialdata as sd
@@ -20,8 +22,8 @@ if TYPE_CHECKING:
 
 StainMethod = Literal["macenko", "vahadane", "reinhard"]
 #: The method vocabulary, derived from ``StainMethod`` so the two cannot drift.
-_VALID_METHODS: frozenset[str] = frozenset(get_args(StainMethod))
-_DECOMPOSITION_METHODS: frozenset[str] = _VALID_METHODS - {"reinhard"}
+_VALID_METHODS = options_of(StainMethod)
+_DECOMPOSITION_METHODS = tuple(m for m in _VALID_METHODS if m != "reinhard")
 
 
 def _coerce_finite(arr: Any, *, shape: tuple[int, ...], name: str) -> np.ndarray:
@@ -74,8 +76,7 @@ class StainFit:
     max_concentrations: np.ndarray | None = None
 
     def __post_init__(self) -> None:
-        if self.method not in _VALID_METHODS:
-            raise ValueError(f"Unknown method {self.method!r}; expected one of {sorted(_VALID_METHODS)}.")
+        object.__setattr__(self, "method", normalize_choice(self.method, _VALID_METHODS, name="method"))
 
         if self.method in _DECOMPOSITION_METHODS:
             if self.stain_matrix is None:

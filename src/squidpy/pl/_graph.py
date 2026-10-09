@@ -6,7 +6,7 @@ import warnings
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -17,10 +17,10 @@ from anndata import AnnData
 from matplotlib.axes import Axes
 
 from squidpy._compat import old_positionals
-from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
-from squidpy._validators import assert_non_empty_sequence, get_valid_values
+from squidpy._validators import assert_non_empty_sequence, get_valid_values, normalize_choice
+from squidpy.gr._nhood import CentralityScore
 from squidpy.gr._utils import _assert_categorical_obs
 from squidpy.pl._color_utils import Palette_t, _get_palette, _maybe_set_colors
 from squidpy.pl._utils import _heatmap, save_fig
@@ -58,7 +58,7 @@ def centrality_scores(
     adata: AnnData,
     *,
     cluster_key: str,
-    score: str | Sequence[str] | None = None,
+    score: CentralityScore | Sequence[CentralityScore] | None = None,
     legend_kwargs: Mapping[str, Any] = MappingProxyType({}),
     palette: Palette_t = None,
     figsize: tuple[float, float] | None = None,
@@ -101,7 +101,9 @@ def centrality_scores(
 
     score = scores if score is None else score
     score = assert_non_empty_sequence(score, name="centrality scores")
-    score = sorted(get_valid_values(score, scores))
+
+    # Names that match no computed column keep their spelling and get dropped by get_valid_values.
+    score = sorted(get_valid_values([normalize_choice(s, scores, name="score", default=s) for s in score], scores))
 
     fig, axs = plt.subplots(1, len(score), figsize=figsize, dpi=dpi, constrained_layout=True)
     axs = np.ravel(axs)  # make into iterable
@@ -244,6 +246,7 @@ def nhood_enrichment(
     %(plotting_returns)s
     """
     _assert_categorical_obs(adata, key=cluster_key)
+    mode = normalize_choice(mode, ("zscore", "count"), name="mode")
     array = _get_data(adata, cluster_key=cluster_key, func_name="nhood_enrichment")[mode]
 
     ad = AnnData(X=array, obs={cluster_key: pd.Categorical(adata.obs[cluster_key].cat.categories)})
@@ -422,11 +425,8 @@ def ripley(
     """
     _assert_categorical_obs(adata, key=cluster_key)
 
+    mode = normalize_choice(mode, ("F", "G", "L"), name="mode")
     res = _get_data(adata, cluster_key=cluster_key, func_name="ripley", mode=mode)
-
-    mode = RipleyStat(mode)  # type: ignore[assignment]
-    if TYPE_CHECKING:
-        assert isinstance(mode, RipleyStat)
 
     legend_kwargs = dict(legend_kwargs)
     if "loc" not in legend_kwargs:
@@ -443,7 +443,7 @@ def ripley(
         y="stats",
         x="bins",
         hue=cluster_key,
-        data=res[f"{mode.s}_stat"],
+        data=res[f"{mode}_stat"],
         hue_order=categories,
         palette=palette,
         ax=ax,
@@ -453,7 +453,7 @@ def ripley(
         sns.lineplot(y="stats", x="bins", errorbar="sd", alpha=0.01, color="gray", data=res["sims_stat"], ax=ax)
     ax.legend(**legend_kwargs)
     ax.set_ylabel("value")
-    ax.set_title(f"Ripley's {mode.s}")
+    ax.set_title(f"Ripley's {mode}")
 
     if save is not None:
         save_fig(fig, path=save)
