@@ -11,6 +11,7 @@ __all__ = ["tiling_qc"]
 
 def tiling_qc(
     sdata: sd.SpatialData,
+    *,
     labels_key: str,
     qc_key: str | None = None,
     score_col: Literal[

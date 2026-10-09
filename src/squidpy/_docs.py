@@ -237,20 +237,28 @@ library_key
 _niche_spatial_conn_key = """\
 spatial_connectivities_key
     Key in :attr:`anndata.AnnData.obsp` containing the spatial connectivity matrix."""
-_niche_mask = """\
-mask
-    Boolean :class:`pandas.Series` indexed like :attr:`anndata.AnnData.obs`. Observations that
-    are `False` are excluded from niche assignment and labeled ``'not_a_niche'``, e.g.
-    ``Series([False, False, True], index=["a", "b", "c"])``."""
+_niche_embedding_key_added = """\
+embedding_key_added
+    Controls the name of the key to be added in :attr:`anndata.AnnData.obsm`, which will hold
+    the niche embedding computed."""
 _niche_min_niche_size = """\
 min_niche_size
     Minimum number of observations required for a niche. Niches with fewer observations
     are relabeled ``'not_a_niche'``."""
+_niche_cluster_mask = """\
+cluster_mask
+    Boolean :class:`pandas.Series` indexed like :attr:`anndata.AnnData.obs`. ``False``
+    observations are labeled ``'not_a_niche'`` and take no part in the clustering, though they
+    still reach their neighbors through the graph. Observations it omits are kept. To drop them
+    from the graph as well, subset and rebuild it with :func:`~squidpy.gr.spatial_neighbors`."""
+_niche_key_added_stem = """\
+key_added
+    Stem of the :attr:`anndata.AnnData.obs` columns the labels are written to, one per resolution,
+    named ``f"{key_added}_res={resolution}"``."""
 # the postprocessing + output params every user-facing niche function shares, in signature order
 _niche_common_params = f"""\
+{_niche_embedding_key_added}
 {_niche_min_niche_size}
-{_niche_mask}
-{_library_key}
 {_copy}"""
 _niche_leiden_params = f"""\
 flavor
@@ -513,8 +521,10 @@ d = DocstringProcessor(
     groups=_groups,
     plotting_library_id=_plotting_library_id,
     library_key=_library_key,
+    niche_cluster_mask=_niche_cluster_mask,
+    niche_key_added_stem=_niche_key_added_stem,
     niche_spatial_conn_key=_niche_spatial_conn_key,
-    niche_mask=_niche_mask,
+    niche_embedding_key_added=_niche_embedding_key_added,
     niche_min_niche_size=_niche_min_niche_size,
     niche_common_params=_niche_common_params,
     niche_leiden_params=_niche_leiden_params,

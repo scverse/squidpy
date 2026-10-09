@@ -29,6 +29,7 @@ from sklearn.neighbors import NearestNeighbors
 from squidpy._constants._constants import CoordType, Transform
 from squidpy._utils import NDArrayA
 from squidpy._validators import assert_positive
+from squidpy.gr._nhood import compute_hop_adjacency_matrices
 
 __all__ = [
     "GraphMatrixT",
@@ -371,15 +372,9 @@ class GridBuilder(GraphBuilderCSR):
 
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         if self.n_rings > 1:
-            adj = self._base_adjacency(coords, set_diag=True)
-            res, walk = adj, adj
-            for i in range(self.n_rings - 1):
-                walk = walk @ adj
-                walk[res.nonzero()] = 0.0
-                walk.eliminate_zeros()
-                walk.data[:] = i + 2.0
-                res = res + walk
-            adj = res
+            base = self._base_adjacency(coords, set_diag=True)
+            rings = compute_hop_adjacency_matrices(base, self.n_rings)
+            adj = sum(base.dtype.type(i + 1) * ring for i, ring in enumerate(rings)).tocsr()
             adj.setdiag(float(self.set_diag))
             adj.eliminate_zeros()
 

@@ -19,6 +19,7 @@ from scanpy import logging as logg
 from scipy.sparse import csc_matrix
 from spatialdata import SpatialData
 
+from squidpy._compat import old_positionals
 from squidpy._constants._constants import ComplexPolicy, CorrAxis
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
@@ -240,6 +241,7 @@ class PermutationTestABC(ABC):
     def test(
         self,
         cluster_key: str,
+        *,
         clusters: Cluster_t | None = None,
         n_perms: int = 1000,
         threshold: float = 0.01,
@@ -553,10 +555,23 @@ class PermutationTest(PermutationTestABC):
 
 
 @d.dedent
+@old_positionals(
+    "cluster_key",
+    "interactions",
+    "complex_policy",
+    "threshold",
+    "corr_method",
+    "corr_axis",
+    "use_raw",
+    "copy",
+    "key_added",
+    "gene_symbols",
+)
 @deprecated_params({"numba_parallel": "1.10.0", "backend": "1.10.0"})
 @deprecated_randomness_param
 def ligrec(
     adata: AnnData | SpatialData,
+    *,
     cluster_key: str,
     interactions: Interaction_t | None = None,
     complex_policy: Literal["min", "all"] = ComplexPolicy.MIN.v,
@@ -567,7 +582,6 @@ def ligrec(
     copy: bool = False,
     key_added: str | None = None,
     gene_symbols: str | None = None,
-    *,
     n_perms: int = 1000,
     rng: SeedLike | RNGLike | None = None,
     clusters: Cluster_t | None = None,
@@ -624,10 +638,10 @@ def ligrec(
 
 
 @njit(parallel=True, cache=True)
-def _score_permutations(
+def _score_permutations(  # noqa: PLR0917, numba requires positional arguments
     data: NDArrayA,
     clustering: NDArrayA,
-    generators: list[np.random.Generator],
+    rngs: list[np.random.Generator],
     inv_counts: NDArrayA,
     mean_obs: NDArrayA,
     interactions: NDArrayA,
@@ -635,11 +649,11 @@ def _score_permutations(
     valid: NDArrayA,
     progress: ProgressBar,
 ) -> NDArrayA:
-    """Shuffle and score one permutation per RNG in ``generators``; return accumulated p-value counts.
+    """Shuffle and score one permutation per RNG in ``rngs``; return accumulated p-value counts.
 
-    ``generators`` must be a :class:`numba.typed.List`, so that it can be indexed inside ``prange``.
+    ``rngs`` must be a :class:`numba.typed.List`, so that it can be indexed inside ``prange``.
     """
-    n_perms = len(generators)
+    n_perms = len(rngs)
     n_cells = data.shape[0]
     n_genes = data.shape[1]
     n_cls = mean_obs.shape[0]
@@ -651,7 +665,7 @@ def _score_permutations(
         perm = clustering.copy()
         # explicit int64 index: under prange the loop var is uint64 and indexing the typed list
         # would otherwise trigger a (harmless) uint64->int64 NumbaTypeSafetyWarning
-        generators[np.int64(p)].shuffle(perm)
+        rngs[np.int64(p)].shuffle(perm)
 
         groups = np.zeros((n_cls, n_genes), dtype=np.float64)
         for cell in range(n_cells):
@@ -760,7 +774,7 @@ def _analysis(
     res_means = np.where(nonzero, (m_rec + m_lig) / 2.0, 0.0)
 
     # one independent RNG per permutation; a numba typed list so the kernel can index it in prange
-    generators = List(rng.spawn(n_perms))
+    rngs = List(rng.spawn(n_perms))
 
     # the whole permutation loop runs in a single numba call; ``n_jobs`` sets its thread count and
     # the kernel updates ``progress`` (a numba_progress proxy) once per permutation
@@ -771,7 +785,7 @@ def _analysis(
         pval_counts = _score_permutations(
             data_arr,
             clustering,
-            generators,
+            rngs,
             inv_counts,
             mean_obs,
             interactions_i32,
