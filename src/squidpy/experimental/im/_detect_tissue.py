@@ -12,7 +12,7 @@ from dask.base import is_dask_collection
 from dask_image.ndinterp import affine_transform as da_affine
 from skimage import feature, future, measure
 from skimage.filters import gaussian, threshold_otsu
-from skimage.morphology import binary_closing, disk, remove_small_holes
+from skimage.morphology import closing, disk, remove_small_holes
 from skimage.segmentation import felzenszwalb
 from skimage.util import img_as_float
 from sklearn.ensemble import RandomForestClassifier
@@ -889,7 +889,7 @@ def _smooth_mask(mask: np.ndarray, cycles: int) -> np.ndarray:
 
     sm = binary
     for i in range(cycles):
-        sm = binary_closing(sm, disk(r0 + i))
+        sm = closing(sm, disk(r0 + i))
 
     return np.asarray(measure.label(sm, connectivity=2).astype(np.int32, copy=False))
 
