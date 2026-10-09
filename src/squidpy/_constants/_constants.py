@@ -45,13 +45,6 @@ class SegmentationBackend(ModeEnum):
 
 
 @unique
-class Centrality(ModeEnum):
-    DEGREE = "degree_centrality"
-    CLUSTERING = "average_clustering"
-    CLOSENESS = "closeness_centrality"
-
-
-@unique
 class DendrogramAxis(ModeEnum):
     INTERACTING_MOLS = "interacting_molecules"
     INTERACTING_CLUSTERS = "interacting_clusters"

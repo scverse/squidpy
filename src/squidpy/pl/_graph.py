@@ -20,6 +20,7 @@ from squidpy._compat import old_positionals
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
 from squidpy._validators import assert_non_empty_sequence, get_valid_values, normalize_choice
+from squidpy.gr._nhood import CentralityScore
 from squidpy.gr._utils import _assert_categorical_obs
 from squidpy.pl._color_utils import Palette_t, _get_palette, _maybe_set_colors
 from squidpy.pl._utils import _heatmap, save_fig
@@ -57,7 +58,7 @@ def centrality_scores(
     adata: AnnData,
     *,
     cluster_key: str,
-    score: str | Sequence[str] | None = None,
+    score: CentralityScore | Sequence[CentralityScore] | None = None,
     legend_kwargs: Mapping[str, Any] = MappingProxyType({}),
     palette: Palette_t = None,
     figsize: tuple[float, float] | None = None,

@@ -57,6 +57,12 @@ _CASES = {
         "ZERO",
         "`handle_nan`",
     ),
+    "gr.centrality_scores-score": (
+        "nhood_data",
+        lambda a, v: sq.gr.centrality_scores(a, cluster_key="leiden", score=v, copy=True),
+        "DEGREE_CENTRALITY",
+        "`score`",
+    ),
     "gr.spatial_autocorr-attr": (
         "nhood_data",
         lambda a, v: sq.gr.spatial_autocorr(a, attr=v, genes=a.var_names[:2], copy=True),
