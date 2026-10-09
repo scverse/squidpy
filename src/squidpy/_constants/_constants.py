@@ -30,13 +30,6 @@ class ComplexPolicy(ModeEnum):
 
 
 @unique
-class Transform(ModeEnum):
-    SPECTRAL = "spectral"
-    COSINE = "cosine"
-    NONE = None
-
-
-@unique
 class Processing(ModeEnum):
     SMOOTH = "smooth"
     GRAY = "gray"

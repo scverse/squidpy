@@ -26,7 +26,6 @@ from scipy.spatial import Delaunay
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.neighbors import NearestNeighbors
 
-from squidpy._constants._constants import Transform
 from squidpy._utils import NDArrayA
 from squidpy._validators import assert_positive, normalize_choice
 from squidpy.gr._nhood import compute_hop_adjacency_matrices
@@ -49,9 +48,9 @@ TransformLike = Literal["spectral", "cosine"] | None
 """Adjacency-matrix transform, or `None` for no transform. Case-insensitive."""
 
 
-def _as_transform(transform: TransformLike | Transform) -> Transform:
-    """Resolve the ``transform`` argument to its enum member, accepting any casing."""
-    return Transform(normalize_choice(transform, [m.value for m in Transform], name="transform"))
+def _as_transform(transform: TransformLike) -> TransformLike:
+    """Resolve the ``transform`` argument to its canonical spelling, accepting any casing."""
+    return normalize_choice(transform, ("spectral", "cosine", None), name="transform")
 
 
 # Kept module-level (not folded into GraphBuilder's params): types the public
@@ -195,7 +194,7 @@ class KNNBuilder(GraphBuilderCSR):
         return {
             "coord_type": "generic",
             "n_neighbors": self.n_neighs,
-            "transform": self.transform.v,
+            "transform": self.transform,
         }
 
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
@@ -253,7 +252,7 @@ class RadiusBuilder(GraphBuilderCSR):
         return {
             "coord_type": "generic",
             "radius": self.radius,
-            "transform": self.transform.v,
+            "transform": self.transform,
         }
 
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
@@ -323,7 +322,7 @@ class DelaunayBuilder(GraphBuilderCSR):
         return {
             "coord_type": "generic",
             "radius": self.radius,
-            "transform": self.transform.v,
+            "transform": self.transform,
         }
 
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
@@ -375,7 +374,7 @@ class GridBuilder(GraphBuilderCSR):
             "n_neighbors": self.n_neighs,
             "n_rings": self.n_rings,
             "delaunay": self.delaunay,
-            "transform": self.transform.v,
+            "transform": self.transform,
         }
 
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
@@ -468,17 +467,17 @@ class PercentilePostprocessor:
 
 @dataclass(frozen=True)
 class TransformPostprocessor:
-    transform: Transform
+    transform: TransformLike
 
     def __call__(self, adj: csr_matrix, dst: csr_matrix) -> tuple[csr_matrix, csr_matrix]:
         adj.eliminate_zeros()
         dst.eliminate_zeros()
 
-        if self.transform == Transform.SPECTRAL:
+        if self.transform == "spectral":
             return cast(csr_matrix, _transform_a_spectral(adj)), dst
-        if self.transform == Transform.COSINE:
+        if self.transform == "cosine":
             return cast(csr_matrix, _transform_a_cosine(adj)), dst
-        if self.transform == Transform.NONE:
+        if self.transform is None:
             return adj, dst
 
         raise NotImplementedError(f"Transform `{self.transform}` is not yet implemented.")

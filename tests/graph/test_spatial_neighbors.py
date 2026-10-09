@@ -10,7 +10,6 @@ from scipy.sparse import isspmatrix_csr
 from shapely import Point
 from spatialdata.datasets import blobs
 
-from squidpy._constants._constants import Transform
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import (
     mask_graph,
@@ -246,7 +245,7 @@ class TestSpatialNeighbors:
         np.testing.assert_allclose(legacy.distances.toarray(), result.distances.toarray())
 
     def test_builder_explicit_entry_point(self, non_visium_adata: AnnData):
-        builder = KNNBuilder(n_neighs=3, transform=Transform.NONE)
+        builder = KNNBuilder(n_neighs=3, transform=None)
 
         baseline = spatial_neighbors_from_builder(non_visium_adata, builder=builder, copy=True)
         matched = spatial_neighbors_from_builder(non_visium_adata, builder=builder, copy=True)

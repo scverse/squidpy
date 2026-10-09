@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Hashable, Iterable, Sequence
-from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from squidpy._utils import _unique_order_preserving
@@ -97,8 +96,6 @@ def normalize_choice(value: Any, options: Iterable[Any], *, name: str) -> Any:
     Raise ValueError naming the valid options if nothing matches.
     """
     options = list(options)
-    if isinstance(value, Enum):
-        value = value.value
     if isinstance(value, str):
         for opt in options:
             if isinstance(opt, str) and opt.casefold() == value.casefold():

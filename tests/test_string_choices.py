@@ -171,10 +171,3 @@ def test_pl_centrality_scores_score_is_case_insensitive(nhood_data) -> None:
     sq.pl.centrality_scores(nhood_data, cluster_key="leiden", score="DEGREE_CENTRALITY")
     with pytest.raises(ValueError, match="No valid values"):
         sq.pl.centrality_scores(nhood_data, cluster_key="leiden", score="bogus")
-
-
-def test_enum_members_are_still_accepted(nhood_data) -> None:
-    """``Transform`` is private but was named in released signatures, so members keep working."""
-    from squidpy._constants._constants import Transform
-
-    sq.gr.spatial_neighbors_knn(nhood_data, transform=Transform.COSINE, copy=True)
