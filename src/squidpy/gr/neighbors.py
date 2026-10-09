@@ -447,8 +447,9 @@ class PercentilePostprocessor:
     percentile: float
 
     def __call__(self, adj: csr_matrix, dst: csr_matrix) -> tuple[csr_matrix, csr_matrix]:
-        rows = np.repeat(np.arange(dst.shape[0], dtype=dst.indices.dtype), np.diff(dst.indptr))
-        edges = dst.data[rows != dst.indices]
+        # builders store explicit zeros on the diagonal; they are not edges
+        coo = dst.tocoo()
+        edges = coo.data[coo.row != coo.col]
         if edges.size == 0:
             return adj, dst
         threshold = np.percentile(edges, self.percentile)
