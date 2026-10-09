@@ -605,6 +605,8 @@ def centrality_scores(
         centrality = [score]
     elif score is None:
         centrality = [c.s for c in Centrality]
+    else:
+        centrality = list(score)
 
     centralities = [Centrality(c) for c in centrality]
 
@@ -786,6 +788,9 @@ def _group_degree_closeness(  # noqa: PLR0917, numba requires positional argumen
     degree = np.zeros(n_groups, dtype=np.float64)
     closeness = np.zeros(n_groups, dtype=np.float64)
 
+    # parallel over groups, not within a BFS: each group's BFS is serial, so a key with few
+    # categories caps at that many busy threads. That is the common case and keeps the kernel simple;
+    # splitting a single BFS across threads is the only way past it, and not worth the complexity.
     for g in prange(n_groups):
         start, end = offsets[g], offsets[g + 1]
         size = end - start

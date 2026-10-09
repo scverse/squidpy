@@ -194,6 +194,28 @@ def test_centrality_scores_v183_positional_backend():
     pd.testing.assert_frame_equal(got, expected)
 
 
+def test_centrality_scores_all_nodes_group_is_zero():
+    """A group spanning every node has no outside nodes, so degree and closeness are defined as 0.
+
+    networkx cannot be the oracle here: both divide by ``n - |S| == 0``. This locks our choice.
+    """
+    adata = _random_graph_adata(40, 0.1)
+    adata.obs[_CK] = pd.Categorical(["only"] * adata.n_obs)
+    df = centrality_scores(adata, cluster_key=_CK, copy=True)
+    np.testing.assert_array_equal(df.loc["only", ["degree_centrality", "closeness_centrality"]].to_numpy(), 0.0)
+
+
+def test_centrality_scores_iterable_score():
+    """``score`` as an iterable yields exactly those columns, in order, matching the single-score calls."""
+    adata = _random_graph_adata(60, 0.06)
+    requested = ["closeness_centrality", "degree_centrality"]
+    df = centrality_scores(adata, cluster_key=_CK, score=requested, copy=True)
+    assert list(df.columns) == requested
+    for col in requested:
+        single = centrality_scores(adata, cluster_key=_CK, score=col, copy=True)
+        pd.testing.assert_series_equal(df[col], single[col])
+
+
 @pytest.mark.parametrize("copy", [True, False])
 def test_interaction_matrix_copy(nhood_data: AnnData, copy: bool):
     adata = nhood_data
