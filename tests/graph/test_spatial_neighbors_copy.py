@@ -15,7 +15,13 @@ from squidpy.gr.neighbors import KNNBuilder
 @pytest.mark.parametrize(
     ("function", "kwargs"),
     [
-        (gr.spatial_neighbors, {"coord_type": "generic", "n_neighs": 2}),
+        # `spatial_neighbors` is deprecated but shipped until v1.9.0, and this case is its
+        # coverage; it calls it on purpose, so its own notice is not a finding here.
+        pytest.param(
+            gr.spatial_neighbors,
+            {"coord_type": "generic", "n_neighs": 2},
+            marks=pytest.mark.filterwarnings("ignore:Calling `spatial_neighbors` is deprecated:FutureWarning"),
+        ),
         (gr.spatial_neighbors_knn, {"n_neighs": 2}),
         (gr.spatial_neighbors_radius, {"radius": 2.0}),
         (gr.spatial_neighbors_delaunay, {}),
