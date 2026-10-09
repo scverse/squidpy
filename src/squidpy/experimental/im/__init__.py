@@ -6,19 +6,15 @@ from ._make_tiles import make_tiles, make_tiles_from_spots
 from ._qc_image import qc_image
 from ._qc_metrics import QCMetric
 from ._stain import (
-    StainReference,
-    decompose_stains,
+    StainFit,
     estimate_white_point,
     fit_stain_reference,
-    normalize_stains,
 )
 
 __all__ = [
     "QCMetric",
-    "StainReference",
+    "StainFit",
     "calculate_image_features",
-    "normalize_stains",
-    "decompose_stains",
     "detect_tissue",
     "estimate_white_point",
     "fit_stain_reference",
