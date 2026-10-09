@@ -577,7 +577,7 @@ def centrality_scores(
     %(table_key)s
     %(cluster_key)s
     score
-        Group centrality measures, matching the definitions in ``rustworkx`` :cite:`rustworkx`.
+        Group centrality measures as described in :mod:`networkx.algorithms.centrality` :cite:`networkx`.
         If `None`, use all the options below. Valid options are:
 
             - `{c.CLOSENESS.s!r}` - measure of how close the group is to other nodes.
@@ -779,8 +779,8 @@ def _group_degree_closeness(  # noqa: PLR0917, numba requires positional argumen
         ``degree = |non-group nodes adjacent to the group| / (n - |S|)``
         ``closeness = (n - |S|) / sum_v d(S, v)``, or 0 when that sum is 0
 
-    Unreachable nodes count towards ``n - |S|`` but add no distance, matching :mod:`networkx` and
-    :mod:`rustworkx`, which is why a disconnected graph can score above 1.
+    Unreachable nodes count towards ``n - |S|`` but add no distance, matching :mod:`networkx`,
+    which is why a disconnected graph can score above 1.
     """
     n_groups = len(offsets) - 1
     degree = np.zeros(n_groups, dtype=np.float64)
