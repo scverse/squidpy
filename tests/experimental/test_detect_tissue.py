@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import numpy as np
+import pytest
 import spatialdata_plot as sdp
 
 import squidpy as sq
-from squidpy.experimental.im import FelzenszwalbParams, WekaParams
+from squidpy.types import FelzenszwalbParams, WekaParams
 from tests.conftest import PlotTester, PlotTesterMeta
 
 _ = sdp
@@ -124,3 +126,69 @@ class TestDetectTissue(PlotTester, metaclass=PlotTesterMeta):
         )
 
         sdata_hne.pl.render_labels("hne_tissue").pl.show()
+
+
+@pytest.mark.parametrize(
+    ("corners", "expected"),
+    [
+        (False, (False,) * 4),
+        (np.bool_(False), (False,) * 4),
+        (0, (False,) * 4),
+        (1, (True,) * 4),
+        (np.array(False), (False,) * 4),
+        ([True, True, False, False], (True, True, False, False)),
+        (np.array([False, True, False, False]), (False, True, False, False)),
+    ],
+)
+def test_normalize_corners(corners, expected) -> None:
+    from squidpy.experimental.im._detect_tissue import _normalize_corners
+
+    assert _normalize_corners(corners) == expected
+
+
+def test_normalize_corners_rejects_generator() -> None:
+    from squidpy.experimental.im._detect_tissue import _normalize_corners
+
+    with pytest.raises(ValueError, match="sequence of 4 bools"):
+        _normalize_corners(c for c in [False] * 4)
+
+
+def test_weka_border_margin_is_not_a_params_key() -> None:
+    from squidpy._params import resolve_params
+
+    # the margin is detect_tissue's own `border_margin_px` argument only
+    with pytest.raises(ValueError, match="Unknown `method_params` field"):
+        resolve_params({"border_margin_px": 20}, WekaParams)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "error", "match"),
+    [
+        ({"corners_are_background": "False"}, TypeError, "not a string"),  # `bool("False")` is True
+        ({"corners_are_background": (True, False)}, ValueError, "sequence of 4 bools"),
+        ({"corners_are_background": np.ones((2, 2), dtype=bool)}, ValueError, "sequence of 4 bools"),
+        ({"corner_size_pct": 0.0}, ValueError, "`corner_size_pct` must be in"),
+    ],
+    ids=["string", "wrong_length", "not_flat", "zero_corner_size"],
+)
+def test_invalid_corners_raise(sdata_hne, kwargs, error, match) -> None:
+    with pytest.raises(error, match=match):
+        sq.experimental.im.detect_tissue(sdata_hne, image_key="hne", inplace=False, **kwargs)
+
+
+@pytest.mark.parametrize(
+    ("i", "rows", "cols"),
+    [
+        (0, slice(None, 2), slice(None, 2)),
+        (1, slice(None, 2), slice(-2, None)),
+        (2, slice(-2, None), slice(None, 2)),
+        (3, slice(-2, None), slice(-2, None)),
+    ],
+    ids=["top_left", "top_right", "bottom_left", "bottom_right"],
+)
+def test_corner_mask_lights_only_its_corner(i, rows, cols) -> None:
+    from squidpy.experimental.im._detect_tissue import _corner_mask
+
+    mask = _corner_mask((10, 10), tuple(j == i for j in range(4)), 0.2)
+    assert mask[rows, cols].all()
+    assert mask.sum() == 4
