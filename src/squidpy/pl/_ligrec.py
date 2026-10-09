@@ -14,6 +14,7 @@ from matplotlib.colorbar import ColorbarBase
 from scanpy import logging as logg
 from scipy.cluster import hierarchy as sch
 
+from squidpy._compat import old_positionals
 from squidpy._constants._constants import DendrogramAxis
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
@@ -129,8 +130,25 @@ class CustomDotplot(sc.pl.DotPlot):
 
 
 @d.dedent
+@old_positionals(
+    "cluster_key",
+    "source_groups",
+    "target_groups",
+    "means_range",
+    "pvalue_threshold",
+    "remove_empty_interactions",
+    "remove_nonsig_interactions",
+    "dendrogram",
+    "alpha",
+    "swap_axes",
+    "title",
+    "figsize",
+    "dpi",
+    "save",
+)
 def ligrec(
     adata: AnnData | Mapping[str, pd.DataFrame],
+    *,
     cluster_key: str | None = None,
     source_groups: str | Sequence[str] | None = None,
     target_groups: str | Sequence[str] | None = None,
@@ -245,7 +263,7 @@ def ligrec(
             raise ValueError("Please provide `cluster_key` when supplying an `AnnData` object.")
 
         cluster_key = Key.uns.ligrec(cluster_key)
-        if cluster_key not in adata.uns_keys():
+        if cluster_key not in adata.uns:
             raise KeyError(f"Key `{cluster_key}` not found in `adata.uns`.")
         adata = adata.uns[cluster_key]
 
@@ -286,6 +304,10 @@ def ligrec(
 
     pvals: pd.DataFrame = adata["pvalues"].loc[:, (source_groups, target_groups)]
     means: pd.DataFrame = adata["means"].loc[:, (source_groups, target_groups)]
+    # stored sparse with different fill values (`nan` and 0); every concat below densifies them
+    # one at a time and warns, so densify once here
+    pvals = pvals.astype(np.float64)
+    means = means.astype(np.float64)
 
     if pvals.empty:
         raise ValueError("No valid clusters have been selected.")

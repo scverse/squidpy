@@ -146,6 +146,7 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
 ```
 
 ## Experimental
+
 ```{eval-rst}
 .. module:: squidpy.experimental
 .. currentmodule:: squidpy
@@ -154,17 +155,20 @@ See the {doc}`extensibility guide </extensibility>` for how to implement a custo
 
     experimental.im.calculate_image_features
     experimental.tl.calculate_tiling_qc
-    experimental.tl.TilingQCParams
     experimental.tl.assign_stitch_groups
-    experimental.tl.StitchParams
     experimental.tl.make_stitched_labels
     experimental.pl.tiling_qc
     experimental.im.fit_stain_reference
-    experimental.im.normalize_stains
-    experimental.im.decompose_stains
     experimental.im.estimate_white_point
-    experimental.im.StainReference
-    experimental.im.ReinhardParams
-    experimental.im.MacenkoParams
-    experimental.im.VahadaneParams
+    experimental.im.StainFit
+```
+
+## Types
+
+The public parameter bags, all {class}`~typing.TypedDict`s: pass a plain `dict` literal or build one with the class. Every key is optional and falls back to the default shown with
+it.
+
+```{eval-rst}
+.. automodule:: squidpy.types
+    :members:
 ```

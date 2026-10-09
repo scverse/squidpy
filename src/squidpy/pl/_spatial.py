@@ -11,6 +11,7 @@ from matplotlib.axes import Axes
 from matplotlib.colors import Colormap
 from matplotlib.figure import Figure
 
+from squidpy._compat import old_positionals
 from squidpy._constants._constants import ScatterShape
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
@@ -46,6 +47,7 @@ from squidpy.pl._utils import sanitize_anndata, save_fig
 @d.dedent
 def _spatial_plot(
     adata: AnnData,
+    *,
     shape: _AvailShapes | None = None,
     color: str | Sequence[str | None] | None = None,
     groups: _SeqStr | None = None,
@@ -140,7 +142,7 @@ def _spatial_plot(
           This does not hold if no image is plotted, then the size corresponds to points size passed to
           :meth:`matplotlib.axes.Axes.scatter`.
 
-    If :attr:`anndata.AnnData.uns` ``['spatial']`` is present, use ``img_key``, ``seg_key`` and
+    If :attr:`anndata.AnnData.uns` ``['spatial']`` is present, use ``img_res_key``, ``seg_key`` and
     ``size_key`` arguments to find values for ``img``, ``seg`` and ``size``.
     Alternatively, these values can be passed directly via ``img``.
 
@@ -162,7 +164,7 @@ def _spatial_plot(
     %(plotting_returns)s
     """
     sanitize_anndata(adata)
-    _assert_spatial_basis(adata, spatial_key)
+    _assert_spatial_basis(adata, key=spatial_key)
 
     scalebar_kwargs = dict(scalebar_kwargs)
     edges_kwargs = dict(edges_kwargs)
@@ -241,8 +243,8 @@ def _spatial_plot(
         _coords = coords[_lib_count]  # TODO: do we want to order points? for now no, skip
         adata_sub, coords_sub, image_sub = _subs(
             adata,
-            _coords,
-            _img,
+            coords=_coords,
+            img=_img,
             library_key=library_key,
             library_id=_lib,
             crop_coords=_crops,
@@ -251,7 +253,7 @@ def _spatial_plot(
         )
         color_source_vector, color_vector, categorical = _set_color_source_vec(
             adata_sub,
-            value_to_plot,
+            value_to_plot=value_to_plot,
             layer=layer,
             use_raw=color_params.use_raw,
             alt_var=alt_var,
@@ -268,8 +270,8 @@ def _spatial_plot(
         if connectivity_key is not None:
             _plot_edges(
                 adata_sub,
-                coords_sub,
-                connectivity_key,
+                coords=coords_sub,
+                connectivity_key=connectivity_key,
                 ax=ax,
                 edges_width=edges_width,
                 edges_color=edges_color,
@@ -394,8 +396,10 @@ def _wrap_signature(wrapper: Callable[[Any], Any]) -> Callable[[Any], Any]:
 
 @d.dedent
 @_wrap_signature
+@old_positionals("shape")
 def spatial_scatter(
     adata: AnnData,
+    *,
     shape: _AvailShapes | None = ScatterShape.CIRCLE.v,
     **kwargs: Any,
 ) -> Axes | Sequence[Axes] | None:
@@ -405,7 +409,7 @@ def spatial_scatter(
     The plotted shapes (circles, squares or hexagons) have a real "size" with respect to their
     coordinate space, which can be specified via the ``size`` or ``size_key`` argument.
 
-        - Use ``img_key`` to display the image in the background.
+        - Use ``img_res_key`` to display the image in the background.
         - Use ``library_id`` to select the image. By default, ``'hires'`` is attempted.
         - Use ``img_alpha``, ``img_cmap`` and ``img_channel`` to control how it is displayed.
         - Use ``size`` to scale the size of the shapes plotted on top.
@@ -438,8 +442,10 @@ def spatial_scatter(
 
 @d.dedent
 @_wrap_signature  # type: ignore[arg-type]
+@old_positionals("seg_cell_id", "seg", "seg_key", "seg_contourpx", "seg_outline")
 def spatial_segment(
     adata: AnnData,
+    *,
     seg_cell_id: str,
     seg: bool | _SeqArray | None = True,
     seg_key: str = Key.uns.image_seg_key,

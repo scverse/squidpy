@@ -3,18 +3,19 @@
 Pure DataArray layer: every function takes and returns ``xr.DataArray`` (or
 numpy), stays lazy, touches no ``sdata``, and exposes no public surface. The
 thin ``sdata`` wrapper lives in :mod:`._normalize`.
+
+``params`` arguments must already be resolved by :func:`squidpy._params.resolve_params`
+(the public dispatchers do this once); they are not re-validated here.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass, fields
+from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
 import xarray as xr
 
-from squidpy.experimental.im._stain._constants import DEFAULT_LUMINOSITY_THRESHOLD
 from squidpy.experimental.im._stain._conversion import (
     _apply_along_channel,
     _check_channel_dim,
@@ -23,80 +24,21 @@ from squidpy.experimental.im._stain._conversion import (
     rgb_to_lab_ruderman,
 )
 from squidpy.experimental.im._stain._mask import as_spatial_mask, foreground_mask_from_lab
-from squidpy.experimental.im._stain._reference import StainReference
+from squidpy.experimental.im._stain._reference import StainFit
+from squidpy.experimental.im._stain._validation import StainFittingError
+from squidpy.types import ReinhardParams
 
 # Numerical safeguard against divide-by-zero on flat (constant-colour)
 # channels. Not a tuning knob, so kept off the public ReinhardParams surface.
 _SIGMA_FLOOR: float = 1e-6
 
 
-@dataclass(slots=True, frozen=True)
-class ReinhardParams:
-    """Tuning knobs for Reinhard stain normalization.
-
-    Pass an instance (or a ``Mapping`` of field names to values) as
-    ``method_params``. Frozen so validation in ``__post_init__`` cannot be
-    silently bypassed by later mutation.
-    """
-
-    luminosity_threshold: float = DEFAULT_LUMINOSITY_THRESHOLD
-    """Normalised Ruderman Lab-L cutoff in ``(0, 1]``; pixels brighter than this are excluded from the fit."""
-
-    mask_background: bool = True
-    """If ``True``, fit channel statistics over tissue pixels only; if ``False``, use every pixel (vanilla Reinhard)."""
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "luminosity_threshold", float(self.luminosity_threshold))
-        object.__setattr__(self, "mask_background", bool(self.mask_background))
-        if not 0.0 < self.luminosity_threshold <= 1.0:
-            raise ValueError(f"`luminosity_threshold` must be in (0, 1], got {self.luminosity_threshold}.")
-
-
-_REINHARD_DEFAULTS = ReinhardParams()
-_REINHARD_FIELDS = frozenset(f.name for f in fields(ReinhardParams))
-
-
-def _resolve_reinhard_params(method_params: ReinhardParams | Mapping[str, Any] | None) -> ReinhardParams:
-    """Normalise the ``method_params`` argument to a :class:`ReinhardParams` instance."""
-    if method_params is None:
-        return _REINHARD_DEFAULTS
-    if isinstance(method_params, ReinhardParams):
-        return method_params
-    if isinstance(method_params, Mapping):
-        unknown = set(method_params) - _REINHARD_FIELDS
-        if unknown:
-            raise ValueError(
-                f"Unknown `method_params` field(s): {sorted(unknown)}; expected from {sorted(_REINHARD_FIELDS)}."
-            )
-        return ReinhardParams(**method_params)
-    raise TypeError(f"`method_params` must be ReinhardParams, Mapping, or None; got {type(method_params).__name__}.")
-
-
-def _masked_channel_stats(lab: xr.DataArray, mask: xr.DataArray | None) -> tuple[np.ndarray, np.ndarray]:
-    """Per-channel mean and std over the spatial dims, tissue pixels only.
-
-    Lazy: the masked mean and std are bundled into one dataset and computed
-    in a single pass, never materialising the full image. Returns two
-    shape-``(3,)`` float64 arrays in channel order.
-
-    Raises ``ValueError`` if the mask leaves no tissue pixels in any channel
-    (the mean would be NaN), with an actionable message.
-    """
-    masked = lab.where(mask) if mask is not None else lab
-    stats = xr.Dataset(
-        {
-            "mu": masked.mean(dim=("y", "x"), skipna=True),
-            "sigma": masked.std(dim=("y", "x"), skipna=True),
-        }
-    ).compute()
-    mu = np.asarray(stats["mu"].values, dtype=np.float64)
-    sigma = np.asarray(stats["sigma"].values, dtype=np.float64)
-    if not (np.all(np.isfinite(mu)) and np.all(np.isfinite(sigma))):
-        raise ValueError(
-            "Foreground mask leaves zero tissue pixels in at least one channel; "
-            "the luminosity_threshold may be too low or the image may be blank."
-        )
-    return mu, sigma
+def validate_reinhard_params(params: dict[str, Any]) -> None:
+    """Coerce ``params`` in place and range-check it. Raises on invalid values."""
+    params["luminosity_threshold"] = float(params["luminosity_threshold"])
+    params["mask_background"] = bool(params["mask_background"])
+    if not 0.0 < params["luminosity_threshold"] <= 1.0:
+        raise ValueError(f"`luminosity_threshold` must be in (0, 1], got {params['luminosity_threshold']}.")
 
 
 def _transfer_kernel(
@@ -117,31 +59,78 @@ def _reinhard_mask(lab: xr.DataArray, params: ReinhardParams, tissue_mask: np.nd
     the param-driven luminosity mask (or ``None`` for vanilla Reinhard)."""
     if tissue_mask is not None:
         return as_spatial_mask(tissue_mask, lab)
-    if params.mask_background:
-        return foreground_mask_from_lab(lab, params.luminosity_threshold)
+    if params["mask_background"]:
+        return foreground_mask_from_lab(lab, params["luminosity_threshold"])
     return None
 
 
-def fit_reinhard(
-    image_rgb: xr.DataArray, params: ReinhardParams, *, tissue_mask: np.ndarray | None = None
-) -> StainReference:
-    """Fit Reinhard channel statistics on a reference image.
-
-    Converts to Ruderman Lab, computes per-channel ``mu``/``sigma`` over
-    tissue pixels, and packs them into a ``StainReference(method="reinhard")``.
-    ``tissue_mask`` (a ``(y, x)`` boolean aligned to ``image_rgb``) selects the
-    tissue pixels when given; otherwise the ``mask_background`` /
-    ``luminosity_threshold`` params drive the mask.
-    """
+def _tissue_lab_moments(
+    image_rgb: xr.DataArray, params: ReinhardParams, tissue_mask: np.ndarray | None, *, image_key: str | None
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     _check_channel_dim(image_rgb)
     lab = rgb_to_lab_ruderman(image_rgb)
-    mu, sigma = _masked_channel_stats(lab, _reinhard_mask(lab, params, tissue_mask))
-    return StainReference(method="reinhard", mu=mu, sigma=sigma)
+    mask = _reinhard_mask(lab, params, tissue_mask)
+    masked = lab.where(mask) if mask is not None else lab
+    # Accumulate in float64: this is a reduction, not a map, so the float32
+    # working dtype is not enough. sigma falls out of E[x^2] - E[x]^2, whose two
+    # terms are ~5000x the variance they bracket; in float32 that cancellation
+    # costs ~1% of sigma and makes the answer depend on chunking. The cast is
+    # elementwise, so it fuses into the per-chunk graph and stays lazy.
+    wide = masked.astype(np.float64)
+    stats = xr.Dataset(
+        {
+            "n": wide.count(dim=("y", "x")),
+            "s": wide.sum(dim=("y", "x"), skipna=True),
+            "s2": (wide**2).sum(dim=("y", "x"), skipna=True),
+        }
+    ).compute()
+    n = np.asarray(stats["n"].values, dtype=np.float64)
+    if not np.all(n > 0):
+        raise StainFittingError(
+            "foreground mask leaves zero tissue pixels in at least one channel; "
+            "the luminosity_threshold may be too low or the image may be blank.",
+            image_key=image_key,
+        )
+    return n, np.asarray(stats["s"].values, dtype=np.float64), np.asarray(stats["s2"].values, dtype=np.float64)
+
+
+def _stats_from_moments(n: np.ndarray, s: np.ndarray, s2: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    mu = s / n
+    return mu, np.sqrt(np.maximum(s2 / n - mu**2, 0.0))
+
+
+def fit_reinhard(
+    image_rgb: xr.DataArray | Sequence[xr.DataArray],
+    params: ReinhardParams,
+    *,
+    tissue_mask: np.ndarray | Sequence[np.ndarray | None] | None = None,
+    image_key: str | Sequence[str | None] | None = None,
+) -> StainFit:
+    """Fit Reinhard channel statistics on one or more reference images.
+
+    Converts to Ruderman Lab and computes per-channel ``mu``/``sigma``
+    (population std) over the tissue pixels. Several images pool into one
+    reference by summing their per-channel moments, so a slide contributes in
+    proportion to its **tissue pixel count**, not equally. A single image is a
+    pool of one. ``tissue_mask`` (``(y, x)`` booleans aligned to each image)
+    selects the tissue pixels when given; otherwise the ``mask_background`` /
+    ``luminosity_threshold`` params drive the mask. ``image_key`` only names the
+    image in error messages.
+    """
+    das = [image_rgb] if isinstance(image_rgb, xr.DataArray) else list(image_rgb)
+    masks = (
+        [tissue_mask] * len(das) if tissue_mask is None or isinstance(tissue_mask, np.ndarray) else list(tissue_mask)
+    )
+    keys = [image_key] * len(das) if image_key is None or isinstance(image_key, str) else list(image_key)
+    moments = [_tissue_lab_moments(da, params, m, image_key=k) for da, m, k in zip(das, masks, keys, strict=True)]
+    pooled = (np.sum(np.stack(x), axis=0) for x in zip(*moments, strict=True))
+    mu, sigma = _stats_from_moments(*pooled)
+    return StainFit(method="reinhard", mu=mu, sigma=sigma)
 
 
 def apply_reinhard(
     image_rgb: xr.DataArray,
-    reference: StainReference,
+    reference: StainFit,
     params: ReinhardParams,
     *,
     fit_rgb: xr.DataArray | None = None,
@@ -159,8 +148,8 @@ def apply_reinhard(
     Lazy if and only if ``image_rgb`` is lazy.
     """
     _check_channel_dim(image_rgb)
-    fit_lab = rgb_to_lab_ruderman(fit_rgb if fit_rgb is not None else image_rgb)
-    mu_src, sigma_src = _masked_channel_stats(fit_lab, _reinhard_mask(fit_lab, params, tissue_mask))
+    fit_src = fit_rgb if fit_rgb is not None else image_rgb
+    mu_src, sigma_src = _stats_from_moments(*_tissue_lab_moments(fit_src, params, tissue_mask, image_key=None))
     sigma_src = np.maximum(sigma_src, _SIGMA_FLOOR)
 
     lab = rgb_to_lab_ruderman(image_rgb)

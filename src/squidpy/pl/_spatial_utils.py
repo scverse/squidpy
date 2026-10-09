@@ -30,7 +30,7 @@ from matplotlib_scalebar.scalebar import ScaleBar
 from pandas import CategoricalDtype
 from scanpy import logging as logg
 from skimage.color import label2rgb
-from skimage.morphology import erosion, square
+from skimage.morphology import erosion, footprint_rectangle
 from skimage.segmentation import find_boundaries
 from skimage.util import map_array
 
@@ -119,6 +119,7 @@ to_hex = partial(colors.to_hex, keep_alpha=True)
 
 def _get_library_id(
     adata: AnnData,
+    *,
     shape: _AvailShapes | None,
     spatial_key: str = Key.uns.spatial,
     library_id: Sequence[str] | None = None,
@@ -151,8 +152,9 @@ def _get_library_id(
 
 def _get_image(
     adata: AnnData,
+    *,
     library_id: Sequence[str],
-    spatial_key: str = Key.obsm.spatial,
+    spatial_key: str = Key.uns.spatial,
     img: bool | _SeqArray | None = None,
     img_res_key: str | None = None,
     img_channel: int | list[int] | None = None,
@@ -170,7 +172,7 @@ def _get_image(
             raise KeyError(
                 f"Image key: `{img_res_key}` does not exist. Available image keys: `{image_mapping.values()}`"
             )
-        img = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][img_res_key] for i in library_id]
+        img = [adata.uns[spatial_key][i][Key.uns.image_key][img_res_key] for i in library_id]
 
     if img_channel is None:
         img = [im[..., :3] for im in img]
@@ -188,11 +190,13 @@ def _get_image(
 
 def _get_segment(
     adata: AnnData,
+    *,
     library_id: Sequence[str],
     seg_cell_id: str | None = None,
     library_key: str | None = None,
     seg: _SeqArray | bool | None = None,
     seg_key: str | None = None,
+    spatial_key: str = Key.uns.spatial,
 ) -> tuple[Sequence[NDArrayA], Sequence[NDArrayA]] | tuple[tuple[None, ...], tuple[None, ...]]:
     if seg_cell_id not in adata.obs:
         raise ValueError(f"Cell id `{seg_cell_id!r}` not found in `adata.obs`.")
@@ -207,14 +211,15 @@ def _get_segment(
     if isinstance(seg, list | np.ndarray | da.Array):
         img_seg = _get_list(seg, _type=(np.ndarray, da.Array), ref_len=len(library_id), name="img_seg")
     else:
-        img_seg = [adata.uns[Key.uns.spatial][i][Key.uns.image_key][seg_key] for i in library_id]
+        img_seg = [adata.uns[spatial_key][i][Key.uns.image_key][seg_key] for i in library_id]
     return img_seg, cell_id_vec
 
 
 def _get_scalefactor_size(
     adata: AnnData,
+    *,
     library_id: Sequence[str],
-    spatial_key: str = Key.obsm.spatial,
+    spatial_key: str = Key.uns.spatial,
     img_res_key: str | None = None,
     scale_factor: _SeqFloat | None = None,
     size: _SeqFloat | None = None,
@@ -233,9 +238,7 @@ def _get_scalefactor_size(
             if not len(scale_factor_key):
                 raise ValueError(f"No `scale_factor` found that could match `img_res_key`: {img_res_key}.")
             _scale_factor_key = scale_factor_key[0]  # get first scale_factor
-            scale_factor = [
-                adata.uns[Key.uns.spatial][i][Key.uns.scalefactor_key][_scale_factor_key] for i in library_id
-            ]
+            scale_factor = [adata.uns[spatial_key][i][Key.uns.scalefactor_key][_scale_factor_key] for i in library_id]
         else:  # handle case where scale_factor is float or list
             scale_factor = _get_list(scale_factor, _type=float, ref_len=len(library_id), name="scale_factor")
 
@@ -250,7 +253,7 @@ def _get_scalefactor_size(
         if not (len(size) == len(library_id) == len(scale_factor)):
             raise ValueError("Len of `size`, `library_id` and `scale_factor` do not match.")
         size = [
-            adata.uns[Key.uns.spatial][i][Key.uns.scalefactor_key][size_key] * s * sf * 0.5
+            adata.uns[spatial_key][i][Key.uns.scalefactor_key][size_key] * s * sf * 0.5
             for i, s, sf in zip(library_id, size, scale_factor, strict=False)
         ]
         return scale_factor, size
@@ -265,8 +268,9 @@ def _get_scalefactor_size(
 
 def _image_spatial_attrs(
     adata: AnnData,
+    *,
     shape: _AvailShapes | None = None,
-    spatial_key: str = Key.obsm.spatial,
+    spatial_key: str = Key.uns.spatial,
     library_id: Sequence[str] | None = None,
     library_key: str | None = None,
     img: bool | _SeqArray | None = None,
@@ -328,6 +332,7 @@ def _image_spatial_attrs(
             library_key=library_key,
             seg=seg,
             seg_key=seg_key,
+            spatial_key=spatial_key,
         )
     else:
         _seg = (None,) * len(library_id)
@@ -338,6 +343,7 @@ def _image_spatial_attrs(
 
 def _set_coords_crops(
     adata: AnnData,
+    *,
     spatial_params: SpatialParams,
     spatial_key: str,
     crop_coord: Sequence[_CoordTuple] | _CoordTuple | None = None,
@@ -359,6 +365,7 @@ def _set_coords_crops(
 
 def _subs(
     adata: AnnData,
+    *,
     coords: NDArrayA,
     img: NDArrayA | None = None,
     library_key: str | None = None,
@@ -446,6 +453,7 @@ def _get_list(
 
 def _set_color_source_vec(
     adata: AnnData,
+    *,
     value_to_plot: str | None,
     use_raw: bool | None = None,
     alt_var: str | None = None,
@@ -494,6 +502,7 @@ def _shaped_scatter(
     y: NDArrayA,
     s: float,
     c: NDArrayA | str,
+    *,
     shape: _AvailShapes | ScatterShape | None = ScatterShape.CIRCLE,
     norm: _Normalize | None = None,
     **kwargs: Any,
@@ -541,6 +550,7 @@ def _make_poly(x: NDArrayA, y: NDArrayA, r: float, n: int, i: int) -> tuple[NDAr
 
 def _plot_edges(
     adata: AnnData,
+    *,
     coords: NDArrayA,
     connectivity_key: str,
     ax: Axes,
@@ -610,6 +620,7 @@ def _get_scalebar(
 
 def _decorate_axs(
     ax: Axes,
+    *,
     cax: PatchCollection,
     lib_count: int,
     fig_params: FigParams,
@@ -694,6 +705,7 @@ def _map_color_seg(
     color_vector: NDArrayA | pd.Categorical,
     color_source_vector: pd.Categorical,
     cmap_params: CmapParams,
+    *,
     seg_erosionpx: int | None = None,
     seg_boundaries: bool = False,
     na_color: str | tuple[float, ...] = (0, 0, 0, 0),
@@ -714,7 +726,7 @@ def _map_color_seg(
             cols = colors.to_rgba_array(color_vector)
 
     if seg_erosionpx is not None:
-        val_im[val_im == erosion(val_im, square(seg_erosionpx))] = 0
+        val_im[val_im == erosion(val_im, footprint_rectangle((seg_erosionpx, seg_erosionpx)))] = 0
 
     seg_im: NDArrayA = label2rgb(
         label=val_im,
@@ -733,6 +745,7 @@ def _map_color_seg(
 
 def _prepare_args_plot(
     adata: AnnData,
+    *,
     shape: _AvailShapes | None = None,
     color: Sequence[str | None] | str | None = None,
     groups: _SeqStr | None = None,
@@ -776,6 +789,7 @@ def _prepare_args_plot(
 def _prepare_params_plot(
     color_params: ColorParams,
     spatial_params: SpatialParams,
+    *,
     spatial_key: str = Key.obsm.spatial,
     wspace: float | None = None,
     hspace: float = 0.25,
@@ -874,6 +888,7 @@ def _panel_grid(
     wspace: float,
     ncols: int,
     figsize: tuple[float, float],
+    *,
     dpi: int | None = None,
 ) -> tuple[Figure, GridSpec]:
     n_panels_x = min(ncols, num_panels)
@@ -933,6 +948,7 @@ def _set_outline(
 
 def _plot_scatter(
     coords: NDArrayA,
+    *,
     ax: Axes,
     outline_params: OutlineParams,
     cmap_params: CmapParams,
@@ -989,6 +1005,7 @@ def _plot_scatter(
 
 def _plot_segment(
     seg: NDArrayA,
+    *,
     cell_id: NDArrayA,
     color_vector: NDArrayA | pd.Series[CategoricalDtype],
     color_source_vector: pd.Series[CategoricalDtype],

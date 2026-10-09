@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 from anndata import AnnData
 from anndata.utils import make_index_unique
-from pandas import CategoricalDtype
+from pandas import CategoricalDtype, Series
 from pandas.api.types import infer_dtype
 from scanpy import logging as logg
 from scipy.sparse import csc_matrix, csr_matrix, spmatrix
@@ -51,7 +51,7 @@ def extract_adata_if_sdata(adata: AnnData | SpatialData, *, table_key: str | Non
     return adata
 
 
-def _assert_categorical_obs(adata: AnnData, key: str) -> None:
+def _assert_categorical_obs(adata: AnnData, *, key: str) -> None:
     if key not in adata.obs:
         raise KeyError(f"Cluster key `{key}` not found in `adata.obs`.")
 
@@ -59,7 +59,7 @@ def _assert_categorical_obs(adata: AnnData, key: str) -> None:
         raise TypeError(f"Expected `adata.obs[{key!r}]` to be `categorical`, found `{infer_dtype(adata.obs[key])}`.")
 
 
-def _assert_connectivity_key(adata: AnnData, key: str) -> None:
+def _assert_connectivity_key(adata: AnnData, *, key: str) -> None:
     if key not in adata.obsp:
         key_added = key.replace("_connectivities", "")
         raise KeyError(
@@ -68,7 +68,7 @@ def _assert_connectivity_key(adata: AnnData, key: str) -> None:
         )
 
 
-def _assert_spatial_basis(adata: AnnData, key: str) -> None:
+def _assert_spatial_basis(adata: AnnData, *, key: str) -> None:
     if key not in adata.obsm:
         raise KeyError(f"Spatial basis `{key}` not found in `adata.obsm`.")
 
@@ -86,7 +86,7 @@ def _save_data(adata: AnnData, *, attr: str, key: str, data: Any, prefix: bool =
 
 
 def _extract_expression(
-    adata: AnnData, genes: Sequence[str] | None = None, use_raw: bool = False, layer: str | None = None
+    adata: AnnData, *, genes: Sequence[str] | None = None, use_raw: bool = False, layer: str | None = None
 ) -> tuple[NDArrayA | spmatrix, Sequence[str]]:
     if use_raw and adata.raw is None:
         logg.warning("AnnData object has no attribute `raw`. Setting `use_raw=False`")
@@ -179,3 +179,16 @@ def _genesymbols(
             # in principle we assume the callee doesn't change the index
             # otherwise, would need to check whether it has been changed and add an option to determine what to do
             adata.var.index = var_names
+
+
+def _group_offsets(cats: Series) -> tuple[NDArrayA, NDArrayA]:
+    """Group a categorical into a CSR-like ``(offsets, members)`` pair, in category order.
+
+    ``members[offsets[g]:offsets[g + 1]]`` holds the ascending row positions of category ``g``.
+    Unused categories are empty; rows with a missing label join no group.
+    """
+    # pandas' grouper beats argsort on the codes, and unlike it tolerates missing labels
+    per_group = cats.groupby(cats, observed=False).indices
+    members = [np.asarray(per_group.get(c, ()), dtype=np.int64) for c in cats.cat.categories]
+    offsets = np.concatenate(([0], np.cumsum([len(m) for m in members]))).astype(np.int64)
+    return offsets, np.concatenate(members) if members else np.empty(0, dtype=np.int64)

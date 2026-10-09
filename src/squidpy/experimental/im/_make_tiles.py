@@ -79,6 +79,7 @@ class _SpotTileGrid:
 
 def _get_largest_scale_dimensions(
     sdata: sd.SpatialData,
+    *,
     image_key: str,
 ) -> tuple[int, int]:
     """Get the dimensions (H, W) of the largest/finest scale of an image.
@@ -101,16 +102,18 @@ def _get_largest_scale_dimensions(
 
 def _save_tiles_to_shapes(
     sdata: sd.SpatialData,
+    *,
     tg: TileGrid,
     image_key: str,
     shapes_key: str,
 ) -> None:
     """Save a TileGrid to sdata.shapes as a GeoDataFrame."""
-    save_tile_grid_to_shapes(sdata, tg, shapes_key, copy_transforms_from_key=image_key)
+    save_tile_grid_to_shapes(sdata, tg=tg, shapes_key=shapes_key, copy_transforms_from_key=image_key)
 
 
 def _save_spot_tiles_to_shapes(
     sdata: sd.SpatialData,
+    *,
     tg: _SpotTileGrid,
     shapes_key: str,
     spot_ids: np.ndarray,
@@ -142,7 +145,7 @@ def _save_spot_tiles_to_shapes(
     logger.info(f"Saved spot-aligned tiles as 'sdata.shapes[\"{shapes_key}\"]'")
 
 
-def _propagate_spot_classification(sdata: sd.SpatialData, tiles_key: str, spots_key: str) -> None:
+def _propagate_spot_classification(sdata: sd.SpatialData, *, tiles_key: str, spots_key: str) -> None:
     """Copy tile classifications from a tiles table back to the corresponding spots."""
     if tiles_key not in sdata.shapes or spots_key not in sdata.shapes:
         return
@@ -162,8 +165,8 @@ def _propagate_spot_classification(sdata: sd.SpatialData, tiles_key: str, spots_
 
 def make_tiles(
     sdata: sd.SpatialData,
-    image_key: str,
     *,
+    image_key: str,
     image_mask_key: str | None = None,
     tissue_mask_key: str | None = None,
     tile_size: tuple[int, int] = (224, 224),
@@ -266,7 +269,7 @@ def make_tiles(
     if center_grid_on_tissue and mask_key_for_grid is not None and scale == "auto":
         label_node = sdata.labels.get(mask_key_for_grid)
         if label_node is not None:
-            target_hw = _get_largest_scale_dimensions(sdata, image_key)
+            target_hw = _get_largest_scale_dimensions(sdata, image_key=image_key)
             scale_for_grid = _choose_label_scale_for_image(label_node, target_hw)
 
     # Build tile grid (keep locally for filtering)
@@ -280,7 +283,7 @@ def make_tiles(
         scale=scale_for_grid,
     )
 
-    _save_tiles_to_shapes(sdata, tg, image_key, shapes_key)
+    _save_tiles_to_shapes(sdata, tg=tg, image_key=image_key, shapes_key=shapes_key)
 
     # Filter tiles
     if tg is not None:
@@ -307,7 +310,7 @@ def make_tiles(
         if scale == "auto":
             label_node = sdata.labels.get(classification_mask_key)
             if label_node is not None:
-                target_hw = _get_largest_scale_dimensions(sdata, image_key)
+                target_hw = _get_largest_scale_dimensions(sdata, image_key=image_key)
                 scale_used = _choose_label_scale_for_image(label_node, target_hw)
             else:
                 scale_used = "scale0"
@@ -420,13 +423,13 @@ def make_tiles_from_spots(
                 image_cs,
             )
 
-    coords, spot_ids = _get_spot_coordinates(sdata, spots_key)
+    coords, spot_ids = _get_spot_coordinates(sdata, spots_key=spots_key)
     derived_tile = _derive_tile_size_from_spots(coords)
     logger.info(f"Derived tile size {derived_tile} from {len(coords)} Visium spots (key='{spots_key}').")
 
     tg = _SpotTileGrid(centers=coords, tile_size=derived_tile, spot_ids=spot_ids)
     shapes_key = new_shapes_key or f"{spots_key}_tiles"
-    _save_spot_tiles_to_shapes(sdata, tg, shapes_key, spot_ids, source_shapes_key=spots_key)
+    _save_spot_tiles_to_shapes(sdata, tg=tg, shapes_key=shapes_key, spot_ids=spot_ids, source_shapes_key=spots_key)
 
     classification_mask_key: str | None = None
     if tissue_mask_key is not None:
@@ -455,7 +458,7 @@ def make_tiles_from_spots(
         if image_key is not None:
             mask_key = classification_mask_key
             if mask_key in sdata.labels:
-                target_hw = _get_largest_scale_dimensions(sdata, image_key)
+                target_hw = _get_largest_scale_dimensions(sdata, image_key=image_key)
                 scale = _choose_label_scale_for_image(sdata.labels[mask_key], target_hw)
             else:
                 scale = "scale0"
@@ -482,7 +485,7 @@ def make_tiles_from_spots(
                 min_tissue_fraction=min_tissue_fraction,
                 shapes_key=shapes_key,
             )
-        _propagate_spot_classification(sdata, shapes_key, spots_key)
+        _propagate_spot_classification(sdata, tiles_key=shapes_key, spots_key=spots_key)
     else:
         logger.info("No mask provided or derived; skipping tissue classification.")
 
@@ -510,9 +513,9 @@ def make_tiles_from_spots(
 
 def _filter_tiles(
     sdata: sd.SpatialData,
+    *,
     tg: TileGrid,
     image_key: str | None,
-    *,
     tissue_mask_key: str | None = None,
     scale: str = "scale0",
     min_tissue_fraction: float = 1.0,
@@ -562,7 +565,7 @@ def _filter_tiles(
     else:
         raise ValueError("tissue_mask_key must be provided when image_key is None.")
     assert_key_in_sdata(sdata, mask_key, attr="labels")
-    mask = get_mask_materialized(sdata, mask_key, scale)
+    mask = get_mask_materialized(sdata, mask_key=mask_key, scale=scale)
     H_mask, W_mask = mask.shape
 
     # Check tissue coverage for each tile
@@ -621,8 +624,8 @@ def _filter_tiles(
 
 def _make_tiles(
     sdata: sd.SpatialData,
-    image_key: str,
     *,
+    image_key: str,
     image_mask_key: str | None = None,
     tile_size: tuple[int, int] = (224, 224),
     center_grid_on_tissue: bool = False,
@@ -633,7 +636,7 @@ def _make_tiles(
     Callers must validate *image_key* before calling this helper.
     """
     # Get image dimensions from the largest/finest scale
-    H, W = _get_largest_scale_dimensions(sdata, image_key)
+    H, W = _get_largest_scale_dimensions(sdata, image_key=image_key)
 
     ty, tx = tile_size
 
@@ -698,6 +701,7 @@ def _make_tiles(
 
 def _get_spot_coordinates(
     sdata: sd.SpatialData,
+    *,
     spots_key: str,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Extract spot centers (x, y) and IDs from a shapes table.

@@ -26,7 +26,8 @@ from scipy.sparse import csr_matrix
 
 from squidpy._utils import RNGLike, SeedLike
 from squidpy.gr import nhood_enrichment, spatial_neighbors_grid
-from squidpy.gr._nhood import _build_shuffle_groups, _shuffled_labels
+from squidpy.gr._nhood import _shuffled_labels
+from squidpy.gr._utils import _group_offsets
 
 _CK = "leiden"
 
@@ -42,7 +43,7 @@ def _ref_shuffle_group(
     """Shuffle ``cluster_annotation`` within each category of ``libraries``.
 
     An independent statement of within-group shuffling, deliberately sharing no code with
-    ``_build_shuffle_groups`` + ``_shuffled_labels``, which it exists to check.
+    ``_group_offsets`` + ``_shuffled_labels``, which it exists to check.
     """
     cluster_annotation_output = np.empty(libraries.shape, dtype=cluster_annotation.dtype)
     for c in libraries.cat.categories:
@@ -135,10 +136,10 @@ def _reference_nhood_enrichment(
     """
     observed = _ref_normalize(adj, int_clust, n_cls, normalization)
 
-    generators = np.random.default_rng(rng).spawn(n_perms)
+    rngs = np.random.default_rng(rng).spawn(n_perms)
     perms = np.empty((n_perms, n_cls, n_cls), dtype=np.float64)
     for p in range(n_perms):
-        gen = generators[p]
+        gen = rngs[p]
         if libraries is not None:
             shuffled = _ref_shuffle_group(int_clust, libraries, gen)
         else:
@@ -346,13 +347,14 @@ def test_zscore_library_key_matches_reference(adata_tiny: AnnData, normalization
 def test_single_group_shuffle_draws_like_numpy(adata_tiny: AnnData):
     """The single-group fast path must consume ``rng`` exactly like a plain ``numpy`` shuffle."""
     int_clust = (np.arange(200) % 7).astype(np.uint32)
-    offsets, indices = _build_shuffle_groups(None, len(int_clust))
+    # what `nhood_enrichment` builds without a `library_key`
+    offsets, indices = np.array([0, len(int_clust)], dtype=np.int64), np.arange(len(int_clust), dtype=np.int64)
 
     # The fast path skips the gather/scatter through ``group_indices``, so it is only valid while a
     # lone group yields identity indices. ``libraries=None`` returns ``arange`` outright; the other
     # way in is a single-category ``library_key``, where identity rests on the stable ``argsort``.
     one_library = pd.Series(pd.Categorical(["s1"] * len(int_clust)))
-    lib_offsets, lib_indices = _build_shuffle_groups(one_library, len(int_clust))
+    lib_offsets, lib_indices = _group_offsets(one_library)
     np.testing.assert_array_equal(lib_offsets, offsets)
     np.testing.assert_array_equal(lib_indices, np.arange(len(int_clust)))
     np.testing.assert_array_equal(indices, np.arange(len(int_clust)))

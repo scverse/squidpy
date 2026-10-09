@@ -8,6 +8,7 @@ from anndata import AnnData
 from scanpy import logging as logg
 from spatialdata import SpatialData
 
+from squidpy._compat import old_positionals
 from squidpy._docs import d
 from squidpy.gr._utils import _save_data, extract_adata_if_sdata
 
@@ -15,8 +16,19 @@ __all__ = ["sliding_window"]
 
 
 @d.dedent
+@old_positionals(
+    "library_key",
+    "window_size",
+    "overlap",
+    "coord_columns",
+    "sliding_window_key",
+    "spatial_key",
+    "drop_partial_windows",
+    "copy",
+)
 def sliding_window(
     adata: AnnData | SpatialData,
+    *,
     library_key: str | None = None,
     window_size: int | None = None,
     overlap: int = 0,
@@ -25,7 +37,6 @@ def sliding_window(
     spatial_key: str = "spatial",
     drop_partial_windows: bool = False,
     copy: bool = False,
-    *,
     table_key: str | None = None,
 ) -> pd.DataFrame | None:
     """
@@ -183,6 +194,7 @@ def _calculate_window_corners(
     min_y: int,
     max_y: int,
     window_size: int,
+    *,
     overlap: int = 0,
     drop_partial_windows: bool = False,
 ) -> pd.DataFrame:

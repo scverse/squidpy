@@ -13,6 +13,7 @@ from sklearn.neighbors import KDTree, NearestNeighbors
 from sklearn.preprocessing import LabelEncoder
 from spatialdata import SpatialData
 
+from squidpy._compat import old_positionals
 from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
@@ -24,9 +25,23 @@ __all__ = ["ripley"]
 
 @d.dedent
 @inject_docs(key=Key.obsm.spatial, rp=RipleyStat)
+@old_positionals(
+    "cluster_key",
+    "mode",
+    "spatial_key",
+    "metric",
+    "n_neigh",
+    "n_simulations",
+    "n_observations",
+    "max_dist",
+    "n_steps",
+    "seed",
+    "copy",
+)
 @deprecated_randomness_param
 def ripley(
     adata: AnnData | SpatialData,
+    *,
     cluster_key: str,
     mode: Literal["F", "G", "L"] = "F",
     spatial_key: str = Key.obsm.spatial,
@@ -38,7 +53,6 @@ def ripley(
     n_steps: int = 50,
     rng: SeedLike | RNGLike | None = None,
     copy: bool = False,
-    *,
     table_key: str | None = None,
 ) -> dict[str, pd.DataFrame | NDArrayA]:
     r"""
@@ -201,7 +215,7 @@ def _reshape_res(results: NDArrayA, columns: NDArrayA | list[str], index: NDArra
     df = pd.DataFrame(results, columns=columns, index=index)
     df.index.set_names(["bins"], inplace=True)
     df = df.melt(var_name=var_name, value_name="stats", ignore_index=False)
-    df[var_name] = df[var_name].astype("category", copy=True)
+    df[var_name] = df[var_name].astype("category")
     df.reset_index(inplace=True)
     return df
 
