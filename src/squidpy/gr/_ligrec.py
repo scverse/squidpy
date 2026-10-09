@@ -140,9 +140,7 @@ class PermutationTestABC(ABC):
     @d.get_full_description(base="PT_prepare")
     @d.get_sections(base="PT_prepare", sections=["Parameters", "Returns"])
     @inject_docs(src=SOURCE, tgt=TARGET)
-    def prepare(
-        self, interactions: Interaction_t, complex_policy: Literal["min", "all"] = "min"
-    ) -> PermutationTestABC:
+    def prepare(self, interactions: Interaction_t, complex_policy: Literal["min", "all"] = "min") -> PermutationTestABC:
         """
         Prepare self for running the permutation test.
 
