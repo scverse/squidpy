@@ -300,7 +300,9 @@ def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
 
     # The reductions below are written as explicit serial loops on purpose: under ``parallel=True``
     # numba turns ``arr.sum()``/``arr.mean()`` into parallel reductions, whose result depends on the
-    # thread count. Summing in index order keeps the output identical for any ``n_jobs``.
+    # thread count. Summing in index order keeps the output identical for any ``n_jobs``. The
+    # per-row precomputes further down are ``prange`` instead: each ``k`` owns its output slot and
+    # accumulates its own row in index order, so they parallelize without reordering any sum.
     x_bar = 0.0
     for i in range(n):
         x_bar += x[i]
@@ -314,7 +316,7 @@ def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
         for i in range(n):
             z2ss += z[i] * z[i]
         lag = np.zeros(n, dtype=np.float64)
-        for k in range(n):
+        for k in prange(n):
             acc = 0.0
             for e in range(indptr[k], indptr[k + 1]):
                 acc += data[e] * z[indices[e]]
@@ -330,7 +332,7 @@ def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
         w_sum = np.zeros(n, dtype=np.float64)
         wx = np.zeros(n, dtype=np.float64)
         wx2 = np.zeros(n, dtype=np.float64)
-        for k in range(n):
+        for k in prange(n):
             acc_w = 0.0
             acc_x = 0.0
             acc_x2 = 0.0
