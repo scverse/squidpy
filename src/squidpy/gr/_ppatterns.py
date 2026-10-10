@@ -272,8 +272,14 @@ def spatial_autocorr(
 
     if corr_method is not None:
         for pv in filter(lambda x: "pval" in x, df.columns):
-            _, pvals_adj, _, _ = multipletests(df[pv].values, alpha=0.05, method=corr_method)
-            df[f"{pv}_{corr_method}"] = pvals_adj
+            pvals = df[pv].to_numpy(dtype=np.float64)
+            # a degenerate feature has no p-value to correct, and `multipletests` would spread its
+            # NaN over every other gene, so correct the defined ones among themselves
+            defined = np.isfinite(pvals)
+            adj = np.full(pvals.shape, np.nan)
+            if defined.any():
+                _, adj[defined], _, _ = multipletests(pvals[defined], alpha=0.05, method=corr_method)
+            df[f"{pv}_{corr_method}"] = adj
 
     df.sort_values(by=params["stat"], ascending=params["ascending"], inplace=True)
 
@@ -723,7 +729,9 @@ def _p_value_calc(
     var_sim = sims["var"]
     se_score_sim = np.sqrt(var_sim)
     z_sim = (score - e_score_sim) / se_score_sim
-    p_z_sim = np.empty(z_sim.shape)
+    # NaN where a feature's permutations are all identical, so `var_sim` is exactly 0; the masks
+    # below skip those and `np.empty` would leave them uninitialized.
+    p_z_sim = np.full(z_sim.shape, np.nan)
 
     p_z_sim[z_sim > 0] = 1 - stats.norm.cdf(z_sim[z_sim > 0])
     p_z_sim[z_sim <= 0] = stats.norm.cdf(z_sim[z_sim <= 0])
@@ -765,7 +773,7 @@ def _analytic_pval(score: NDArrayA, g: spmatrix | NDArrayA, params: dict[str, An
     seScore_norm = Vscore_norm ** (1 / 2.0)
 
     z_norm = (score - params["expected"]) / seScore_norm
-    p_norm = np.empty(score.shape)
+    p_norm = np.full(score.shape, np.nan)  # constant features have a NaN score and match neither mask
     p_norm[z_norm > 0] = 1 - stats.norm.cdf(z_norm[z_norm > 0])
     p_norm[z_norm <= 0] = stats.norm.cdf(z_norm[z_norm <= 0])
 

@@ -37,22 +37,17 @@ def test_spatial_autocorr_seq_par(dummy_adata: AnnData, mode: str):
     assert "pval_norm_fdr_bh" in dummy_adata.uns[UNS_KEY]
     assert dummy_adata.uns[UNS_KEY].columns.shape == (4,)
     assert df.columns.shape == (9,)
-    # test pval_norm same
-    # will need to increase the tolerance because numba parallel computations might not be exactly the same
-    # these pval_norms don't use the seed anyway so the difference is not due to the seed
-    # see https://github.com/scverse/squidpy/issues/1030 for more details
     np.testing.assert_allclose(df["pval_norm"].values, df_parallel["pval_norm"].values, atol=1e-12)
     # test highly variable
     assert dummy_adata.uns[UNS_KEY].shape != df.shape
     # assert idx are sorted and contain same elements
     assert not np.array_equal(idx_df, idx_adata)
     np.testing.assert_array_equal(sorted(idx_df), sorted(idx_adata))
-    # check parallel gives same results
-    # each permutation now gets its own seed (spawned from a SeedSequence), so the
-    # simulated p-values no longer depend on how the permutations are split across jobs
-    np.testing.assert_allclose(df["pval_sim"].values, df_parallel["pval_sim"].values, atol=1e-12)
-    np.testing.assert_allclose(df["pval_z_sim"].values, df_parallel["pval_z_sim"].values, atol=1e-12)
-    np.testing.assert_allclose(df["var_sim"].values, df_parallel["var_sim"].values, atol=1e-12)
+    # each permutation draws from its own spawned generator, so the simulated columns do not
+    # depend on how the features were split across workers
+    df_parallel = df_parallel.loc[df.index]  # align in case the stat-based sort ties differently
+    for col in ("pval_sim", "pval_z_sim", "var_sim"):
+        np.testing.assert_allclose(df[col].values, df_parallel[col].values, atol=1e-12)
 
 
 @pytest.mark.parametrize("mode", ["moran", "geary"])
@@ -77,12 +72,6 @@ def test_spatial_autocorr_reproducibility(dummy_adata: AnnData, n_jobs: int, mod
     # assert fdr correction in adata.uns
     assert "pval_sim_fdr_bh" in df_1
     assert "pval_norm_fdr_bh" in dummy_adata.uns[UNS_KEY]
-    # test pval_norm same
-    # will need to increase the tolerance because numba parallel computations might not be exactly the same
-    # see https://github.com/scverse/squidpy/issues/1030 for more details about the tolerance
-    # these pval_norms don't use the seed anyway so the difference is not due to the seed
-    np.testing.assert_allclose(df_1["pval_norm"].values, df_2["pval_norm"].values, atol=1e-12)
-    np.testing.assert_allclose(df_1["var_norm"].values, df_2["var_norm"].values, atol=1e-12)
     assert dummy_adata.uns[UNS_KEY].columns.shape == (4,)
     assert df_2.columns.shape == (9,)
     # test highly variable
@@ -95,16 +84,39 @@ def test_spatial_autocorr_reproducibility(dummy_adata: AnnData, n_jobs: int, mod
 
 
 @pytest.mark.parametrize("mode", ["moran", "geary"])
-def test_spatial_autocorr_n_jobs_invariance(dummy_adata: AnnData, mode: str):
-    """The number of workers must not change the permutation-based results (seed spawned per permutation)."""
-    kw = {"mode": mode, "copy": True, "rng": 42, "n_perms": 50}
-    df_serial = spatial_autocorr(dummy_adata, n_jobs=1, **kw)
-    df_parallel = spatial_autocorr(dummy_adata, n_jobs=2, **kw)
+def test_spatial_autocorr_degenerate_feature_is_nan(mode: str):
+    """A gene whose permutations all score alike has no z-test, and must not poison the FDR column.
 
-    # align on the gene index in case the stat-based sort order ties differently
-    df_parallel = df_parallel.loc[df_serial.index]
-    for col in ["pval_sim", "pval_z_sim", "var_sim"]:
-        np.testing.assert_allclose(df_serial[col].values, df_parallel[col].values, atol=1e-12)
+    Its variance is exactly zero, so the z-score is undefined. Filling `pval_z_sim` with
+    `np.empty` left those entries at whatever memory held, which reads as a significant
+    p-value, and a NaN handed to `multipletests` spreads over every other gene.
+    """
+    import scipy.sparse as sps
+
+    from squidpy.gr import spatial_neighbors_knn
+
+    rng = np.random.default_rng(0)
+    n = 400
+    X = np.zeros((n, 3), dtype=np.float32)
+    X[5, 0] = 4.0  # expressed in a single cell: every permutation gives the same score
+    X[:, 1] = rng.poisson(2, n)
+    X[7, 2] = 1.0
+    adata = AnnData(sps.csr_matrix(X))
+    adata.var_names = ["solo", "normal", "solo2"]
+    adata.obsm["spatial"] = rng.random((n, 2))
+    spatial_neighbors_knn(adata, n_neighs=6)
+
+    df = spatial_autocorr(adata, mode=mode, n_perms=13, rng=3, copy=True, show_progress_bar=False)
+    degenerate, real = ["solo", "solo2"], "normal"
+
+    assert (df.loc[degenerate, "var_sim"] == 0.0).all()
+    assert df.loc[degenerate, "pval_z_sim"].isna().all()
+    assert df.loc[degenerate, "pval_z_sim_fdr_bh"].isna().all()
+    # the gene with a defined z-test keeps one, and its correction is unaffected
+    assert np.isfinite(df.loc[real, "pval_z_sim"])
+    assert np.isfinite(df.loc[real, "pval_z_sim_fdr_bh"])
+    # the permutation p-value is a tally, so it stays defined for every gene
+    assert df["pval_sim"].notna().all()
 
 
 def test_spatial_autocorr_ties_match_scanpy():
@@ -137,14 +149,13 @@ def test_spatial_autocorr_ties_match_scanpy():
 
 @pytest.mark.parametrize("mode", ["moran", "geary"])
 def test_spatial_autocorr_perm_blocks(dummy_adata: AnnData, mode: str, monkeypatch):
-    """Drawing the permutations block by block changes neither the result nor its n_jobs invariance."""
+    """Drawing the permutations block by block must not change the result."""
     import squidpy.gr._ppatterns as ppatterns
 
     kw = {"mode": mode, "copy": True, "rng": 42, "n_perms": 50}
     expected = spatial_autocorr(dummy_adata, **kw)
     monkeypatch.setattr(ppatterns, "_PERM_BLOCK_SIZE", 7 * dummy_adata.n_obs)  # 8 blocks, the last one short
-    for n_jobs in (1, 2):
-        assert_frame_equal(spatial_autocorr(dummy_adata, n_jobs=n_jobs, **kw), expected)
+    assert_frame_equal(spatial_autocorr(dummy_adata, **kw), expected)
 
 
 def test_spatial_autocorr_full_gene_list_reordered(dummy_adata: AnnData):
