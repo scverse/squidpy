@@ -53,7 +53,27 @@ ip = np.int32
 fp = np.float32
 bl = nt.boolean
 
-_PERM_BLOCK_SIZE = 2**28  # permutation entries held at once in `spatial_autocorr`, i.e. 1 GiB of int32
+# Permutation entries held at once in `spatial_autocorr`: 2**28 int32 is 1 GiB.
+#
+# The permutations are drawn once and reused across features, so they are materialized; drawing
+# them per feature would cost `n_features` times the shuffles. Without a cap that buffer is
+# `n_perms * n_cells * 4`, which couples memory to a parameter raised for statistical reasons --
+# going from 100 to 1000 permutations for usable FDR resolution would want 10x the memory, and
+# 1000 permutations over 100M cells would want 372 GB. Capping decouples them: resolution costs
+# time, not RAM.
+#
+# 2**28 was picked by measuring the cost of splitting rather than by the size of any cache. On an
+# exclusive 90-core node, full `spatial_autocorr` over tiled MERFISH, batched against a single
+# block: ~1.03x at 1M cells (4 blocks, moran 0.99x), ~1.10x at 10M cells (4 blocks), and 0.86x at
+# 10M with 2 blocks -- i.e. splitting is sometimes faster. The tax only climbs past ~8 blocks.
+# A smaller cap is cheap in memory but reaches that knee sooner; a larger one buys little, since
+# one block was never meaningfully faster than four.
+#
+# It is a ceiling, not a tuning knob: it changes no result (`test_spatial_autocorr_perm_blocks`),
+# and nothing about it is calibrated to a particular machine. Block size sets the tax, and block
+# size follows `n_cells` alone -- raising `n_perms` adds blocks and work in equal measure, so the
+# tax is independent of it.
+_PERM_BLOCK_SIZE = 2**28
 
 
 @d.dedent
@@ -318,9 +338,10 @@ def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
     n_perms, n = perms.shape
     out = np.empty(n_perms, dtype=np.float64)
 
-    # The reductions below are explicit loops rather than ``arr.sum()``/``arr.mean()`` so the
-    # summation order is fixed by the source, not by numba's choice of reduction strategy.
-    # Summing in index order keeps the output identical for any ``n_jobs``.
+    # Explicit loops rather than ``arr.sum()`` to avoid materializing temporaries; this kernel is
+    # serial, so there is no parallel reduction to worry about either way. Independence from
+    # ``n_jobs`` comes from `_score_perms`: permutation ``p`` is always drawn from ``rngs[p]``, and
+    # each feature is owned by exactly one worker.
     n_nz = nz.shape[0]
     x_bar = 0.0
     for t in range(n_nz):
@@ -415,9 +436,8 @@ def _score_perms(
     g = g.astype(np.float64, copy=False)
     w = g.data.sum()
     rngs = np.random.default_rng(rng).spawn(n_perms)
-    # ponytail: permutations are drawn in blocks capped at `_PERM_BLOCK_SIZE` entries (1 GiB of
-    # int32), and every feature is revisited once per block; more than one block only past
-    # n_perms * n_cells > 2**28. Raise the cap to trade memory for fewer repeats.
+    # Blocks of at most `_PERM_BLOCK_SIZE` entries; every feature is revisited once per block, so
+    # the per-block scatter is re-paid. More than one block only past n_perms * n_cells > 2**28.
     block = int(np.clip(_PERM_BLOCK_SIZE // max(n_cells, 1), 1, n_perms))
     buffer = np.empty((block, n_cells), dtype=np.int32)
     identity = np.arange(n_cells, dtype=np.int32)[None]
