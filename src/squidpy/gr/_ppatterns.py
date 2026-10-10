@@ -53,26 +53,23 @@ ip = np.int32
 fp = np.float32
 bl = nt.boolean
 
-# Permutation entries held at once in `spatial_autocorr`: 2**28 int32 is 1 GiB.
+# Permutation entries held at once in `spatial_autocorr`.
 #
-# The permutations are drawn once and reused across features, so they are materialized; drawing
-# them per feature would cost `n_features` times the shuffles. Without a cap that buffer is
-# `n_perms * n_cells * 4`, which couples memory to a parameter raised for statistical reasons --
-# going from 100 to 1000 permutations for usable FDR resolution would want 10x the memory, and
-# 1000 permutations over 100M cells would want 372 GB. Capping decouples them: resolution costs
-# time, not RAM.
+# Permutations are drawn once and reused across features, so they are materialized; drawing them
+# per feature would cost `n_features` times the shuffles. Uncapped, that buffer is
+# `n_perms * n_cells * 4` -- memory tied to a parameter raised for statistical reasons, so asking
+# for finer FDR resolution would also ask for proportionally more RAM. The cap decouples them:
+# resolution costs time, not memory.
 #
-# 2**28 was picked by measuring the cost of splitting rather than by the size of any cache. On an
-# exclusive 90-core node, full `spatial_autocorr` over tiled MERFISH, batched against a single
-# block: ~1.03x at 1M cells (4 blocks, moran 0.99x), ~1.10x at 10M cells (4 blocks), and 0.86x at
-# 10M with 2 blocks -- i.e. splitting is sometimes faster. The tax only climbs past ~8 blocks.
-# A smaller cap is cheap in memory but reaches that knee sooner; a larger one buys little, since
-# one block was never meaningfully faster than four.
+# The value comes from measuring the cost of splitting, on full `spatial_autocorr` runs over tiled
+# MERFISH on an exclusive node, batched against a single block: ~1.03x at 1M cells and ~1.10x at
+# 10M, both at four blocks, and 0.86x at 10M with two -- splitting is sometimes the faster arm.
+# The tax only climbs past roughly eight blocks. A smaller cap reaches that knee sooner; a larger
+# one buys little, since one block was never meaningfully faster than four.
 #
-# It is a ceiling, not a tuning knob: it changes no result (`test_spatial_autocorr_perm_blocks`),
-# and nothing about it is calibrated to a particular machine. Block size sets the tax, and block
-# size follows `n_cells` alone -- raising `n_perms` adds blocks and work in equal measure, so the
-# tax is independent of it.
+# A ceiling, not a tuning knob: it changes no result (`test_spatial_autocorr_perm_blocks`) and is
+# not calibrated to any machine. Block size sets the tax and follows `n_cells` alone, so raising
+# `n_perms` adds blocks and work in equal measure and leaves the tax unchanged.
 _PERM_BLOCK_SIZE = 2**28
 
 
