@@ -446,9 +446,11 @@ def _score_perms(
     # Constant features have a zero denominator; scanpy drops them and reports `nan`, so seed with it.
     score = np.full(n_features, np.nan, dtype=np.float64)
     count_ge = np.zeros(n_features, dtype=np.int64)  # integer tally of `sims >= score`, so exact
-    # Permuted scores cluster around the observed one, so mean and variance are accumulated as
-    # sums shifted by it. Both are plain sums, so they merge across blocks with `+=`, and
-    # `s2/n - (s1/n)**2` does not cancel: `s1/n` is the small residual.
+    # Mean and variance accumulate as sums of `sims - score`. Both are plain sums, so blocks merge
+    # with `+=` and no Welford state is carried. `s1/n` is the observed score's distance from the
+    # permutation mean, so `s2/n - (s1/n)**2` loses about eps*z**2: ~1e-13 at z=27, against ~1e-16
+    # for a two-pass variance. Worth it for the simpler merge, but it is a real difference, and it
+    # makes the variance exactly 0 when every permutation scores alike (see `_p_value_calc`).
     s1 = np.zeros(n_features, dtype=np.float64)
     s2 = np.zeros(n_features, dtype=np.float64)
     n_blocks = -(-n_perms // block)
