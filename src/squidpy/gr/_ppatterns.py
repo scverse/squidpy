@@ -439,9 +439,11 @@ def _score_perms(
     # Constant features have a zero denominator; scanpy drops them and reports `nan`, so seed with it.
     score = np.full(n_features, np.nan, dtype=np.float64)
     count_ge = np.zeros(n_features, dtype=np.int64)  # tally of `sims >= score`, exact by construction
-    seen = np.zeros(n_features, dtype=np.int64)
-    mean = np.zeros(n_features, dtype=np.float64)
-    m2 = np.zeros(n_features, dtype=np.float64)
+    # Permuted scores cluster around the observed one, so the mean and variance are accumulated as
+    # sums shifted by it. Both are plain sums: they merge across blocks by `+=`, and the final
+    # `s2/n - (s1/n)**2` has nothing to cancel because `s1/n` is the small residual.
+    s1 = np.zeros(n_features, dtype=np.float64)
+    s2 = np.zeros(n_features, dtype=np.float64)
     n_blocks = -(-n_perms // block)
     # Features are independent and the kernel is nogil, so parallelism lives here rather than
     # inside the kernel. That holds even when there are fewer features than workers: an in-kernel
@@ -465,15 +467,9 @@ def _score_perms(
             score[m] = _autocorr_perms(*args, identity, moran)[0]
         sims = _autocorr_perms(*args, perms, moran)
         count_ge[m] += int((sims >= score[m]).sum())
-        # Chan's parallel combine. `sum(x^2) - mean^2` would cancel catastrophically here:
-        # the permuted scores cluster tightly around their expectation.
-        b_n = sims.shape[0]
-        b_mean = sims.mean()
-        delta = b_mean - mean[m]
-        total = seen[m] + b_n
-        m2[m] += ((sims - b_mean) ** 2).sum() + delta * delta * seen[m] * b_n / total
-        mean[m] += delta * b_n / total
-        seen[m] = total
+        shifted = sims - score[m]
+        s1[m] += shifted.sum()
+        s2[m] += (shifted * shifted).sum()
 
     with (
         numba_threads(1),  # the kernel is serial; the pool below owns the parallelism
@@ -504,12 +500,13 @@ def _score_perms(
             ):
                 pbar.update(len(done))
     # Constant features never ran, so they keep scanpy's `nan` rather than a zero mean/variance.
-    ran = seen > 0
+    ran = ~np.isnan(score)
+    mean_shift = np.where(ran, s1 / n_perms, np.nan)
     return score, {
         "n_perms": n_perms,
         "count_ge": count_ge,
-        "mean": np.where(ran, mean, np.nan),
-        "var": np.where(ran, m2 / np.where(ran, seen, 1), np.nan),
+        "mean": score + mean_shift,
+        "var": np.where(ran, s2 / n_perms - mean_shift**2, np.nan),
     }
 
 
