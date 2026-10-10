@@ -166,7 +166,7 @@ def test_spatial_autocorr_full_gene_list_reordered(dummy_adata: AnnData):
 
 @pytest.mark.parametrize("mode", ["moran", "geary"])
 def test_spatial_autocorr_csc_connectivities(dummy_adata: AnnData, mode: str):
-    """A CSC graph must give the CSR result: the kernel reads CSR and sklearn's row-normalize skips CSC."""
+    """A CSC graph must give the CSR result: `normalize(axis=1, copy=False)` leaves CSC untouched."""
     key = Key.obsp.spatial_conn()
     kw = {"mode": mode, "copy": True, "rng": 42, "n_perms": 50}
     csc = dummy_adata.copy()
@@ -183,7 +183,7 @@ def test_spatial_autocorr_v183_positional_backend(dummy_adata: AnnData):
 
     Delete this together with the ``backend`` shim. The positional signature it pins only exists
     because `@deprecated_params` keeps accepting `backend` in its v1.8.3 slot; once that is dropped
-    for 1.10.0 there is no positional form left to protect and the call below stops compiling.
+    for 1.10.0 there is no positional form left to protect and the call below starts raising.
     """
     kw = {"mode": "moran", "n_perms": 20, "rng": 0, "copy": True, "n_jobs": 1, "show_progress_bar": False}
     expected = spatial_autocorr(dummy_adata, **kw)
@@ -396,7 +396,7 @@ def test_score_perms_matches_scanpy_per_permutation(mode: str):
 
 @pytest.mark.parametrize("mode", ["moran", "geary"])
 def test_score_perms_thread_invariant(mode: str):
-    """Permutation scores must not depend on how many numba threads the kernel runs on."""
+    """Permutation scores must not depend on `n_jobs`, which sizes the thread pool."""
     from scipy.sparse import csr_matrix
     from sklearn.neighbors import kneighbors_graph
     from sklearn.preprocessing import normalize

@@ -196,8 +196,8 @@ def spatial_autocorr(
             genes = [genes]
 
         if not use_raw:
-            # `genes is None` resolves to every gene, and `adata[:, genes]` would then copy the
-            # whole matrix and reindex its columns to produce exactly what it was given.
+            # full var_names in order: `adata[:, genes]` would copy X to hand back the same
+            # columns it was given.
             if len(genes) == adata.n_vars and np.array_equal(np.asarray(genes), adata.var_names.values):
                 return (adata.X if layer is None else adata.layers[layer]).T, genes
             subset = adata[:, genes]
@@ -248,9 +248,7 @@ def spatial_autocorr(
     else:
         raise NotImplementedError(f"Mode `{mode}` is not yet implemented.")
 
-    g = adata.obsp[connectivity_key].tocsr(
-        copy=True
-    )  # the permutation kernel reads CSR; sklearn's row-normalize is a no-op on CSC
+    g = adata.obsp[connectivity_key].tocsr(copy=True)
     if transformation:  # row-normalize
         normalize(g, norm="l1", axis=1, copy=False)
 
@@ -317,15 +315,14 @@ def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
 
     Compiled serial on purpose: `_score_perms` parallelizes across features instead, which measured
     faster than an in-kernel ``prange`` even with fewer features than workers. ``nogil`` is what
-    makes that legal: numba's default threading layer aborts when a ``parallel=True`` kernel is
-    entered from two Python threads.
+    lets that pool enter it concurrently, which a ``parallel=True`` kernel cannot survive under
+    numba's default threading layer.
     """
     n_perms, n = perms.shape
     out = np.empty(n_perms, dtype=np.float64)
 
-    # Explicit loops rather than ``arr.sum()`` to avoid materializing temporaries. Independence
-    # from ``n_jobs`` comes from `_score_perms`, where permutation ``p`` is always drawn from
-    # ``rngs[p]`` and each feature is owned by one worker.
+    # Independence from ``n_jobs`` comes from `_score_perms`: permutation ``p`` is always drawn
+    # from ``rngs[p]``, and each feature is owned by one worker.
     n_nz = nz.shape[0]
     x_bar = 0.0
     for t in range(n_nz):
@@ -334,7 +331,7 @@ def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
 
     # sum_i (x_i - x_bar)^2: Moran's denominator, and Geary's.
     css = 0.0
-    for t in range(n_nz):
+    for t in range(n_nz):  # looped rather than ((xv - x_bar) ** 2).sum() to skip the temporary
         d = xv[t] - x_bar
         css += d * d
     css += (n - n_nz) * x_bar * x_bar  # every zero entry contributes x_bar^2
@@ -412,8 +409,8 @@ def _score_perms(
     """Observed scores ``(n_features,)`` and the permutation accumulators `_p_value_calc` needs.
 
     The permutation scores are only ever reduced along the permutation axis, so the
-    ``(n_perms, n_features)`` matrix is never materialized: a tally and a running mean/``M2`` per
-    feature carry the same information in ``O(n_features)``.
+    ``(n_perms, n_features)`` matrix is never materialized: a tally, plus sums of the scores
+    shifted by the observed one, carry the same information in ``O(n_features)``.
     """
     n_cells = g.shape[0]
     # Match the casts scanpy applies to its own inputs, so the kernel sees the same numbers.
@@ -421,7 +418,7 @@ def _score_perms(
     w = g.data.sum()
     rngs = np.random.default_rng(rng).spawn(n_perms)
     # Blocks of at most `_PERM_BLOCK_SIZE` entries; every feature is revisited once per block, so
-    # the per-block scatter is re-paid. More than one block only past n_perms * n_cells > 2**28.
+    # the per-block scatter is re-paid. More than one block only once n_perms * n_cells exceeds it.
     block = int(np.clip(_PERM_BLOCK_SIZE // max(n_cells, 1), 1, n_perms))
     buffer = np.empty((block, n_cells), dtype=np.int32)
     identity = np.arange(n_cells, dtype=np.int32)[None]
@@ -484,9 +481,8 @@ def _score_perms(
             first = lo == 0
 
             def fill(chunk: range, perms: NDArrayA = perms, lo: int = lo) -> None:
-                # numpy releases the GIL inside `permutation`, so these draws also spread over
-                # the pool. Row `i` always comes from `rngs[lo + i]`, so the draw does not depend
-                # on how the work was scheduled.
+                # numpy releases the GIL inside `permutation`, so these draws spread over the
+                # pool rather than serializing on it.
                 for i in chunk:
                     perms[i] = rngs[lo + i].permutation(n_cells)
 
@@ -716,7 +712,7 @@ def _p_value_calc(
         return results
 
     n_perms = sims["n_perms"]
-    large_perm = sims["count_ge"].copy()  # copy: the swap below writes in place
+    large_perm = sims["count_ge"].copy()  # copy: the fold below writes in place
     # subtract total perm for negative values
     large_perm[(n_perms - large_perm) < large_perm] = n_perms - large_perm[(n_perms - large_perm) < large_perm]
     # get p-value based on permutation
