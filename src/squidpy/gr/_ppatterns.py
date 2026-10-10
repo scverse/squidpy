@@ -113,7 +113,7 @@ def spatial_autocorr(
     %(rng_versionchanged)s
 
     .. versionchanged:: 1.8.4
-        Permutations run on numba threads, and ``n_jobs = None`` now uses all ``NUMBA_NUM_THREADS``
+        Permutations run on a thread pool, and ``n_jobs = None`` now uses all ``NUMBA_NUM_THREADS``
         threads instead of one process. Pass ``n_jobs = 1`` for the old serial default.
 
     Parameters
@@ -253,7 +253,8 @@ def spatial_autocorr(
     start = logg.info(f"Calculating {mode}'s statistic for `{n_perms}` permutations using `{n_jobs}` thread(s)")
     if n_perms is not None:
         assert_positive(n_perms, name="n_perms")
-        # the observed score comes from the same kernel as the permuted ones, so `sims >= score` sees exact ties
+        # the observed score comes from the same kernel as the permuted ones, so the tally below
+        # compares like with like and exact ties stay exact
         score, score_perms = _score_perms(
             g, vals, mode=mode, n_perms=n_perms, rng=rng, n_jobs=n_jobs, show_progress_bar=show_progress_bar
         )
@@ -282,7 +283,8 @@ def spatial_autocorr(
     _save_data(adata, attr="uns", key=mode_str + stat_str, data=df, time=start)
 
 
-def _autocorr_perms_src(  # noqa: PLR0917, numba requires positional arguments
+@njit(parallel=False, nogil=True, cache=True)
+def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
     tptr: NDArrayA,
     tind: NDArrayA,
     tdat: NDArrayA,
@@ -297,9 +299,8 @@ def _autocorr_perms_src(  # noqa: PLR0917, numba requires positional arguments
     """Permutation scores of one feature over the row-permuted graph, one per row of ``perms``.
 
     Both statistics sum, over the rows of ``g[perm, :]``, a per-row quantity that depends on the
-    permutation only through *which* row is visited. Accumulating those quantities once, per row of
-    the unpermuted graph, leaves ``O(n_cells)`` per permutation instead of a full ``O(nnz)`` pass,
-    and lets numba own the parallelism with the GIL released.
+    permutation only through *which* row is visited, so those quantities are accumulated once per
+    row of the unpermuted graph rather than re-derived for every permutation.
 
     ``nz`` lists the cells where this feature is non-zero. Both statistics split into a term that
     only touches those cells and a term that is permutation-invariant (``sum(perm)`` over a bijection
@@ -308,13 +309,18 @@ def _autocorr_perms_src(  # noqa: PLR0917, numba requires positional arguments
 
     ``xv`` must already be :class:`numpy.float64`, and ``tdat`` the float64 graph weights,
     matching the casts :mod:`scanpy` applies before its own kernels.
+
+    Compiled serial on purpose: `_score_perms` parallelizes across features instead, which measured
+    faster than an in-kernel ``prange`` even with fewer features than workers. ``nogil`` is what
+    makes that legal -- numba's default threading layer aborts when a ``parallel=True`` kernel is
+    entered from two Python threads.
     """
     n_perms, n = perms.shape
     out = np.empty(n_perms, dtype=np.float64)
 
-    # The reductions below are written as explicit serial loops on purpose: under ``parallel=True``
-    # numba turns ``arr.sum()``/``arr.mean()`` into parallel reductions, whose result depends on the
-    # thread count. Summing in index order keeps the output identical for any ``n_jobs``.
+    # The reductions below are explicit loops rather than ``arr.sum()``/``arr.mean()`` so the
+    # summation order is fixed by the source, not by numba's choice of reduction strategy.
+    # Summing in index order keeps the output identical for any ``n_jobs``.
     n_nz = nz.shape[0]
     x_bar = 0.0
     for t in range(n_nz):
@@ -382,15 +388,8 @@ def _autocorr_perms_src(  # noqa: PLR0917, numba requires positional arguments
     return out
 
 
-# Serial, and parallelised one level up: `_score_perms` runs features across a thread pool, which
-# beats parallelising inside the kernel even for a couple of features. `nogil` is what lets the pool
-# work at all -- numba's default threading layer aborts if a `parallel=True` kernel is entered from
-# two Python threads.
-_autocorr_perms = njit(parallel=False, nogil=True, cache=True)(_autocorr_perms_src)
-
-
 def _chunks(n: int, workers: int) -> list[range]:
-    """Contiguous index runs, ~4 per worker so the pool can still balance uneven features."""
+    """Contiguous index runs over ``n``, ~4 per worker so the pool can balance uneven items."""
     step = max(1, -(-n // (workers * 4)))
     return [range(s, min(s + step, n)) for s in range(0, n, step)]
 
@@ -416,8 +415,9 @@ def _score_perms(
     g = g.astype(np.float64, copy=False)
     w = g.data.sum()
     rngs = np.random.default_rng(rng).spawn(n_perms)
-    # ponytail: permutations are drawn in blocks of at most 256 MB (int32), and every feature is
-    # re-extracted once per block; the block count only exceeds 1 past ~250k cells x 256 perms.
+    # ponytail: permutations are drawn in blocks capped at `_PERM_BLOCK_SIZE` entries (1 GiB of
+    # int32), and every feature is revisited once per block; more than one block only past
+    # n_perms * n_cells > 2**28. Raise the cap to trade memory for fewer repeats.
     block = int(np.clip(_PERM_BLOCK_SIZE // max(n_cells, 1), 1, n_perms))
     buffer = np.empty((block, n_cells), dtype=np.int32)
     identity = np.arange(n_cells, dtype=np.int32)[None]
@@ -432,8 +432,6 @@ def _score_perms(
         # one conversion here makes the per-feature extraction below ~180x cheaper.
         vals = vals.tocsr()
     n_features = vals.shape[0]
-    # Columns of `g` are only needed when some feature is sparse enough for the scatter to win;
-    # the transpose costs one O(nnz) pass and a second copy of the graph, so build it lazily.
     # The kernel walks g by column, so it needs the transpose: one O(nnz) pass, and it replaces
     # the per-feature dense vector the row-wise form required.
     gt = g.T.tocsr()
@@ -449,7 +447,6 @@ def _score_perms(
     # inside the kernel. That holds even when there are fewer features than workers: an in-kernel
     # `prange` over permutations measured slower than a half-empty pool.
     pool_workers = max(1, min(n_jobs, n_features))
-    kernel = _autocorr_perms
 
     def run_feature(m: int, perms: NDArrayA, first: bool) -> None:
         if sparse_vals:
@@ -465,8 +462,8 @@ def _score_perms(
             return  # constant feature: scanpy drops it and reports `nan`
         args = (tptr, tind, tdat, w_sum, col_sum, nz, xv, w)
         if first:
-            score[m] = kernel(*args, identity, moran)[0]
-        sims = kernel(*args, perms, moran)
+            score[m] = _autocorr_perms(*args, identity, moran)[0]
+        sims = _autocorr_perms(*args, perms, moran)
         count_ge[m] += int((sims >= score[m]).sum())
         # Chan's parallel combine. `sum(x^2) - mean^2` would cancel catastrophically here:
         # the permuted scores cluster tightly around their expectation.
@@ -488,15 +485,19 @@ def _score_perms(
             first = lo == 0
 
             def fill(i: int, perms: NDArrayA = perms, lo: int = lo) -> None:
-                # numpy releases the GIL inside `permutation`, so this fans out too. Row `i` always
-                # comes from `rngs[lo + i]`, so the draw is independent of how work is scheduled.
+                # numpy releases the GIL inside `permutation`, so these draws spread over the same
+                # pool (as far as `pool_workers` allows). Row `i` always comes from `rngs[lo + i]`,
+                # so the draw never depends on how the work was scheduled.
                 perms[i] = rngs[lo + i].permutation(n_cells)
+
+            # Drained before the feature map below starts, so no worker reads `perms` while
+            # another is still filling it.
+            list(ex.map(lambda c, fill=fill: [fill(i) for i in c], _chunks(len(perms), pool_workers)))
 
             # Hand each worker a contiguous run rather than one item: a single feature is ~0.06 ms
             # against a ~0.03 ms queue round-trip, so per-item dispatch would cost as much as the
-            # work. Each worker owns its own `m`, so every write lands in a distinct slot.
-            # The defaults bind this block's values rather than the loop's last ones.
-            list(ex.map(lambda c, fill=fill: [fill(i) for i in c], _chunks(len(perms), pool_workers)))
+            # work. Each worker owns its own `m`, so every write lands in a distinct slot. The
+            # lambda defaults bind this block's values rather than the loop's last ones.
             for done in ex.map(
                 lambda c, perms=perms, first=first: [run_feature(m, perms, first) for m in c],
                 _chunks(n_features, pool_workers),
@@ -508,7 +509,7 @@ def _score_perms(
         "n_perms": n_perms,
         "count_ge": count_ge,
         "mean": np.where(ran, mean, np.nan),
-        "var": np.where(ran, m2 / np.where(ran, seen - 1, 1), np.nan),
+        "var": np.where(ran, m2 / np.where(ran, seen, 1), np.nan),
     }
 
 
@@ -689,6 +690,8 @@ def _p_value_calc(
     sims
         Permutation accumulators from `_score_perms`: ``n_perms`` and, per feature, the
         ``count_ge`` tally plus the ``mean``/``var`` of the permuted scores.
+    weights
+        The spatial connectivity graph, used for the analytic (normality) p-value.
     params
         Object to store relevant function parameters.
 
