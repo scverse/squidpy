@@ -32,6 +32,7 @@ from squidpy._validators import assert_positive
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_spatial_basis,
+    _group_offsets,
     _save_data,
     extract_adata_if_sdata,
 )
@@ -323,6 +324,7 @@ def spatial_neighbors(
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
+        copy=copy,
     )
     builder = _resolve_graph_builder(
         coord_type=coord_type,
@@ -354,6 +356,7 @@ def _resolve_data(
     table_key: str | None = None,
     spatial_key: str = Key.obsm.spatial,
     library_key: str | None = None,
+    copy: bool = False,
 ) -> tuple[AnnData, str | None]:
     if not isinstance(data, SpatialData):
         return data, library_key
@@ -400,6 +403,10 @@ def _resolve_data(
             centroid = centroid[1:].copy()
         centroids.append(centroid)
 
+    if copy:
+        # Graph construction only needs observations, coordinates and the uns keys
+        # used by legacy graph dispatch. Do not copy or load expression matrices.
+        table = AnnData(obs=table.obs.copy(), uns=table.uns.copy())
     table.obsm[spatial_key] = np.concatenate(centroids)
     return table, region_key
 
@@ -469,6 +476,7 @@ def spatial_neighbors_from_builder(
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
+        copy=copy,
     )
     return _run_spatial_neighbors(
         adata,
@@ -488,6 +496,7 @@ def _prepare_spatial_neighbors_input(
     elements_to_coordinate_systems: dict[str, str] | None,
     table_key: str | None,
     library_key: str | None,
+    copy: bool,
 ) -> tuple[AnnData, str | None]:
     """Resolve input data and validate the requested spatial basis."""
     adata, library_key = _resolve_data(
@@ -496,6 +505,7 @@ def _prepare_spatial_neighbors_input(
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
+        copy=copy,
     )
     _assert_spatial_basis(adata, key=spatial_key)
     return adata, library_key
@@ -558,6 +568,7 @@ def spatial_neighbors_knn(
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
+        copy=copy,
     )
     return _run_spatial_neighbors(
         adata,
@@ -630,6 +641,7 @@ def spatial_neighbors_radius(
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
+        copy=copy,
     )
     return _run_spatial_neighbors(
         adata,
@@ -706,6 +718,7 @@ def spatial_neighbors_delaunay(
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
+        copy=copy,
     )
     return _run_spatial_neighbors(
         adata,
@@ -795,6 +808,7 @@ def spatial_neighbors_grid(
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
+        copy=copy,
     )
     return _run_spatial_neighbors(
         adata,
@@ -827,19 +841,11 @@ def _run_spatial_neighbors(
 
     start = logg.info(f"Creating graph using `{builder.transform}` transform and `{len(libs)}` libraries.")
     if library_key is not None:
-        # Extract the per-library coordinate arrays once.
-        # Subsetting the full AnnData inside the loop recomputes the library mask repeatedly and
-        # creates a view per library, which dominates the runtime for many cells.
-        # Slicing the coordinate array by precomputed category codes is far cheaper and,
-        # because the resulting arrays are small, makes the per-library graph construction cheap to parallelize.
-        codes = adata.obs[library_key].cat.codes.to_numpy()
+        # Slice the coordinates per library; subsetting the AnnData per library dominates the runtime.
         coords = adata.obsm[spatial_key]
-        per_lib_coords: list[np.ndarray] = []
-        idxs: list[int] = []
-        for code in range(len(libs)):
-            idx = np.where(codes == code)[0]
-            per_lib_coords.append(np.ascontiguousarray(coords[idx]))
-            idxs.extend(idx.tolist())
+        offsets, members = _group_offsets(adata.obs[library_key])
+        per_lib_coords = [np.ascontiguousarray(coords[members[offsets[g] : offsets[g + 1]]]) for g in range(len(libs))]
+        idxs = members.tolist()  # already in library order, which is what ``combine`` expects
 
         mats = thread_map(
             builder.build,

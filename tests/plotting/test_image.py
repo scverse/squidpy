@@ -9,7 +9,7 @@ from matplotlib.testing.compare import compare_images
 
 import squidpy as sq
 from squidpy.im import ImageContainer
-from tests.conftest import ACTUAL, DPI, EXPECTED, TOL, PlotTester, PlotTesterMeta
+from tests.conftest import ACTUAL, DPI, EXPECTED, SKIMAGE_PLUGIN_DEPRECATION, TOL, PlotTester, PlotTesterMeta
 
 
 class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):
@@ -18,6 +18,7 @@ class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):
         with pytest.raises(ValueError, match=r"Expected `ax` to be of shape `\(1, 3\)`"):
             cont.show(ax=ax, channelwise=True)
 
+    @SKIMAGE_PLUGIN_DEPRECATION
     def test_plot_axis(self, cont: ImageContainer):
         cont.add_img(np.random.RandomState(42).normal(size=(*cont.shape, 3)), layer="foo")
         fig, (ax1, ax2) = plt.subplots(ncols=2, dpi=DPI, tight_layout=True)
@@ -25,12 +26,14 @@ class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):
         cont.show("image", ax=ax1)
         cont.show("foo", ax=ax2)
 
+    @SKIMAGE_PLUGIN_DEPRECATION
     def test_plot_channel(self, cont: ImageContainer):
         cont.show(channel=1, dpi=DPI)
 
     def test_plot_library_id(self, small_cont_4d: ImageContainer):
         small_cont_4d.show(library_id=["1"], dpi=DPI)
 
+    @SKIMAGE_PLUGIN_DEPRECATION
     def test_plot_segmentation(self, cont: ImageContainer):
         seg = np.random.RandomState(43).randint(0, 255, size=(*cont.shape, 1))
         seg[seg <= 200] = 0
@@ -39,12 +42,15 @@ class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):
 
         cont.show("image", segmentation_layer="foo", dpi=DPI)
 
+    @SKIMAGE_PLUGIN_DEPRECATION
     def test_plot_imshow_kwargs(self, cont: ImageContainer):
         cont.show(channel=2, cmap="inferno", dpi=DPI)
 
+    @SKIMAGE_PLUGIN_DEPRECATION
     def test_plot_channelwise(self, cont: ImageContainer):
         cont.show(channelwise=True, dpi=DPI)
 
+    @SKIMAGE_PLUGIN_DEPRECATION
     def test_plot_channelwise_segmentation(self, cont: ImageContainer):
         seg = np.random.RandomState(43).randint(0, 255, size=(*cont.shape, 1))
         seg[seg <= 200] = 0
@@ -53,6 +59,7 @@ class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):
 
         cont.show("image", channelwise=True, segmentation_layer="foo", dpi=DPI, segmentation_alpha=1)
 
+    @SKIMAGE_PLUGIN_DEPRECATION
     def test_plot_scale_mask_circle_crop(self, cont: ImageContainer):
         cont.crop_corner(0, 0, (200, 200), mask_circle=True, scale=2).show(dpi=DPI)
 
@@ -70,6 +77,7 @@ class TestContainerShow(PlotTester, metaclass=PlotTesterMeta):
 
 
 @pytest.mark.parametrize("is_view", [False, True])
+@SKIMAGE_PLUGIN_DEPRECATION
 def test_extract(adata: AnnData, cont: ImageContainer, caplog, is_view: bool):
     sq.im.calculate_image_features(adata, img=cont, features=["summary"])
 

@@ -65,9 +65,8 @@ dependencies = [
   "pillow>=8",
   "pooch>=1.6",
   "pyyaml>=6",
-  "rustworkx>=0.18",
   "scanpy>=1.9.3",
-  "scikit-image>=0.25",
+  "scikit-image>=0.26",
   # due to https://github.com/scikit-image/scikit-image/issues/6850 breaks rescale ufunc
   "scikit-learn>=0.24",
   # dataset registry + downloader now live in scverse-misc
