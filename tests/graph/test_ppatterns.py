@@ -9,7 +9,7 @@ from pandas.testing import assert_frame_equal
 
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import co_occurrence, spatial_autocorr
-from squidpy.gr._ppatterns import _find_min_max, _score_perms
+from squidpy.gr._ppatterns import _autocorr_perms, _find_min_max, _score_perms
 
 MORAN_K = "moranI"
 GEARY_C = "gearyC"
@@ -325,13 +325,43 @@ def test_score_perms_matches_scanpy_per_permutation(mode: str):
     vals = rng.random((n_genes, n), dtype=np.float32)
 
     autocorr = SpatialAutocorr(mode)
+    moran = autocorr == SpatialAutocorr.MORAN
     observed, got = _score_perms(g, vals, mode=autocorr, n_perms=n_perms, rng=0, n_jobs=1, show_progress_bar=False)
 
     func = morans_i if autocorr == SpatialAutocorr.MORAN else gearys_c
     expected = np.stack([func(g[gen.permutation(n), :], vals) for gen in np.random.default_rng(0).spawn(n_perms)])
-    assert got.shape == (n_perms, n_genes)
     np.testing.assert_allclose(observed, func(g, vals), rtol=1e-9)
-    np.testing.assert_allclose(got, expected, rtol=1e-9)
+
+    # `_score_perms` only keeps reductions of the permutation scores, so the per-permutation
+    # comparison happens one level down, against the kernel that still returns them.
+    gg = g.astype(np.float64, copy=False)
+    gt = gg.T.tocsr()
+    perms = np.stack([gen.permutation(n).astype(np.int32) for gen in np.random.default_rng(0).spawn(n_perms)])
+    sims = np.stack(
+        [
+            _autocorr_perms(
+                gt.indptr,
+                gt.indices,
+                gt.data,
+                np.asarray(gg.sum(axis=1)).ravel(),
+                np.asarray(gg.sum(axis=0)).ravel(),
+                np.arange(n, dtype=np.int32),
+                np.ascontiguousarray(vals[m], np.float64),
+                gg.data.sum(),
+                perms,
+                moran,
+            )
+            for m in range(n_genes)
+        ]
+    ).T
+    assert sims.shape == (n_perms, n_genes)
+    np.testing.assert_allclose(sims, expected, rtol=1e-9)
+
+    # and the accumulators must be those same scores, reduced
+    assert got["n_perms"] == n_perms
+    np.testing.assert_array_equal(got["count_ge"], (sims >= observed).sum(axis=0))
+    np.testing.assert_allclose(got["mean"], expected.mean(axis=0), rtol=1e-9)
+    np.testing.assert_allclose(got["var"], expected.var(axis=0), rtol=1e-9)
 
 
 @pytest.mark.parametrize("mode", ["moran", "geary"])
@@ -353,7 +383,9 @@ def test_score_perms_thread_invariant(mode: str):
     serial = _score_perms(g, vals, mode=autocorr, n_perms=n_perms, rng=0, n_jobs=1, show_progress_bar=False)
     threaded = _score_perms(g, vals, mode=autocorr, n_perms=n_perms, rng=0, n_jobs=4, show_progress_bar=False)
     np.testing.assert_array_equal(serial[0], threaded[0])
-    np.testing.assert_array_equal(serial[1], threaded[1])
+    assert serial[1].keys() == threaded[1].keys()
+    for key in serial[1]:
+        np.testing.assert_array_equal(serial[1][key], threaded[1][key], err_msg=key)
 
 
 def test_spatial_autocorr_backend_deprecated(dummy_adata: AnnData):
