@@ -53,23 +53,11 @@ ip = np.int32
 fp = np.float32
 bl = nt.boolean
 
-# Permutation entries held at once in `spatial_autocorr`.
-#
-# Permutations are drawn once and reused across features, so they are materialized; drawing them
-# per feature would cost `n_features` times the shuffles. Uncapped, that buffer is
-# `n_perms * n_cells * 4` -- memory tied to a parameter raised for statistical reasons, so asking
-# for finer FDR resolution would also ask for proportionally more RAM. The cap decouples them:
-# resolution costs time, not memory.
-#
-# The value comes from measuring the cost of splitting, on full `spatial_autocorr` runs over tiled
-# MERFISH on an exclusive node, batched against a single block: ~1.03x at 1M cells and ~1.10x at
-# 10M, both at four blocks, and 0.86x at 10M with two -- splitting is sometimes the faster arm.
-# The tax only climbs past roughly eight blocks. A smaller cap reaches that knee sooner; a larger
-# one buys little, since one block was never meaningfully faster than four.
-#
-# A ceiling, not a tuning knob: it changes no result (`test_spatial_autocorr_perm_blocks`) and is
-# not calibrated to any machine. Block size sets the tax and follows `n_cells` alone, so raising
-# `n_perms` adds blocks and work in equal measure and leaves the tax unchanged.
+# Permutation entries held at once. Permutations are reused across features, so they are
+# materialized rather than redrawn per feature; the cap keeps that buffer off `n_perms`, which
+# users raise for FDR resolution. Splitting costs ~3% at 1M cells and ~10% at 10M (four blocks
+# either way), and only becomes expensive past ~8 blocks. It changes no result, see
+# `test_spatial_autocorr_perm_blocks`.
 _PERM_BLOCK_SIZE = 2**28
 
 
@@ -270,8 +258,8 @@ def spatial_autocorr(
     start = logg.info(f"Calculating {mode}'s statistic for `{n_perms}` permutations using `{n_jobs}` thread(s)")
     if n_perms is not None:
         assert_positive(n_perms, name="n_perms")
-        # the observed score comes from the same kernel as the permuted ones, so the tally below
-        # compares like with like and exact ties stay exact
+        # the observed score comes from the same kernel as the permuted ones, so exact ties
+        # in the tally below stay exact
         score, score_perms = _score_perms(
             g, vals, mode=mode, n_perms=n_perms, rng=rng, n_jobs=n_jobs, show_progress_bar=show_progress_bar
         )
@@ -329,23 +317,22 @@ def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
 
     Compiled serial on purpose: `_score_perms` parallelizes across features instead, which measured
     faster than an in-kernel ``prange`` even with fewer features than workers. ``nogil`` is what
-    makes that legal -- numba's default threading layer aborts when a ``parallel=True`` kernel is
+    makes that legal: numba's default threading layer aborts when a ``parallel=True`` kernel is
     entered from two Python threads.
     """
     n_perms, n = perms.shape
     out = np.empty(n_perms, dtype=np.float64)
 
-    # Explicit loops rather than ``arr.sum()`` to avoid materializing temporaries; this kernel is
-    # serial, so there is no parallel reduction to worry about either way. Independence from
-    # ``n_jobs`` comes from `_score_perms`: permutation ``p`` is always drawn from ``rngs[p]``, and
-    # each feature is owned by exactly one worker.
+    # Explicit loops rather than ``arr.sum()`` to avoid materializing temporaries. Independence
+    # from ``n_jobs`` comes from `_score_perms`, where permutation ``p`` is always drawn from
+    # ``rngs[p]`` and each feature is owned by one worker.
     n_nz = nz.shape[0]
     x_bar = 0.0
     for t in range(n_nz):
         x_bar += xv[t]
     x_bar /= n
 
-    # sum_i (x_i - x_bar)^2 -- Moran's denominator and Geary's, the same quantity either way.
+    # sum_i (x_i - x_bar)^2, which is Moran's denominator and Geary's alike.
     css = 0.0
     for t in range(n_nz):
         d = xv[t] - x_bar
@@ -463,8 +450,8 @@ def _score_perms(
     s2 = np.zeros(n_features, dtype=np.float64)
     n_blocks = -(-n_perms // block)
     # Features are independent and the kernel is nogil, so parallelism lives here rather than
-    # inside the kernel. That holds even when there are fewer features than workers: an in-kernel
-    # `prange` over permutations measured slower than a half-empty pool.
+    # inside the kernel. Even with fewer features than workers, an in-kernel `prange` over
+    # permutations measured slower than a half-empty pool.
     pool_workers = max(1, min(n_jobs, n_features))
 
     def run_feature(m: int, perms: NDArrayA, first: bool) -> None:
