@@ -265,7 +265,8 @@ def spatial_autocorr(
     else:
         score, score_perms = params["func"](g, vals), None  # type: ignore
 
-    with np.errstate(divide="ignore"):
+    # a degenerate feature has `var_sim == 0`, so its z score is an invalid 0/0, not a divide
+    with np.errstate(divide="ignore", invalid="ignore"):
         pval_results = _p_value_calc(score, score_perms, g, params)
 
     data_dict: dict[str, Any] = {str(params["stat"]): score, **pval_results}
