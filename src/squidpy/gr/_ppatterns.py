@@ -55,9 +55,10 @@ bl = nt.boolean
 
 # Permutation entries held at once. Permutations are reused across features, so they are
 # materialized rather than redrawn per feature; the cap keeps that buffer off `n_perms`, which
-# users raise for FDR resolution. Splitting costs ~3% at 1M cells and ~10% at 10M (four blocks
-# either way), and only becomes expensive past ~8 blocks. It changes no result, see
-# `test_spatial_autocorr_perm_blocks`.
+# users raise for FDR resolution. Each block re-pays one scatter per feature, so the cost is set
+# by the block size this leaves: measured within a few percent up to 10M cells, where the block is
+# still tens of permutations, and ~1.3-1.6x at 100M, where it falls to two. Raise the cap if that
+# scale matters. It changes no result, see `test_spatial_autocorr_perm_blocks`.
 _PERM_BLOCK_SIZE = 2**28
 
 
