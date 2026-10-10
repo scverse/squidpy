@@ -495,8 +495,6 @@ def _score_perms(
             first = lo == 0
 
             def fill(chunk: range, perms: NDArrayA = perms, lo: int = lo) -> None:
-                # numpy releases the GIL inside `permutation`, so these draws spread over the
-                # pool rather than serializing on it.
                 for i in chunk:
                     perms[i] = rngs[lo + i].permutation(n_cells)
 
