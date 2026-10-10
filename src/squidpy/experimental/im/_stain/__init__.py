@@ -18,10 +18,6 @@ from squidpy.experimental.im._stain._decomposition import (
     apply_decomposition,
     fit_decomposition,
 )
-from squidpy.experimental.im._stain._mask import (
-    absorbance_foreground_mask,
-    luminosity_foreground_mask,
-)
 from squidpy.experimental.im._stain._normalize import (
     estimate_white_point,
     fit_stain_reference,
@@ -48,7 +44,6 @@ __all__ = [
     "StainFittingError",
     "StainMethod",
     "StainFit",
-    "absorbance_foreground_mask",
     "apply_decomposition",
     "apply_reinhard",
     "complement_third_column",
@@ -57,7 +52,6 @@ __all__ = [
     "fit_reinhard",
     "fit_stain_reference",
     "lab_ruderman_to_rgb",
-    "luminosity_foreground_mask",
     "reorder_to_canonical",
     "rgb_to_lab_ruderman",
     "rgb_to_sda",

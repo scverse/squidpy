@@ -295,6 +295,14 @@ def test_co_occurrence_reproducibility(adata: AnnData):
     np.testing.assert_allclose(arr_1, arr_2)
 
 
+def test_co_occurrence_missing_labels_raise(adata: AnnData):
+    # a missing label has code -1, which the kernel would count as a phantom cluster
+    adata.obs["leiden"] = adata.obs["leiden"].copy()
+    adata.obs.loc[adata.obs_names[:3], "leiden"] = np.nan
+    with pytest.raises(ValueError, match=r"contains missing values"):
+        co_occurrence(adata, cluster_key="leiden", copy=True)
+
+
 @pytest.mark.parametrize("size", [1, 3])
 def test_co_occurrence_explicit_interval(adata: AnnData, size: int):
     minn, maxx = _find_min_max(adata.obsm[Key.obsm.spatial])
