@@ -147,6 +147,23 @@ def test_spatial_autocorr_perm_blocks(dummy_adata: AnnData, mode: str, monkeypat
         assert_frame_equal(spatial_autocorr(dummy_adata, n_jobs=n_jobs, **kw), expected)
 
 
+def test_spatial_autocorr_full_gene_list_reordered(dummy_adata: AnnData):
+    """A full-length but reordered `genes` must not take the identity fast path in `extract_X`.
+
+    `extract_X` skips `adata[:, genes]` when the selection is every gene in `var_names` order.
+    Dropping the order check from that guard leaves a list of the right length taking the fast
+    path, which returns `X` in var order while labelling the rows in the caller's order.
+    """
+    genes = list(dummy_adata.var_names)
+    kw = {"mode": "geary", "n_perms": 20, "rng": 0, "copy": True, "show_progress_bar": False}
+    fwd = spatial_autocorr(dummy_adata, genes=genes, **kw)
+    rev = spatial_autocorr(dummy_adata, genes=genes[::-1], **kw)
+
+    # a gene's statistic cannot depend on the order the caller listed the genes in
+    assert set(fwd.index) == set(rev.index)
+    np.testing.assert_allclose(fwd["C"], rev.loc[fwd.index, "C"], rtol=1e-12)
+
+
 @pytest.mark.parametrize("mode", ["moran", "geary"])
 def test_spatial_autocorr_csc_connectivities(dummy_adata: AnnData, mode: str):
     """A CSC graph must give the CSR result: the kernel reads CSR and sklearn's row-normalize skips CSC."""
