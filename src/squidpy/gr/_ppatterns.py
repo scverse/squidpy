@@ -470,7 +470,11 @@ def _score_perms(
             xv = np.ascontiguousarray(vals.data[lo_m:hi_m], dtype=np.float64)
         else:
             nz = all_cells
-            xv = np.ascontiguousarray(vals[m], dtype=np.float64)
+            # both statistics are invariant to a shift, and centring here keeps the kernel's
+            # `g @ x - x_bar * w_sum` from cancelling on a feature whose mean dwarfs its spread.
+            # A sparse feature cannot reach that ratio, so it pays nothing for this.
+            xv = np.asarray(vals[m], dtype=np.float64)
+            xv = xv - xv.mean()
         if len(nz) == 0 or (xv.min() == xv.max() and (len(nz) == n_cells or xv[0] == 0.0)):
             return  # constant feature: scanpy drops it and reports `nan`
         args = (tptr, tind, tdat, w_sum, col_sum, nz, xv, w)

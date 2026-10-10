@@ -119,6 +119,31 @@ def test_spatial_autocorr_degenerate_feature_is_nan(mode: str):
     assert df["pval_sim"].notna().all()
 
 
+@pytest.mark.parametrize(("mode", "stat"), [("moran", "I"), ("geary", "C")])
+def test_spatial_autocorr_offset_feature_precision(mode: str, stat: str):
+    """Both statistics ignore a constant shift, so a large offset must not move the score.
+
+    The kernel rebuilds the centred quantities by subtraction, e.g. `g @ x - x_bar * w_sum`,
+    which cancels away roughly `(mean / sd) ** 2` digits. Dense features are centred before
+    they reach it; without that, an offset of 1e6 moved Moran's I by several percent.
+    """
+    from squidpy.gr import spatial_neighbors_knn
+
+    rng = np.random.default_rng(1)
+    n = 400
+    base = rng.standard_normal(n)
+    adata = AnnData(np.stack([base, base + 1e6], axis=1).astype(np.float64))
+    adata.var_names = ["plain", "offset"]
+    adata.obsm["spatial"] = rng.random((n, 2))
+    spatial_neighbors_knn(adata, n_neighs=6)
+
+    # `n_perms` routes the observed score through the kernel rather than scanpy
+    df = spatial_autocorr(adata, mode=mode, n_perms=1, rng=0, copy=True, show_progress_bar=False)
+    # 1e-8 is the floor for recovering a unit-scale value from one offset by 1e6, not slack:
+    # without the centring the difference was 5e-2
+    np.testing.assert_allclose(df.loc["offset", stat], df.loc["plain", stat], rtol=1e-8)
+
+
 def test_spatial_autocorr_ties_match_scanpy():
     """A gene with one non-zero count ties most permutations exactly; ties must count as in scanpy."""
     import scipy.sparse as sps
