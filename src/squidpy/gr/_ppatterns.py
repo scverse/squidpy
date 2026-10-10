@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Literal
 
 import numba.types as nt
@@ -33,6 +32,7 @@ from squidpy._utils import (
     deprecated_randomness_param,
     get_n_numba_threads,
     numba_threads,
+    thread_map,
 )
 from squidpy._validators import assert_key_in_adata, assert_positive
 from squidpy.gr._utils import (
@@ -478,31 +478,33 @@ def _score_perms(
     with (
         numba_threads(1),  # the kernel is serial; the pool below owns the parallelism
         tqdm(total=n_blocks * n_features, unit="feature", disable=not show_progress_bar) as pbar,
-        ThreadPoolExecutor(pool_workers) as ex,
     ):
         for lo in range(0, n_perms, block):
             perms = buffer[: min(block, n_perms - lo)]
             first = lo == 0
 
-            def fill(i: int, perms: NDArrayA = perms, lo: int = lo) -> None:
+            def fill(chunk: range, perms: NDArrayA = perms, lo: int = lo) -> None:
                 # numpy releases the GIL inside `permutation`, so these draws spread over the same
                 # pool (as far as `pool_workers` allows). Row `i` always comes from `rngs[lo + i]`,
                 # so the draw never depends on how the work was scheduled.
-                perms[i] = rngs[lo + i].permutation(n_cells)
+                for i in chunk:
+                    perms[i] = rngs[lo + i].permutation(n_cells)
 
             # Drained before the feature map below starts, so no worker reads `perms` while
             # another is still filling it.
-            list(ex.map(lambda c, fill=fill: [fill(i) for i in c], _chunks(len(perms), pool_workers)))
+            thread_map(fill, _chunks(len(perms), pool_workers), n_jobs=pool_workers)
 
             # Hand each worker a contiguous run rather than one item: a single feature is ~0.06 ms
             # against a ~0.03 ms queue round-trip, so per-item dispatch would cost as much as the
             # work. Each worker owns its own `m`, so every write lands in a distinct slot. The
-            # lambda defaults bind this block's values rather than the loop's last ones.
-            for done in ex.map(
-                lambda c, perms=perms, first=first: [run_feature(m, perms, first) for m in c],
-                _chunks(n_features, pool_workers),
-            ):
-                pbar.update(len(done))
+            # default binds this block's values rather than the loop's last ones.
+            def run_chunk(chunk: range, perms: NDArrayA = perms, first: bool = first) -> int:
+                for m in chunk:
+                    run_feature(m, perms, first)
+                return len(chunk)
+
+            for done in thread_map(run_chunk, _chunks(n_features, pool_workers), n_jobs=pool_workers):
+                pbar.update(done)
     # Constant features never ran, so they keep scanpy's `nan` rather than a zero mean/variance.
     ran = ~np.isnan(score)
     mean_shift = np.where(ran, s1 / n_perms, np.nan)

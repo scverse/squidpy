@@ -179,7 +179,12 @@ def test_spatial_autocorr_csc_connectivities(dummy_adata: AnnData, mode: str):
 
 
 def test_spatial_autocorr_v183_positional_backend(dummy_adata: AnnData):
-    """A v1.8.3 positional call through ``backend`` binds every value and warns about ``backend``."""
+    """A v1.8.3 positional call through ``backend`` binds every value and warns about ``backend``.
+
+    Delete this together with the ``backend`` shim. The positional signature it pins only exists
+    because `@deprecated_params` keeps accepting `backend` in its v1.8.3 slot; once that is dropped
+    for 1.10.0 there is no positional form left to protect and the call below stops compiling.
+    """
     kw = {"mode": "moran", "n_perms": 20, "rng": 0, "copy": True, "n_jobs": 1, "show_progress_bar": False}
     expected = spatial_autocorr(dummy_adata, **kw)
     args = (
