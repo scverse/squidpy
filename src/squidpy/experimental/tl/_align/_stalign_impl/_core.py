@@ -520,13 +520,12 @@ def lddmm(
 ) -> dict[str, Any]:
     """Fit an LDDMM registration of ``I`` onto ``J`` by gradient descent.
 
-    The whole descent runs as a single ``lax.while_loop``, so XLA compiles the loop body
-    once and fuses across it instead of paying per-iteration dispatch from Python.
+    Every tuning parameter is required; the ``fit_stalign_*`` functions resolve them from
+    the ``Stalign*Params`` schemas in :mod:`squidpy.types`. Only the ``initial_velocity`` /
+    ``velocity_grid`` / ``points_*`` sentinels default to ``None``, meaning "not supplied".
 
-    Every tuning parameter is required: the defaults live in the ``Stalign*Params`` schemas
-    in :mod:`squidpy.types`, so they exist in exactly one place, and the ``fit_stalign_*``
-    functions resolve them before calling in. Only the ``initial_velocity`` / ``velocity_grid`` / ``points_*``
-    sentinels default to ``None``, which means "not supplied" rather than a tuned value.
+    The rank is read off ``len(xI)``: two axes registers a section onto a section, three
+    registers a section into a reference volume. Nothing in the descent is rank-specific.
 
     Parameters
     ----------
@@ -538,9 +537,6 @@ def lddmm(
         than the previous step because the mixture weights only move every 5th iteration,
         so the objective plateaus and then jumps: a one-step test would stop on a
         plateau.
-
-    The rank is read off ``len(xI)``: two axes registers a section onto a section, three
-    registers a section into a reference volume. Nothing in the descent is rank-specific.
 
     Returns
     -------

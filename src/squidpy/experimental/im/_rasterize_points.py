@@ -3,11 +3,7 @@
 :func:`rasterize_points` turns points into a density image; :func:`sample_volume` is the
 inverse, reading an image or volume at arbitrary physical points.
 
-The numerics here are deliberately free of JAX: the STalign solver in
-:mod:`squidpy.experimental.tl` imports :func:`rasterize` and :func:`axis` from this
-module, so the primitive is usable (and installable) without the optional JAX extra.
-Sampling stays JAX-free for the same reason, and because :mod:`~squidpy.experimental.im`
-is the layer the solver imports *from*: reaching back into it would invert that.
+Kept free of JAX, so the primitives stay usable without the optional extra.
 """
 
 from __future__ import annotations
@@ -96,10 +92,8 @@ def rasterize(
 def _deposit(x: np.ndarray, y: np.ndarray, grid_x: np.ndarray, grid_y: np.ndarray, dx: float) -> np.ndarray:
     """Spread each point's unit mass bilinearly over its four neighbouring cells.
 
-    Snapping to the nearest cell instead would quantise every position by up to half a
-    cell before any blurring happens, which at a typical ``dx`` is comparable to the
-    features being registered. ``np.bincount`` keeps this a handful of vectorised passes
-    rather than a Python loop over points.
+    Snapping to the nearest cell would quantise every position by up to half a cell, which
+    at a typical ``dx`` is comparable to the features being registered.
     """
     n_rows, n_cols = grid_y.size, grid_x.size
     col_f = (x - grid_x[0]) / dx

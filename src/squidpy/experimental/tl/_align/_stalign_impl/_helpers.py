@@ -97,12 +97,7 @@ def explicit_axes(value: Sequence[npt.ArrayLike], shape: tuple[int, ...], name: 
 def affine_xy_to_rc(
     matrix: npt.ArrayLike, *, name: str = "initial_affine", ndim: int = 2
 ) -> tuple[jax.Array, jax.Array]:
-    """Split a homogeneous ``(x, y[, z])`` affine into array-order ``(linear, translation)``.
-
-    The solver works in array order (``(y, x)`` at rank 2, ``(z, y, x)`` at rank 3)
-    so conjugating by the axis reversal converts the caller's convention without them
-    having to think in the solver's.
-    """
+    """Split a homogeneous ``(x, y[, z])`` affine into array-order ``(linear, translation)``."""
     dtype = jax_dtype()
     affine_xy = jnp.asarray(matrix, dtype=dtype)
     if affine_xy.shape != (ndim + 1, ndim + 1):
