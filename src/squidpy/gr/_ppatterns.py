@@ -332,7 +332,7 @@ def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
         x_bar += xv[t]
     x_bar /= n
 
-    # sum_i (x_i - x_bar)^2, which is Moran's denominator and Geary's alike.
+    # sum_i (x_i - x_bar)^2: Moran's denominator, and Geary's.
     css = 0.0
     for t in range(n_nz):
         d = xv[t] - x_bar
@@ -352,8 +352,8 @@ def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
                 lag[tind[e]] += tdat[e] * xj
         for k in range(n):
             lag[k] -= x_bar * w_sum[k]
-        # sum_i lag[perm[i]] * z[i] = sum_{x[i]!=0} lag[perm[i]] * x[i] - x_bar * sum_k lag[k],
-        # the second term being permutation-invariant and so hoisted out of the loop.
+        # sum_i lag[perm[i]] * z[i] = sum_{x[i]!=0} lag[perm[i]] * x[i] - x_bar * sum_k lag[k].
+        # The second term is permutation-invariant, so it is hoisted out of the loop.
         # sum_k lag[k] = sum_j x[j] * colsum(g)[j] - x_bar * W: O(nnz), not O(n_cells).
         lag_tot = 0.0
         for t in range(n_nz):
@@ -436,22 +436,22 @@ def _score_perms(
         # one conversion here makes the per-feature extraction below ~180x cheaper.
         vals = vals.tocsr()
     n_features = vals.shape[0]
-    # The kernel walks g by column, so it needs the transpose: one O(nnz) pass, and it replaces
-    # the per-feature dense vector the row-wise form required.
+    # The kernel walks g by column, so it needs the transpose. One O(nnz) pass, and it removes
+    # the per-feature dense vector the row-wise form needed.
     gt = g.T.tocsr()
     tptr, tind, tdat = gt.indptr, gt.indices, gt.data
     # Constant features have a zero denominator; scanpy drops them and reports `nan`, so seed with it.
     score = np.full(n_features, np.nan, dtype=np.float64)
-    count_ge = np.zeros(n_features, dtype=np.int64)  # tally of `sims >= score`, exact by construction
-    # Permuted scores cluster around the observed one, so the mean and variance are accumulated as
-    # sums shifted by it. Both are plain sums: they merge across blocks by `+=`, and the final
-    # `s2/n - (s1/n)**2` has nothing to cancel because `s1/n` is the small residual.
+    count_ge = np.zeros(n_features, dtype=np.int64)  # integer tally of `sims >= score`, so exact
+    # Permuted scores cluster around the observed one, so mean and variance are accumulated as
+    # sums shifted by it. Both are plain sums, so they merge across blocks with `+=`, and
+    # `s2/n - (s1/n)**2` does not cancel: `s1/n` is the small residual.
     s1 = np.zeros(n_features, dtype=np.float64)
     s2 = np.zeros(n_features, dtype=np.float64)
     n_blocks = -(-n_perms // block)
-    # Features are independent and the kernel is nogil, so parallelism lives here rather than
-    # inside the kernel. Even with fewer features than workers, an in-kernel `prange` over
-    # permutations measured slower than a half-empty pool.
+    # Features are independent and the kernel is nogil, so the parallelism is here rather than
+    # inside the kernel. That held even with fewer features than workers, where an in-kernel
+    # `prange` over permutations still measured slower.
     pool_workers = max(1, min(n_jobs, n_features))
 
     def run_feature(m: int, perms: NDArrayA, first: bool) -> None:
@@ -484,9 +484,9 @@ def _score_perms(
             first = lo == 0
 
             def fill(chunk: range, perms: NDArrayA = perms, lo: int = lo) -> None:
-                # numpy releases the GIL inside `permutation`, so these draws spread over the same
-                # pool (as far as `pool_workers` allows). Row `i` always comes from `rngs[lo + i]`,
-                # so the draw never depends on how the work was scheduled.
+                # numpy releases the GIL inside `permutation`, so these draws also spread over
+                # the pool. Row `i` always comes from `rngs[lo + i]`, so the draw does not depend
+                # on how the work was scheduled.
                 for i in chunk:
                     perms[i] = rngs[lo + i].permutation(n_cells)
 
@@ -494,10 +494,10 @@ def _score_perms(
             # another is still filling it.
             thread_map(fill, _chunks(len(perms), pool_workers), n_jobs=pool_workers)
 
-            # Hand each worker a contiguous run rather than one item: a single feature is ~0.06 ms
-            # against a ~0.03 ms queue round-trip, so per-item dispatch would cost as much as the
-            # work. Each worker owns its own `m`, so every write lands in a distinct slot. The
-            # default binds this block's values rather than the loop's last ones.
+            # Each worker takes a contiguous run of features rather than one at a time; a single
+            # feature is short enough that per-item dispatch cost about as much as the work. Each
+            # `m` belongs to one worker, so the writes in `run_feature` never collide. The defaults
+            # bind this block's values rather than the loop's last ones.
             def run_chunk(chunk: range, perms: NDArrayA = perms, first: bool = first) -> int:
                 for m in chunk:
                     run_feature(m, perms, first)
