@@ -1,9 +1,6 @@
 """Container write-back for the public align functions.
 
-Holds the writes that are *not* plain array writes: registering a fitted affine as a
-SpatialData transformation, and encoding a fit for ``uns``.
-
-The fit estimators in :mod:`._stalign` / :mod:`._landmark` operate on plain arrays.
+Registering a fitted affine as a SpatialData transformation, and encoding a fit for ``uns``.
 """
 
 from __future__ import annotations

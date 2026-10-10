@@ -1,6 +1,3 @@
-"""Ported STalign JAX LDDMM solver
-
-Pure numerics only and these functions are gated by the jax requirement.
-"""
+"""Ported STalign JAX LDDMM solver. Pure numerics, and requires the ``jax`` extra."""
 
 from __future__ import annotations

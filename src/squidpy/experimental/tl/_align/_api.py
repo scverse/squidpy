@@ -1,23 +1,16 @@
 """The public alignment functions, built on the array-in / array-out estimators.
 
 Thin orchestrators: resolve the ``*_key`` arguments to in-memory arrays and call the
-estimator, which never sees a container. SpatialData transformation write-back lives in
-:mod:`._io`.
+estimator, which never sees a container.
 
-Fitting and writing are separate calls for STalign. A diffeomorphism has no SpatialData
-representation, so the fit cannot live in a container: it is the return value, and its
+STalign fits and writes in separate calls: a diffeomorphism has no SpatialData
+representation, so the fit is the return value and its
 :meth:`~squidpy.experimental.tl.StalignFit.transform` method writes.
-:func:`align_landmarks` fits and writes in one call, which its result being an affine, and
-so representable, makes honest.
+:func:`align_landmarks` does both in one call, its result being an affine.
 
-Writing takes ``inplace``, with the meaning scanpy gives it: ``inplace=False`` hands back
-what would have been written instead of writing it. A function that returns a fit takes no
-such flag: there is nothing to write yet, and ``copy`` in scanpy's sense (operate on a
-duplicated container) is a caller's ``.copy()`` away.
-
-``key_added`` always names a write target, defaulting to a conventional key the way
-scanpy's does: it is never the switch for whether to write. That is ``inplace``'s job,
-and one flag with one meaning beats two spellings of the same thing.
+``inplace=False`` hands back what would have been written, as in scanpy; a function
+returning a fit takes no such flag. ``key_added`` always names the write target, never
+whether to write.
 """
 
 from __future__ import annotations
@@ -347,9 +340,7 @@ def _element_axes(
 ) -> list[np.ndarray]:
     """Physical axes of an image element, read off its transformation.
 
-    The scale and translation the element carries into ``coordinate_system`` are what put
-    it in physical units, so the fit reads them rather than taking a ``*_scale`` argument
-    that could disagree with the container. Axis order matches the array's spatial axes.
+    Axis order matches the array's spatial axes.
     """
     from spatialdata.transformations import get_transformation
 
@@ -377,12 +368,9 @@ def _assert_table_coords_share_frame(
 ) -> None:
     """Refuse to transform ``obsm`` coordinates that are not in ``coordinate_system``.
 
-    The fit's units come from the image element's transformation, so the coordinates it is
-    applied to have to be in that same system. A table's ``obsm`` sits in the intrinsic
-    frame of the element it annotates, which only coincides when that element's transform
-    into ``coordinate_system`` is the identity. Checked rather than silently applied: the
-    result is plausible reference coordinates that are simply wrong, with nothing to
-    reveal it.
+    A table's ``obsm`` sits in the intrinsic frame of the element it annotates, which
+    coincides with ``coordinate_system`` only when that element's transform into it is the
+    identity. Otherwise the result is plausible but wrong coordinates.
     """
     from spatialdata.transformations import get_transformation
 
@@ -559,10 +547,9 @@ def align_landmarks(
         )
 
     if not isinstance(data_ref, AnnData | SpatialData):
-        # The landmarks themselves, not containers holding them. There is no key to address
-        # and nothing to write into, so this returns the matrix and refuses the arguments that
-        # only mean something for a container rather than silently ignoring them.
-        # `fit_landmarks` validates the pair, so nothing is re-checked here.
+        # The landmarks themselves, not containers holding them: there is no key to address
+        # and nothing to write into, so this returns the matrix and refuses the container-only
+        # arguments. `fit_landmarks` validates the pair, so nothing is re-checked here.
         if data_query is None:
             raise ValueError(
                 "`data_ref` is an array of landmarks, so `data_query` must be the matching "
@@ -595,9 +582,9 @@ def align_landmarks(
     )
 
     if key_added is not None and isinstance(query_container, SpatialData) and query_table is None:
-        # `key_added` writes to a table's `obsm`, and `table_key` is what names that table. But
-        # it also moves the landmark read into that table's `obsm`, so shapes-element landmarks
-        # can never be combined with `key_added`. Say so, rather than asking for `table_key`.
+        # `key_added` writes to a table's `obsm`, named by `table_key`. But `table_key` also
+        # moves the landmark read into that table's `obsm`, so shapes-element landmarks can
+        # never be combined with `key_added`.
         raise ValueError(
             "`key_added` writes into a table's `obsm`, so it needs `table_key`, which also reads the "
             "landmarks from that table. With the landmarks in shapes elements, use "
@@ -687,10 +674,7 @@ def _read_landmarks(
 def _coordinate_system_of(sdata: SpatialData, *, element: str, side: str) -> str:
     """The coordinate system the shapes element is annotated in.
 
-    Everything registered to it moves with the fit, so it has to be unambiguous.
-    Reading it off the element rather than taking it as an argument keeps the call site
-    to the ``*_key`` arguments, and it is the same element the user picked the
-    landmarks on.
+    Raises if it is ambiguous: everything registered to it moves with the fit.
     """
     from spatialdata.transformations import get_transformation
 
