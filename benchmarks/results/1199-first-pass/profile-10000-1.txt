@@ -1,0 +1,41 @@
+         78892 function calls (76221 primitive calls) in 0.036 seconds
+
+   Ordered by: cumulative time
+   List reduced from 1893 to 35 due to restriction <35>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+      2/1    0.000    0.000    0.032    0.032 _build.py:352(_resolve_data)
+    22/10    0.000    0.000    0.028    0.003 functools.py:930(wrapper)
+        1    0.000    0.000    0.022    0.022 centroids.py:108(_)
+        1    0.000    0.000    0.021    0.021 transform.py:429(_)
+       12    0.000    0.000    0.011    0.001 _accessor.py:62(wrapper)
+        5    0.000    0.000    0.011    0.002 base.py:368(compute)
+  506/351    0.000    0.000    0.010    0.000 functools.py:1010(__get__)
+        5    0.000    0.000    0.009    0.002 base.py:685(compute)
+       14    0.000    0.000    0.008    0.001 _collections.py:6(new_collection)
+        5    0.000    0.000    0.006    0.001 threaded.py:62(get)
+        8    0.000    0.000    0.006    0.001 _expr.py:928(optimize_until)
+        2    0.000    0.000    0.006    0.003 _collection.py:1391(to_dask_array)
+        2    0.000    0.000    0.006    0.003 _collection.py:1432(values)
+        2    0.000    0.000    0.006    0.003 _collection.py:992(map_partitions)
+        2    0.000    0.000    0.006    0.003 _collection.py:6165(map_partitions)
+        5    0.000    0.000    0.006    0.001 local.py:382(get_async)
+        2    0.000    0.000    0.005    0.003 _backends.py:23(create_array_collection)
+       16    0.000    0.000    0.005    0.000 _expr.py:445(simplify)
+    82/26    0.000    0.000    0.005    0.000 _expr.py:367(simplify_once)
+4313/2730    0.001    0.000    0.004    0.000 {built-in method builtins.len}
+       37    0.000    0.000    0.004    0.000 frame.py:4337(__getitem__)
+  265/232    0.000    0.000    0.003    0.000 utils.py:777(__call__)
+        5    0.000    0.000    0.003    0.001 _expr.py:559(__dask_graph__)
+2095/2062    0.000    0.000    0.003    0.000 {built-in method builtins.getattr}
+        1    0.000    0.000    0.003    0.003 relational_query.py:752(match_element_to_table)
+        1    0.000    0.000    0.003    0.003 relational_query.py:558(join_spatialelement_table)
+       72    0.000    0.000    0.003    0.000 _expr.py:60(__new__)
+        2    0.000    0.000    0.003    0.002 _expr.py:96(optimize)
+        2    0.000    0.000    0.003    0.002 _expr.py:903(optimize)
+        6    0.000    0.000    0.003    0.001 _expr.py:437(optimize)
+       11    0.000    0.000    0.003    0.000 _expr.py:263(_layer)
+        1    0.000    0.000    0.003    0.003 _collection.py:396(__len__)
+        1    0.000    0.000    0.003    0.003 base.py:1019(centroid)
+        1    0.000    0.000    0.003    0.003 base.py:90(_delegate_property)
+       72    0.000    0.000    0.003    0.000 series.py:369(__init__)
