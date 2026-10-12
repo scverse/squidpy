@@ -1,0 +1,934 @@
+{
+  "git_sha": "704348fcd6418af5deb051fe09050321b88b20c1",
+  "git_dirty": true,
+  "source_sha256": {
+    "src/squidpy/gr/_build.py": "75cd452c15827fd260d7b5f81a5f2b503e8bb0cbcbefd1ff820b0fa8c889d9fb",
+    "benchmarks/bench_spatial_neighbors_input.py": "6b7a9581f18f4d533d5764d50bd9b8d13139036d1a1a3f860339c85e4f362c00"
+  },
+  "interpreter": "python",
+  "hardware": {
+    "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+    "machine": "x86_64",
+    "logical_cpus": 5
+  },
+  "thread_environment": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMBA_NUM_THREADS": "1"
+  },
+  "parameters": {
+    "cases": [
+      "10000:1",
+      "100000:1",
+      "100000:20"
+    ],
+    "repeats": 5,
+    "radius": 1.6,
+    "vertices": 16,
+    "seed": 1199,
+    "output": "benchmarks/results/1199-coordinate-reuse",
+    "worker": null,
+    "cells": null,
+    "regions": null
+  },
+  "method": {
+    "density": 1.0,
+    "polygon_radius": 0.25,
+    "coordinate_system": "global (Identity)",
+    "copy": true,
+    "n_jobs": 1,
+    "expression_matrix": "absent",
+    "coordinate_sources": [
+      "SpatialData elements",
+      "SpatialData table",
+      "AnnData coordinates"
+    ],
+    "timing": "warm process; existing coordinates; rotating repeated-path order",
+    "memory": "separate process per input type; both prepared inputs resident; sampled RSS"
+  },
+  "cases": [
+    {
+      "timing": {
+        "cells": 10000,
+        "regions": 1,
+        "coordinate_preparation_s": 0.15202647799742408,
+        "python": "3.12.14",
+        "source_path": "src/squidpy/__init__.py",
+        "packages": {
+          "spatialdata": "0.8.0",
+          "anndata": "0.13.4",
+          "numpy": "2.5.4",
+          "pandas": "3.0.6",
+          "scipy": "1.18.1",
+          "scikit-learn": "1.9.1",
+          "shapely": "2.2.0",
+          "dask": "2026.8.0"
+        },
+        "samples": [
+          {
+            "kind": "spatialdata_first_graph",
+            "trial": 0,
+            "total_s": 0.45183240399637725,
+            "resolve_s": 0.20591254798637237,
+            "graph_s": 0.24579564899613615,
+            "centroid_calls": 1,
+            "matrix_nnz": 79666,
+            "nonzero_connections": 79666
+          },
+          {
+            "kind": "spatialdata_table_first_graph",
+            "trial": 0,
+            "total_s": 0.2622578909940785,
+            "resolve_s": 0.03290657000616193,
+            "graph_s": 0.22882185599883087,
+            "centroid_calls": 0,
+            "matrix_nnz": 79666,
+            "nonzero_connections": 79666
+          },
+          {
+            "kind": "spatialdata_repeat",
+            "trial": 1,
+            "total_s": 0.4728917739994358,
+            "resolve_s": 0.24733796100190375,
+            "graph_s": 0.2254364130058093,
+            "centroid_calls": 1,
+            "matrix_nnz": 79666,
+            "nonzero_connections": 79666
+          },
+          {
+            "kind": "spatialdata_table_repeat",
+            "trial": 1,
+            "total_s": 0.2729280889907386,
+            "resolve_s": 0.022170367010403425,
+            "graph_s": 0.2505510260089068,
+            "centroid_calls": 0,
+            "matrix_nnz": 79666,
+            "nonzero_connections": 79666
+          },
+          {
+            "kind": "anndata_coordinates",
+            "trial": 1,
+            "total_s": 0.30750313099997584,
+            "resolve_s": 3.955996362492442e-06,
+            "graph_s": 0.3065161690028617,
+            "centroid_calls": 0,
+            "matrix_nnz": 79666,
+            "nonzero_connections": 79666
+          },
+          {
+            "kind": "spatialdata_table_repeat",
+            "trial": 2,
+            "total_s": 0.39162027000566013,
+            "resolve_s": 0.03600596099568065,
+            "graph_s": 0.34663639499922283,
+            "centroid_calls": 0,
+            "matrix_nnz": 79666,
+            "nonzero_connections": 79666
+          },
+          {
+            "kind": "anndata_coordinates",
+            "trial": 2,
+            "total_s": 0.28770514999632724,
+            "resolve_s": 3.249995643272996e-06,
+            "graph_s": 0.28751829400425777,
+            "centroid_calls": 0,
+            "matrix_nnz": 79666,
+            "nonzero_connections": 79666
+          },
+          {
+            "kind": "spatialdata_repeat",
+            "trial": 2,
+            "total_s": 1.0971634489978896,
+            "resolve_s": 0.48269172399886884,
+            "graph_s": 0.613478411003598,
+            "centroid_calls": 1,
+            "matrix_nnz": 79666,
+            "nonzero_connections": 79666
+          },
+          {
+            "kind": "anndata_coordinates",
+            "trial": 3,
+            "total_s": 0.48593696899479255,
+            "resolve_s": 2.6679917937144637e-06,
+            "graph_s": 0.4858557810075581,
+            "centroid_calls": 0,
+            "matrix_nnz": 79666,
+            "nonzero_connections": 79666
+          },
+          {
+            "kind": "spatialdata_repeat",
+            "trial": 3,
+            "total_s": 0.6210555090074195,
+            "resolve_s": 0.35328647898859344,
+            "graph_s": 0.2676452420128044,
+            "centroid_calls": 1,
+            "matrix_nnz": 79666,
+            "nonzero_connections": 79666
+          },
+          {
+            "kind": "spatialdata_table_repeat",
+            "trial": 3,
+            "total_s": 0.22402653899916913,
+            "resolve_s": 0.045746561998385005,
+            "graph_s": 0.17796763200021815,
+            "centroid_calls": 0,
+            "matrix_nnz": 79666,
+            "nonzero_connections": 79666
+          },
+          {
+            "kind": "spatialdata_repeat",
+            "trial": 4,
+            "total_s": 1.2584441649960354,
+            "resolve_s": 0.37745292999898084,
+            "graph_s": 0.879729150008643,
+            "centroid_calls": 1,
+            "matrix_nnz": 79666,
+            "nonzero_connections": 79666
+          },
+          {
+            "kind": "spatialdata_table_repeat",
+            "trial": 4,
+            "total_s": 0.2720052399963606,
+            "resolve_s": 0.023293631995329633,
+            "graph_s": 0.24858683900674805,
+            "centroid_calls": 0,
+            "matrix_nnz": 79666,
+            "nonzero_connections": 79666
+          },
+          {
+            "kind": "anndata_coordinates",
+            "trial": 4,
+            "total_s": 0.2433721989946207,
+            "resolve_s": 2.4300097720697522e-06,
+            "graph_s": 0.2432985329942312,
+            "centroid_calls": 0,
+            "matrix_nnz": 79666,
+            "nonzero_connections": 79666
+          },
+          {
+            "kind": "spatialdata_table_repeat",
+            "trial": 5,
+            "total_s": 0.31044016299711075,
+            "resolve_s": 0.037809346002177335,
+            "graph_s": 0.27033481300168205,
+            "centroid_calls": 0,
+            "matrix_nnz": 79666,
+            "nonzero_connections": 79666
+          },
+          {
+            "kind": "anndata_coordinates",
+            "trial": 5,
+            "total_s": 0.2203373670054134,
+            "resolve_s": 2.7579953894019127e-06,
+            "graph_s": 0.22023334201367106,
+            "centroid_calls": 0,
+            "matrix_nnz": 79666,
+            "nonzero_connections": 79666
+          },
+          {
+            "kind": "spatialdata_repeat",
+            "trial": 5,
+            "total_s": 0.4652356299920939,
+            "resolve_s": 0.23302574901026674,
+            "graph_s": 0.23208898499433417,
+            "centroid_calls": 1,
+            "matrix_nnz": 79666,
+            "nonzero_connections": 79666
+          }
+        ],
+        "equivalence": "passed",
+        "input_preservation": "passed"
+      },
+      "memory_spatialdata": {
+        "cells": 10000,
+        "regions": 1,
+        "coordinate_preparation_s": 0.7629316439997638,
+        "python": "3.12.14",
+        "source_path": "src/squidpy/__init__.py",
+        "packages": {
+          "spatialdata": "0.8.0",
+          "anndata": "0.13.4",
+          "numpy": "2.5.4",
+          "pandas": "3.0.6",
+          "scipy": "1.18.1",
+          "scikit-learn": "1.9.1",
+          "shapely": "2.2.0",
+          "dask": "2026.8.0"
+        },
+        "kind": "memory_spatialdata",
+        "baseline_rss_mib": 366.39453125,
+        "sampled_peak_rss_mib": 375.57421875,
+        "sampled_increment_mib": 9.1796875,
+        "sampling_interval_ms": 2,
+        "matrix_nnz": 79666
+      },
+      "memory_spatialdata_table": {
+        "cells": 10000,
+        "regions": 1,
+        "coordinate_preparation_s": 0.10994342499179766,
+        "python": "3.12.14",
+        "source_path": "src/squidpy/__init__.py",
+        "packages": {
+          "spatialdata": "0.8.0",
+          "anndata": "0.13.4",
+          "numpy": "2.5.4",
+          "pandas": "3.0.6",
+          "scipy": "1.18.1",
+          "scikit-learn": "1.9.1",
+          "shapely": "2.2.0",
+          "dask": "2026.8.0"
+        },
+        "kind": "memory_spatialdata_table",
+        "baseline_rss_mib": 366.3984375,
+        "sampled_peak_rss_mib": 374.36328125,
+        "sampled_increment_mib": 7.96484375,
+        "sampling_interval_ms": 2,
+        "matrix_nnz": 79666
+      },
+      "memory_anndata": {
+        "cells": 10000,
+        "regions": 1,
+        "coordinate_preparation_s": 0.15832105099980254,
+        "python": "3.12.14",
+        "source_path": "src/squidpy/__init__.py",
+        "packages": {
+          "spatialdata": "0.8.0",
+          "anndata": "0.13.4",
+          "numpy": "2.5.4",
+          "pandas": "3.0.6",
+          "scipy": "1.18.1",
+          "scikit-learn": "1.9.1",
+          "shapely": "2.2.0",
+          "dask": "2026.8.0"
+        },
+        "kind": "memory_anndata",
+        "baseline_rss_mib": 366.37109375,
+        "sampled_peak_rss_mib": 376.24609375,
+        "sampled_increment_mib": 9.875,
+        "sampling_interval_ms": 2,
+        "matrix_nnz": 79666
+      },
+      "medians": {
+        "spatialdata_first_graph": {
+          "total_s": 0.45183240399637725,
+          "resolve_s": 0.20591254798637237,
+          "graph_s": 0.24579564899613615,
+          "centroid_calls": 1
+        },
+        "spatialdata_table_first_graph": {
+          "total_s": 0.2622578909940785,
+          "resolve_s": 0.03290657000616193,
+          "graph_s": 0.22882185599883087,
+          "centroid_calls": 0
+        },
+        "spatialdata_repeat": {
+          "total_s": 0.6210555090074195,
+          "resolve_s": 0.35328647898859344,
+          "graph_s": 0.2676452420128044,
+          "centroid_calls": 1
+        },
+        "spatialdata_table_repeat": {
+          "total_s": 0.2729280889907386,
+          "resolve_s": 0.03600596099568065,
+          "graph_s": 0.2505510260089068,
+          "centroid_calls": 0
+        },
+        "anndata_coordinates": {
+          "total_s": 0.28770514999632724,
+          "resolve_s": 2.7579953894019127e-06,
+          "graph_s": 0.28751829400425777,
+          "centroid_calls": 0
+        }
+      }
+    },
+    {
+      "timing": {
+        "cells": 100000,
+        "regions": 1,
+        "coordinate_preparation_s": 0.674671237997245,
+        "python": "3.12.14",
+        "source_path": "src/squidpy/__init__.py",
+        "packages": {
+          "spatialdata": "0.8.0",
+          "anndata": "0.13.4",
+          "numpy": "2.5.4",
+          "pandas": "3.0.6",
+          "scipy": "1.18.1",
+          "scikit-learn": "1.9.1",
+          "shapely": "2.2.0",
+          "dask": "2026.8.0"
+        },
+        "samples": [
+          {
+            "kind": "spatialdata_first_graph",
+            "trial": 0,
+            "total_s": 2.534570542993606,
+            "resolve_s": 0.3761283139901934,
+            "graph_s": 2.1582885179959703,
+            "centroid_calls": 1,
+            "matrix_nnz": 803176,
+            "nonzero_connections": 803176
+          },
+          {
+            "kind": "spatialdata_table_first_graph",
+            "trial": 0,
+            "total_s": 2.303023870001198,
+            "resolve_s": 0.08258034099708311,
+            "graph_s": 2.2190185739891604,
+            "centroid_calls": 0,
+            "matrix_nnz": 803176,
+            "nonzero_connections": 803176
+          },
+          {
+            "kind": "spatialdata_repeat",
+            "trial": 1,
+            "total_s": 3.232323529999121,
+            "resolve_s": 0.34304247998807114,
+            "graph_s": 2.887530785999843,
+            "centroid_calls": 1,
+            "matrix_nnz": 803176,
+            "nonzero_connections": 803176
+          },
+          {
+            "kind": "spatialdata_table_repeat",
+            "trial": 1,
+            "total_s": 2.541684206997161,
+            "resolve_s": 0.11704705499869306,
+            "graph_s": 2.4244828340015374,
+            "centroid_calls": 0,
+            "matrix_nnz": 803176,
+            "nonzero_connections": 803176
+          },
+          {
+            "kind": "anndata_coordinates",
+            "trial": 1,
+            "total_s": 1.7798896849999437,
+            "resolve_s": 2.329994458705187e-06,
+            "graph_s": 1.7798135630000615,
+            "centroid_calls": 0,
+            "matrix_nnz": 803176,
+            "nonzero_connections": 803176
+          },
+          {
+            "kind": "spatialdata_table_repeat",
+            "trial": 2,
+            "total_s": 1.8486283620004542,
+            "resolve_s": 0.05694841900549363,
+            "graph_s": 1.7914544060040498,
+            "centroid_calls": 0,
+            "matrix_nnz": 803176,
+            "nonzero_connections": 803176
+          },
+          {
+            "kind": "anndata_coordinates",
+            "trial": 2,
+            "total_s": 1.5988884329999564,
+            "resolve_s": 2.335000317543745e-06,
+            "graph_s": 1.598823322012322,
+            "centroid_calls": 0,
+            "matrix_nnz": 803176,
+            "nonzero_connections": 803176
+          },
+          {
+            "kind": "spatialdata_repeat",
+            "trial": 2,
+            "total_s": 2.4183316560083767,
+            "resolve_s": 0.26122245799342636,
+            "graph_s": 2.1559611779957777,
+            "centroid_calls": 1,
+            "matrix_nnz": 803176,
+            "nonzero_connections": 803176
+          },
+          {
+            "kind": "anndata_coordinates",
+            "trial": 3,
+            "total_s": 2.6546046220028074,
+            "resolve_s": 2.531000063754618e-06,
+            "graph_s": 2.6544673290045466,
+            "centroid_calls": 0,
+            "matrix_nnz": 803176,
+            "nonzero_connections": 803176
+          },
+          {
+            "kind": "spatialdata_repeat",
+            "trial": 3,
+            "total_s": 2.3316111019958043,
+            "resolve_s": 0.30480307499237824,
+            "graph_s": 2.0254560019966448,
+            "centroid_calls": 1,
+            "matrix_nnz": 803176,
+            "nonzero_connections": 803176
+          },
+          {
+            "kind": "spatialdata_table_repeat",
+            "trial": 3,
+            "total_s": 1.9603404899971792,
+            "resolve_s": 0.08969400500063784,
+            "graph_s": 1.8697675000003073,
+            "centroid_calls": 0,
+            "matrix_nnz": 803176,
+            "nonzero_connections": 803176
+          },
+          {
+            "kind": "spatialdata_repeat",
+            "trial": 4,
+            "total_s": 2.0528068560088286,
+            "resolve_s": 0.2480228999920655,
+            "graph_s": 1.8035573519882746,
+            "centroid_calls": 1,
+            "matrix_nnz": 803176,
+            "nonzero_connections": 803176
+          },
+          {
+            "kind": "spatialdata_table_repeat",
+            "trial": 4,
+            "total_s": 2.9697782620060025,
+            "resolve_s": 0.060506371009978466,
+            "graph_s": 2.9037675199942896,
+            "centroid_calls": 0,
+            "matrix_nnz": 803176,
+            "nonzero_connections": 803176
+          },
+          {
+            "kind": "anndata_coordinates",
+            "trial": 4,
+            "total_s": 7.4978843889985,
+            "resolve_s": 2.5619956431910396e-06,
+            "graph_s": 7.497670029988512,
+            "centroid_calls": 0,
+            "matrix_nnz": 803176,
+            "nonzero_connections": 803176
+          },
+          {
+            "kind": "spatialdata_table_repeat",
+            "trial": 5,
+            "total_s": 5.036594083008822,
+            "resolve_s": 0.15800933400169015,
+            "graph_s": 4.875057462006225,
+            "centroid_calls": 0,
+            "matrix_nnz": 803176,
+            "nonzero_connections": 803176
+          },
+          {
+            "kind": "anndata_coordinates",
+            "trial": 5,
+            "total_s": 2.322077116012224,
+            "resolve_s": 2.224012860096991e-06,
+            "graph_s": 2.322005017005722,
+            "centroid_calls": 0,
+            "matrix_nnz": 803176,
+            "nonzero_connections": 803176
+          },
+          {
+            "kind": "spatialdata_repeat",
+            "trial": 5,
+            "total_s": 3.011931539993384,
+            "resolve_s": 0.5121281140018255,
+            "graph_s": 2.4992328719963552,
+            "centroid_calls": 1,
+            "matrix_nnz": 803176,
+            "nonzero_connections": 803176
+          }
+        ],
+        "equivalence": "passed",
+        "input_preservation": "passed"
+      },
+      "memory_spatialdata": {
+        "cells": 100000,
+        "regions": 1,
+        "coordinate_preparation_s": 0.5813565779972123,
+        "python": "3.12.14",
+        "source_path": "src/squidpy/__init__.py",
+        "packages": {
+          "spatialdata": "0.8.0",
+          "anndata": "0.13.4",
+          "numpy": "2.5.4",
+          "pandas": "3.0.6",
+          "scipy": "1.18.1",
+          "scikit-learn": "1.9.1",
+          "shapely": "2.2.0",
+          "dask": "2026.8.0"
+        },
+        "kind": "memory_spatialdata",
+        "baseline_rss_mib": 488.84375,
+        "sampled_peak_rss_mib": 540.08203125,
+        "sampled_increment_mib": 51.23828125,
+        "sampling_interval_ms": 2,
+        "matrix_nnz": 803176
+      },
+      "memory_spatialdata_table": {
+        "cells": 100000,
+        "regions": 1,
+        "coordinate_preparation_s": 0.5147796480014222,
+        "python": "3.12.14",
+        "source_path": "src/squidpy/__init__.py",
+        "packages": {
+          "spatialdata": "0.8.0",
+          "anndata": "0.13.4",
+          "numpy": "2.5.4",
+          "pandas": "3.0.6",
+          "scipy": "1.18.1",
+          "scikit-learn": "1.9.1",
+          "shapely": "2.2.0",
+          "dask": "2026.8.0"
+        },
+        "kind": "memory_spatialdata_table",
+        "baseline_rss_mib": 489.98828125,
+        "sampled_peak_rss_mib": 545.2734375,
+        "sampled_increment_mib": 55.28515625,
+        "sampling_interval_ms": 2,
+        "matrix_nnz": 803176
+      },
+      "memory_anndata": {
+        "cells": 100000,
+        "regions": 1,
+        "coordinate_preparation_s": 2.155047096995986,
+        "python": "3.12.14",
+        "source_path": "src/squidpy/__init__.py",
+        "packages": {
+          "spatialdata": "0.8.0",
+          "anndata": "0.13.4",
+          "numpy": "2.5.4",
+          "pandas": "3.0.6",
+          "scipy": "1.18.1",
+          "scikit-learn": "1.9.1",
+          "shapely": "2.2.0",
+          "dask": "2026.8.0"
+        },
+        "kind": "memory_anndata",
+        "baseline_rss_mib": 487.58984375,
+        "sampled_peak_rss_mib": 541.90625,
+        "sampled_increment_mib": 54.31640625,
+        "sampling_interval_ms": 2,
+        "matrix_nnz": 803176
+      },
+      "medians": {
+        "spatialdata_first_graph": {
+          "total_s": 2.534570542993606,
+          "resolve_s": 0.3761283139901934,
+          "graph_s": 2.1582885179959703,
+          "centroid_calls": 1
+        },
+        "spatialdata_table_first_graph": {
+          "total_s": 2.303023870001198,
+          "resolve_s": 0.08258034099708311,
+          "graph_s": 2.2190185739891604,
+          "centroid_calls": 0
+        },
+        "spatialdata_repeat": {
+          "total_s": 2.4183316560083767,
+          "resolve_s": 0.30480307499237824,
+          "graph_s": 2.1559611779957777,
+          "centroid_calls": 1
+        },
+        "spatialdata_table_repeat": {
+          "total_s": 2.541684206997161,
+          "resolve_s": 0.08969400500063784,
+          "graph_s": 2.4244828340015374,
+          "centroid_calls": 0
+        },
+        "anndata_coordinates": {
+          "total_s": 2.322077116012224,
+          "resolve_s": 2.335000317543745e-06,
+          "graph_s": 2.322005017005722,
+          "centroid_calls": 0
+        }
+      }
+    },
+    {
+      "timing": {
+        "cells": 100000,
+        "regions": 20,
+        "coordinate_preparation_s": 6.8806479019986,
+        "python": "3.12.14",
+        "source_path": "src/squidpy/__init__.py",
+        "packages": {
+          "spatialdata": "0.8.0",
+          "anndata": "0.13.4",
+          "numpy": "2.5.4",
+          "pandas": "3.0.6",
+          "scipy": "1.18.1",
+          "scikit-learn": "1.9.1",
+          "shapely": "2.2.0",
+          "dask": "2026.8.0"
+        },
+        "samples": [
+          {
+            "kind": "spatialdata_first_graph",
+            "trial": 0,
+            "total_s": 4.512674037992838,
+            "resolve_s": 2.8451289939985145,
+            "graph_s": 1.6673659219959518,
+            "centroid_calls": 20,
+            "matrix_nnz": 789290,
+            "nonzero_connections": 789290
+          },
+          {
+            "kind": "spatialdata_table_first_graph",
+            "trial": 0,
+            "total_s": 2.039315804009675,
+            "resolve_s": 0.21194156000274234,
+            "graph_s": 1.8271633590047713,
+            "centroid_calls": 0,
+            "matrix_nnz": 789290,
+            "nonzero_connections": 789290
+          },
+          {
+            "kind": "spatialdata_repeat",
+            "trial": 1,
+            "total_s": 4.560599703996559,
+            "resolve_s": 2.584325934003573,
+            "graph_s": 1.975218648003647,
+            "centroid_calls": 20,
+            "matrix_nnz": 789290,
+            "nonzero_connections": 789290
+          },
+          {
+            "kind": "spatialdata_table_repeat",
+            "trial": 1,
+            "total_s": 2.0804453210002976,
+            "resolve_s": 0.21438694099197164,
+            "graph_s": 1.8647163740097312,
+            "centroid_calls": 0,
+            "matrix_nnz": 789290,
+            "nonzero_connections": 789290
+          },
+          {
+            "kind": "anndata_coordinates",
+            "trial": 1,
+            "total_s": 2.336970869000652,
+            "resolve_s": 2.4500041035935283e-06,
+            "graph_s": 2.336731798990513,
+            "centroid_calls": 0,
+            "matrix_nnz": 789290,
+            "nonzero_connections": 789290
+          },
+          {
+            "kind": "spatialdata_table_repeat",
+            "trial": 2,
+            "total_s": 2.3889075990009587,
+            "resolve_s": 0.22930962400278077,
+            "graph_s": 2.158650810000836,
+            "centroid_calls": 0,
+            "matrix_nnz": 789290,
+            "nonzero_connections": 789290
+          },
+          {
+            "kind": "anndata_coordinates",
+            "trial": 2,
+            "total_s": 2.2643327769910684,
+            "resolve_s": 2.4360051611438394e-06,
+            "graph_s": 2.2634060790005606,
+            "centroid_calls": 0,
+            "matrix_nnz": 789290,
+            "nonzero_connections": 789290
+          },
+          {
+            "kind": "spatialdata_repeat",
+            "trial": 2,
+            "total_s": 4.528471062993049,
+            "resolve_s": 2.9106490870035486,
+            "graph_s": 1.6176731339946855,
+            "centroid_calls": 20,
+            "matrix_nnz": 789290,
+            "nonzero_connections": 789290
+          },
+          {
+            "kind": "anndata_coordinates",
+            "trial": 3,
+            "total_s": 1.51554939399648,
+            "resolve_s": 3.440989530645311e-06,
+            "graph_s": 1.5146234879939584,
+            "centroid_calls": 0,
+            "matrix_nnz": 789290,
+            "nonzero_connections": 789290
+          },
+          {
+            "kind": "spatialdata_repeat",
+            "trial": 3,
+            "total_s": 4.020907958998578,
+            "resolve_s": 2.3142659470031504,
+            "graph_s": 1.7064999419962987,
+            "centroid_calls": 20,
+            "matrix_nnz": 789290,
+            "nonzero_connections": 789290
+          },
+          {
+            "kind": "spatialdata_table_repeat",
+            "trial": 3,
+            "total_s": 2.1801542709872592,
+            "resolve_s": 0.31342200200015213,
+            "graph_s": 1.8663395199982915,
+            "centroid_calls": 0,
+            "matrix_nnz": 789290,
+            "nonzero_connections": 789290
+          },
+          {
+            "kind": "spatialdata_repeat",
+            "trial": 4,
+            "total_s": 4.458222650006064,
+            "resolve_s": 2.2094047559949104,
+            "graph_s": 2.2485842850001063,
+            "centroid_calls": 20,
+            "matrix_nnz": 789290,
+            "nonzero_connections": 789290
+          },
+          {
+            "kind": "spatialdata_table_repeat",
+            "trial": 4,
+            "total_s": 1.6326642890053336,
+            "resolve_s": 0.26136412599589676,
+            "graph_s": 1.3711589629965601,
+            "centroid_calls": 0,
+            "matrix_nnz": 789290,
+            "nonzero_connections": 789290
+          },
+          {
+            "kind": "anndata_coordinates",
+            "trial": 4,
+            "total_s": 1.0488305339968065,
+            "resolve_s": 4.311994416639209e-06,
+            "graph_s": 1.04875289699703,
+            "centroid_calls": 0,
+            "matrix_nnz": 789290,
+            "nonzero_connections": 789290
+          },
+          {
+            "kind": "spatialdata_table_repeat",
+            "trial": 5,
+            "total_s": 1.2864268220000667,
+            "resolve_s": 0.1641167710040463,
+            "graph_s": 1.1221289249951951,
+            "centroid_calls": 0,
+            "matrix_nnz": 789290,
+            "nonzero_connections": 789290
+          },
+          {
+            "kind": "anndata_coordinates",
+            "trial": 5,
+            "total_s": 1.2042815669992706,
+            "resolve_s": 3.2449897844344378e-06,
+            "graph_s": 1.2041423230111832,
+            "centroid_calls": 0,
+            "matrix_nnz": 789290,
+            "nonzero_connections": 789290
+          },
+          {
+            "kind": "spatialdata_repeat",
+            "trial": 5,
+            "total_s": 7.115413546998752,
+            "resolve_s": 4.264996204001363,
+            "graph_s": 2.8498174419946736,
+            "centroid_calls": 20,
+            "matrix_nnz": 789290,
+            "nonzero_connections": 789290
+          }
+        ],
+        "equivalence": "passed",
+        "input_preservation": "passed"
+      },
+      "memory_spatialdata": {
+        "cells": 100000,
+        "regions": 20,
+        "coordinate_preparation_s": 2.1892831369914347,
+        "python": "3.12.14",
+        "source_path": "src/squidpy/__init__.py",
+        "packages": {
+          "spatialdata": "0.8.0",
+          "anndata": "0.13.4",
+          "numpy": "2.5.4",
+          "pandas": "3.0.6",
+          "scipy": "1.18.1",
+          "scikit-learn": "1.9.1",
+          "shapely": "2.2.0",
+          "dask": "2026.8.0"
+        },
+        "kind": "memory_spatialdata",
+        "baseline_rss_mib": 438.44921875,
+        "sampled_peak_rss_mib": 503.82421875,
+        "sampled_increment_mib": 65.375,
+        "sampling_interval_ms": 2,
+        "matrix_nnz": 789290
+      },
+      "memory_spatialdata_table": {
+        "cells": 100000,
+        "regions": 20,
+        "coordinate_preparation_s": 1.5659198469948024,
+        "python": "3.12.14",
+        "source_path": "src/squidpy/__init__.py",
+        "packages": {
+          "spatialdata": "0.8.0",
+          "anndata": "0.13.4",
+          "numpy": "2.5.4",
+          "pandas": "3.0.6",
+          "scipy": "1.18.1",
+          "scikit-learn": "1.9.1",
+          "shapely": "2.2.0",
+          "dask": "2026.8.0"
+        },
+        "kind": "memory_spatialdata_table",
+        "baseline_rss_mib": 438.3359375,
+        "sampled_peak_rss_mib": 498.328125,
+        "sampled_increment_mib": 59.9921875,
+        "sampling_interval_ms": 2,
+        "matrix_nnz": 789290
+      },
+      "memory_anndata": {
+        "cells": 100000,
+        "regions": 20,
+        "coordinate_preparation_s": 2.145187412999803,
+        "python": "3.12.14",
+        "source_path": "src/squidpy/__init__.py",
+        "packages": {
+          "spatialdata": "0.8.0",
+          "anndata": "0.13.4",
+          "numpy": "2.5.4",
+          "pandas": "3.0.6",
+          "scipy": "1.18.1",
+          "scikit-learn": "1.9.1",
+          "shapely": "2.2.0",
+          "dask": "2026.8.0"
+        },
+        "kind": "memory_anndata",
+        "baseline_rss_mib": 438.28515625,
+        "sampled_peak_rss_mib": 494.03515625,
+        "sampled_increment_mib": 55.75,
+        "sampling_interval_ms": 2,
+        "matrix_nnz": 789290
+      },
+      "medians": {
+        "spatialdata_first_graph": {
+          "total_s": 4.512674037992838,
+          "resolve_s": 2.8451289939985145,
+          "graph_s": 1.6673659219959518,
+          "centroid_calls": 20
+        },
+        "spatialdata_table_first_graph": {
+          "total_s": 2.039315804009675,
+          "resolve_s": 0.21194156000274234,
+          "graph_s": 1.8271633590047713,
+          "centroid_calls": 0
+        },
+        "spatialdata_repeat": {
+          "total_s": 4.528471062993049,
+          "resolve_s": 2.584325934003573,
+          "graph_s": 1.975218648003647,
+          "centroid_calls": 20
+        },
+        "spatialdata_table_repeat": {
+          "total_s": 2.0804453210002976,
+          "resolve_s": 0.22930962400278077,
+          "graph_s": 1.8647163740097312,
+          "centroid_calls": 0
+        },
+        "anndata_coordinates": {
+          "total_s": 1.51554939399648,
+          "resolve_s": 3.2449897844344378e-06,
+          "graph_s": 1.5146234879939584,
+          "centroid_calls": 0
+        }
+      }
+    }
+  ]
+}

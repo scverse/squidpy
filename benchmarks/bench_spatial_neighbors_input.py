@@ -1,10 +1,11 @@
-"""Measure issue #1199 without changing Squidpy's implementation.
+"""Measure element-derived and reused table coordinates for issue #1199.
 
 Run with a Python environment satisfying this checkout's runtime dependencies.
 The default cases use 10k/100k polygons and fixed density, radius and complexity.
 Each case runs in a fresh process. Imports, warmup and fixture preparation are
 excluded from timings; the first sample is a first graph call, not cold startup.
-Both inputs already contain identical, SpatialData-derived coordinates.
+SpatialData and AnnData inputs contain identical, SpatialData-derived coordinates.
+Compare SpatialData element and table modes with an AnnData reference.
 Memory samples run separately from timing/validation, with no reference graph.
 """
 
@@ -14,6 +15,7 @@ import argparse
 import cProfile
 import csv
 import gc
+import hashlib
 import importlib.metadata
 import json
 import os
@@ -77,20 +79,20 @@ def inputs(args):
     coordinate_preparation_s = time.perf_counter() - start
     assert library_key == "region"
     coords = resolved.obsm["spatial"]
-    # Existing coordinates deliberately do not stop today's SpatialData resolver.
+    # Prepare identical coordinates outside all graph timings.
     sdata.tables["table"].obsm["spatial"] = coords.copy()
     adata = AnnData(obs=resolved.obs.copy(), obsm={"spatial": coords.copy()})
     return sdata, adata, mapping, coordinate_preparation_s
 
 
-def graph(data, mapping, radius):
+def graph(data, mapping, radius, *, coordinate_source="elements"):
     from spatialdata import SpatialData
 
     from squidpy.gr import spatial_neighbors_radius
 
     kwargs = {"radius": radius, "copy": True, "n_jobs": 1, "library_key": "region"}
     if isinstance(data, SpatialData):
-        kwargs.update(table_key="table", elements_to_coordinate_systems=mapping)
+        kwargs.update(table_key="table", elements_to_coordinate_systems=mapping, coordinate_source=coordinate_source)
     return spatial_neighbors_radius(data, **kwargs)
 
 
@@ -102,7 +104,9 @@ def warmup(args):
     small, mapping = fixture(200, 1, args.seed, args.vertices)
     resolved, _ = _resolve_data(small, table_key="table", elements_to_coordinate_systems=mapping, copy=True)
     adata = AnnData(obs=resolved.obs.copy(), obsm={"spatial": resolved.obsm["spatial"]})
+    small.tables["table"].obsm["spatial"] = resolved.obsm["spatial"].copy()
     graph(small, mapping, args.radius)
+    graph(small, mapping, args.radius, coordinate_source="table")
     graph(adata, mapping, args.radius)
     gc.collect()
 
@@ -158,17 +162,26 @@ def timing(args, sdata, adata, mapping):
     before_obs = sdata.tables["table"].obs.copy()
     before_coords = sdata.tables["table"].obsm["spatial"].copy()
     samples = []
-    order = [("spatialdata_first_graph", sdata, 0)]
+    order = [
+        ("spatialdata_first_graph", sdata, "elements", 0),
+        ("spatialdata_table_first_graph", sdata, "table", 0),
+    ]
     for trial in range(1, args.repeats + 1):
-        pair = [("spatialdata_repeat", sdata, trial), ("anndata_coordinates", adata, trial)]
-        order.extend(pair if trial % 2 else pair[::-1])
-    for kind, data, trial in order:
+        group = [
+            ("spatialdata_repeat", sdata, "elements", trial),
+            ("spatialdata_table_repeat", sdata, "table", trial),
+            ("anndata_coordinates", adata, "elements", trial),
+        ]
+        # Rotate which path runs first, so no mode always benefits from call order.
+        offset = (trial - 1) % len(group)
+        order.extend(group[offset:] + group[:offset])
+    for kind, data, source, trial in order:
         gc.collect()
         with instrumentation() as metrics:
             start = time.perf_counter()
-            result = graph(data, mapping, args.radius)
+            result = graph(data, mapping, args.radius, coordinate_source=source)
             elapsed = time.perf_counter() - start
-        assert metrics["centroid_calls"] == (args.regions if data is sdata else 0)
+        assert metrics["centroid_calls"] == (args.regions if data is sdata and source == "elements" else 0)
         assert_graph_equal(result, reference)
         samples.append(
             {
@@ -194,12 +207,20 @@ def timing(args, sdata, adata, mapping):
     # Profile separately, so profiler overhead never enters timing samples.
     from squidpy.gr._build import _resolve_data
 
-    profile = cProfile.Profile()
-    profile.runcall(_resolve_data, sdata, table_key="table", elements_to_coordinate_systems=mapping, copy=True)
-    profile_path = Path(args.output) / f"profile-{args.cells}-{args.regions}.txt"
-    with profile_path.open("w") as stream:
-        pstats.Stats(profile, stream=stream).strip_dirs().sort_stats("cumulative").print_stats(35)
-    profile_path.write_text(profile_path.read_text().rstrip() + "\n")
+    for source in ("elements", "table"):
+        profile = cProfile.Profile()
+        profile.runcall(
+            _resolve_data,
+            sdata,
+            table_key="table",
+            elements_to_coordinate_systems=mapping,
+            coordinate_source=source,
+            copy=True,
+        )
+        profile_path = Path(args.output) / f"profile-{args.cells}-{args.regions}-{source}.txt"
+        with profile_path.open("w") as stream:
+            pstats.Stats(profile, stream=stream).strip_dirs().sort_stats("cumulative").print_stats(35)
+        profile_path.write_text(profile_path.read_text().rstrip() + "\n")
     return {"samples": samples, "equivalence": "passed", "input_preservation": "passed"}
 
 
@@ -219,7 +240,9 @@ def memory(args, sdata, adata, mapping):
     sampler = threading.Thread(target=sample, daemon=True)
     sampler.start()
     try:
-        result = graph(sdata if args.worker == "memory_spatialdata" else adata, mapping, args.radius)
+        data = adata if args.worker == "memory_anndata" else sdata
+        source = "table" if args.worker == "memory_spatialdata_table" else "elements"
+        result = graph(data, mapping, args.radius, coordinate_source=source)
         peak[0] = max(peak[0], process.memory_info().rss)
         nnz = int(result.connectivities.nnz)
     finally:
@@ -265,8 +288,10 @@ def main():
     parser.add_argument("--radius", type=float, default=1.6)
     parser.add_argument("--vertices", type=int, default=16)
     parser.add_argument("--seed", type=int, default=1199)
-    parser.add_argument("--output", default="benchmarks/results/1199-first-pass")
-    parser.add_argument("--worker", choices=["timing", "memory_spatialdata", "memory_anndata"])
+    parser.add_argument("--output", default="benchmarks/results/1199-coordinate-reuse")
+    parser.add_argument(
+        "--worker", choices=["timing", "memory_spatialdata", "memory_spatialdata_table", "memory_anndata"]
+    )
     parser.add_argument("--cells", type=int)
     parser.add_argument("--regions", type=int)
     args = parser.parse_args()
@@ -286,7 +311,7 @@ def main():
         if not (cells >= regions >= 1 and args.repeats >= 1 and args.vertices >= 3 and args.radius > 0):
             parser.error("Require cells >= regions >= 1, repeats >= 1, vertices >= 3 and radius > 0.")
         collected = {}
-        for mode in ("timing", "memory_spatialdata", "memory_anndata"):
+        for mode in ("timing", "memory_spatialdata", "memory_spatialdata_table", "memory_anndata"):
             command = [
                 sys.executable,
                 str(Path(__file__).resolve()),
@@ -315,7 +340,13 @@ def main():
             print(f"Completed {case} {mode}", flush=True)
         samples = collected["timing"]["samples"]
         medians = {}
-        for kind in ("spatialdata_first_graph", "spatialdata_repeat", "anndata_coordinates"):
+        for kind in (
+            "spatialdata_first_graph",
+            "spatialdata_table_first_graph",
+            "spatialdata_repeat",
+            "spatialdata_table_repeat",
+            "anndata_coordinates",
+        ):
             group = [sample for sample in samples if sample["kind"] == kind]
             medians[kind] = {
                 name: statistics.median(sample[name] for sample in group)
@@ -330,6 +361,11 @@ def main():
     sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repository, text=True).strip()
     summary = {
         "git_sha": sha,
+        "git_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=repository, text=True).strip()),
+        "source_sha256": {
+            name: hashlib.sha256((repository / name).read_bytes()).hexdigest()
+            for name in ("src/squidpy/gr/_build.py", "benchmarks/bench_spatial_neighbors_input.py")
+        },
         "interpreter": Path(sys.executable).name,
         "hardware": {"platform": platform.platform(), "machine": platform.machine(), "logical_cpus": os.cpu_count()},
         "thread_environment": {
@@ -344,7 +380,8 @@ def main():
             "copy": True,
             "n_jobs": 1,
             "expression_matrix": "absent",
-            "timing": "warm process; existing coordinates; alternating repeated-input order",
+            "coordinate_sources": ["SpatialData elements", "SpatialData table", "AnnData coordinates"],
+            "timing": "warm process; existing coordinates; rotating repeated-path order",
             "memory": "separate process per input type; both prepared inputs resident; sampled RSS",
         },
         "cases": case_results,
