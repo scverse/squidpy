@@ -1,0 +1,41 @@
+         78892 function calls (76221 primitive calls) in 0.085 seconds
+
+   Ordered by: cumulative time
+   List reduced from 1893 to 35 due to restriction <35>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+      2/1    0.000    0.000    0.078    0.078 _build.py:352(_resolve_data)
+    22/10    0.004    0.000    0.069    0.007 functools.py:930(wrapper)
+        4    0.000    0.000    0.027    0.007 decorators.py:73(wrapped)
+2095/2062    0.000    0.000    0.027    0.000 {built-in method builtins.getattr}
+        1    0.000    0.000    0.027    0.027 base.py:1019(centroid)
+        1    0.000    0.000    0.027    0.027 base.py:90(_delegate_property)
+        1    0.000    0.000    0.027    0.027 centroids.py:108(_)
+        1    0.000    0.000    0.027    0.027 array.py:617(centroid)
+        1    0.027    0.027    0.027    0.027 constructive.py:345(centroid)
+        1    0.000    0.000    0.024    0.024 transform.py:429(_)
+  506/351    0.000    0.000    0.013    0.000 functools.py:1010(__get__)
+       12    0.000    0.000    0.011    0.001 _accessor.py:62(wrapper)
+        5    0.000    0.000    0.011    0.002 base.py:368(compute)
+        5    0.000    0.000    0.009    0.002 base.py:685(compute)
+       14    0.000    0.000    0.008    0.001 _collections.py:6(new_collection)
+        1    0.000    0.000    0.008    0.008 base.py:6220(get_coordinates)
+        1    0.000    0.000    0.007    0.007 __init__.py:83(fn_compatible)
+        1    0.000    0.000    0.007    0.007 anndata.py:233(__init__)
+        1    0.000    0.000    0.007    0.007 anndata.py:354(_init_as_actual)
+        1    0.000    0.000    0.007    0.007 decorators.py:171(wrapper)
+        1    0.000    0.000    0.007    0.007 coordinates.py:197(get_coordinates)
+        1    0.007    0.007    0.007    0.007 {built-in method shapely.lib.get_coordinates}
+        8    0.000    0.000    0.007    0.001 _expr.py:928(optimize_until)
+        1    0.001    0.001    0.006    0.006 anndata.py:1590(_check_uniqueness)
+        5    0.000    0.000    0.006    0.001 threaded.py:62(get)
+        2    0.000    0.000    0.006    0.003 _collection.py:1391(to_dask_array)
+        2    0.000    0.000    0.006    0.003 _collection.py:1432(values)
+        2    0.000    0.000    0.006    0.003 _collection.py:992(map_partitions)
+        2    0.000    0.000    0.006    0.003 _collection.py:6165(map_partitions)
+       15    0.004    0.000    0.006    0.000 base.py:2457(is_unique)
+        5    0.000    0.000    0.006    0.001 local.py:382(get_async)
+        2    0.000    0.000    0.005    0.003 _backends.py:23(create_array_collection)
+        1    0.000    0.000    0.005    0.005 relational_query.py:752(match_element_to_table)
+        1    0.000    0.000    0.005    0.005 relational_query.py:558(join_spatialelement_table)
+       16    0.000    0.000    0.005    0.000 _expr.py:445(simplify)

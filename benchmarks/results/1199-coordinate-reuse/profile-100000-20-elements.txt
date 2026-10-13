@@ -1,0 +1,41 @@
+         1530449 function calls (1478448 primitive calls) in 7.845 seconds
+
+   Ordered by: cumulative time
+   List reduced from 1891 to 35 due to restriction <35>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+      2/1    0.008    0.004    6.718    6.718 _build.py:348(_resolve_data)
+   288/48    0.033    0.000    5.943    0.124 functools.py:907(wrapper)
+       20    0.174    0.009    5.892    0.295 centroids.py:108(_)
+       20    0.016    0.001    5.137    0.257 transform.py:429(_)
+10120/7020    0.043    0.000    2.940    0.000 functools.py:982(__get__)
+      240    0.006    0.000    2.532    0.011 _accessor.py:62(wrapper)
+      280    0.007    0.000    2.290    0.008 _collections.py:6(new_collection)
+      100    0.003    0.000    1.959    0.020 base.py:368(compute)
+      100    0.009    0.000    1.945    0.019 base.py:685(compute)
+84120/53196    0.086    0.000    1.307    0.000 {built-in method builtins.len}
+      160    0.009    0.000    1.267    0.008 _expr.py:928(optimize_until)
+       20    0.000    0.000    1.204    0.060 _collection.py:396(__len__)
+      100    0.005    0.000    1.160    0.012 threaded.py:62(get)
+      100    0.016    0.000    1.148    0.011 local.py:382(get_async)
+       40    0.000    0.000    1.123    0.028 _collection.py:1391(to_dask_array)
+5300/4640    0.035    0.000    1.122    0.000 utils.py:777(__call__)
+       40    0.000    0.000    1.117    0.028 _collection.py:1432(values)
+       40    0.001    0.000    1.113    0.028 _collection.py:992(map_partitions)
+       40    0.001    0.000    1.112    0.028 _collection.py:6165(map_partitions)
+      320    0.003    0.000    1.104    0.003 _expr.py:445(simplify)
+ 1640/520    0.040    0.000    1.068    0.002 _expr.py:367(simplify_once)
+        1    0.000    0.000    1.064    1.064 relational_query.py:752(match_element_to_table)
+        1    0.000    0.000    1.064    1.064 relational_query.py:558(join_spatialelement_table)
+  580/560    0.012    0.000    1.038    0.002 indexing.py:1192(__getitem__)
+       40    0.004    0.000    1.026    0.026 _backends.py:23(create_array_collection)
+      683    0.026    0.000    1.014    0.001 frame.py:4337(__getitem__)
+        1    0.000    0.000    0.936    0.936 relational_query.py:689(_call_join)
+        1    0.000    0.000    0.936    0.936 relational_query.py:516(__call__)
+        1    0.005    0.005    0.936    0.936 relational_query.py:293(_right_join_spatialelement_table)
+      140    0.004    0.000    0.881    0.006 _expr.py:2199(_meta)
+      540    0.041    0.000    0.775    0.001 indexing.py:1740(_getitem_axis)
+       20    0.007    0.000    0.743    0.037 relational_query.py:203(_get_masked_element)
+31641/29961    0.044    0.000    0.736    0.000 {built-in method builtins.hasattr}
+       40    0.000    0.000    0.733    0.018 _expr.py:96(optimize)
+       40    0.000    0.000    0.733    0.018 _expr.py:903(optimize)
