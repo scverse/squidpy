@@ -393,7 +393,6 @@ def _resolve_data(
             "The spatialdata table must annotate all elements keys. Some elements are missing or not ordered correctly, please check the `elements_to_coordinate_systems` dictionary."
         )
     if coordinate_source == "table":
-        _assert_spatial_basis(table, key=spatial_key)
         coords = table.obsm[spatial_key]
         if not isinstance(coords, np.ndarray) or coords.dtype.kind not in "iuf":
             raise TypeError(f"`table.obsm[{spatial_key!r}]` must be a real numeric NumPy array.")
@@ -419,7 +418,8 @@ def _resolve_data(
         # Graph construction only needs observations, coordinates and the uns keys
         # used by legacy graph dispatch. Do not copy or load expression matrices.
         table = AnnData(obs=table.obs.copy(), uns=table.uns.copy())
-    table.obsm[spatial_key] = coords
+    if copy or coordinate_source == "elements":
+        table.obsm[spatial_key] = coords
     return table, region_key
 
 
@@ -644,8 +644,8 @@ def spatial_neighbors_radius(
 
     Examples
     --------
-    Reuse coordinates already stored in a SpatialData table. They must be in the
-    desired coordinate system, with distances in the same units as ``radius``:
+    Reuse coordinates stored in a SpatialData table. The coordinates must already
+    be in the desired coordinate system and use the same units as ``radius``.
 
     >>> sq.gr.spatial_neighbors_radius(
     ...     sdata,

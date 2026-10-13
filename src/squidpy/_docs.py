@@ -442,20 +442,20 @@ elements_to_coordinate_systems
     A dictionary mapping element names of the SpatialData object to coordinate systems.
     The elements can be either Shapes or Labels. For compatibility, the spatialdata table must annotate
     all regions keys. Must not be ``None`` if ``adata`` is a :class:`spatialdata.SpatialData`.
-    With ``coordinate_source="table"``, the element names are still used for association and instance-order
-    checks, but the coordinate-system values are not used to transform coordinates.
+    With ``coordinate_source="table"``, the element names are used to check table associations and instance
+    order. Coordinates are read as stored; the coordinate-system values do not trigger a transformation.
 table_key
     Key in :attr:`spatialdata.SpatialData.tables` where the spatialdata table is stored. Must not be ``None`` if
     ``adata`` is a :class:`spatialdata.SpatialData`.
 coordinate_source
     Source of coordinates for :class:`spatialdata.SpatialData` inputs. ``"elements"`` (default) computes
     element centroids in the mapped coordinate systems and stores them under ``spatial_key``.
-    ``"table"`` reads existing coordinates from the selected table's ``obsm[spatial_key]`` without
-    computing centroids or transforming coordinates. The coordinates must be a real numeric NumPy array
-    of shape ``(n_obs, 2)``, in table observation order, with only finite values. They must already be in the
-    desired coordinate system and use the units expected by the graph builder. Missing or invalid coordinates
-    raise an error; there is no fallback to element centroids. For :class:`anndata.AnnData` inputs, both
-    valid values use the existing ``obsm[spatial_key]`` coordinates."""
+    ``"table"`` reads the selected table's existing ``obsm[spatial_key]`` coordinates, skipping centroid
+    computation and coordinate transformation. Supply a real numeric NumPy array of shape ``(n_obs, 2)``
+    with finite values and rows in table observation order. The coordinates must already be in the desired
+    coordinate system, with units appropriate for the graph builder. Missing or invalid coordinates raise
+    an error without falling back to element centroids. Both values use existing ``obsm[spatial_key]``
+    coordinates for :class:`anndata.AnnData` inputs."""
 _graph_common_params = """\
 percentile
     Percentile of the distances to use as threshold.
@@ -475,11 +475,11 @@ n_jobs
     Speedup is sub-linear (memory-bandwidth bound), so parallelism mainly pays off for many
     large libraries."""
 _spatial_neighbors_copy_notes = """\
-For SpatialData inputs, ``copy=True`` leaves the source table unchanged, using a lightweight temporary
-AnnData without copying or loading the expression matrix. In ``coordinate_source="table"`` mode, the
-temporary object also receives an independent copy of the coordinates. With ``copy=False``, graph results
-are saved to the selected table; ``"elements"`` writes computed coordinates to ``obsm[spatial_key]``,
-whereas ``"table"`` uses the existing coordinates."""
+For SpatialData inputs, ``copy=True`` builds the graph in a lightweight temporary AnnData and leaves
+the source table unchanged. The expression matrix is neither copied nor loaded. Table mode gives the
+temporary object its own copy of the coordinates. With ``copy=False``, graph results are saved to the
+selected table. Element mode writes computed coordinates to ``obsm[spatial_key]``; table mode uses
+the existing coordinates."""
 _spatial_neighbors_returns = (
     """\
 If ``copy = True``, returns a :class:`~squidpy.gr.SpatialNeighborsResult` with the

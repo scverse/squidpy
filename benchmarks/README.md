@@ -1,8 +1,8 @@
 # Spatial-neighbor input benchmark for issue #1199
 
 The first-pass baseline below measures the implementation at Git commit `f03069089ce7fdc45a513eef83598796073665ac`.
-No Squidpy runtime code was changed for that baseline. The AnnData path is a reference using
-already prepared coordinates, not a measured implementation of a new cache.
+That baseline uses unchanged Squidpy runtime code. The AnnData reference measures
+graph construction with already prepared coordinates; no new cache was measured.
 
 ## Method
 
@@ -41,9 +41,9 @@ time must not be labelled solely polygon-centroid computation.
 
 ## Sampled RSS
 
-Values are MiB. These are separate single-run snapshots, not timing-run memory
-measurements or allocation totals. The incremental column subtracts RSS just
-before graph construction from sampled peak RSS.
+Values are MiB, measured in separate single runs. The incremental column subtracts
+RSS just before graph construction from sampled peak RSS. These snapshots measure
+resident memory separately from the timing runs; they do not measure allocation totals.
 
 | Cells | Regions | SData baseline | SData peak | SData increment | AnnData baseline | AnnData peak | AnnData increment |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -85,13 +85,13 @@ Independent resolver profiles: [10k / 1 region](results/1199-first-pass/profile-
 
 ## Coordinate reuse implementation
 
-The updated implementation adds explicit `coordinate_source="table"` reuse to
-all six public spatial-neighbor interfaces. The default `"elements"` path still
-computes and transforms centroids. Table mode uses `obsm[spatial_key]` as stored:
-the caller supplies aligned, finite, real numeric NumPy coordinates in the
-desired coordinate system. Both paths retain region and instance association
-checks. `copy=True` copies coordinates into a lightweight temporary AnnData
-without copying the expression matrix.
+All six public spatial-neighbor interfaces accept `coordinate_source="table"`
+to reuse existing coordinates. The default `"elements"` path computes and
+transforms centroids. Table mode reads `obsm[spatial_key]` as stored, so the caller
+supplies aligned, finite, real numeric NumPy coordinates in the desired coordinate
+system. Region and instance association checks apply to both paths. With
+`copy=True`, coordinates are copied into a lightweight temporary AnnData;
+the expression matrix is not copied.
 
 This run compares SpatialData element mode, SpatialData table mode and the
 AnnData reference on the same prepared inputs. Five repeats rotate the first
@@ -101,9 +101,9 @@ graph matches the reference CSR structure and values (`rtol=atol=1e-12`).
 Both inputs remain unchanged. Table mode makes zero centroid calls in every
 sample, compared with one call per region for element mode.
 
-These measurements use Linux x86_64 and Python 3.12.14. Compare paths within
-this run; the historical macOS baseline above is not a before/after timing
-comparison on identical hardware. The measured code is an uncommitted
+These measurements use Linux x86_64 and Python 3.12.14. The paths in this run
+can be compared directly. The historical baseline above used macOS, so comparing
+the two runs would also include a hardware difference. The measured code is an uncommitted
 working-tree implementation based on `704348fcd6418af5deb051fe09050321b88b20c1`;
 `summary.json` records dirty status and SHA-256 hashes of the source and script.
 
@@ -118,11 +118,10 @@ element-mode total / table-mode total; values above one indicate faster table mo
 | 100,000 | 1 | 2.418332 | 0.304803 | 2.541684 | 0.089694 | 2.322077 | 0.95 |
 | 100,000 | 20 | 4.528471 | 2.584326 | 2.080445 | 0.229310 | 1.515549 | 2.18 |
 
-Input preparation is faster in all three cases (about 3.4–11.3 times). Total
+Input preparation is about 3.4–11.3 times faster across the three cases. Total
 repeated-graph time improves by about 2.3 times for 10k / 1 region and 2.2 times
-for 100k / 20 regions. The 100k / 1-region case does **not** show a total-time
-improvement: table mode is about 5% slower in this run, despite a faster
-resolver. Its graph-stage medians are 2.424483 s (table) versus 2.155961 s
+for 100k / 20 regions. For 100k / 1 region, table mode is about 5% slower overall
+despite a faster resolver. Its graph-stage medians are 2.424483 s (table) versus 2.155961 s
 (elements). Graph-stage timings vary even though the builder is unchanged;
 these five-repeat measurements do not establish a universal end-to-end speedup.
 The resolver includes association checks, coordinate validation/copying and
@@ -132,8 +131,9 @@ element processing; its savings must not be labelled solely centroid computation
 
 Each path runs once in its own fresh process, with both prepared inputs
 resident and no reference graph. RSS is sampled every 2 ms. Values are MiB;
-increments subtract the pre-graph baseline from the sampled peak. They are
-single-run observations, not allocation totals or exact peak-memory bounds.
+increments subtract the pre-graph baseline from the sampled peak. These single-run
+observations report sampled resident memory; they do not measure allocation totals
+or establish exact peak-memory bounds.
 
 | Cells | Regions | Elements baseline | Elements peak | Elements increment | Table baseline | Table peak | Table increment | AnnData baseline | AnnData peak | AnnData increment |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
