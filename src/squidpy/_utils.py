@@ -74,8 +74,8 @@ def _unique_order_preserving(
 
 
 def _callback_wrapper(chosen_runner: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-    numba.set_num_threads(1)
-    return chosen_runner(*args, **kwargs)
+    with numba_threads(1):
+        return chosen_runner(*args, **kwargs)
 
 
 class Signal(Enum):
@@ -113,8 +113,8 @@ def parallelize(
         Sequence of items to split into chunks.
     n_jobs
         Number of parallel jobs to use. `None` is serial and ``-1`` uses all available cores;
-        ``0`` and values below ``-1`` raise. If the function uses numba compiled functions, numba may use cores depending on the
-        number of threads set in the environment regardless of this argument.
+        ``0`` and values below ``-1`` raise. Each callback runs with Numba limited to one thread;
+        the previous thread count is restored when the callback returns or raises.
     n_split
         Split ``collection`` into ``n_split`` chunks.
         If <= 0, ``collection`` is assumed to be already split into chunks.
