@@ -102,6 +102,52 @@ def test_parallelize_cleans_up_progress_on_error(parallelize_resources, n_jobs, 
     assert not set(active_children()) - processes
 
 
+def test_parallelize_stops_progress_during_update(parallelize_resources, monkeypatch):
+    from tqdm.auto import tqdm as auto_tqdm
+    from tqdm.std import tqdm as std_tqdm
+
+    updating = threading.Event()
+    release = threading.Event()
+    bars, errors = [], []
+    original_update = std_tqdm.update
+    original_join = threading.Thread.join
+    error = ValueError("Callback failed after update")
+
+    def hold_update(bar, n=1):
+        bars.append(bar)
+        updating.set()
+        assert release.wait(10), "Progress update was not released"
+        return original_update(bar, n)
+
+    def release_update_before_join(thread, *args, **kwargs):
+        if thread.name == "ParallelizeUpdateThread":
+            release.set()
+        return original_join(thread, *args, **kwargs)
+
+    def callback(chunk, *, queue):
+        queue.put(Signal.UPDATE)
+        assert updating.wait(10), "Progress update did not start"
+        raise error
+
+    monkeypatch.setattr(std_tqdm, "update", hold_update)
+    monkeypatch.setattr(auto_tqdm, "update", hold_update)
+    monkeypatch.setattr(threading.Thread, "join", release_update_before_join)
+    monkeypatch.setattr(threading, "excepthook", lambda args: errors.append(args.exc_value))
+
+    try:
+        run = parallelize(callback, [1], n_jobs=1, backend="threading", show_progress_bar=True)
+        with pytest.raises(ValueError) as exc_info:
+            run()
+
+        assert exc_info.value is error
+        assert not errors
+        assert bars and all(bar.disable for bar in bars)
+    finally:
+        release.set()
+        for bar in bars:
+            bar.close()
+
+
 # Timeouts are also useful because some processes don't return in
 # in case of failure.
 

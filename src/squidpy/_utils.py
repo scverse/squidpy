@@ -60,7 +60,7 @@ def _cpu_count() -> int:
         return os.cpu_count() or 1
 
 
-class SigQueue(Queue["Signal"] if TYPE_CHECKING else Queue):  # type: ignore[misc]
+class SigQueue(Queue["Signal | None"] if TYPE_CHECKING else Queue):  # type: ignore[misc]
     """Signalling queue."""
 
 
@@ -170,23 +170,27 @@ def parallelize(
 
     def update(pbar: tqdm.std.tqdm, queue: SigQueue, n_total: int) -> None:
         n_finished = 0
-        while n_finished < n_total:
-            try:
-                res = queue.get()
-            except EOFError as e:
-                if not n_finished != n_total:
-                    raise RuntimeError(f"Finished only `{n_finished}` out of `{n_total}` tasks.") from e
-                break
+        try:
+            while n_finished < n_total:
+                try:
+                    res = queue.get()
+                except EOFError as e:
+                    if not n_finished != n_total:
+                        raise RuntimeError(f"Finished only `{n_finished}` out of `{n_total}` tasks.") from e
+                    break
 
-            assert isinstance(res, Signal), f"Invalid type `{type(res).__name__}`."
+                if res is None:
+                    break
+                assert isinstance(res, Signal), f"Invalid type `{type(res).__name__}`."
 
-            if res in (Signal.FINISH, Signal.UPDATE_FINISH):
-                n_finished += 1
-            if pbar is not None and res in (Signal.UPDATE, Signal.UPDATE_FINISH):
-                pbar.update()
+                if res in (Signal.FINISH, Signal.UPDATE_FINISH):
+                    n_finished += 1
+                if pbar is not None and res in (Signal.UPDATE, Signal.UPDATE_FINISH):
+                    pbar.update()
 
-        if pbar is not None:
-            pbar.close()
+        finally:
+            if pbar is not None:
+                pbar.close()
 
     chosen_runner = runner if use_runner else callback
 
@@ -217,11 +221,15 @@ def parallelize(
 
                 return res if extractor is None else extractor(res)
         finally:
-            if manager is not None:
-                # Unblock queue.get() if a callback did not send FINISH.
-                manager.shutdown()
-            if thread is not None:
-                thread.join()
+            try:
+                if thread is not None:
+                    # Stop the reader before closing its queue connection.
+                    if thread.is_alive():
+                        queue.put(None)
+                    thread.join()
+            finally:
+                if manager is not None:
+                    manager.shutdown()
 
     n_jobs = get_n_processes(n_jobs)
 
