@@ -193,27 +193,35 @@ def parallelize(
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         if pass_queue and show_progress_bar:
             pbar = None if tqdm is None else tqdm(total=col_len, unit=unit)
-            queue = Manager().Queue()
+            manager = Manager()
+            queue = manager.Queue()
             thread = Thread(target=update, args=(pbar, queue, len(collections)), name="ParallelizeUpdateThread")
             thread.start()
         else:
-            pbar, queue, thread = None, None, None
+            pbar, queue, thread, manager = None, None, None, None
         jl_kwargs = {"inner_max_num_threads": 1} if backend == "loky" else {}
-        with jl.parallel_config(backend, n_jobs=n_jobs, **jl_kwargs):
-            res = jl.Parallel(n_jobs=n_jobs, backend=backend)(
-                jl.delayed(_callback_wrapper)(
-                    *((chosen_runner, i, cs) if use_ixs else (chosen_runner, cs)),
-                    *args,
-                    **kwargs,
-                    queue=queue,
+        try:
+            with jl.parallel_config(backend, n_jobs=n_jobs, **jl_kwargs):
+                res = jl.Parallel(n_jobs=n_jobs, backend=backend)(
+                    jl.delayed(_callback_wrapper)(
+                        *((chosen_runner, i, cs) if use_ixs else (chosen_runner, cs)),
+                        *args,
+                        **kwargs,
+                        queue=queue,
+                    )
+                    for i, cs in enumerate(collections)
                 )
-                for i, cs in enumerate(collections)
-            )
 
+                if thread is not None:
+                    thread.join()
+
+                return res if extractor is None else extractor(res)
+        finally:
+            if manager is not None:
+                # Unblock queue.get() if a callback did not send FINISH.
+                manager.shutdown()
             if thread is not None:
                 thread.join()
-
-            return res if extractor is None else extractor(res)
 
     n_jobs = get_n_processes(n_jobs)
 
