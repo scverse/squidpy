@@ -60,7 +60,7 @@ def _cpu_count() -> int:
         return os.cpu_count() or 1
 
 
-class SigQueue(Queue["Signal"] if TYPE_CHECKING else Queue):  # type: ignore[misc]
+class SigQueue(Queue["Signal | None"] if TYPE_CHECKING else Queue):  # type: ignore[misc]
     """Signalling queue."""
 
 
@@ -170,50 +170,66 @@ def parallelize(
 
     def update(pbar: tqdm.std.tqdm, queue: SigQueue, n_total: int) -> None:
         n_finished = 0
-        while n_finished < n_total:
-            try:
-                res = queue.get()
-            except EOFError as e:
-                if not n_finished != n_total:
-                    raise RuntimeError(f"Finished only `{n_finished}` out of `{n_total}` tasks.") from e
-                break
+        try:
+            while n_finished < n_total:
+                try:
+                    res = queue.get()
+                except EOFError as e:
+                    if not n_finished != n_total:
+                        raise RuntimeError(f"Finished only `{n_finished}` out of `{n_total}` tasks.") from e
+                    break
 
-            assert isinstance(res, Signal), f"Invalid type `{type(res).__name__}`."
+                if res is None:
+                    break
+                assert isinstance(res, Signal), f"Invalid type `{type(res).__name__}`."
 
-            if res in (Signal.FINISH, Signal.UPDATE_FINISH):
-                n_finished += 1
-            if pbar is not None and res in (Signal.UPDATE, Signal.UPDATE_FINISH):
-                pbar.update()
+                if res in (Signal.FINISH, Signal.UPDATE_FINISH):
+                    n_finished += 1
+                if pbar is not None and res in (Signal.UPDATE, Signal.UPDATE_FINISH):
+                    pbar.update()
 
-        if pbar is not None:
-            pbar.close()
+        finally:
+            if pbar is not None:
+                pbar.close()
 
     chosen_runner = runner if use_runner else callback
 
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         if pass_queue and show_progress_bar:
             pbar = None if tqdm is None else tqdm(total=col_len, unit=unit)
-            queue = Manager().Queue()
+            manager = Manager()
+            queue = manager.Queue()
             thread = Thread(target=update, args=(pbar, queue, len(collections)), name="ParallelizeUpdateThread")
             thread.start()
         else:
-            pbar, queue, thread = None, None, None
+            pbar, queue, thread, manager = None, None, None, None
         jl_kwargs = {"inner_max_num_threads": 1} if backend == "loky" else {}
-        with jl.parallel_config(backend, n_jobs=n_jobs, **jl_kwargs):
-            res = jl.Parallel(n_jobs=n_jobs, backend=backend)(
-                jl.delayed(_callback_wrapper)(
-                    *((chosen_runner, i, cs) if use_ixs else (chosen_runner, cs)),
-                    *args,
-                    **kwargs,
-                    queue=queue,
+        try:
+            with jl.parallel_config(backend, n_jobs=n_jobs, **jl_kwargs):
+                res = jl.Parallel(n_jobs=n_jobs, backend=backend)(
+                    jl.delayed(_callback_wrapper)(
+                        *((chosen_runner, i, cs) if use_ixs else (chosen_runner, cs)),
+                        *args,
+                        **kwargs,
+                        queue=queue,
+                    )
+                    for i, cs in enumerate(collections)
                 )
-                for i, cs in enumerate(collections)
-            )
 
-            if thread is not None:
-                thread.join()
+                if thread is not None:
+                    thread.join()
 
-            return res if extractor is None else extractor(res)
+                return res if extractor is None else extractor(res)
+        finally:
+            try:
+                if thread is not None:
+                    # Stop the reader before closing its queue connection.
+                    if thread.is_alive():
+                        queue.put(None)
+                    thread.join()
+            finally:
+                if manager is not None:
+                    manager.shutdown()
 
     n_jobs = get_n_processes(n_jobs)
 
