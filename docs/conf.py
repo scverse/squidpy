@@ -219,10 +219,22 @@ def _skip_dict_api(app, what, name, obj, skip, options) -> bool | None:  # type:
     return True if getattr(obj, "__qualname__", "").startswith("dict.") else None
 
 
+def _fix_numpy_ndarray_ref(app, env, node, contnode) -> None:  # type: ignore[no-untyped-def]
+    """NumPy documents the NDArray type alias as data, not a class."""
+    if (
+        node.get("refdomain") == "py"
+        and node.get("reftype") == "class"
+        and node.get("reftarget") == "numpy.typing.NDArray"
+    ):
+        node["reftype"] = "data"
+
+
 def setup(app: Sphinx) -> None:
     app.connect("builder-inited", lambda _app: _params_defaults())
     app.connect("autodoc-process-docstring", _append_default)
     app.connect("autodoc-skip-member", _skip_dict_api)
+    # Correct the role before intersphinx's default-priority resolver runs.
+    app.connect("missing-reference", _fix_numpy_ndarray_ref, priority=400)
     app.add_css_file("css/custom.css")
     app.add_css_file("css/sphinx_gallery.css")
     app.add_css_file("css/nbsphinx.css")
