@@ -25,7 +25,7 @@
 
 ## Miscellaneous
 
-- Better error message for handling palette in  {func}`squidpy.pl.spatial_scatter`.
+- Better error message for handling palette in {func}`squidpy.pl.spatial_scatter`.
   [@giovp](https://github.com/giovp)
   [#562](https://github.com/scverse/squidpy/pull/562)
 

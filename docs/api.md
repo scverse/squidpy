@@ -11,6 +11,7 @@ import squidpy as sq
 ```
 
 ## Graph
+
 ```{eval-rst}
 .. module:: squidpy.gr
 .. currentmodule:: squidpy
@@ -43,6 +44,7 @@ import squidpy as sq
 ```
 
 ## Image
+
 ```{eval-rst}
 .. module:: squidpy.im
 .. currentmodule:: squidpy
@@ -56,6 +58,7 @@ import squidpy as sq
 ```
 
 ## Plotting
+
 ```{eval-rst}
 .. module:: squidpy.pl
 .. currentmodule:: squidpy
@@ -76,6 +79,7 @@ import squidpy as sq
 ```
 
 ## Reading
+
 ```{eval-rst}
 .. module:: squidpy.read
 .. currentmodule:: squidpy
@@ -88,6 +92,7 @@ import squidpy as sq
 ```
 
 ## Tools
+
 ```{eval-rst}
 .. module:: squidpy.tl
 .. currentmodule:: squidpy
@@ -99,6 +104,7 @@ import squidpy as sq
 ```
 
 ## Datasets
+
 ```{eval-rst}
 .. module:: squidpy.datasets
 .. currentmodule:: squidpy
