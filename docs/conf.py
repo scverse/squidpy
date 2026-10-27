@@ -151,8 +151,13 @@ nitpick_ignore = [
     ("py:class", "NDArray"),
     # numpy.typing.NDArray canonicalizes to this private path, which has no doc target
     ("py:class", "numpy._typing._array_like.NDArray"),
+    # public name of the above since sphinx-autodoc-typehints 3.14, still linked as a class; numpy documents it as data
+    # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/1104
+    ("py:class", "numpy.typing.NDArray"),
     ("py:class", "np.number"),
     ("py:class", "csr_matrix"),
+    # SpatialNeighborsResult's own PEP 695 type parameter, which has no doc target on the squidpy.types page
+    ("py:class", "GraphMatrixT"),
     ("py:class", "pandas.core.frame.DataFrame"),
 ]
 # see the solution from: https://github.com/sphinx-doc/sphinx/issues/7369
