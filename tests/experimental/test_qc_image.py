@@ -33,6 +33,27 @@ def sdata_hne(_sdata_hne_with_tissue):
     return copy.deepcopy(_sdata_hne_with_tissue)
 
 
+def test_qc_image_accepts_a_bare_metric_string(sdata_hne) -> None:
+    """A single metric name, not wrapped in a list.
+
+    `QCMetric` was a `StrEnum`, but the guard was `isinstance(m, QCMetric)`, which is False
+    for the plain string the member compares equal to. So this raised `TypeError` while
+    the docs advertised the string form.
+    """
+    sq.experimental.im.qc_image(sdata_hne, image_key="hne", tile_size=_FAST_TILE, metrics="tenengrad", progress=False)
+    assert any("tenengrad" in name for name in sdata_hne.tables["qc_img_hne"].var_names)
+
+
+@pytest.mark.parametrize(
+    ("metrics", "match"),
+    [(["not_a_metric"], r"Unknown metrics \['not_a_metric'\]"), (5, r"Unknown metrics \[5\]\. Available")],
+    ids=["unknown_name", "not_iterable"],
+)
+def test_qc_image_names_the_unknown_metric(sdata_hne, metrics, match) -> None:
+    with pytest.raises(ValueError, match=match):
+        sq.experimental.im.qc_image(sdata_hne, image_key="hne", tile_size=_FAST_TILE, metrics=metrics, progress=False)
+
+
 class TestQCImage(PlotTester, metaclass=PlotTesterMeta):
     def test_plot_calc_qc_image_hne(self, sdata_hne):
         """Test QC image overlay with a single sharpness metric."""
@@ -40,7 +61,7 @@ class TestQCImage(PlotTester, metaclass=PlotTesterMeta):
             sdata_hne,
             image_key="hne",
             tile_size=_FAST_TILE,
-            metrics=[sq.experimental.im.QCMetric.TENENGRAD],
+            metrics=["tenengrad"],
             progress=False,
         )
 
@@ -73,7 +94,7 @@ class TestQCImage(PlotTester, metaclass=PlotTesterMeta):
             sdata_hne,
             image_key="hne",
             tile_size=_FAST_TILE,
-            metrics=[sq.experimental.im.QCMetric.TENENGRAD],
+            metrics=["tenengrad"],
             progress=False,
         )
 
@@ -91,7 +112,7 @@ def test_qc_image_hne_metric_without_hne_flag(sdata_hne):
             image_key="hne",
             tile_size=_FAST_TILE,
             is_hne=False,
-            metrics=[sq.experimental.im.QCMetric.HEMATOXYLIN_MEAN],
+            metrics=["hematoxylin_mean"],
         )
 
 
@@ -144,7 +165,7 @@ def test_qc_image_rgb_metric(sdata_hne):
         image_key="hne",
         tile_size=_FAST_TILE,
         is_hne=True,
-        metrics=[sq.experimental.im.QCMetric.HEMATOXYLIN_MEAN],
+        metrics=["hematoxylin_mean"],
         detect_tissue=False,
         detect_outliers=False,
         progress=False,
@@ -159,7 +180,7 @@ def test_qc_image_outlier_detection_with_tissue(sdata_hne):
         sdata_hne,
         image_key="hne",
         tile_size=_FAST_TILE,
-        metrics=[sq.experimental.im.QCMetric.TENENGRAD],
+        metrics=["tenengrad"],
         detect_outliers=True,
         detect_tissue=True,
         progress=False,
@@ -180,7 +201,7 @@ def test_qc_image_outlier_detection_without_tissue(sdata_hne):
         sdata_hne,
         image_key="hne",
         tile_size=_FAST_TILE,
-        metrics=[sq.experimental.im.QCMetric.TENENGRAD],
+        metrics=["tenengrad"],
         detect_outliers=True,
         detect_tissue=False,
         progress=False,
@@ -201,7 +222,7 @@ def test_qc_image_compute_only(sdata_hne):
         sdata_hne,
         image_key="hne",
         tile_size=_FAST_TILE,
-        metrics=[sq.experimental.im.QCMetric.TENENGRAD, sq.experimental.im.QCMetric.BRIGHTNESS_MEAN],
+        metrics=["tenengrad", "brightness_mean"],
         detect_outliers=False,
         detect_tissue=False,
         progress=False,

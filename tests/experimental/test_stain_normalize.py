@@ -62,7 +62,7 @@ class TestFitStainReference:
 
     def test_unknown_method_raises(self, rgb_values: np.ndarray) -> None:
         sdata = _make_sdata(rgb_values)
-        with pytest.raises(ValueError, match="Unknown method"):
+        with pytest.raises(ValueError, match="Expected `method` to be one of"):
             fit_stain_reference(sdata, image_key="img", method="bogus")
 
     def test_rgba_image_rejected(self) -> None:

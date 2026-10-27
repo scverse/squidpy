@@ -4,7 +4,6 @@ from ._calculate_image_features import calculate_image_features
 from ._detect_tissue import detect_tissue
 from ._make_tiles import make_tiles, make_tiles_from_spots
 from ._qc_image import qc_image
-from ._qc_metrics import QCMetric
 from ._stain import (
     StainFit,
     estimate_white_point,
@@ -12,7 +11,6 @@ from ._stain import (
 )
 
 __all__ = [
-    "QCMetric",
     "StainFit",
     "calculate_image_features",
     "detect_tissue",
