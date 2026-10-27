@@ -10,8 +10,8 @@ import numpy as np
 from squidpy._utils import NDArrayA, _unique_order_preserving
 
 if TYPE_CHECKING:
-    from fast_array_utils.types import HasArrayNamespace as Array
     from anndata import AnnData
+    from fast_array_utils.types import HasArrayNamespace as Array
     from spatialdata import SpatialData
 
 

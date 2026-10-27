@@ -94,9 +94,7 @@ def explicit_axes(value: Sequence[Array], shape: tuple[int, ...], name: str) -> 
     return resolved
 
 
-def affine_xy_to_rc(
-    matrix: Array, *, name: str = "initial_affine", ndim: int = 2
-) -> tuple[jax.Array, jax.Array]:
+def affine_xy_to_rc(matrix: Array, *, name: str = "initial_affine", ndim: int = 2) -> tuple[jax.Array, jax.Array]:
     """Split a homogeneous ``(x, y[, z])`` affine into array-order ``(linear, translation)``."""
     dtype = jax_dtype()
     affine_xy = jnp.asarray(matrix, dtype=dtype)
