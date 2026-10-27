@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Annotated, TypedDict
 
-import numpy.typing as npt
+from fast_array_utils.types import HasArrayNamespace as Array
 
 from squidpy._params import Default
 from squidpy._utils import RNGLike, SeedLike
@@ -148,13 +148,13 @@ class StalignObsParams(TypedDict, total=False):
     image path, so it takes everything that does plus the three rasterization knobs.
     """
 
-    initial_affine: Annotated[npt.ArrayLike | None, Default(None)]
+    initial_affine: Annotated[Array | None, Default(None)]
     """Homogeneous ``(3, 3)`` affine in ``(x, y)`` to start from."""
 
-    initial_velocity: Annotated[npt.ArrayLike | None, Default(None)]
+    initial_velocity: Annotated[Array | None, Default(None)]
     """Continuation state from a prior fit, in the solver's row-column convention."""
 
-    velocity_grid: Annotated[tuple[npt.ArrayLike, npt.ArrayLike] | None, Default(None)]
+    velocity_grid: Annotated[tuple[Array, Array] | None, Default(None)]
     """Axes ``initial_velocity`` lives on, row-column."""
 
     a: Annotated[float, Default(500.0)]
@@ -202,10 +202,10 @@ class StalignObsParams(TypedDict, total=False):
     sigmaP: Annotated[float, Default(20.0)]
     """Noise scale of the landmark point-matching term."""
 
-    muA: Annotated[npt.ArrayLike | None, Default(None)]
+    muA: Annotated[Array | None, Default(None)]
     """Fixed per-channel artifact means. ``None`` estimates them during fitting."""
 
-    muB: Annotated[npt.ArrayLike | None, Default(None)]
+    muB: Annotated[Array | None, Default(None)]
     """Fixed per-channel background means. ``None`` estimates them during fitting."""
 
     tol: Annotated[float | None, Default(None)]
@@ -233,13 +233,13 @@ class StalignImageParams(TypedDict, total=False):
     step sizes retuned: a kernel width in pixels is not one in cell coordinates.
     """
 
-    initial_affine: Annotated[npt.ArrayLike | None, Default(None)]
+    initial_affine: Annotated[Array | None, Default(None)]
     """Homogeneous ``(3, 3)`` affine in ``(x, y)`` to start from."""
 
-    initial_velocity: Annotated[npt.ArrayLike | None, Default(None)]
+    initial_velocity: Annotated[Array | None, Default(None)]
     """Continuation state from a prior fit, in the solver's row-column convention."""
 
-    velocity_grid: Annotated[tuple[npt.ArrayLike, npt.ArrayLike] | None, Default(None)]
+    velocity_grid: Annotated[tuple[Array, Array] | None, Default(None)]
     """Axes ``initial_velocity`` lives on, row-column."""
 
     a: Annotated[float, Default(20.0)]
@@ -287,10 +287,10 @@ class StalignImageParams(TypedDict, total=False):
     sigmaP: Annotated[float, Default(20.0)]
     """Noise scale of the landmark point-matching term."""
 
-    muA: Annotated[npt.ArrayLike | None, Default(None)]
+    muA: Annotated[Array | None, Default(None)]
     """Fixed per-channel artifact means. ``None`` estimates them during fitting."""
 
-    muB: Annotated[npt.ArrayLike | None, Default(None)]
+    muB: Annotated[Array | None, Default(None)]
     """Fixed per-channel background means. ``None`` estimates them during fitting."""
 
     tol: Annotated[float | None, Default(None)]
@@ -310,10 +310,10 @@ class StalignVolumeParams(TypedDict, total=False):
     rather than a solver key.
     """
 
-    initial_velocity: Annotated[npt.ArrayLike | None, Default(None)]
+    initial_velocity: Annotated[Array | None, Default(None)]
     """Continuation state from a prior fit, in the solver's row-column convention."""
 
-    velocity_grid: Annotated[tuple[npt.ArrayLike, npt.ArrayLike, npt.ArrayLike] | None, Default(None)]
+    velocity_grid: Annotated[tuple[Array, Array, Array] | None, Default(None)]
     """Axes ``initial_velocity`` lives on, row-column."""
 
     a: Annotated[float, Default(500.0)]
@@ -358,10 +358,10 @@ class StalignVolumeParams(TypedDict, total=False):
     sigmaR: Annotated[float, Default(1000000.0)]
     """Noise scale of the regularisation term; larger penalises the velocity field less."""
 
-    muA: Annotated[npt.ArrayLike | None, Default(None)]
+    muA: Annotated[Array | None, Default(None)]
     """Fixed per-channel artifact means. ``None`` estimates them during fitting."""
 
-    muB: Annotated[npt.ArrayLike | None, Default(None)]
+    muB: Annotated[Array | None, Default(None)]
     """Fixed per-channel background means. ``None`` estimates them during fitting."""
 
     tol: Annotated[float | None, Default(None)]

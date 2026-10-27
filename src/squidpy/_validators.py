@@ -10,7 +10,7 @@ import numpy as np
 from squidpy._utils import NDArrayA, _unique_order_preserving
 
 if TYPE_CHECKING:
-    import numpy.typing as npt
+    from fast_array_utils.types import HasArrayNamespace as Array
     from anndata import AnnData
     from spatialdata import SpatialData
 
@@ -68,7 +68,7 @@ def get_valid_values(needle: Sequence[Any], haystack: Sequence[Any]) -> Sequence
     return res
 
 
-def validate_xy(points: npt.ArrayLike, *, name: str) -> NDArrayA:
+def validate_xy(points: Array, *, name: str) -> NDArrayA:
     """Coerce ``points`` to a finite ``(n, 2)`` float array of ``(x, y)`` pairs."""
     arr = np.asarray(points, dtype=float)
     if arr.ndim != 2 or arr.shape[1] != 2:

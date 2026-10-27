@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     import numpy.typing as npt
+    from fast_array_utils.types import HasArrayNamespace as Array
 
     from ._stalign import StalignObsFit
 
@@ -94,7 +95,7 @@ def _read_coords_2d(adata: AnnData, *, key: str, side: str, name: str) -> np.nda
     return coords
 
 
-def _as_chw(value: npt.ArrayLike, *, what: str, ndim: int = 2) -> np.ndarray:
+def _as_chw(value: Array, *, what: str, ndim: int = 2) -> np.ndarray:
     """Promote an unchannelled array to a single-channel one.
 
     ``ndim`` is the number of *spatial* axes: 2 for a section, 3 for a reference volume.
@@ -127,7 +128,7 @@ def _write_coords(
     spatial_key: str,
     key_added: str,
     *,
-    transform: Callable[[np.ndarray], npt.ArrayLike],
+    transform: Callable[[np.ndarray], Array],
     spatial_key_name: str,
     inplace: bool = True,
 ) -> np.ndarray | None:
@@ -167,8 +168,8 @@ def stalign_align_obs(
     *,
     spatial_key: str | tuple[str, str] = "spatial",
     table_key: str | tuple[str | None, str | None] | None = None,
-    landmarks_ref: npt.ArrayLike | None = None,
-    landmarks_query: npt.ArrayLike | None = None,
+    landmarks_ref: Array | None = None,
+    landmarks_query: Array | None = None,
     **solver_params: Unpack[StalignObsParams],
 ) -> StalignObsFit:
     """Align a query point cloud onto a reference with STalign (diffeomorphic LDDMM).
@@ -235,8 +236,8 @@ def stalign_align_image(
     image_key: str | tuple[str, str],
     ref_coordinate_system: str = "global",
     query_coordinate_system: str = "global",
-    landmarks_ref: npt.ArrayLike | None = None,
-    landmarks_query: npt.ArrayLike | None = None,
+    landmarks_ref: Array | None = None,
+    landmarks_query: Array | None = None,
     **solver_params: Unpack[StalignImageParams],
 ) -> StalignImageFit:
     """Align a query image onto a reference image with STalign (diffeomorphic LDDMM).
@@ -405,7 +406,7 @@ def stalign_align_volume(
     initial_slice: int | None = None,
     initial_rotation: float = 0.0,
     initial_scale: float = 1.0,
-    initial_affine: npt.ArrayLike | None = None,
+    initial_affine: Array | None = None,
     **solver_params: Unpack[StalignVolumeParams],
 ) -> StalignVolumeFit:
     """Place a 2D section into a 3D reference volume with STalign (diffeomorphic LDDMM).
@@ -475,8 +476,8 @@ def stalign_align_volume(
 
 
 def align_landmarks(
-    data_ref: AnnData | SpatialData | npt.ArrayLike,
-    data_query: AnnData | SpatialData | npt.ArrayLike | None = None,
+    data_ref: AnnData | SpatialData | Array,
+    data_query: AnnData | SpatialData | Array | None = None,
     *,
     landmark_key: str | tuple[str, str] | None = None,
     method: Literal["similarity", "affine"] = "similarity",

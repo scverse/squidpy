@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Unpack
 
 import numpy as np
-import numpy.typing as npt
+from fast_array_utils.types import HasArrayNamespace as Array
 
 from squidpy._params import resolve_params
 from squidpy._validators import normalize_choice
@@ -83,7 +83,7 @@ class StalignFit:
 
     def transform_points(
         self,
-        points: npt.ArrayLike,
+        points: Array,
         *,
         direction: Literal["forward", "backward"] = "forward",
     ) -> JaxArray:
@@ -243,8 +243,8 @@ class StalignImageFit(StalignFit):
         self,
         *,
         direction: Literal["forward", "backward"] = "forward",
-        query_axes: Sequence[npt.ArrayLike] | None = None,
-        ref_axes: Sequence[npt.ArrayLike] | None = None,
+        query_axes: Sequence[Array] | None = None,
+        ref_axes: Sequence[Array] | None = None,
     ) -> JaxArray:
         """The dense row-column coordinate transform of the fit, shape ``(2, *grid)``.
 
@@ -266,11 +266,11 @@ class StalignImageFit(StalignFit):
 
     def warp_image(
         self,
-        image: npt.ArrayLike,
+        image: Array,
         *,
         direction: Literal["forward", "backward"] = "forward",
-        query_axes: Sequence[npt.ArrayLike] | None = None,
-        ref_axes: Sequence[npt.ArrayLike] | None = None,
+        query_axes: Sequence[Array] | None = None,
+        ref_axes: Sequence[Array] | None = None,
     ) -> JaxArray:
         """Resample an image through the fit.
 
@@ -322,7 +322,7 @@ class StalignVolumeFit(StalignFit):
 
     def transform_points(
         self,
-        points: npt.ArrayLike,
+        points: Array,
         *,
         direction: Literal["forward", "backward"] | None = None,
     ) -> JaxArray:
@@ -358,8 +358,8 @@ class StalignVolumeFit(StalignFit):
         self,
         *,
         direction: Literal["forward", "backward"] = "backward",
-        query_axes: Sequence[npt.ArrayLike] | None = None,
-        ref_axes: Sequence[npt.ArrayLike] | None = None,
+        query_axes: Sequence[Array] | None = None,
+        ref_axes: Sequence[Array] | None = None,
     ) -> JaxArray:
         """The dense row-column coordinate transform of the fit, shape ``(3, *grid)``.
 
@@ -391,15 +391,15 @@ class StalignVolumeFit(StalignFit):
 # from its affine plane for the outer 5% of cells: one to two cortical layers. The
 # `initial_*` arguments are therefore an initialisation, not the answer.
 def fit_stalign_volume(
-    ref: npt.ArrayLike,
-    query: npt.ArrayLike,
+    ref: Array,
+    query: Array,
     *,
-    ref_axes: Sequence[npt.ArrayLike] | None = None,
-    query_axes: Sequence[npt.ArrayLike] | None = None,
+    ref_axes: Sequence[Array] | None = None,
+    query_axes: Sequence[Array] | None = None,
     initial_slice: int | None = None,
     initial_rotation: float = 0.0,
     initial_scale: float = 1.0,
-    initial_affine: npt.ArrayLike | None = None,
+    initial_affine: Array | None = None,
     **solver_params: Unpack[StalignVolumeParams],
 ) -> StalignVolumeFit:
     """Array-in / array-out core of :func:`~squidpy.experimental.tl.stalign_align_volume`, which documents it."""
@@ -501,9 +501,9 @@ def _require_jax() -> None:
 
 
 def _initial_affine_and_landmarks(
-    landmarks_ref: npt.ArrayLike | None,
-    landmarks_query: npt.ArrayLike | None,
-    initial_affine: npt.ArrayLike | None,
+    landmarks_ref: Array | None,
+    landmarks_query: Array | None,
+    initial_affine: Array | None,
 ) -> tuple[JaxArray, JaxArray, JaxArray | None, JaxArray | None]:
     """Resolve the starting affine and the row-col landmark pair the point term uses.
 
@@ -547,11 +547,11 @@ def _initial_affine_and_landmarks(
 
 
 def fit_stalign_obs(
-    ref: npt.ArrayLike,
-    query: npt.ArrayLike,
+    ref: Array,
+    query: Array,
     *,
-    landmarks_ref: npt.ArrayLike | None = None,
-    landmarks_query: npt.ArrayLike | None = None,
+    landmarks_ref: Array | None = None,
+    landmarks_query: Array | None = None,
     **solver_params: Unpack[StalignObsParams],
 ) -> StalignObsFit:
     """Array-in / array-out core of :func:`~squidpy.experimental.tl.stalign_align_obs`, which documents it."""
@@ -596,13 +596,13 @@ def fit_stalign_obs(
 
 
 def fit_stalign_image(
-    ref: npt.ArrayLike,
-    query: npt.ArrayLike,
+    ref: Array,
+    query: Array,
     *,
-    ref_axes: Sequence[npt.ArrayLike] | None = None,
-    query_axes: Sequence[npt.ArrayLike] | None = None,
-    landmarks_ref: npt.ArrayLike | None = None,
-    landmarks_query: npt.ArrayLike | None = None,
+    ref_axes: Sequence[Array] | None = None,
+    query_axes: Sequence[Array] | None = None,
+    landmarks_ref: Array | None = None,
+    landmarks_query: Array | None = None,
     **solver_params: Unpack[StalignImageParams],
 ) -> StalignImageFit:
     """Array-in / array-out core of :func:`~squidpy.experimental.tl.stalign_align_image`, which documents it."""

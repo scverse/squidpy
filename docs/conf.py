@@ -156,10 +156,8 @@ nitpick_ignore = [
     # public name of the above since sphinx-autodoc-typehints 3.14, still linked as a class; numpy documents it as data
     # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/1104
     ("py:class", "numpy.typing.NDArray"),
-    ("py:class", "numpy._typing._array_like.ArrayLike"),
-    # `npt.ArrayLike` in a signature resolves to its union members, which are private
-    ("py:class", "numpy._typing._array_like._SupportsArray"),
-    ("py:class", "numpy._typing._nested_sequence._NestedSequence"),
+    # fast-array-utils doesn't document its array protocol
+    ("py:class", "fast_array_utils.types.HasArrayNamespace"),
     # optional dep mocked at build time (see autodoc_mock_imports), so no resolvable target
     ("py:class", "jax.Array"),
     ("py:class", "JaxArray"),

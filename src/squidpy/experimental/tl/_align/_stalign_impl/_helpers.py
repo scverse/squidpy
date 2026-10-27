@@ -15,7 +15,7 @@ from squidpy.experimental.im._rasterize_points import rasterize
 from ._core import jax_dtype, reverse_axes
 
 if TYPE_CHECKING:
-    import numpy.typing as npt
+    from fast_array_utils.types import HasArrayNamespace as Array
 
 __all__ = [
     "resolve_axes",
@@ -37,12 +37,12 @@ def rasterize_cloud(
     return (grid_y, grid_x), image
 
 
-def validate_points(points: npt.ArrayLike, *, name: str) -> jax.Array:
+def validate_points(points: Array, *, name: str) -> jax.Array:
     """Coerce ``points`` to a finite ``(n, 2)`` JAX array."""
     return jnp.asarray(validate_xy(points, name=name), dtype=jax_dtype())
 
 
-def as_chw(image: npt.ArrayLike, *, name: str, ndim: int = 2) -> jax.Array:
+def as_chw(image: Array, *, name: str, ndim: int = 2) -> jax.Array:
     """Coerce an image to channels-first, promoting an unchannelled array.
 
     ``ndim`` is the number of *spatial* axes: 2 for a ``(y, x)`` section, 3 for a
@@ -59,7 +59,7 @@ def as_chw(image: npt.ArrayLike, *, name: str, ndim: int = 2) -> jax.Array:
     return arr
 
 
-def resolve_axes(axes: Sequence[npt.ArrayLike] | None, shape: tuple[int, ...], name: str) -> tuple[jax.Array, ...]:
+def resolve_axes(axes: Sequence[Array] | None, shape: tuple[int, ...], name: str) -> tuple[jax.Array, ...]:
     """Physical axes for one side, at any rank: explicit if given, otherwise centred pixel units."""
     if axes is None:
         return centred_axes(shape, (1.0,) * len(shape))
@@ -80,7 +80,7 @@ def centred_axes(shape: tuple[int, ...], scale: Sequence[float]) -> tuple[jax.Ar
     )
 
 
-def explicit_axes(value: Sequence[npt.ArrayLike], shape: tuple[int, ...], name: str) -> tuple[jax.Array, ...]:
+def explicit_axes(value: Sequence[Array], shape: tuple[int, ...], name: str) -> tuple[jax.Array, ...]:
     """Validate caller-supplied physical axes against the image they describe."""
     dtype = jax_dtype()
     resolved = tuple(jnp.asarray(axis, dtype=dtype) for axis in value)
@@ -95,7 +95,7 @@ def explicit_axes(value: Sequence[npt.ArrayLike], shape: tuple[int, ...], name: 
 
 
 def affine_xy_to_rc(
-    matrix: npt.ArrayLike, *, name: str = "initial_affine", ndim: int = 2
+    matrix: Array, *, name: str = "initial_affine", ndim: int = 2
 ) -> tuple[jax.Array, jax.Array]:
     """Split a homogeneous ``(x, y[, z])`` affine into array-order ``(linear, translation)``."""
     dtype = jax_dtype()
