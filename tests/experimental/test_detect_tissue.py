@@ -168,8 +168,10 @@ def test_weka_border_margin_is_not_a_params_key() -> None:
         ({"corners_are_background": (True, False)}, ValueError, "sequence of 4 bools"),
         ({"corners_are_background": np.ones((2, 2), dtype=bool)}, ValueError, "sequence of 4 bools"),
         ({"corner_size_pct": 0.0}, ValueError, "`corner_size_pct` must be in"),
+        ({"method": "bogus"}, ValueError, "Expected `method` to be one of"),
+        ({"method": None}, ValueError, "Expected `method` to be one of"),
     ],
-    ids=["string", "wrong_length", "not_flat", "zero_corner_size"],
+    ids=["string", "wrong_length", "not_flat", "zero_corner_size", "unknown_method", "none_method"],
 )
 def test_invalid_corners_raise(sdata_hne, kwargs, error, match) -> None:
     with pytest.raises(error, match=match):

@@ -8,6 +8,8 @@ import scanpy as sc
 from fast_array_utils.types import HasArrayNamespace as Array
 from sklearn.base import BaseEstimator, ClusterMixin
 
+from squidpy._validators import normalize_choice
+
 
 @runtime_checkable
 class Clusterer(Protocol):
@@ -62,10 +64,11 @@ class LeidenClusterer(ClusterMixin, BaseEstimator):
         # Default to the igraph backend so niche labels are reproducible across versions;
         # leidenalg is deprecated in scanpy and unstable on small graphs. See
         # scverse/squidpy#1260.
-        kwargs: dict[str, Any] = {"flavor": self.flavor, "n_iterations": self.n_iterations}
+        flavor = normalize_choice(self.flavor, ("igraph", "leidenalg"), name="flavor")
+        kwargs: dict[str, Any] = {"flavor": flavor, "n_iterations": self.n_iterations}
         # scanpy's igraph backend only supports undirected graphs and errors if `directed`
         # is left at the leidenalg default of True, so pin it to False.
-        if self.flavor == "igraph":
+        if flavor == "igraph":
             kwargs["directed"] = False
         sc.tl.leiden(
             shell,
