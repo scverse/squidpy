@@ -486,7 +486,7 @@ def test_cluster_auto_k_rejects_clusterer_with_model_params():
 
 
 def test_cluster_auto_k_rejects_a_clusterer_that_cannot_be_swept():
-    """A clusterer without a seed looks perfectly stable at every K, so it is refused."""
+    """A clusterer without a seed gives one labeling per K however many runs, so it is refused."""
     with pytest.raises(ValueError, match=r"AgglomerativeClustering takes no 'random_state'"):
         cluster_auto_k(AnnData(make_blobs()), n_clusters=(2, 4), clusterer=AgglomerativeClustering(), rng=0)
 

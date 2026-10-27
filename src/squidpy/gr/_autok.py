@@ -123,7 +123,7 @@ def cluster_stability(
     *,
     score_fn: Callable[[Array, Array], float] = fowlkes_mallows_score,
 ) -> tuple[list[int], np.ndarray]:
-    """Score already-computed labelings by how stably each K reproduces across runs.
+    """Score already-computed labelings by how well each K agrees with its neighbours.
 
     The batch counterpart to the sweep inside the sweep, for labelings produced
     elsewhere: only the labels are compared, so any clusterer will do.
@@ -231,8 +231,8 @@ def check_sweepable(clusterer: SweepableClusterer) -> str:
     if "random_state" not in params:
         raise ValueError(
             f"{type(clusterer).__name__} takes no 'random_state', so every run of a K returns the "
-            "same labeling and its stability is 1 whatever K is. Stability selection needs a "
-            "clusterer that varies between runs."
+            "same labeling and the runs average nothing: the stability rests on a single labeling "
+            "per K. Stability selection needs a clusterer that varies between runs."
         )
     return k_param
 
@@ -298,14 +298,15 @@ def sweep_auto_k(
         ``random_state`` this sets per fit, so its own are ignored. Defaults to
         :class:`~sklearn.mixture.GaussianMixture`.
 
-        Being stochastic is a real requirement, not a formality: the sweep scores how much
-        a K's labeling moves between runs, so a deterministic clusterer looks perfectly
-        stable at every K. Estimators that infer their own K have nothing to sweep. Both
-        cases are rejected rather than run.
+        Being stochastic is a real requirement, not a formality: the sweep averages each K's
+        agreement with its neighbours over runs, and a deterministic clusterer gives the same
+        labeling every run, so there is nothing to average, and it is rejected rather than run.
+        Estimators that infer their own K, such as
+        :class:`~sklearn.mixture.BayesianGaussianMixture`, are accepted but rarely useful: their
+        number of clusters is only an upper bound.
 
         Of scikit-learn's own clusterers that leaves
         :class:`~sklearn.mixture.GaussianMixture`,
-        :class:`~sklearn.mixture.BayesianGaussianMixture`,
         :class:`~sklearn.cluster.KMeans`, :class:`~sklearn.cluster.MiniBatchKMeans`,
         :class:`~sklearn.cluster.BisectingKMeans` and
         :class:`~sklearn.cluster.SpectralClustering`; the rule is the contract, though, so
@@ -385,8 +386,8 @@ def sweep_auto_k(
 class AutoKClusterer(ClusterMixin, BaseEstimator):
     """A clusterer whose number of clusters is chosen by the stability of its labeling.
 
-    Every candidate K is fitted ``max_runs`` times and scored by how stably its labeling
-    reproduces across runs; ``labels_`` is the labeling of the most stable K.
+    Every candidate K is fitted ``max_runs`` times and scored by how well its labeling
+    agrees with the adjacent K's across runs; ``labels_`` is the labeling of the most stable K.
 
     Parameters
     ----------

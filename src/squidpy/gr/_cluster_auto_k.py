@@ -76,10 +76,10 @@ def cluster_auto_k(
         number of clusters and a ``random_state``, both of which this sets per fit. It is
         cloned for every fit, so the one passed in is never touched.
 
-        Being stochastic is a real requirement rather than a formality: stability scores
-        how much a K's labeling moves between runs, so a deterministic clusterer looks
-        perfectly stable at every K. That and clusterers that infer their own K are
-        rejected rather than run.
+        Being stochastic is a real requirement rather than a formality: stability averages
+        each K's agreement with its neighbours over runs, and a deterministic clusterer gives
+        the same labeling every run, so there is nothing to average, and it is rejected rather
+        than run. Clusterers that infer their own K are accepted but rarely useful.
     %(rng)s
         Seeds every individual fit.
     store_labels
@@ -172,7 +172,7 @@ def cluster_stability(
     copy: bool = False,
     table_key: str | None = None,
 ) -> AnnData | None:
-    """Score existing clusterings by how stably each number of clusters reproduces across runs.
+    """Score existing clusterings by how well each number of clusters agrees with its neighbours.
 
     Reads labelings already in ``adata.obs``, so any clusterer will do; see
     :func:`~squidpy.gr.cluster_auto_k`.
