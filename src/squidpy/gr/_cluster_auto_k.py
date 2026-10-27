@@ -9,13 +9,14 @@ import pandas as pd
 from anndata import AnnData
 from scipy.sparse import issparse
 from sklearn.metrics import fowlkes_mallows_score
+from sklearn.mixture import GaussianMixture
 from spatialdata import SpatialData
 from spatialdata._logging import logger as logg
 
 from squidpy._docs import d
 from squidpy._utils import RNGLike, SeedLike
 from squidpy._validators import assert_isinstance, assert_key_in_adata
-from squidpy.gr._autok import _gmm, _stability_frame, expand_n_clusters, label_columns, sweep_auto_k, to_uns
+from squidpy.gr._autok import _stability_frame, expand_n_clusters, label_columns, sweep_auto_k, to_uns
 from squidpy.gr._autok import cluster_stability as _cluster_stability
 from squidpy.gr._clusterers import SweepableClusterer
 from squidpy.gr._utils import _save_data, extract_adata_if_sdata
@@ -31,7 +32,6 @@ def cluster_auto_k(
     use_rep: str | None = None,
     max_runs: int = 10,
     convergence_tol: float = 1e-2,
-    model_params: Mapping[str, Any] | None = None,
     clusterer: SweepableClusterer | None = None,
     rng: SeedLike | RNGLike | None = None,
     store_labels: bool = False,
@@ -65,10 +65,6 @@ def cluster_auto_k(
     convergence_tol
         Stop early once the mean absolute percentage error between the mean stability curves
         of consecutive runs falls below this value.
-    model_params
-        Extra keyword arguments for :class:`~sklearn.mixture.GaussianMixture`. The mapping is
-        never modified. ``n_components`` and ``random_state`` are controlled by ``n_clusters``
-        and ``rng`` and are rejected here. Mutually exclusive with *clusterer*.
     clusterer
         Fitted at every candidate K instead of the default mixture. Any
         ``SweepableClusterer`` will do (scikit-learn's
@@ -121,8 +117,6 @@ def cluster_auto_k(
 
     assert_isinstance(max_runs, int, name="max_runs")
     assert_isinstance(convergence_tol, (float, int), name="convergence_tol")
-    if clusterer is not None and model_params is not None:
-        raise ValueError("'model_params' configures the default mixture, so it cannot be combined with 'clusterer'")
 
     adata = orig_adata.copy() if copy else orig_adata
     X = adata.obsm[use_rep] if use_rep is not None else adata.X
@@ -135,7 +129,7 @@ def cluster_auto_k(
         )
 
     if clusterer is None:
-        clusterer = _gmm(model_params)
+        clusterer = GaussianMixture()
 
     candidates = expand_n_clusters(n_clusters)
     logg.info(

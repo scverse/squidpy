@@ -618,6 +618,7 @@ def calculate_niche_cellcharter(
     rng: SeedLike | RNGLike | None = None,
     spatial_connectivities_key: str = "spatial_connectivities",
     n_clusters: int | tuple[int, int] | Sequence[int] = 10,
+    clusterer: GaussianMixture | None = None,
     max_runs: int = 10,
     convergence_tol: float = 1e-2,
     store_labels: bool = False,
@@ -692,6 +693,11 @@ def calculate_niche_cellcharter(
         ``max_runs`` times, as :func:`~squidpy.gr.cluster_auto_k` does. The sweep keeps the
         best of several fits per K, so rerunning with the selected K as an int does not
         reproduce its labels; use ``store_labels`` to keep the runners-up instead.
+    clusterer
+        The :class:`~sklearn.mixture.GaussianMixture` to fit, e.g. with a different
+        ``covariance_type`` or ``reg_covar``. It is cloned, and its ``n_components`` and
+        ``random_state`` are set from ``n_clusters`` and ``rng``. Defaults to
+        ``GaussianMixture()``.
     max_runs
         Maximum number of repetitions per candidate K. Only used when ``n_clusters``
         requests a sweep.
@@ -748,18 +754,20 @@ def calculate_niche_cellcharter(
 
     # `GaussianMixture` is a `Clusterer` as it stands, so a fixed K needs no wrapper. Its default
     # 'kmeans' init is CellCharter's too, for a fixed K and in the sweep alike.
-    clusterer: Clusterer
+    mixture = GaussianMixture() if clusterer is None else clone(clusterer)
+    fit: Clusterer
     if isinstance(n_clusters, int | np.integer):
-        clusterer = GaussianMixture(n_components=int(n_clusters))
+        fit = mixture.set_params(n_components=int(n_clusters))
     else:
-        clusterer = AutoKClusterer(
+        fit = AutoKClusterer(
             n_clusters=n_clusters,
+            clusterer=mixture,
             max_runs=max_runs,
             convergence_tol=convergence_tol,
             store_labels=store_labels,
             uns_key=f"{key_added}_autok",
         )
-    clusterers = {key_added: clusterer}
+    clusterers = {key_added: fit}
 
     return calculate_niche_custom(
         data,

@@ -15,6 +15,7 @@ from scanpy.pp import neighbors
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import dijkstra
 from scipy.spatial import cKDTree
+from sklearn.mixture import GaussianMixture
 from spatialdata import SpatialData
 from spatialdata.models import TableModel
 
@@ -1139,3 +1140,14 @@ def test_niche_cellcharter_auto_k_diagnostics_roundtrip_h5ad(dummy_adata2: AnnDa
     assert_frame_equal(reloaded["table"], original["table"])
     assert reloaded["converged"] == original["converged"]
     assert reloaded["best_k"] == original["best_k"]
+
+
+@pytest.mark.parametrize("n_clusters", [3, (2, 3)])
+def test_niche_cellcharter_takes_a_mixture(dummy_adata2: AnnData, n_clusters):
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    mixture = GaussianMixture(covariance_type="diag")
+    calculate_niche_cellcharter(
+        dummy_adata2, distance=2, aggregation="mean", rng=0, n_clusters=n_clusters, max_runs=2, clusterer=mixture
+    )
+    assert dummy_adata2.obs["cellcharter_niche"].notna().all()
+    assert mixture.get_params()["n_components"] == 1, "the mixture passed in is cloned, not set"

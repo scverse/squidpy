@@ -9,11 +9,11 @@ from scipy.sparse import csr_matrix
 from sklearn.base import clone
 from sklearn.cluster import AgglomerativeClustering, KMeans
 from sklearn.metrics import fowlkes_mallows_score
+from sklearn.mixture import GaussianMixture
 
 from squidpy.gr import cluster_auto_k, cluster_stability
 from squidpy.gr._autok import (
     AutoKClusterer,
-    _gmm,
     _score_block,
     expand_n_clusters,
     mirror_stability,
@@ -129,19 +129,6 @@ def test_sweep_convergence():
     assert exhausted.n_runs == 3
 
 
-def test_default_gmm_rejects_params_the_sweep_controls_itself():
-    for owned in ("n_components", "random_state"):
-        with pytest.raises(ValueError, match=rf"'{owned}' cannot be set through 'model_params'"):
-            _gmm({owned: 3})
-
-
-def test_default_gmm_does_not_mutate_the_callers_model_params():
-    # upstream pops `random_state` out of the caller's dict; we must not
-    model_params = {"max_iter": 10}
-    _gmm(model_params)
-    assert model_params == {"max_iter": 10}
-
-
 def test_sweep_uses_kmeans_init_but_overridable(monkeypatch):
     from squidpy.gr import _autok
 
@@ -158,7 +145,7 @@ def test_sweep_uses_kmeans_init_but_overridable(monkeypatch):
     assert set(seen) == {"kmeans"}
 
     seen.clear()
-    sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, clusterer=_gmm({"init_params": "random_from_data"}), rng=0)
+    sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, clusterer=GaussianMixture(init_params="random_from_data"), rng=0)
     assert set(seen) == {"random_from_data"}
 
 
@@ -166,8 +153,8 @@ def test_sweep_reg_covar_hint():
     # only two distinct points, so with the regularisation switched off every component
     # lands on a singular covariance
     X = np.repeat(np.array([[0.0, 0.0], [1.0, 1.0]]), 15, axis=0)
-    with pytest.raises(ValueError, match=r"model_params=\{'reg_covar'"):
-        sweep_auto_k(X, [2, 3, 4], max_runs=2, clusterer=_gmm({"reg_covar": 0.0}), rng=0)
+    with pytest.raises(ValueError, match=r"clusterer=GaussianMixture\(reg_covar"):
+        sweep_auto_k(X, [2, 3, 4], max_runs=2, clusterer=GaussianMixture(reg_covar=0.0), rng=0)
 
 
 def test_sweep_reg_covar_hint_not_for_other_errors():
@@ -235,6 +222,8 @@ def test_cluster_auto_k_on_adata():
     assert diagnostics["best_k"] in scored(diagnostics["table"])
     assert list(adata.obs.columns) == ["cluster_auto_k"]
     assert adata.obs["cluster_auto_k"].dtype == "category"
+    categories = list(adata.obs["cluster_auto_k"].cat.categories)
+    assert categories == [str(i) for i in sorted(map(int, categories))], "string labels in numeric order, like leiden"
 
 
 def test_cluster_auto_k_copy():
@@ -478,11 +467,6 @@ def test_cluster_auto_k_takes_a_clusterer():
 
     assert adata.obs["kmeans_k"].notna().all()
     assert adata.uns["kmeans_k"]["best_k"] in scored(adata.uns["kmeans_k"]["table"])
-
-
-def test_cluster_auto_k_rejects_clusterer_with_model_params():
-    with pytest.raises(ValueError, match=r"'model_params' configures the default mixture"):
-        cluster_auto_k(AnnData(make_blobs()), n_clusters=(2, 4), clusterer=KMeans(), model_params={"reg_covar": 1e-3})
 
 
 def test_cluster_auto_k_rejects_a_clusterer_that_cannot_be_swept():

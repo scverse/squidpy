@@ -27,10 +27,6 @@ from squidpy.gr._clusterers import SweepableClusterer
 # width of the spectral embedding, not the number of clusters.
 _K_PARAMS = ("n_clusters", "n_components")
 
-# Mixture parameters squidpy sets itself, and the argument that sets each: routing them
-# through `model_params` instead would silently override the sweep.
-_GMM_OWNED = {"n_components": "n_clusters", "random_state": "rng"}
-
 
 class ClusterAutoKResult(NamedTuple):
     """A sweep result."""
@@ -185,22 +181,16 @@ def label_columns(result: ClusterAutoKResult, key: str, *, all_labels: bool = Fa
     The selected K takes the bare *key*, which keeps the primary column name predictable
     for downstream code; with ``all_labels`` every fitted K follows as ``{key}_k{K}``.
     """
-    columns = {key: pd.Categorical(result.labels[result.best_k])}
+    columns = {key: _string_labels(result.labels[result.best_k])}
     if all_labels:
-        columns |= {f"{key}_k{k}": pd.Categorical(labeling) for k, labeling in result.labels.items()}
+        columns |= {f"{key}_k{k}": _string_labels(labeling) for k, labeling in result.labels.items()}
     return columns
 
 
-def check_model_params(model_params: Mapping[str, object]) -> None:
-    """Reject the mixture parameters squidpy sets itself.
-
-    Separate from :func:`_gmm` so that a caller taking a ``model_params`` argument can
-    reject a bad one up front, rather than at whichever point it happens to build a
-    mixture.
-    """
-    for owned, controller in _GMM_OWNED.items():
-        if owned in model_params:
-            raise ValueError(f"'{owned}' cannot be set through 'model_params'; it is controlled by '{controller}'")
+def _string_labels(labeling: np.ndarray) -> pd.Categorical:
+    """String categories in numeric order, as ``sc.tl.leiden`` and the niche labels store them."""
+    present = np.unique(labeling)
+    return pd.Categorical(labeling.astype(str), categories=present.astype(str))
 
 
 def check_sweepable(clusterer: SweepableClusterer) -> str:
@@ -237,17 +227,6 @@ def check_sweepable(clusterer: SweepableClusterer) -> str:
     return k_param
 
 
-def _gmm(model_params: Mapping[str, object] | None = None, **overrides: object) -> GaussianMixture:
-    """The default clusterer: a :class:`~sklearn.mixture.GaussianMixture` with the kmeans init CellCharter uses.
-
-    The parameters in ``_GMM_OWNED`` are the caller's, not *model_params*': the sweep sets
-    them per fit, and a single-fit caller passes them as *overrides*. The caller's mapping
-    is never modified.
-    """
-    check_model_params(model_params or {})
-    return GaussianMixture(**(model_params or {}), **overrides)
-
-
 def _fit_once(
     clusterer: SweepableClusterer, k_param: str, X: Array, k: int, random_state: int
 ) -> tuple[np.ndarray, float]:
@@ -259,8 +238,8 @@ def _fit_once(
         labels = est.fit(X).predict(X) if hasattr(est, "predict") else est.fit_predict(X)
     except ValueError as err:  # a failed fit otherwise aborts the whole sweep opaquely
         hint = (
-            " Increase the mixture's 'reg_covar' (e.g. model_params={'reg_covar': 1e-4} where the "
-            "caller takes it), pass float64 data, or request a smaller range of K values."
+            " Increase the mixture's 'reg_covar' (e.g. clusterer=GaussianMixture(reg_covar=1e-4)), "
+            "pass float64 data, or request a smaller range of K values."
             if "ill-defined empirical covariance" in str(err)
             else ""
         )
@@ -330,7 +309,7 @@ def sweep_auto_k(
         raise ValueError(f"stability needs at least 2 runs to compare, got max_runs={max_runs}")
 
     if clusterer is None:
-        clusterer = _gmm()
+        clusterer = GaussianMixture()
     k_param = check_sweepable(clusterer)
 
     base = legacy_random(np.random.default_rng(rng))
@@ -407,8 +386,6 @@ class AutoKClusterer(ClusterMixin, BaseEstimator):
         ``niche_columns_``.
     uns_key
         Key of the per-K diagnostics in ``niche_uns_``.
-    model_params
-        Extra parameters for the default mixture; unused when *clusterer* is given.
     random_state
         Base seed of the sweep. Every fit is seeded from it, its run and its K.
     """
@@ -422,7 +399,6 @@ class AutoKClusterer(ClusterMixin, BaseEstimator):
         convergence_tol: float = 1e-2,
         store_labels: bool = False,
         uns_key: str = "niche_autok",
-        model_params: Mapping[str, Any] | None = None,
         random_state: int | None = None,
     ):
         self.n_clusters = n_clusters
@@ -431,7 +407,6 @@ class AutoKClusterer(ClusterMixin, BaseEstimator):
         self.convergence_tol = convergence_tol
         self.store_labels = store_labels
         self.uns_key = uns_key
-        self.model_params = model_params
         self.random_state = random_state
 
     def fit(self, X: Array, y: None = None) -> AutoKClusterer:
@@ -446,7 +421,7 @@ class AutoKClusterer(ClusterMixin, BaseEstimator):
         result = sweep_auto_k(
             X,
             candidates,
-            clusterer=self.clusterer if self.clusterer is not None else _gmm(self.model_params),
+            clusterer=self.clusterer if self.clusterer is not None else GaussianMixture(),
             max_runs=self.max_runs,
             convergence_tol=self.convergence_tol,
             rng=self.random_state,
