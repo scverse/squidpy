@@ -27,6 +27,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
     "sphinx_autodoc_typehints",
+    "scanpydoc",
     "sphinx.ext.intersphinx",
     "sphinx.ext.autosummary",
     "sphinx.ext.mathjax",
@@ -67,7 +68,6 @@ intersphinx_mapping = dict(  # noqa: C408
 templates_path = ["_templates"]
 source_suffix = {".rst": "restructuredtext", ".ipynb": "myst-nb"}
 master_doc = "index"
-pygments_style = "sphinx"
 
 # myst
 nb_execution_mode = "off"
@@ -94,16 +94,23 @@ suppress_warnings = ["download.not_readable", "git.too_shallow"]
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-# keep the per-key entries of squidpy.types out of the left nav; #1287 removes this
+# no nav entry per documented object: a function page would list itself under its own nav entry
 toc_object_entries = False
 autosummary_generate = True
 autodoc_member_order = "groupwise"
 autodoc_typehints = "signature"
+# show each parameter's default next to its type, as scanpy does
+typehints_defaults = "braces"
+# a closed vocabulary this long is unreadable spelled out, and `qc_image` spells it
+# twice, once bare and once inside a list; the alias name is the useful thing
+autodoc_type_aliases = {"QCMetric": "QCMetric"}
 autodoc_docstring_signature = True
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
-napoleon_use_rtype = True
+napoleon_use_rtype = False
+# fold the return type into the Returns section rather than giving it its own
+typehints_use_rtype = False
 napoleon_use_param = True
 todo_include_todos = False
 
@@ -161,10 +168,16 @@ linkcheck_ignore = [
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_theme = "sphinx_rtd_theme"
+html_theme = "scanpydoc"
 html_static_path = ["_static"]
 html_logo = "_static/img/squidpy_horizontal.png"
-html_theme_options = {"navigation_depth": 4, "logo_only": True}
+html_theme_options = {
+    "repository_url": "https://github.com/scverse/squidpy",
+    "repository_branch": "main",
+    "use_repository_button": True,
+    # the default of 4 drops the methods of the fit classes and the gr.neighbors classes from the nav
+    "max_navbar_depth": 5,
+}
 html_show_sphinx = False
 
 
@@ -210,16 +223,8 @@ def _append_default(app, what, name, obj, options, lines) -> None:  # type: igno
         lines.append(f"Default: ``{defaults[key]!r}``")
 
 
-def _skip_dict_api(app, what, name, obj, skip, options) -> bool | None:  # type: ignore[no-untyped-def]
-    """Hide the mapping API a params TypedDict inherits from :class:`dict`."""
-    return True if getattr(obj, "__qualname__", "").startswith("dict.") else None
-
-
 def setup(app: Sphinx) -> None:
     app.connect("builder-inited", lambda _app: _params_defaults())
     app.connect("autodoc-process-docstring", _append_default)
-    app.connect("autodoc-skip-member", _skip_dict_api)
     app.add_css_file("css/custom.css")
-    app.add_css_file("css/sphinx_gallery.css")
-    app.add_css_file("css/nbsphinx.css")
     app.add_css_file("css/dataframe.css")  # had to add this manually

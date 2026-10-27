@@ -300,7 +300,7 @@ def spatial_neighbors(
 
     Returns
     -------
-    If ``copy = True``, returns a :class:`~squidpy.gr.SpatialNeighborsResult` with the spatial connectivities and distances matrices.
+    If ``copy = True``, returns a :class:`~squidpy.types.SpatialNeighborsResult` with the spatial connectivities and distances matrices.
 
     Otherwise, modifies the ``adata`` with the following keys:
 
@@ -438,9 +438,9 @@ def spatial_neighbors_from_builder(
     %(adata)s
     builder
         Graph construction strategy to execute. Built-in builders subclass
-        {{class}}`~squidpy.gr.neighbors.GraphBuilderCSR`, while custom backends
+        :class:`~squidpy.gr.neighbors.GraphBuilderCSR`, while custom backends
         can implement the more generic
-        {{class}}`~squidpy.gr.neighbors.GraphBuilder` interface directly.
+        :class:`~squidpy.gr.neighbors.GraphBuilder` interface directly.
         Reusable post-build operations are also exposed via
         :class:`~squidpy.gr.neighbors.DistanceIntervalPostprocessor`,
         :class:`~squidpy.gr.neighbors.PercentilePostprocessor`, and
@@ -885,7 +885,7 @@ def mask_graph(
     """
     Mask the graph based on a polygon mask.
 
-    Given a spatial graph stored in :attr:`anndata.AnnData.obsp` ``['{{key_added}}_{{spatial_key}}_connectivities']`` and spatial coordinates stored in :attr:`anndata.AnnData.obsp` ``['{{spatial_key}}']``, it maskes the graph so that only edges fully contained in the polygons are kept.
+    Given a spatial graph stored in :attr:`anndata.AnnData.obsp` ``['{spatial_key}_connectivities']`` and spatial coordinates stored in :attr:`anndata.AnnData.obsm` ``['{spatial_key}']``, it masks the graph so that only edges fully contained in the polygons are kept.
 
     Parameters
     ----------
@@ -910,9 +910,9 @@ def mask_graph(
 
     Otherwise, modifies the ``adata`` with the following keys:
 
-        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_{{spatial_key}}_connectivities']`` - the spatial connectivities.
-        - :attr:`anndata.AnnData.obsp` ``['{{key_added}}_{{spatial_key}}_distances']`` - the spatial distances.
-        - :attr:`anndata.AnnData.uns`  ``['{{key_added}}_{{spatial_key}}']`` - :class:`dict` containing parameters.
+        - :attr:`anndata.AnnData.obsp` ``['{key_added}_{spatial_key}_connectivities']`` - the spatial connectivities.
+        - :attr:`anndata.AnnData.obsp` ``['{key_added}_{spatial_key}_distances']`` - the spatial distances.
+        - :attr:`anndata.AnnData.uns`  ``['{key_added}_{spatial_key}_neighbors']`` - :class:`dict` containing parameters.
 
     Notes
     -----
