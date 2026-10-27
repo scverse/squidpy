@@ -36,18 +36,17 @@ def make_blobs(n_per_blob: int = 30, n_features: int = 5, seed: int = 0) -> np.n
 
 
 def test_expand_n_clusters_adds_halo_to_a_tuple():
-    assert expand_n_clusters((2, 10)) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    assert expand_n_clusters((2, 10)) == (list(range(1, 12)), list(range(2, 11)))
 
 
-def test_expand_n_clusters_clamps_the_halo_at_one():
-    assert expand_n_clusters((1, 3)) == [1, 2, 3, 4]
+def test_expand_n_clusters_drops_k_below_two():
+    with pytest.warns(UserWarning, match=r"K < 2"):
+        assert expand_n_clusters((1, 3)) == ([1, 2, 3, 4], [2, 3])
 
 
-def test_expand_n_clusters_takes_a_sequence_literally():
-    assert expand_n_clusters([2, 3, 4, 5]) == [2, 3, 4, 5]
-    assert expand_n_clusters([2, 5, 9]) == [2, 5, 9]
-    # sorted, since stability compares each K with its neighbour in this order
-    assert expand_n_clusters([5, 2, 8, 3]) == [2, 3, 5, 8]
+def test_expand_n_clusters_halos_every_listed_k():
+    assert expand_n_clusters([2, 5, 9]) == ([1, 2, 3, 4, 5, 6, 8, 9, 10], [2, 5, 9])
+    assert expand_n_clusters([5, 2, 5, 3]) == ([1, 2, 3, 4, 5, 6], [2, 3, 5]), "sorted and deduplicated"
 
 
 def test_spectral_clustering_is_swept_on_n_clusters():
@@ -64,11 +63,10 @@ def test_spectral_clustering_is_swept_on_n_clusters():
     [
         ((2, 10, 3), r"must be \(min, max\)"),
         ((10, 2), r"min <= max"),
-        ([0, 1, 2], r"at least 1"),
-        ([2, 2, 3], r"must not contain duplicates"),
-        ([2, 3], r"at least 3 K values"),
+        ([0, 1], r"at least one value >= 2"),
     ],
 )
+@pytest.mark.filterwarnings("ignore:stability cannot be computed")
 def test_expand_n_clusters_rejects_bad_requests(n_clusters, match):
     with pytest.raises(ValueError, match=match):
         expand_n_clusters(n_clusters)
@@ -133,13 +131,13 @@ def test_sweep_uses_kmeans_init_but_overridable(monkeypatch):
     from squidpy.gr import _autok
 
     seen: list[str] = []
-    original = _autok.GaussianMixture
+    original = _autok.clone
 
-    def spy(*args, **kwargs):
-        seen.append(kwargs.get("init_params", "kmeans"))
-        return original(*args, **kwargs)
+    def spy(est):
+        seen.append(est.get_params()["init_params"])
+        return original(est)
 
-    monkeypatch.setattr(_autok, "GaussianMixture", spy)
+    monkeypatch.setattr(_autok, "clone", spy)
 
     sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, rng=0)
     assert set(seen) == {"kmeans"}
@@ -347,12 +345,13 @@ def _adata_with_runs(ks: list[int], n_runs: int) -> tuple[AnnData, dict[int, lis
 def test_cluster_stability_scores_obs_columns():
     adata, keys = _adata_with_runs([2, 3, 4], n_runs=3)
 
-    df = cluster_stability(adata, cluster_keys=keys, copy=True).uns["cluster_stability"]
+    stored = cluster_stability(adata, cluster_keys=keys, copy=True).uns["cluster_stability"]
+    df = stored["table"]
     assert list(df.index) == [2, 3, 4]
     # only the interior K is scored, the bounds are a halo that is compared against but never selectable
     assert df["stability_mean"].isna().tolist() == [True, False, True]
-    # the most stable K is the argmax of that column, not a separate flag
-    assert df["stability_mean"].idxmax() == 3
+    assert stored["best_k"] == df["stability_mean"].idxmax() == 3
+    assert stored["stability"].shape[0] == 1
 
 
 def test_cluster_stability_writes_to_uns():
@@ -361,7 +360,37 @@ def test_cluster_stability_writes_to_uns():
     assert "cluster_stability" not in adata.uns
 
     assert cluster_stability(adata, cluster_keys=keys, key_added="my_stability") is None
-    pd.testing.assert_frame_equal(adata.uns["my_stability"], expected)
+    pd.testing.assert_frame_equal(adata.uns["my_stability"]["table"], expected["table"])
+
+
+def test_cluster_stability_takes_a_score_fn():
+    adata, keys = _adata_with_runs([2, 3, 4], n_runs=2)
+    cluster_stability(adata, cluster_keys=keys, score_fn=lambda a, b: 0.25)
+    assert adata.uns["cluster_stability"]["table"].loc[3, "stability_mean"] == 0.25
+
+
+def test_cluster_auto_k_takes_spatialdata():
+    from spatialdata import SpatialData
+    from spatialdata.models import TableModel
+
+    sdata = SpatialData(tables={"table": TableModel.parse(AnnData(make_blobs()))})
+    cluster_auto_k(sdata, n_clusters=(2, 4), max_runs=2, rng=0, table_key="table")
+    assert sdata.tables["table"].obs["cluster_auto_k"].notna().all()
+
+
+def test_cluster_auto_k_rejects_sparse_input_for_a_given_mixture():
+    with pytest.raises(TypeError, match=r"does not support sparse input"):
+        cluster_auto_k(AnnData(csr_matrix(make_blobs())), n_clusters=(2, 4), clusterer=GaussianMixture(reg_covar=1e-4))
+
+
+class _NoiseLabeler(KMeans):
+    def predict(self, X, sample_weight=None):
+        return np.full(len(X), -1)
+
+
+def test_sweep_rejects_negative_labels():
+    with pytest.raises(ValueError, match=r"returned negative labels"):
+        sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, clusterer=_NoiseLabeler(n_init=1), rng=0)
 
 
 def test_cluster_stability_rejects_a_missing_column():
@@ -380,9 +409,11 @@ def test_cluster_stability_rejects_empty_cluster_keys():
 # parity with the reference implementation
 
 
-def _cc_expand(n_clusters: tuple[int, int]) -> list[int]:
-    # cellcharter 0.3.7, ClusterAutoK.__init__
-    return list(range(*(max(1, n_clusters[0] - 1), n_clusters[1] + 2)))
+def _cc_expand(n_clusters: tuple[int, int] | list[int]) -> list[int]:
+    # cellcharter main, ClusterAutoK.__init__ and _fit_n_clusters
+    ks = range(n_clusters[0], n_clusters[1] + 1) if isinstance(n_clusters, tuple) else n_clusters
+    ks = sorted({int(k) for k in ks if k >= 2})
+    return sorted({k + d for k in ks for d in (-1, 0, 1)})
 
 
 def _cc_mirror(stability: list[float], n_clusters: list[int]) -> np.ndarray:
@@ -398,9 +429,20 @@ def _cc_best_k(stability: np.ndarray, n_clusters: list[int]) -> int:
     return n_clusters[int(np.argmax(means)) + 1]
 
 
-@pytest.mark.parametrize("n_clusters", [(2, 10), (2, 4), (3, 7), (1, 5)])
+@pytest.mark.filterwarnings("ignore:stability cannot be computed")
+@pytest.mark.parametrize("n_clusters", [(2, 10), (2, 4), (3, 7), (1, 5), [5, 10, 15, 20], [2, 3, 7]])
 def test_expand_n_clusters_matches_cellcharter(n_clusters):
-    assert expand_n_clusters(n_clusters) == _cc_expand(n_clusters)
+    assert expand_n_clusters(n_clusters)[0] == _cc_expand(n_clusters)
+
+
+def test_cluster_auto_k_scores_every_listed_k():
+    """Non-consecutive K values are each scored against K-1 and K+1, as in CellCharter."""
+    adata = AnnData(make_blobs())
+    cluster_auto_k(adata, n_clusters=[2, 5], max_runs=2, rng=0)
+    table = adata.uns["cluster_auto_k"]["table"]
+    assert list(table.index) == [1, 2, 3, 4, 5, 6]
+    assert table["stability_mean"].notna().tolist() == [False, True, False, False, True, False]
+    assert adata.uns["cluster_auto_k"]["stability"].shape[0] == 2
 
 
 @pytest.mark.parametrize(("n_ks", "n_blocks"), [(5, 3), (6, 1), (4, 6), (11, 10)])

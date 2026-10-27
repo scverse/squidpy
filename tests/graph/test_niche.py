@@ -1151,3 +1151,32 @@ def test_niche_cellcharter_takes_a_mixture(dummy_adata2: AnnData, n_clusters):
     )
     assert dummy_adata2.obs["cellcharter_niche"].notna().all()
     assert mixture.get_params()["n_components"] == 1, "the mixture passed in is cloned, not set"
+
+
+def test_niche_cellcharter_auto_k_takes_a_sequence(dummy_adata2: AnnData):
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean", rng=0, n_clusters=[2, 3, 4], max_runs=2)
+    assert dummy_adata2.uns["cellcharter_niche_autok"]["best_k"] in {2, 3, 4}, "every listed K is scored"
+
+
+def test_niche_cellcharter_auto_k_is_reproducible_and_takes_a_mask():
+    adata = _tiny(n=80)
+    keep = Series(np.arange(80) < 60, index=adata.obs_names)
+    kw = {"distance": 2, "rng": 0, "n_clusters": (2, 3), "max_runs": 2, "cluster_mask": keep}
+    first = calculate_niche_cellcharter(adata, copy=True, **kw)
+    second = calculate_niche_cellcharter(adata, copy=True, **kw)
+    assert (first.obs["cellcharter_niche"].astype(str)[60:] == "not_a_niche").all()
+    pd.testing.assert_series_equal(first.obs["cellcharter_niche"], second.obs["cellcharter_niche"])
+
+
+def test_niche_cellcharter_rejects_a_non_mixture_clusterer(dummy_adata2: AnnData):
+    from sklearn.cluster import KMeans
+
+    with pytest.raises(TypeError, match=r"'clusterer' must be a GaussianMixture"):
+        calculate_niche_cellcharter(dummy_adata2, distance=2, n_clusters=3, clusterer=KMeans())
+
+
+def test_niche_cellcharter_warns_on_sweep_arguments_with_a_fixed_k(dummy_adata2: AnnData):
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    with pytest.warns(UserWarning, match=r"only apply to a sweep"):
+        calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean", rng=0, n_clusters=3, max_runs=3)

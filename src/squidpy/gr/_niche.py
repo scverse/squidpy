@@ -689,7 +689,7 @@ def calculate_niche_cellcharter(
     n_clusters
         Number of Gaussian mixture components, and therefore the number of niche
         labels produced per library or dataset. A ``(min, max)`` tuple or a sequence of
-        candidates instead selects the most stable K, fitting each candidate up to
+        K values instead selects the most stable of them, fitting each candidate up to
         ``max_runs`` times, as :func:`~squidpy.gr.cluster_auto_k` does. The sweep keeps the
         best of several fits per K, so rerunning with the selected K as an int does not
         reproduce its labels; use ``store_labels`` to keep the runners-up instead.
@@ -754,9 +754,20 @@ def calculate_niche_cellcharter(
 
     # `GaussianMixture` is a `Clusterer` as it stands, so a fixed K needs no wrapper. Its default
     # 'kmeans' init is CellCharter's too, for a fixed K and in the sweep alike.
+    if clusterer is not None and not isinstance(clusterer, GaussianMixture):
+        raise TypeError(
+            f"'clusterer' must be a GaussianMixture, got {type(clusterer).__name__}; see cluster_auto_k for others"
+        )
     mixture = GaussianMixture() if clusterer is None else clone(clusterer)
     fit: Clusterer
     if isinstance(n_clusters, int | np.integer):
+        if (max_runs, convergence_tol, store_labels) != (10, 1e-2, False):
+            warnings.warn(
+                "'max_runs', 'convergence_tol' and 'store_labels' only apply to a sweep; pass a tuple or a "
+                "sequence as 'n_clusters' to select K",
+                UserWarning,
+                stacklevel=2,
+            )
         fit = mixture.set_params(n_components=int(n_clusters))
     else:
         fit = AutoKClusterer(

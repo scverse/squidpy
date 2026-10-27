@@ -52,10 +52,10 @@ def cluster_auto_k(
     ----------
     %(adata)s
     n_clusters
-        Candidate numbers of clusters. A ``(min, max)`` tuple also fits ``min - 1`` and
-        ``max + 1``, because stability is only defined on interior K values and the bounds
-        would otherwise not be selectable. A sequence of candidates is taken literally and
-        gets no such halo, so its first and last entries can never be selected.
+        Numbers of clusters to select from: a ``(min, max)`` tuple for every K in that range,
+        or a sequence of K values, which need not be consecutive. As in CellCharter, each K
+        is scored by its agreement with K-1 and K+1, so those are fitted too. K < 2 cannot
+        be scored and is dropped with a warning.
     use_rep
         Key in ``adata.obsm`` holding the representation to cluster. If ``None``, uses
         ``adata.X``.
@@ -122,16 +122,15 @@ def cluster_auto_k(
     X = adata.obsm[use_rep] if use_rep is not None else adata.X
     if X is None:
         raise ValueError("'adata.X' is None. Pass a representation via 'use_rep'.")
-    if issparse(X) and clusterer is None:
+    if clusterer is None:
+        clusterer = GaussianMixture()
+    if issparse(X) and isinstance(clusterer, GaussianMixture):
         raise TypeError(
             "'GaussianMixture' does not support sparse input. Pass a dense representation via "
             "'use_rep', or densify with 'adata.X = adata.X.toarray()'."
         )
 
-    if clusterer is None:
-        clusterer = GaussianMixture()
-
-    candidates = expand_n_clusters(n_clusters)
+    candidates, scored = expand_n_clusters(n_clusters)
     logg.info(
         f"Selecting the number of clusters over K={candidates} with up to {max_runs} runs each "
         f"({len(candidates) * max_runs} {type(clusterer).__name__} fits at most)"
@@ -140,6 +139,7 @@ def cluster_auto_k(
     result = sweep_auto_k(
         X,
         candidates,
+        scored=scored,
         max_runs=max_runs,
         convergence_tol=convergence_tol,
         clusterer=clusterer,
@@ -191,9 +191,9 @@ def cluster_stability(
     If ``copy = True``, returns a copy of ``adata`` with the additions below; otherwise ``adata``
     is modified in place and ``None`` is returned. Either way it gains the following key:
 
-        - :attr:`anndata.AnnData.uns` ``['{key_added}']`` - per-K stability indexed by K, with
-          ``NaN`` on the two halo rows that are never scored. The most stable K is
-          ``df["stability_mean"].idxmax()``.
+        - :attr:`anndata.AnnData.uns` ``['{key_added}']`` - a dict with the per-K diagnostics
+          ``table`` (``NaN`` on the two halo rows that are never scored), the full
+          ``stability`` matrix and the most stable ``best_k``, as :func:`cluster_auto_k` stores them.
     """
     assert_isinstance(data, (AnnData, SpatialData), name="data")
     assert_isinstance(copy, bool, name="copy")
@@ -210,6 +210,7 @@ def cluster_stability(
     logg.info(f"Scored the stability of K={sorted(labels)} over {len(next(iter(labels.values())))} runs each")
     df = _stability_frame(sorted(labels), interior, stability)
 
-    _save_data(adata, attr="uns", key=key_added, data=df)
+    best_k = int(df["stability_mean"].idxmax())
+    _save_data(adata, attr="uns", key=key_added, data={"table": df, "stability": stability, "best_k": best_k})
 
     return adata if copy else None

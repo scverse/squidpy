@@ -7,6 +7,7 @@ Anything needing :class:`~anndata.AnnData` belongs in :mod:`squidpy.gr._cluster_
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable, Mapping, Sequence
 from itertools import combinations
 from typing import Any, NamedTuple
@@ -53,15 +54,17 @@ class ClusterAutoKResult(NamedTuple):
     labels: dict[int, np.ndarray]
 
 
-def expand_n_clusters(n_clusters: tuple[int, int] | Sequence[int]) -> list[int]:
-    """Resolve the requested K values into the list of K values to fit.
+def expand_n_clusters(n_clusters: tuple[int, int] | Sequence[int]) -> tuple[list[int], list[int]]:
+    """Resolve the requested K values into the K values to fit and the K values to score.
 
-    A ``(min, max)`` tuple is expanded to ``range(max(1, min - 1), max + 2)``: stability is
-    only defined on interior K values (see :func:`mirror_stability`), so the bounds need a
-    +-1 halo. ``min=1`` is clamped, so K=1 stays halo and is never selectable.
+    As CellCharter's ``ClusterAutoK`` does: a ``(min, max)`` tuple means every K in that
+    range, any other sequence the listed K values. Each requested K is scored by its
+    agreement with K-1 and K+1, so those are fitted too. K < 2 cannot be scored and is
+    dropped with a warning.
 
-    Any other sequence is taken as the K values to fit, sorted, and gets no halo: stability
-    compares each K with its neighbour in that order.
+    Returns
+    -------
+    The K values to fit and the K values to score, both sorted.
     """
     if isinstance(n_clusters, tuple):
         if len(n_clusters) != 2:
@@ -69,21 +72,16 @@ def expand_n_clusters(n_clusters: tuple[int, int] | Sequence[int]) -> list[int]:
         low, high = n_clusters
         if low > high:
             raise ValueError(f"'n_clusters' must be (min, max) with min <= max, got {n_clusters!r}")
-        if low < 1:
-            raise ValueError(f"'n_clusters' must be (min, max) with min >= 1, got {n_clusters!r}")
-        candidates = list(range(max(1, low - 1), high + 2))
+        requested = set(range(low, high + 1))
     else:
-        candidates = sorted(n_clusters)
+        requested = {int(k) for k in n_clusters}
 
-    if any(k < 1 for k in candidates):
-        raise ValueError(f"every value in 'n_clusters' must be at least 1, got {candidates!r}")
-    if len(candidates) != len(set(candidates)):
-        raise ValueError(f"'n_clusters' must not contain duplicates, got {candidates!r}")
-    if len(candidates) < 3:
-        raise ValueError(
-            f"stability is only defined on interior K values, so at least 3 K values are needed, got {candidates!r}."
-        )
-    return candidates
+    scored = sorted(k for k in requested if k >= 2)
+    if len(scored) < len(requested):
+        warnings.warn("stability cannot be computed for K < 2, ignoring those values", UserWarning, stacklevel=3)
+    if not scored:
+        raise ValueError(f"'n_clusters' must contain at least one value >= 2, got {n_clusters!r}")
+    return sorted({k + d for k in scored for d in (-1, 0, 1)}), scored
 
 
 def mirror_stability(blocks: Sequence[Sequence[float]]) -> np.ndarray:
@@ -121,8 +119,8 @@ def cluster_stability(
 ) -> tuple[list[int], np.ndarray]:
     """Score already-computed labelings by how well each K agrees with its neighbours.
 
-    The batch counterpart to the sweep inside the sweep, for labelings produced
-    elsewhere: only the labels are compared, so any clusterer will do.
+    The scoring step of the sweep on its own, for labelings produced elsewhere: only the
+    labels are compared, so any clusterer will do.
 
     Parameters
     ----------
@@ -199,9 +197,8 @@ def check_sweepable(clusterer: SweepableClusterer) -> str:
     Two things are checked, in the only order that works. The methods first, by
     ``isinstance`` (``SweepableClusterer`` is runtime-checkable), and
     ``get_params`` has to exist before it can be called. Then the parameters, which no
-    protocol can state; see ``SweepableClusterer.set_params``. Both
-    before any fitting, so an unusable clusterer says so immediately rather than after the
-    first fit.
+    protocol can state; see ``SweepableClusterer.set_params``. Both run before any fitting,
+    so an unusable clusterer says so immediately rather than after the first fit.
     """
     if not isinstance(clusterer, SweepableClusterer):
         # e.g. the biclustering estimators, which label rows and columns separately rather
@@ -247,7 +244,12 @@ def _fit_once(
     # labels are in [0, k), and the estimator already rejects k > n_samples, so uint32 cannot
     # overflow. Every run's labeling is kept for the whole sweep, so the narrower dtype is
     # what keeps that affordable.
-    labels = np.asarray(labels).astype(np.uint32, copy=False)
+    labels = np.asarray(labels)
+    if labels.min() < 0:  # e.g. -1 for noise, which uint32 would silently wrap around
+        raise ValueError(
+            f"{type(est).__name__} returned negative labels at K={k}; the sweep needs one cluster per observation"
+        )
+    labels = labels.astype(np.uint32, copy=False)
     # only used to pick which run's labeling is kept for this K; `best_k` never sees it.
     # scikit-learn has no `nll_`, and `score` means different things per estimator, so this
     # is only ever compared within one K. `NaN` for clusterers without one keeps the first run.
@@ -259,6 +261,7 @@ def sweep_auto_k(
     X: Array,
     n_clusters: Sequence[int],
     *,
+    scored: Sequence[int] | None = None,
     clusterer: SweepableClusterer | None = None,
     max_runs: int = 10,
     convergence_tol: float = 1e-2,
@@ -272,6 +275,9 @@ def sweep_auto_k(
         Feature matrix with observations as rows.
     n_clusters
         The K values to fit, already resolved by :func:`expand_n_clusters`.
+    scored
+        The K values to score, each of which needs its K-1 and K+1 in *n_clusters*.
+        Defaults to every K but the first and the last.
     clusterer
         A ``SweepableClusterer``, whose number of clusters and
         ``random_state`` this sets per fit, so its own are ignored. Defaults to
@@ -315,8 +321,14 @@ def sweep_auto_k(
     base = legacy_random(np.random.default_rng(rng))
 
     ks = list(n_clusters)
-    # adjacent pairs rather than `k + 1` arithmetic, so non-contiguous K lists work
+    # adjacent pairs rather than `k + 1` arithmetic, so non-contiguous K lists work. A pair
+    # across a gap only feeds the rows of unscored K values, which `rows` drops.
     pairs = list(zip(ks[:-1], ks[1:], strict=True))
+    interior = ks[1:-1]
+    scored = interior if scored is None else list(scored)
+    if not set(scored) <= set(interior):
+        raise ValueError(f"every scored K needs a fitted neighbour on both sides, got {scored!r} for {ks!r}")
+    rows = [interior.index(k) for k in scored]
 
     labels_per_run: list[dict[int, np.ndarray]] = []
     best_nll: dict[int, float] = {}
@@ -340,7 +352,7 @@ def sweep_auto_k(
             # this run's K against every stored run's K+1, one direction only, which
             # `mirror_stability` then folds into a symmetric per-K score
             blocks.extend(_score_block(run_labels, stored, pairs, fowlkes_mallows_score) for stored in labels_per_run)
-            curve = mirror_stability(blocks).mean(axis=1)
+            curve = mirror_stability(blocks)[rows].mean(axis=1)
             if previous_curve is not None and mean_absolute_percentage_error(previous_curve, curve) < convergence_tol:
                 labels_per_run.append(run_labels)
                 converged = True
@@ -349,8 +361,8 @@ def sweep_auto_k(
 
         labels_per_run.append(run_labels)
 
-    stability = mirror_stability(blocks)
-    table = _stability_frame(ks, ks[1:-1], stability)
+    stability = mirror_stability(blocks)[rows]
+    table = _stability_frame(ks, scored, stability)
     table.insert(2, "nll", [best_nll[k] for k in ks])
     return ClusterAutoKResult(
         table=table,
@@ -371,7 +383,7 @@ class AutoKClusterer(ClusterMixin, BaseEstimator):
     Parameters
     ----------
     n_clusters
-        Candidate numbers of clusters. A ``(min, max)`` tuple gains a ``+-1`` halo, see
+        Numbers of clusters to select from, a ``(min, max)`` range or a sequence; see
         :func:`~squidpy.gr._autok.expand_n_clusters`.
     clusterer
         The ``SweepableClusterer`` fitted at every K. Defaults to a
@@ -379,8 +391,8 @@ class AutoKClusterer(ClusterMixin, BaseEstimator):
     max_runs
         Maximum number of repetitions per K.
     convergence_tol
-        Stop early once the mean stability curve settles, see
-        the auto-K sweep.
+        Stop early once the mean stability curve changes by less than this between
+        consecutive runs.
     store_labels
         Also keep the labeling of every fitted K, as ``k{K}`` entries in
         ``niche_columns_``.
@@ -413,7 +425,7 @@ class AutoKClusterer(ClusterMixin, BaseEstimator):
         """Sweep the candidate K values over *X*, leaving the selected labeling in ``labels_``."""
         # expanded in `fit`, not `__init__`: a scikit-learn estimator hands back the
         # parameters it was given, so expanding early would make `clone` lose the halo
-        candidates = expand_n_clusters(self.n_clusters)
+        candidates, scored = expand_n_clusters(self.n_clusters)
         logg.info(
             f"Selecting the number of clusters over K={candidates} with up to {self.max_runs} runs each "
             f"({len(candidates) * self.max_runs} fits at most)"
@@ -421,7 +433,8 @@ class AutoKClusterer(ClusterMixin, BaseEstimator):
         result = sweep_auto_k(
             X,
             candidates,
-            clusterer=self.clusterer if self.clusterer is not None else GaussianMixture(),
+            scored=scored,
+            clusterer=self.clusterer,
             max_runs=self.max_runs,
             convergence_tol=self.convergence_tol,
             rng=self.random_state,
