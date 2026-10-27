@@ -378,8 +378,8 @@ def _one_cluster(adata: AnnData) -> None:
 @pytest.mark.parametrize(
     ("mutate", "kwargs", "match"),
     [
-        (None, {"handle_nan": "nonsense"}, "Invalid `handle_nan` mode"),
-        (None, {"normalization": "invalid_mode"}, "Invalid normalization mode"),
+        (None, {"handle_nan": "nonsense"}, "Expected `handle_nan` to be one of"),
+        (None, {"normalization": "invalid_mode"}, "Expected `normalization` to be one of"),
         (_nan_cluster, {}, "Found `NaN` values"),
         (_one_cluster, {}, "Expected at least `2` clusters"),
     ],

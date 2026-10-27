@@ -13,10 +13,10 @@ from squidpy._validators import (
     assert_key_in_sdata,
     assert_non_empty_sequence,
     assert_non_negative,
-    assert_one_of,
     assert_positive,
     check_tuple_needles,
     get_valid_values,
+    normalize_choice,
 )
 
 
@@ -132,14 +132,16 @@ class TestAssertIsinstance:
             assert_isinstance(3.14, (str, int), name="x")
 
 
-# assert_one_of
-class TestAssertOneOf:
-    def test_valid(self):
-        assert_one_of("a", ["a", "b", "c"], name="x")
+# normalize_choice
+class TestNormalizeChoice:
+    @pytest.mark.parametrize(("value", "expected"), [("a", "a"), ("A", "a"), ("x", "X"), (None, None), (4, 4)])
+    def test_valid(self, value, expected):
+        assert normalize_choice(value, ["a", "X", None, 4], name="x") == expected
 
-    def test_invalid(self):
-        with pytest.raises(ValueError, match="one of"):
-            assert_one_of("z", ["a", "b"], name="x")
+    @pytest.mark.parametrize("value", ["z", 5, ["a"]])
+    def test_invalid(self, value):
+        with pytest.raises(ValueError, match=r"Expected `x` to be one of `\['a', 'b'\]`"):
+            normalize_choice(value, ["a", "b"], name="x")
 
 
 # assert_key_in_adata
