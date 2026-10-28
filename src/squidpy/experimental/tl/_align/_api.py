@@ -1,17 +1,4 @@
-"""The public alignment functions, built on the array-in / array-out estimators.
-
-Thin orchestrators: resolve the ``*_key`` arguments to in-memory arrays and call the
-estimator, which never sees a container.
-
-STalign fits and writes in separate calls: a diffeomorphism has no SpatialData
-representation, so the fit is the return value and its
-:meth:`~squidpy.experimental.tl.StalignFit.transform` method writes.
-:func:`align_landmarks` does both in one call, its result being an affine.
-
-``inplace=False`` hands back what would have been written, as in scanpy; a function
-returning a fit takes no such flag. ``key_added`` always names the write target, never
-whether to write.
-"""
+"""The public alignment functions, built on the array-in / array-out estimators."""
 
 from __future__ import annotations
 
@@ -96,10 +83,7 @@ def _read_coords_2d(adata: AnnData, *, key: str, side: str, name: str) -> np.nda
 
 
 def _as_chw(value: Array, *, what: str, ndim: int = 2) -> np.ndarray:
-    """Promote an unchannelled array to a single-channel one.
-
-    ``ndim`` is the number of *spatial* axes: 2 for a section, 3 for a reference volume.
-    """
+    """Promote an unchannelled array with ``ndim`` spatial axes to a single-channel one."""
     array = np.asarray(value)
     if array.ndim == ndim:
         array = array[None]
@@ -271,9 +255,7 @@ def stalign_align_image(
     solver_params
         LDDMM solver tuning; see
         :class:`~squidpy.types.StalignImageParams` for the accepted
-        keys, their meaning, and their defaults. ``a``, ``epL``, ``epT`` and ``epV`` are
-        lengths and step sizes in the units the elements carry, and their defaults are
-        tuned for pixel-sized units: an element scaled to microns needs them rescaled.
+        keys, their meaning, and their defaults.
 
     Returns
     -------
@@ -339,10 +321,7 @@ def _element_axes(
     coordinate_system: str,
     side: str,
 ) -> list[np.ndarray]:
-    """Physical axes of an image element, read off its transformation.
-
-    Axis order matches the array's spatial axes.
-    """
+    """Physical axes of an image element, read off its transformation, in array axis order."""
     from spatialdata.transformations import get_transformation
 
     spatial = ("z", "y", "x")[-(array.ndim - 1) :]
@@ -367,12 +346,7 @@ def _element_axes(
 def _assert_table_coords_share_frame(
     sdata: SpatialData, *, adata: AnnData, spatial_key: str, coordinate_system: str
 ) -> None:
-    """Refuse to transform ``obsm`` coordinates that are not in ``coordinate_system``.
-
-    A table's ``obsm`` sits in the intrinsic frame of the element it annotates, which
-    coincides with ``coordinate_system`` only when that element's transform into it is the
-    identity. Otherwise the result is plausible but wrong coordinates.
-    """
+    """Refuse to transform ``obsm`` coordinates that are not in ``coordinate_system``."""
     from spatialdata.transformations import get_transformation
 
     region = adata.uns.get("spatialdata_attrs", {}).get("region")
@@ -673,10 +647,7 @@ def _read_landmarks(
 
 
 def _coordinate_system_of(sdata: SpatialData, *, element: str, side: str) -> str:
-    """The coordinate system the shapes element is annotated in.
-
-    Raises if it is ambiguous: everything registered to it moves with the fit.
-    """
+    """The one coordinate system the shapes element is annotated in; raises if ambiguous."""
     from spatialdata.transformations import get_transformation
 
     systems = sorted(get_transformation(sdata.shapes[element], get_all=True))
