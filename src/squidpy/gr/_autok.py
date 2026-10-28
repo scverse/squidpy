@@ -281,13 +281,6 @@ def sweep_auto_k(
         ``random_state`` this sets per fit, so its own are ignored. Defaults to
         :class:`~sklearn.mixture.GaussianMixture`.
 
-        Being stochastic is a real requirement, not a formality: the sweep averages each K's
-        agreement with its neighbours over runs, and a deterministic clusterer gives the same
-        labeling every run, so there is nothing to average, and it is rejected rather than run.
-        Estimators that infer their own K, such as
-        :class:`~sklearn.mixture.BayesianGaussianMixture`, are accepted but rarely useful: their
-        number of clusters is only an upper bound.
-
         Of scikit-learn's own clusterers that leaves
         :class:`~sklearn.mixture.GaussianMixture`,
         :class:`~sklearn.cluster.KMeans`, :class:`~sklearn.cluster.MiniBatchKMeans`,

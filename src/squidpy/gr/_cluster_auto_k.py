@@ -71,11 +71,6 @@ def cluster_auto_k(
         :class:`~sklearn.cluster.KMeans`, cuML's, or your own) as long as it takes a
         number of clusters and a ``random_state``, both of which this sets per fit. It is
         cloned for every fit, so the one passed in is never touched.
-
-        Being stochastic is a real requirement rather than a formality: stability averages
-        each K's agreement with its neighbours over runs, and a deterministic clusterer gives
-        the same labeling every run, so there is nothing to average, and it is rejected rather
-        than run. Clusterers that infer their own K are accepted but rarely useful.
     %(rng)s
         Seeds every individual fit.
     store_labels
