@@ -53,9 +53,9 @@ def test_spectral_clustering_is_swept_on_n_clusters():
     # it also takes `n_components` (the embedding width), which must not be mistaken for K
     from sklearn.cluster import SpectralClustering
 
-    from squidpy.gr._autok import check_sweepable
+    from squidpy.gr._autok import check_k_clusterer
 
-    assert check_sweepable(SpectralClustering()) == "n_clusters"
+    assert check_k_clusterer(SpectralClustering()) == "n_clusters"
 
 
 @pytest.mark.parametrize(
@@ -503,7 +503,7 @@ def test_autok_clusterer_sweeps_a_non_mixture():
 
 
 def test_cluster_auto_k_takes_a_clusterer():
-    """Any sweepable clusterer, not only the default mixture."""
+    """Any KClusterer, not only the default mixture."""
     adata = AnnData(make_blobs())
     cluster_auto_k(adata, n_clusters=(2, 4), clusterer=KMeans(n_init=1), max_runs=3, rng=0, key_added="kmeans_k")
 

@@ -21,7 +21,7 @@ from sklearn.mixture import GaussianMixture
 from spatialdata._logging import logger as logg
 
 from squidpy._utils import RNGLike, SeedLike, legacy_random
-from squidpy.gr._clusterers import SweepableClusterer
+from squidpy.gr._clusterers import KClusterer
 
 # The two spellings of the number-of-clusters parameter, in the order they are tried.
 # `n_clusters` first: SpectralClustering takes both, and there `n_components` is the
@@ -191,16 +191,16 @@ def _string_labels(labeling: np.ndarray) -> pd.Categorical:
     return pd.Categorical(labeling.astype(str), categories=present.astype(str))
 
 
-def check_sweepable(clusterer: SweepableClusterer) -> str:
+def check_k_clusterer(clusterer: KClusterer) -> str:
     """Name of *clusterer*'s number-of-clusters parameter, rejecting what cannot be swept.
 
     Two things are checked, in the only order that works. The methods first, by
-    ``isinstance`` (``SweepableClusterer`` is runtime-checkable), and
+    ``isinstance`` (``KClusterer`` is runtime-checkable), and
     ``get_params`` has to exist before it can be called. Then the parameters, which no
-    protocol can state; see ``SweepableClusterer.set_params``. Both run before any fitting,
+    protocol can state; see ``KClusterer.set_params``. Both run before any fitting,
     so an unusable clusterer says so immediately rather than after the first fit.
     """
-    if not isinstance(clusterer, SweepableClusterer):
+    if not isinstance(clusterer, KClusterer):
         # e.g. the biclustering estimators, which label rows and columns separately rather
         # than assigning one label per observation, and so have no `fit_predict`
         raise ValueError(
@@ -224,9 +224,7 @@ def check_sweepable(clusterer: SweepableClusterer) -> str:
     return k_param
 
 
-def _fit_once(
-    clusterer: SweepableClusterer, k_param: str, X: Array, k: int, random_state: int
-) -> tuple[np.ndarray, float]:
+def _fit_once(clusterer: KClusterer, k_param: str, X: Array, k: int, random_state: int) -> tuple[np.ndarray, float]:
     """One run: a fresh clone of *clusterer* at ``k``, seeded by ``random_state``."""
     est = clone(clusterer).set_params(**{k_param: k, "random_state": random_state})
     try:
@@ -262,7 +260,7 @@ def sweep_auto_k(
     n_clusters: Sequence[int],
     *,
     scored: Sequence[int] | None = None,
-    clusterer: SweepableClusterer | None = None,
+    clusterer: KClusterer | None = None,
     max_runs: int = 10,
     convergence_tol: float = 1e-2,
     rng: SeedLike | RNGLike | None = None,
@@ -279,7 +277,7 @@ def sweep_auto_k(
         The K values to score, each of which needs its K-1 and K+1 in *n_clusters*.
         Defaults to every K but the first and the last.
     clusterer
-        A ``SweepableClusterer``, whose number of clusters and
+        A ``KClusterer``, whose number of clusters and
         ``random_state`` this sets per fit, so its own are ignored. Defaults to
         :class:`~sklearn.mixture.GaussianMixture`.
 
@@ -316,7 +314,7 @@ def sweep_auto_k(
 
     if clusterer is None:
         clusterer = GaussianMixture()
-    k_param = check_sweepable(clusterer)
+    k_param = check_k_clusterer(clusterer)
 
     base = legacy_random(np.random.default_rng(rng))
 
@@ -386,7 +384,7 @@ class AutoKClusterer(ClusterMixin, BaseEstimator):
         Numbers of clusters to select from, a ``(min, max)`` range or a sequence; see
         :func:`~squidpy.gr._autok.expand_n_clusters`.
     clusterer
-        The ``SweepableClusterer`` fitted at every K. Defaults to a
+        The ``KClusterer`` fitted at every K. Defaults to a
         :class:`~sklearn.mixture.GaussianMixture`, which is what CellCharter selects over.
     max_runs
         Maximum number of repetitions per K.
@@ -406,7 +404,7 @@ class AutoKClusterer(ClusterMixin, BaseEstimator):
         self,
         *,
         n_clusters: tuple[int, int] | Sequence[int],
-        clusterer: SweepableClusterer | None = None,
+        clusterer: KClusterer | None = None,
         max_runs: int = 10,
         convergence_tol: float = 1e-2,
         store_labels: bool = False,

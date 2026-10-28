@@ -1169,11 +1169,32 @@ def test_niche_cellcharter_auto_k_is_reproducible_and_takes_a_mask():
     pd.testing.assert_series_equal(first.obs["cellcharter_niche"], second.obs["cellcharter_niche"])
 
 
-def test_niche_cellcharter_rejects_a_non_mixture_clusterer(dummy_adata2: AnnData):
+@pytest.mark.parametrize("n_clusters", [3, (2, 3)])
+def test_niche_cellcharter_takes_any_k_clusterer(dummy_adata2: AnnData, n_clusters):
     from sklearn.cluster import KMeans
 
-    with pytest.raises(TypeError, match=r"'clusterer' must be a GaussianMixture"):
-        calculate_niche_cellcharter(dummy_adata2, distance=2, n_clusters=3, clusterer=KMeans())
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    calculate_niche_cellcharter(
+        dummy_adata2, distance=2, rng=0, n_clusters=n_clusters, max_runs=2, clusterer=KMeans(n_init=1)
+    )
+    assert dummy_adata2.obs["cellcharter_niche"].nunique() in {2, 3}
+
+
+def test_niche_cellcharter_bayesian_mixture_caps_k(dummy_adata2: AnnData):
+    from sklearn.mixture import BayesianGaussianMixture
+
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    calculate_niche_cellcharter(dummy_adata2, distance=2, rng=0, n_clusters=5, clusterer=BayesianGaussianMixture())
+    assert 1 <= dummy_adata2.obs["cellcharter_niche"].nunique() <= 5
+
+
+def test_niche_cellcharter_rejects_a_clusterer_without_k(dummy_adata2: AnnData):
+    from sklearn.cluster import DBSCAN
+
+    with pytest.raises(TypeError, match=r"must implement fit_predict"):
+        calculate_niche_cellcharter(dummy_adata2, distance=2, n_clusters=3, clusterer=object())
+    with pytest.raises(TypeError, match=r"takes neither 'n_components' nor 'n_clusters'"):
+        calculate_niche_cellcharter(dummy_adata2, distance=2, n_clusters=3, clusterer=DBSCAN())
 
 
 def test_niche_cellcharter_warns_on_sweep_arguments_with_a_fixed_k(dummy_adata2: AnnData):

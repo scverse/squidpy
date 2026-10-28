@@ -18,7 +18,7 @@ from squidpy._utils import RNGLike, SeedLike
 from squidpy._validators import assert_isinstance, assert_key_in_adata
 from squidpy.gr._autok import _stability_frame, expand_n_clusters, label_columns, sweep_auto_k, to_uns
 from squidpy.gr._autok import cluster_stability as _cluster_stability
-from squidpy.gr._clusterers import SweepableClusterer
+from squidpy.gr._clusterers import KClusterer
 from squidpy.gr._utils import _save_data, extract_adata_if_sdata
 
 __all__ = ["cluster_auto_k", "cluster_stability"]
@@ -32,7 +32,7 @@ def cluster_auto_k(
     use_rep: str | None = None,
     max_runs: int = 10,
     convergence_tol: float = 1e-2,
-    clusterer: SweepableClusterer | None = None,
+    clusterer: KClusterer | None = None,
     rng: SeedLike | RNGLike | None = None,
     store_labels: bool = False,
     key_added: str = "cluster_auto_k",
@@ -67,7 +67,7 @@ def cluster_auto_k(
         of consecutive runs falls below this value.
     clusterer
         Fitted at every candidate K instead of the default mixture. Any
-        ``SweepableClusterer`` will do (scikit-learn's
+        :class:`~squidpy.gr.KClusterer` will do (scikit-learn's
         :class:`~sklearn.cluster.KMeans`, cuML's, or your own) as long as it takes a
         number of clusters and a ``random_state``, both of which this sets per fit. It is
         cloned for every fit, so the one passed in is never touched.

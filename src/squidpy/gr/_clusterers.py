@@ -34,8 +34,8 @@ class Clusterer(Protocol):
 
 
 @runtime_checkable
-class SweepableClusterer(Clusterer, Protocol):
-    """A :class:`Clusterer` whose number of clusters squidpy also sets, per fit.
+class KClusterer(Clusterer, Protocol):
+    """A :class:`~squidpy.gr.Clusterer` whose number of clusters squidpy also sets, per fit.
 
     The auto-K sweep fits one clusterer per candidate K and per run, each on a fresh
     :func:`~sklearn.base.clone`, so the estimator passed in is never mutated.

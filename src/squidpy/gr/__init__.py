@@ -14,6 +14,7 @@ from squidpy.gr._build import (
     spatial_neighbors_radius,
 )
 from squidpy.gr._cluster_auto_k import cluster_auto_k, cluster_stability
+from squidpy.gr._clusterers import Clusterer, KClusterer
 from squidpy.gr._ligrec import ligrec
 from squidpy.gr._nhood import (
     NhoodEnrichmentResult,
@@ -53,6 +54,8 @@ __all__ = [
     "calculate_niche_spatialleiden",
     "cluster_auto_k",
     "cluster_stability",
+    "Clusterer",
+    "KClusterer",
     "ligrec",
     "centrality_scores",
     "interaction_matrix",
