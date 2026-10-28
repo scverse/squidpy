@@ -512,7 +512,7 @@ def lddmm(
     sigmaB: float,
     sigmaA: float,
     sigmaR: float,
-    sigmaP: float,
+    sigmaP: float | None = None,
     muA: np.ndarray | jax.Array | None,
     muB: np.ndarray | jax.Array | None,
     tol: float | None,
@@ -522,7 +522,8 @@ def lddmm(
 
     Every tuning parameter is required; the ``fit_stalign_*`` functions resolve them from
     the ``Stalign*Params`` schemas in :mod:`squidpy.types`. Only the ``initial_velocity`` /
-    ``velocity_grid`` / ``points_*`` sentinels default to ``None``, meaning "not supplied".
+    ``velocity_grid`` / ``points_*`` sentinels default to ``None``, meaning "not supplied",
+    and ``sigmaP``, which weights the point term and so is needed only with ``points_*``.
 
     The rank is read off ``len(xI)``: two axes registers a section onto a section, three
     registers a section into a reference volume. Nothing in the descent is rank-specific.
@@ -558,6 +559,8 @@ def lddmm(
         source_landmarks = jnp.zeros((0, ndim), dtype=jax_dtype())
         target_landmarks = jnp.zeros((0, ndim), dtype=jax_dtype())
     else:
+        if sigmaP is None:
+            raise ValueError("Expected `sigmaP` alongside `points_source` / `points_target`.")
         source_landmarks = jnp.asarray(points_source, dtype=jax_dtype())
         target_landmarks = jnp.asarray(points_target, dtype=jax_dtype())
 

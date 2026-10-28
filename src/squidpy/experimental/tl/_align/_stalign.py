@@ -34,10 +34,6 @@ else:
 #: the rasterization knobs, and the affine that becomes the solver's `L`/`T`.
 _CONSUMED_KEYS = frozenset({"dx", "blur", "raster_expand", "initial_affine"})
 
-#: `sigmaP` is not a rank-3 knob and the public schema omits it, but `lddmm` requires the
-#: argument, so the volume path supplies it rather than exposing it.
-_VOLUME_SIGMA_P = 2e1
-
 _JAX_REQUIRED = 'STalign alignment requires JAX: `pip install "squidpy[jax]"`.'
 
 
@@ -386,10 +382,6 @@ class StalignVolumeFit(StalignFit):
         return transform_grid_row_col(axes, self.velocity_grid, self.velocity, self.affine, direction=direction)
 
 
-# Why the full 3D deformation rather than an affine plane plus an in-plane 2D fit: on a
-# MERFISH-into-Allen-CCF run the diffeomorphism bends the fitted surface 2-5 voxels away
-# from its affine plane for the outer 5% of cells: one to two cortical layers. The
-# `initial_*` arguments are therefore an initialisation, not the answer.
 def fit_stalign_volume(
     ref: Array,
     query: Array,
@@ -410,11 +402,7 @@ def fit_stalign_volume(
     from ._stalign_impl._core import jax_dtype, lddmm
     from ._stalign_impl._helpers import affine_xy_to_rc, as_chw, resolve_axes
 
-    # `dict[str, Any]`, not the TypedDict: `sigmaP` is not one of its keys
-    opts: dict[str, Any] = {
-        **resolve_params(solver_params, StalignVolumeParams, arg_name="solver_params"),
-        "sigmaP": _VOLUME_SIGMA_P,
-    }
+    opts = resolve_params(solver_params, StalignVolumeParams, arg_name="solver_params")
     dtype = jax_dtype()
 
     target_image = as_chw(query, name="query", ndim=2)
