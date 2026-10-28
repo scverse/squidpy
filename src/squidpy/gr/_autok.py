@@ -281,12 +281,12 @@ def sweep_auto_k(
         ``random_state`` this sets per fit, so its own are ignored. Defaults to
         :class:`~sklearn.mixture.GaussianMixture`.
 
-        Of scikit-learn's own clusterers that leaves
+        Of scikit-learn's own clusterers, that includes
         :class:`~sklearn.mixture.GaussianMixture`,
         :class:`~sklearn.cluster.KMeans`, :class:`~sklearn.cluster.MiniBatchKMeans`,
         :class:`~sklearn.cluster.BisectingKMeans` and
-        :class:`~sklearn.cluster.SpectralClustering`; the rule is the contract, though, so
-        anything else matching it works too, scikit-learn or not.
+        :class:`~sklearn.cluster.SpectralClustering`; anything else matching the contract
+        works too, scikit-learn or not.
     max_runs
         Maximum number of repetitions per K. Must be at least 2: a single run leaves
         stability undefined, since there is nothing to compare against.
