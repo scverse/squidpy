@@ -144,6 +144,7 @@ nitpicky = True  # this is linkcheck for Sphinx.
 nitpick_ignore = [
     ("py:func", "numba.prange"),  # no reference for this function
     ("py:class", "matplotlib_scalebar.ScaleBar"),  # this project has no sphinx docs
+    ("py:class", "fast_array_utils.types.HasArrayNamespace"),  # not in fast-array-utils' docs
     # TODO: fix using scanpydoc.elegant_typehints
     ("py:class", "pathlib._local.Path"),
     ("py:data", "typing.Union"),
