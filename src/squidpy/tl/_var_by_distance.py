@@ -252,12 +252,12 @@ def _get_coordinates(
     if nan_ids.size != 0:
         nan_ids = np.unique(nan_ids)
 
-    batch_coord = adata.obsm["spatial"][~np.isnan(adata.obsm["spatial"]).any(axis=1)]
+    batch_coord = adata.obsm[spatial_key][~np.isnan(adata.obsm[spatial_key]).any(axis=1)]
 
     if isinstance(anchor, list):
         anchor_coord = np.array(anchor).reshape(1, -1)
     else:
-        anchor_arr = np.array(adata[adata.obs[annotation] == anchor].obsm["spatial"])
+        anchor_arr = np.array(adata[adata.obs[annotation] == anchor].obsm[spatial_key])
         anchor_coord = anchor_arr[~np.isnan(anchor_arr).any(axis=1)]
     return anchor_coord, batch_coord, nan_ids
 
