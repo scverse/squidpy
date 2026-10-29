@@ -539,3 +539,11 @@ def test_landmark_pairs_must_match_with_an_initial_affine() -> None:
         fit_stalign_image(
             *_pair(), landmarks_ref=_LM_REF, landmarks_query=_LM_REF[:1], initial_affine=np.eye(3), niter=1
         )
+
+
+def test_micron_scale_axes_are_accepted_in_the_default_precision() -> None:
+    from squidpy.experimental.tl._align._stalign import fit_stalign_image
+
+    image = np.random.default_rng(0).random((1, 200, 28))
+    axes = [np.arange(200) * 2.7 + 1000.0, np.arange(28) * 2.7]
+    fit_stalign_image(image, image, ref_axes=axes, query_axes=axes, a=40.0, nt=1, niter=1)

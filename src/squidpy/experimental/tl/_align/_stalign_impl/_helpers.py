@@ -74,7 +74,10 @@ def explicit_axes(value: Sequence[Array], shape: tuple[int, ...], name: str) -> 
     lengths = tuple(axis.shape[0] for axis in resolved)
     if lengths != shape:
         raise ValueError(f"Expected `{name}` lengths {shape}, found {lengths}.")
-    if not all(jnp.allclose(jnp.diff(axis), axis[1] - axis[0]) for axis in resolved):
+    # checked on the caller's values: after a cast to float32, coordinates in the hundreds
+    # already carry spacing errors above allclose's tolerance
+    given = [np.asarray(axis, dtype=float) for axis in value]
+    if not all(np.allclose(np.diff(axis), axis[1] - axis[0]) for axis in given):
         raise ValueError(f"Expected each `{name}` axis to be evenly spaced.")
     return resolved
 
