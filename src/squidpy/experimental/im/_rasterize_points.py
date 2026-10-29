@@ -17,8 +17,6 @@ if TYPE_CHECKING:
     from spatialdata import SpatialData
     from xarray import DataArray
 
-#: ``axis`` and ``rasterize`` are the JAX-free primitives the STalign solver imports, so
-#: they are part of this module's surface even though only ``rasterize_points`` is public API.
 __all__ = ["axis", "rasterize", "rasterize_points", "sample_volume"]
 
 
@@ -192,8 +190,6 @@ def rasterize_points(
 
     grid_x, grid_y, image = rasterize(np.asarray(frame["x"]), np.asarray(frame["y"]), dx=dx, blur=blur, expand=expand)
 
-    # The raster's own pixel grid is index space; this puts it back where the points are.
-    # `Scale` first, then `Translation`, since the grid origin is a physical offset.
     transformation = TransformSequence(
         [Scale([dx, dx], axes=("y", "x")), Translation([grid_y[0], grid_x[0]], axes=("y", "x"))]
     )
@@ -251,8 +247,7 @@ def sample_volume(
         raise ValueError(f"Expected `volume` to have {ndim} or {ndim + 1} axes, found shape {arr.shape}.")
     resolved = [np.asarray(axis, dtype=float) for axis in axes]
     for position, values in enumerate(resolved):
-        # A single-sample axis has no spacing to divide by; without this the index comes
-        # out as inf or nan and every sampled value is silently garbage.
+        # a single-sample axis has no spacing to divide by
         if values.ndim != 1 or values.shape[0] < 2:
             raise ValueError(f"Expected `axes[{position}]` to hold at least two coordinates, found {values.shape}.")
     pts = np.asarray(points, dtype=float)

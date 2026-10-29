@@ -24,14 +24,10 @@ if TYPE_CHECKING:
 
     JaxArray = jax.Array
 else:
-    # Bound at runtime, not just under TYPE_CHECKING: `sphinx_autodoc_typehints` calls
-    # `get_type_hints` on the fit classes, and jax is an optional extra that must not be
-    # imported here. `Any` is the placeholder that keeps that resolvable.
     JaxArray = Any
 
 
-#: Keys the fit functions consume themselves rather than forwarding to the solver:
-#: the rasterization knobs, and the affine that becomes the solver's `L`/`T`.
+#: Keys the fit functions consume themselves rather than forward to the solver.
 _CONSUMED_KEYS = frozenset({"dx", "blur", "raster_expand", "initial_affine"})
 
 _JAX_REQUIRED = 'STalign alignment requires JAX: `pip install "squidpy[jax]"`.'
@@ -73,8 +69,7 @@ class StalignFit:
 
     #: Dimensionality of the reference frame the fit maps into.
     rank: ClassVar[Literal[2, 3]] = 2
-    #: Which entry point produced the fit. The discriminant :meth:`from_uns` decodes on,
-    #: because ``rank`` alone does not separate an obs fit from an image fit.
+    #: Which entry point produced the fit; what :meth:`from_uns` decodes on.
     kind: ClassVar[Literal["obs", "image", "volume"]]
 
     def transform_points(
@@ -144,8 +139,6 @@ class StalignFit:
 
         fitted_in = getattr(self, "coordinate_system", None)  # only the raster fits record one
         if isinstance(data, SpatialData) and fitted_in is not None:
-            # a raster fit took its units from an image element's transformation, so the
-            # coordinates it is applied to have to sit in the fit's frame
             _assert_table_coords_share_frame(
                 data,
                 adata=_resolve_table(data, table_key, side="query"),
@@ -340,10 +333,7 @@ class StalignVolumeFit(StalignFit):
         pts = jnp.asarray(points, dtype=jax_dtype())
         if pts.ndim != 2 or pts.shape[1] != 2:
             raise ValueError(f"Expected an (N, 2) `(x, y)` array, found shape {pts.shape}.")
-        # This owns both halves of the convention change: the lift of a flat section onto the
-        # `z = 0` plane, and the reversal between the caller's `(x, y, z)` and the solver's
-        # `(z, y, x)`. The section is the fixed image, so mapping it into the reference is the
-        # *backward* direction: the same map the objective samples the volume through.
+        # the section is the fixed image, so section -> reference is the backward map
         lifted = jnp.stack((jnp.zeros(pts.shape[0], dtype=pts.dtype), pts[:, 1], pts[:, 0]), axis=1)
         transformed = transform_points_row_col(
             self.velocity_grid, self.velocity, self.affine, lifted, direction="backward"
@@ -375,8 +365,6 @@ class StalignVolumeFit(StalignFit):
             raise ValueError(
                 f"Expected 3 reference axes and 2 query axes, found {len(volume_axes)} and {len(section_axes)}."
             )
-        # The same lift `fit_stalign_volume` applies: a single-sample z axis at the origin
-        # turns the flat section into something the rank-3 solver can address.
         lifted = (jnp.zeros(1, dtype=jax_dtype()), *section_axes)
         axes = volume_axes if direction == "forward" else lifted
         return transform_grid_row_col(axes, self.velocity_grid, self.velocity, self.affine, direction=direction)
@@ -408,21 +396,15 @@ def fit_stalign_volume(
     target_image = as_chw(query, name="query", ndim=2)
     source_image = as_chw(ref, name="ref", ndim=3)
     if source_image.shape[1] < 2:
-        # A `(c, y, x)` section passed as the reference reads as a one-voxel-deep volume,
-        # which is the likely way to arrive here. Named explicitly because there is no
-        # out-of-plane information in it to fit: `stalign_align_image` is the 2D path.
         raise ValueError(
             f"Expected `ref` to be a volume with at least two samples along `z`, found depth "
             f"{source_image.shape[1]}. A single plane carries no out-of-plane information; use "
             f"`stalign_align_image` to register two 2D images."
         )
 
-    # The reference is the moving image: it is the volume that gets warped onto the
-    # section, so it plays LDDMM's `I`/`xI` role and the section plays `J`/`xJ`.
+    # the volume is the moving image (LDDMM's I/xI), the section the fixed one (J/xJ)
     source_grid = resolve_axes(ref_axes, source_image.shape[1:], "ref_axes")
     section_grid = resolve_axes(query_axes, target_image.shape[1:], "query_axes")
-    # Upstream's whole 3D-to-slice special case: give the section a single-sample z axis
-    # at the origin and a length-1 z extent, and the rank-3 solver does the rest.
     target_grid = (jnp.zeros(1, dtype=dtype), *section_grid)
     target_image = target_image[:, None]
 
@@ -446,12 +428,7 @@ def fit_stalign_volume(
             [[1.0, 0.0, 0.0], [0.0, cos, -sin], [0.0, sin, cos]],
             dtype=dtype,
         )
-        # Send the volume's centre at `initial_slice` to the section's centre. Written as
-        # `centre_section - linear @ centre_volume` rather than by negating the volume's z
-        # and centring in-plane: the short form silently assumes the volume's own in-plane
-        # axes are centred on the origin, which `centred_axes` satisfies and `_element_axes`
-        # (what every container-level fit uses) does not, and it leaves `linear` out of
-        # the z term so `initial_scale` moves the slice it was asked to centre on.
+        # send the volume's centre at `initial_slice` to the section's centre
         centre_volume = jnp.asarray(
             [source_grid[0][slice_index], jnp.mean(source_grid[1]), jnp.mean(source_grid[2])],
             dtype=dtype,
@@ -473,8 +450,6 @@ def fit_stalign_volume(
     )
     return StalignVolumeFit(
         **fit_result,
-        # Indexed rather than passed whole: `resolve_axes` is rank-agnostic and returns a
-        # variadic tuple, while the class documents the exact arity its rank implies.
         ref_axes=(source_grid[0], source_grid[1], source_grid[2]),
         query_axes=(section_grid[0], section_grid[1]),
     )
@@ -518,8 +493,7 @@ def _initial_affine_and_landmarks(
     dtype = jax_dtype()
     source_landmarks = target_landmarks = None
     if landmarks_ref is not None:
-        # The solver runs in row-col (y, x); landmarks arrive as (x, y) like every other
-        # public coordinate, so they swap at the same boundary the clouds do.
+        # landmarks arrive as (x, y); the solver runs in row-col
         source_landmarks = validate_points(landmarks_query, name="landmarks_query")[:, ::-1]
         target_landmarks = validate_points(landmarks_ref, name="landmarks_ref")[:, ::-1]
 
@@ -577,9 +551,6 @@ def fit_stalign_obs(
     return StalignObsFit(
         **fit_result,
         aligned_points=aligned_rc[:, ::-1],
-        # No raster axes: the grids here are the internal density rasters at `dx`
-        # resolution, not a frame any real image lives on. Offering `warp_image`
-        # off them would quietly resample the caller's image onto a coarse, unrelated grid.
     )
 
 

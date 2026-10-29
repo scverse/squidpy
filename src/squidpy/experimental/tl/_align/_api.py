@@ -295,8 +295,6 @@ def _fit_raster[F: StalignFit](
 
     ref_array = _read_image(sdata_ref, ref_image, side="reference", ndim=ref_ndim)
     query_array = _read_image(query_container, query_image, side="query")
-    # The estimator is container-agnostic, so the query frame is stamped on here rather
-    # than threaded through it: it is what `transform` has to check coordinates against.
     return dataclasses.replace(
         fit_fn(
             ref=ref_array,
@@ -522,9 +520,6 @@ def align_landmarks(
         )
 
     if not isinstance(data_ref, AnnData | SpatialData):
-        # The landmarks themselves, not containers holding them: there is no key to address
-        # and nothing to write into, so this returns the matrix and refuses the container-only
-        # arguments. `fit_landmarks` validates the pair, so nothing is re-checked here.
         if data_query is None:
             raise ValueError(
                 "`data_ref` is an array of landmarks, so `data_query` must be the matching "
@@ -557,9 +552,6 @@ def align_landmarks(
     )
 
     if key_added is not None and isinstance(query_container, SpatialData) and query_table is None:
-        # `key_added` writes to a table's `obsm`, named by `table_key`. But `table_key` also
-        # moves the landmark read into that table's `obsm`, so shapes-element landmarks can
-        # never be combined with `key_added`.
         raise ValueError(
             "`key_added` writes into a table's `obsm`, so it needs `table_key`, which also reads the "
             "landmarks from that table. With the landmarks in shapes elements, use "
@@ -581,9 +573,7 @@ def align_landmarks(
             )
 
         moving_cs = _coordinate_system_of(query_container, element=query_lm_key, side="query")
-        # Registering moves *everything* in `moving_cs`. If the reference sits in that same
-        # coordinate system of the same object, it would be dragged along with the query:
-        # silently producing a wrong answer rather than failing.
+        # registering moves everything in `moving_cs`, a reference there included
         if (
             data_ref is query_container
             and ref_table is None
@@ -639,8 +629,6 @@ def _read_landmarks(
         )
     from spatialdata import transform
 
-    # In the coordinate system, not the element's intrinsic frame: the fit is registered
-    # onto that coordinate system, so that is the frame its landmarks have to be in.
     coordinate_system = _coordinate_system_of(container, element=landmark_key, side=side)
     geometry = transform(container.shapes[landmark_key], to_coordinate_system=coordinate_system).geometry
     return np.column_stack([geometry.x.to_numpy(), geometry.y.to_numpy()])

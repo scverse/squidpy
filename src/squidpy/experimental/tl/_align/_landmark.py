@@ -28,9 +28,6 @@ def fit_landmarks(ref: np.ndarray, query: np.ndarray, *, method: Literal["simila
     query = validate_xy(query, name="query")
     if ref.shape != query.shape:
         raise ValueError(f"`ref` and `query` must have the same shape; got {ref.shape} and {query.shape}.")
-    # 2 distinct pairs fix the 4 DOF of a similarity; the 6-DOF affine needs 3 off a line,
-    # since on a line it is exact *on* the landmarks and arbitrary off them, with no residual
-    # to reveal it.
     need = 2 if method == "similarity" else 3
     if ref.shape[0] < need:
         raise ValueError(f"`{method}` needs at least {need} landmark pairs, got {ref.shape[0]}.")
@@ -42,9 +39,7 @@ def fit_landmarks(ref: np.ndarray, query: np.ndarray, *, method: Literal["simila
 
     from skimage.transform import estimate_transform
 
-    # skimage's similarity is Umeyama restricted to proper rotations: it never mirrors, where
-    # spatialdata's (and so napari-spatialdata's) picks the reflection sign from an affine fit
-    # and flips on (near-)collinear landmarks.
+    # skimage's similarity never mirrors; spatialdata's flips on near-collinear landmarks
     fitted = estimate_transform(method, src=query, dst=ref)
     # skimage >= 0.26 returns a falsy FailedEstimation; 0.25 returns NaN params
     if not fitted or not np.isfinite(fitted.params).all():

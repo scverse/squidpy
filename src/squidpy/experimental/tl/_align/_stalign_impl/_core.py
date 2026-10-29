@@ -15,14 +15,10 @@ from squidpy.experimental.im import _rasterize_points
 
 __all__ = ["interp", "jax_dtype", "lddmm", "reverse_axes", "transform_grid_row_col", "transform_points_row_col"]
 
-#: An ordered per-axis coordinate vector, one entry per spatial axis. Two entries for the
-#: 2D section-to-section fits, three for fitting a section into a reference volume; the
-#: solver reads its rank off ``len(axes)`` rather than assuming either.
+#: One coordinate vector per spatial axis; the solver reads its rank off ``len(axes)``.
 Axes = Sequence[jax.Array]
 
-#: Iteration at which the mixture-weight E step switches on (STalign.py:1233). Before
-#: this the weights are frozen at their initial values, so the objective changes
-#: definition here and its value jumps discontinuously.
+#: Iteration at which the mixture-weight E step switches on (STalign.py:1233).
 MIXTURE_E_STEP_START = 50
 
 
@@ -39,8 +35,6 @@ def reverse_axes(ndim: int) -> jax.Array:
     converts between the two conventions, and being its own inverse it serves both
     directions.
     """
-    # Built in NumPy: it is a compile-time constant, and JAX rejects a plain list as a
-    # multidimensional index.
     return jnp.asarray(np.eye(ndim + 1)[[*reversed(range(ndim)), ndim]], dtype=jax_dtype())
 
 
@@ -76,10 +70,7 @@ def interp(
         raise ValueError(
             f"Expected interpolation coordinates to have leading axis of size {ndim}, found `{coords.shape}`."
         )
-    # A single-sample axis has no step to divide by, and `x[axis][1]` on it does not raise:
-    # JAX clamps out-of-bounds indices, so the step comes out as zero and every sampled
-    # value is silently inf or nan. Guarded here because this is the one place every
-    # caller's coordinates get converted to indices.
+    # JAX clamps out-of-bounds indices, so a single-sample axis would give a zero step
     for axis, values in enumerate(x):
         if values.shape[0] < 2:
             raise ValueError(
@@ -169,10 +160,6 @@ def _contrast_transform(source_image: jax.Array, target_image: jax.Array, weight
     return (coefficients.T @ design).reshape(target_image.shape)
 
 
-#: The stable-length axis builder, shared with the point rasteriser so the velocity grid
-#: and the density grid cannot drift apart. It lives in :mod:`squidpy.experimental.im`
-#: because it is pure NumPy and that module carries no JAX dependency; the one JAX caller
-#: here casts on the way out.
 _axis = _rasterize_points.axis
 
 
@@ -225,8 +212,6 @@ def _update_mixture_weights(
     muB: jax.Array,
     iteration: int,
 ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]:
-    # Every spatial axis, however many there are: `(-1, -2)` at rank 2, `(-1, -2, -3)`
-    # when the target is a volume. What survives the sum is the per-channel mean.
     spatial_axes = tuple(range(1, target_image.ndim))
     if estimate_muA:
         muA = jnp.sum(artifact_weights * target_image, axis=spatial_axes) / jnp.maximum(
@@ -263,8 +248,7 @@ def _update_mixture_weights(
         total = total + jnp.max(total) * 1e-6
         return match / total, artifact / total, background / total
 
-    # Before the E step switches on the weights stay at their initial 0.5/0.4/0.1,
-    # while muA/muB are still re-estimated every 5th iteration.
+    # before the E step the weights keep their initial values; muA/muB still update every 5th iteration
     match_weights, artifact_weights, background_weights = jax.lax.cond(
         iteration >= MIXTURE_E_STEP_START,
         _e_step,
@@ -316,9 +300,7 @@ def _lddmm_loss(
     fft_velocity = jnp.fft.fftn(velocity, axes=spatial)
     # Sum over time and the vector component, leaving one term per velocity-grid cell.
     reg_energy = jnp.sum(jnp.sum(jnp.abs(fft_velocity) ** 2, axis=(0, velocity.ndim - 1)) * ll) * dv_prod / 2.0
-    # One division per axis rather than one by their product: `(x / n) / m` and
-    # `x / (n * m)` differ in the last bit, and the 2D path is pinned bit-for-bit against
-    # the reference bundle.
+    # one division per axis: `x / (n * m)` differs from upstream in the last bit
     for axis in spatial:
         reg_energy = reg_energy / velocity.shape[axis]
     reg_energy = reg_energy / sigmaR**2
@@ -333,10 +315,7 @@ def _lddmm_loss(
     return total, (contrast_source, transformed_points, match_energy, reg_energy, point_energy)
 
 
-# Only what genuinely cannot be traced is static: `niter` sizes the energy trace, `tol`
-# is tested against `None` in Python, and `estimate_mu*` pick a branch in Python. The
-# tuning scalars are traced, so retuning any of them reuses the compiled loop instead of
-# paying for a fresh trace of `value_and_grad` through the interpolation and FFTs.
+# static only where Python needs the value; the tuning scalars stay traced
 @partial(jax.jit, static_argnames=("niter", "tol", "estimate_muA", "estimate_muB"))
 def _lddmm_run(
     linear,
@@ -382,8 +361,7 @@ def _lddmm_run(
     loss_and_grad = jax.value_and_grad(_lddmm_loss, argnums=(0, 1, 2), has_aux=True)
 
     dtype = jax_dtype()
-    # `niter=0` means "evaluate the initial state and stop"; the trace still needs a
-    # slot so the carry has a fixed shape.
+    # one slot even for niter=0, so the carry has a fixed shape
     energies = jnp.full((max(niter, 1),), jnp.nan, dtype=dtype)
     initial = (
         jnp.asarray(0),
@@ -469,18 +447,11 @@ def _lddmm_run(
         iteration, energies = carry[0], carry[-1]
         if tol is None:
             return iteration < niter
-        # Compare against `patience` iterations ago rather than the previous step: the
-        # weights only move every 5th iteration, so consecutive energies plateau and
-        # then jump, and a one-step test would stop on the plateau.
+        # compare against `patience` iterations ago: the weights move only every 5th iteration
         recent = energies[jnp.maximum(iteration - 1, 0)]
         older = energies[jnp.maximum(iteration - 1 - patience, 0)]
         improving = (older - recent) > tol * jnp.abs(older)
-        # The whole comparison window has to sit after the E step switches on. The
-        # objective changes definition at `MIXTURE_E_STEP_START` and its value jumps
-        # upward there, which reads as "no longer improving" to any stopping rule; the
-        # first energy computed with the new weights is at `MIXTURE_E_STEP_START + 1`, so
-        # the oldest index we may look at is that, hence the `+ 2` once the window and the
-        # one-step lag are accounted for.
+        # keep the window after the E step switches on, where the objective jumps
         warming_up = iteration < MIXTURE_E_STEP_START + 2 + patience
         return (iteration < niter) & (warming_up | improving)
 
@@ -601,9 +572,7 @@ def lddmm(
     estimate_muA = muA is None
     estimate_muB = muB is None
 
-    # Precomputed here in Python so the diffeo-phase step sizes stay bit-identical to
-    # `epL / 10.0` (the `(it >= diffeo_start) * 9` scaling at STalign.py:1205-1206)
-    # rather than being derived from a traced scalar at the solver's active precision.
+    # precomputed so the diffeo-phase steps are bit-identical to upstream's `epL / 10.0`
     final = _lddmm_run(
         linear,
         translation=translation,
@@ -659,8 +628,6 @@ def lddmm(
         "match_weights": match_weights,
         "background_weights": background_weights,
         "artifact_weights": artifact_weights,
-        # Per-iteration objective, so a caller can tell a converged run from a diverged
-        # one without running it again. Trailing entries stay NaN if `tol` stopped early.
         "energies": energies[:niter],
         "n_iter": int(completed),
     }
