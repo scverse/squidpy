@@ -186,7 +186,7 @@ def test_fixture_samples_are_off_grid(primitives):
 
 
 def test_fixture_stays_inside_velocity_grid(primitives, velocity_grid):
-    """Keeps the padding divergence (D5) out of every test that is not about it."""
+    """Keeps the out-of-domain padding difference out of every test that is not about it."""
     points = np.asarray(primitives["points"])
     for axis, column in zip(velocity_grid, points.T, strict=True):
         assert column.min() > float(axis[0]) and column.max() < float(axis[-1])
@@ -374,14 +374,14 @@ def test_contrast_transform_freezes_the_ridge_coefficients():
 
 
 def test_rasterize_grid_matches_upstream(primitives, clouds):
-    """Ledger row D2, fixed: the raster axes are identical to upstream's."""
+    """The raster axes are identical to upstream's."""
     grid_x, grid_y, _ = _helpers.rasterize(clouds.ref[:, 0], clouds.ref[:, 1], **F.RASTER_PARAMS)
     np.testing.assert_allclose(grid_x, primitives["raster_ref_x"], rtol=0, atol=1e-9)
     np.testing.assert_allclose(grid_y, primitives["raster_ref_y"], rtol=0, atol=1e-9)
 
 
 def test_velocity_grid_matches_upstream(primitives, source_grid):
-    """Ledger row D2, fixed: same off-by-one, same fix, in ``_build_velocity_grid``."""
+    """The velocity grid has upstream's length, without its off-by-one."""
     axes, _ = source_grid
     built = _core._build_velocity_grid(axes, a=F.LDDMM_PARAMS["a"], expand=F.LDDMM_PARAMS["expand"])
     np.testing.assert_allclose(np.asarray(built[0]), primitives["xv_upstream_0"], rtol=0, atol=1e-9)
@@ -390,7 +390,7 @@ def test_velocity_grid_matches_upstream(primitives, source_grid):
 
 @pytest.mark.parametrize("step", [30.0, 7.3, 0.017])
 def test_grid_length_is_stable_against_float_rounding(step):
-    """The other half of D2: ``np.arange(lo, hi + step, step)`` had an unstable length."""
+    """``np.arange(lo, hi + step, step)`` had an unstable length; the grid does not."""
     from squidpy.experimental.im._rasterize_points import axis
 
     assert axis is _core._axis
@@ -414,7 +414,7 @@ def test_transform_points_backward_matches_upstream(fitted, primitives):
 
 
 def test_backward_transform_inverts_better(fitted, primitives):
-    """D6, stated usefully: squidpy's backward map is the better inverse of the forward one."""
+    """squidpy's backward map is the better inverse of the forward one."""
     points = np.asarray(primitives["points"])
     roundtrip = _transform_rc(fitted, primitives["points_forward"], direction="backward")
     ours = rel(roundtrip, points)
@@ -438,7 +438,7 @@ def test_interp_outside_domain_matches_upstream(primitives, source_grid):
 
 
 def test_interp_outside_domain_is_border_padding(primitives, source_grid):
-    """The positive half of D5: squidpy's behaviour is exactly upstream's 'border' mode."""
+    """Outside the domain squidpy behaves exactly like upstream's 'border' mode."""
     axes, image = source_grid
     got = _core.interp(axes, image, jnp.asarray(primitives["interp_coords_outside"]))
     error = rel(got, primitives["interp_border_outside"])
@@ -450,7 +450,7 @@ RASTER_BUDGET = 0.06
 
 
 def test_rasterize_stays_within_budget(primitives, clouds):
-    """D1 is a deliberate speedup, so it gets a measured budget rather than equality."""
+    """Rasterisation is a deliberate speedup, so it gets a measured budget rather than equality."""
     _, _, got = _helpers.rasterize(clouds.ref[:, 0], clouds.ref[:, 1], **F.RASTER_PARAMS)
     expected = primitives["raster_ref"]
     got = np.asarray(got)
@@ -479,7 +479,7 @@ def _residual(linear, translation, source, target) -> float:
 
 
 def test_affine_from_points_is_equivalent_when_well_conditioned(primitives):
-    """D7: the two are different estimators, not the same one implemented twice."""
+    """The affine from landmarks: different estimators, equivalent when well conditioned."""
     source = np.asarray(primitives["landmarks_query"])[:, ::-1]
     target = np.asarray(primitives["landmarks_ref"])[:, ::-1]
 
@@ -508,7 +508,7 @@ def test_affine_from_points_is_equivalent_when_well_conditioned(primitives):
 
 
 def test_affine_from_points_refuses_ill_conditioning(primitives):
-    """D7: on near-collinear landmarks upstream's ``inv(XᵀX)`` collapses; squidpy refuses."""
+    """On near-collinear landmarks upstream's ``inv(XᵀX)`` collapses; squidpy refuses."""
     source, target = primitives["ill_src"], primitives["ill_dst"]
     with pytest.raises(ValueError, match="not collinear"):
         _helpers.affine_from_points(jnp.asarray(source), jnp.asarray(target))
@@ -742,7 +742,7 @@ def test_image_warp_matches_upstream(image_reference):
 
 
 def test_on_grid_sampling_costs_six_orders_of_magnitude():
-    """Ledger row D10, measured rather than asserted."""
+    """Sampling exactly on grid lines costs agreement, measured rather than asserted."""
     matched = _load("image_trajectory_matched")
     axes = (jnp.asarray(matched["axis_0"]), jnp.asarray(matched["axis_1"]))
     result = _core.lddmm(
@@ -758,7 +758,7 @@ def test_on_grid_sampling_costs_six_orders_of_magnitude():
     )
     degraded = rel(result["velocity"], matched["v"])
     assert 1e-6 < degraded < 1e-1, (
-        f"on-grid sampling now costs {degraded:.3e}; if this has become exact, D10 is gone "
+        f"on-grid sampling now costs {degraded:.3e}; if this has become exact, the on-grid difference is gone "
         f"and the off-grid fixture design can be simplified"
     )
 
@@ -985,7 +985,7 @@ def test_slice_sample_volume_matches_upstream(slice_reference, slice_axes, order
 
 
 def test_slice_regularizer_axes_diverge_from_upstream(slice_reference):
-    """Ledger row D11, measured: squidpy's rank-3 regulariser is the 3-axis one."""
+    """squidpy's rank-3 regulariser is the 3-axis one, upstream's the 2-axis one."""
     xv = tuple(jnp.asarray(slice_reference[f"xv_{axis}"]) for axis in range(3))
     section = tuple(jnp.asarray(slice_reference[f"query_axis_{axis}"]) for axis in range(2))
     reference = tuple(jnp.asarray(slice_reference[f"ref_axis_{axis}"]) for axis in range(3))
