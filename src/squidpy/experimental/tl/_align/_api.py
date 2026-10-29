@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     import numpy.typing as npt
+    import xarray as xr
     from fast_array_utils.types import HasArrayNamespace as Array
 
     from ._stalign import StalignObsFit
@@ -93,8 +94,8 @@ def _as_chw(value: Array, *, what: str, ndim: int = 2) -> np.ndarray:
     return array
 
 
-def _read_image(container: SpatialData, key: str, *, side: str, ndim: int = 2) -> np.ndarray:
-    """Read a channels-first array from a SpatialData image element."""
+def _read_image(container: SpatialData, key: str, *, side: str, ndim: int, scale: str) -> xr.DataArray:
+    """The image element's DataArray at ``scale``."""
     if not isinstance(container, SpatialData):
         raise TypeError(f"`image_key` names a SpatialData image, but the {side} is a {type(container).__name__}.")
     if key not in container.images:
@@ -102,7 +103,7 @@ def _read_image(container: SpatialData, key: str, *, side: str, ndim: int = 2) -
 
     from squidpy.experimental.im._utils import get_element_data
 
-    element = get_element_data(container.images[key], "scale0", "image", key)
+    element = get_element_data(container.images[key], scale, "image", key)
     if ndim == 3 and "z" not in element.dims:
         raise ValueError(
             f"`image_key={key!r}` on the {side} is a 2D image, but this needs a volume with a `z` axis. "
@@ -110,7 +111,7 @@ def _read_image(container: SpatialData, key: str, *, side: str, ndim: int = 2) -
         )
     if ndim == 2 and "z" in element.dims:
         raise ValueError(f"`image_key={key!r}` on the {side} is a volume, but this needs a 2D image.")
-    return _as_chw(element.data, what=f"`image_key={key!r}`", ndim=ndim)
+    return element
 
 
 def _write_coords(
@@ -227,6 +228,7 @@ def stalign_align_image(
     image_key: str | tuple[str, str],
     ref_coordinate_system: str = "global",
     query_coordinate_system: str = "global",
+    scale: str | tuple[str, str] = "scale0",
     landmarks_ref: Array | None = None,
     landmarks_query: Array | None = None,
     **solver_params: Unpack[StalignImageParams],
@@ -251,6 +253,9 @@ def stalign_align_image(
         translation the elements carry supply the units, so two images at different
         resolutions need nothing restated: and nothing can be restated to contradict
         the container.
+    scale
+        Multiscale level to fit on, or a ``(ref, query)`` pair. A coarser level fits faster;
+        its physical axes come from that level's own transformation, so the units stay right.
     landmarks_ref, landmarks_query
         Optional paired ``(x, y)`` landmark arrays (matched by row order), in the units of
         the corresponding ``*_coordinate_system``: the same units the elements' own
@@ -276,6 +281,7 @@ def stalign_align_image(
         image_key,
         ref_coordinate_system=ref_coordinate_system,
         query_coordinate_system=query_coordinate_system,
+        scale=scale,
         ref_ndim=2,
         landmarks_ref=landmarks_ref,
         landmarks_query=landmarks_query,
@@ -291,46 +297,37 @@ def _fit_raster[F: StalignFit](
     *,
     ref_coordinate_system: str,
     query_coordinate_system: str,
+    scale: str | tuple[str, str],
     ref_ndim: int,
     **fit_kwargs: Any,
 ) -> F:
     """Read both image elements, fit them on their physical axes and stamp the query frame on the fit."""
     ref_image, query_image = _resolve_pair(image_key, name="image_key")
+    ref_scale, query_scale = _resolve_pair(scale, name="scale")
     query_container = _query_of(
         sdata_ref, sdata_query, ref_address=(ref_image,), query_address=(query_image,), key_name="image_key"
     )
 
-    ref_array = _read_image(sdata_ref, ref_image, side="reference", ndim=ref_ndim)
-    query_array = _read_image(query_container, query_image, side="query")
+    ref = _read_image(sdata_ref, ref_image, side="reference", ndim=ref_ndim, scale=ref_scale)
+    query = _read_image(query_container, query_image, side="query", ndim=2, scale=query_scale)
     return dataclasses.replace(
         fit_fn(
-            ref=ref_array,
-            query=query_array,
-            ref_axes=_element_axes(
-                sdata_ref, ref_image, ref_array, coordinate_system=ref_coordinate_system, side="reference"
-            ),
-            query_axes=_element_axes(
-                query_container, query_image, query_array, coordinate_system=query_coordinate_system, side="query"
-            ),
+            ref=_as_chw(ref.data, what=f"`image_key={ref_image!r}`", ndim=ref_ndim),
+            query=_as_chw(query.data, what=f"`image_key={query_image!r}`", ndim=2),
+            ref_axes=_element_axes(ref, ref_image, coordinate_system=ref_coordinate_system, side="reference"),
+            query_axes=_element_axes(query, query_image, coordinate_system=query_coordinate_system, side="query"),
             **fit_kwargs,
         ),
         coordinate_system=query_coordinate_system,
     )
 
 
-def _element_axes(
-    container: SpatialData,
-    key: str,
-    array: np.ndarray,
-    *,
-    coordinate_system: str,
-    side: str,
-) -> list[np.ndarray]:
-    """Physical axes of an image element, read off its transformation, in array axis order."""
+def _element_axes(element: xr.DataArray, key: str, *, coordinate_system: str, side: str) -> list[np.ndarray]:
+    """Physical axes of one image level, read off its own transformation, in array axis order."""
     from spatialdata.transformations import get_transformation
 
-    spatial = ("z", "y", "x")[-(array.ndim - 1) :]
-    transformation = get_transformation(container.images[key], to_coordinate_system=coordinate_system)
+    spatial = tuple(dim for dim in element.dims if dim in ("z", "y", "x"))
+    transformation = get_transformation(element, to_coordinate_system=coordinate_system)
     matrix = np.asarray(transformation.to_affine_matrix(input_axes=spatial, output_axes=spatial), dtype=float)
 
     off_diagonal = matrix[: len(spatial), : len(spatial)] - np.diag(np.diag(matrix[: len(spatial), : len(spatial)]))
@@ -342,8 +339,8 @@ def _element_axes(
     scale = np.diag(matrix[: len(spatial), : len(spatial)])
     offset = matrix[: len(spatial), -1]
     return [
-        np.arange(size, dtype=float) * step + shift
-        for size, step, shift in zip(array.shape[1:], scale, offset, strict=True)
+        np.arange(element.sizes[dim], dtype=float) * step + shift
+        for dim, step, shift in zip(spatial, scale, offset, strict=True)
     ]
 
 
@@ -381,6 +378,7 @@ def stalign_align_volume(
     image_key: str | tuple[str, str],
     ref_coordinate_system: str = "global",
     query_coordinate_system: str = "global",
+    scale: str | tuple[str, str] = "scale0",
     initial_slice: int | None = None,
     initial_rotation: float = 0.0,
     initial_scale: float = 1.0,
@@ -415,6 +413,9 @@ def stalign_align_volume(
     ref_coordinate_system, query_coordinate_system
         Coordinate systems to read each element's physical axes in. The scale and
         translation the elements carry supply the units, so nothing has to be restated.
+    scale
+        Multiscale level to fit on, or a ``(ref, query)`` pair. A coarser level fits faster;
+        its physical axes come from that level's own transformation, so the units stay right.
     initial_slice
         Index along the reference's ``z`` axis to centre the section on. ``None`` centres
         on the middle of the volume.
@@ -443,6 +444,7 @@ def stalign_align_volume(
         image_key,
         ref_coordinate_system=ref_coordinate_system,
         query_coordinate_system=query_coordinate_system,
+        scale=scale,
         ref_ndim=3,
         initial_slice=initial_slice,
         initial_rotation=initial_rotation,

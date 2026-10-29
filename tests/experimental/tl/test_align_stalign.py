@@ -486,3 +486,12 @@ def test_a_2d_image_with_channels_is_not_read_as_a_volume() -> None:
     sdata = _sdata_image(np.random.default_rng(0).random((5, 12, 12)), "section")
     with pytest.raises(ValueError, match=r"needs a volume with a `z` axis"):
         stalign_align_volume(sdata, sdata, image_key=("section", "section"), **IMAGE_SOLVER)
+
+
+def test_image_fit_on_a_coarser_scale_keeps_physical_units() -> None:
+    image = np.random.default_rng(0).random((1, 16, 16))
+    sdata = _sdata_image(image, "image", scale_factors=[2])
+    fit = stalign_align_image(sdata, sdata, image_key="image", scale="scale1", **IMAGE_SOLVER)
+
+    for axis in fit.query_axes:
+        np.testing.assert_allclose(np.asarray(axis), np.arange(8.0) * 2)
