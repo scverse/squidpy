@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from spatialdata import SpatialData
     from xarray import DataArray
 
-__all__ = ["axis", "rasterize", "rasterize_points", "sample_volume"]
+__all__ = ["rasterize_points", "sample_volume"]
 
 
 def axis(start: float, stop: float, step: float) -> np.ndarray:

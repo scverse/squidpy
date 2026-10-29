@@ -22,7 +22,6 @@ __all__ = [
     "affine_from_points",
     "affine_xy_to_rc",
     "as_chw",
-    "centred_axes",
     "explicit_axes",
     "rasterize_cloud",
     "validate_points",
@@ -59,18 +58,9 @@ def resolve_axes(axes: Sequence[Array] | None, shape: tuple[int, ...], name: str
     if any(size < 2 for size in shape):
         raise ValueError(f"Expected each `{name}` axis to contain at least two coordinates, found shape {shape}.")
     if axes is None:
-        return centred_axes(shape, (1.0,) * len(shape))
+        # centred on the origin, so the affine can start near identity
+        return tuple(jnp.arange(size, dtype=jax_dtype()) - (size - 1) / 2.0 for size in shape)
     return explicit_axes(axes, shape, name)
-
-
-def centred_axes(shape: tuple[int, ...], scale: Sequence[float]) -> tuple[jax.Array, ...]:
-    """Physical axes for ``shape``, centred on the origin and spaced by ``scale``."""
-    dtype = jax_dtype()
-    if len(scale) != len(shape):
-        raise ValueError(f"Expected {len(shape)} scale entries for a {len(shape)}-axis image, found {len(scale)}.")
-    return tuple(
-        (jnp.arange(size, dtype=dtype) - (size - 1) / 2.0) * step for size, step in zip(shape, scale, strict=True)
-    )
 
 
 def explicit_axes(value: Sequence[Array], shape: tuple[int, ...], name: str) -> tuple[jax.Array, ...]:

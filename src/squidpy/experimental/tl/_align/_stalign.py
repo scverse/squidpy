@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Unpack
 
 import numpy as np
@@ -62,6 +62,9 @@ class StalignFit:
     energies: JaxArray | None = None
     #: The iteration the fit stopped at.
     n_iter: int | None = None
+    #: The query coordinate system the fit's coordinates are in; :meth:`transform` checks
+    #: the coordinates it is given against it.
+    coordinate_system: str = "global"
 
     #: Dimensionality of the reference frame the fit maps into.
     rank: ClassVar[Literal[2, 3]] = 2
@@ -124,13 +127,12 @@ class StalignFit:
         """
         from spatialdata import SpatialData
 
-        fitted_in = getattr(self, "coordinate_system", None)  # only the raster fits record one
-        if isinstance(data, SpatialData) and fitted_in is not None:
+        if isinstance(data, SpatialData):
             assert_table_coords_share_frame(
                 data,
                 adata=resolve_table(data, table_key, side="query"),
                 spatial_key=spatial_key,
-                coordinate_system=fitted_in,
+                coordinate_system=self.coordinate_system,
             )
         return write_coords(
             data,
@@ -174,8 +176,18 @@ class StalignFit:
         return fit_from_uns(resolve_table(data, table_key, side="query"), key)
 
 
+class _PlanarFit(StalignFit):
+    """The rank-2 fits, which map both ways."""
+
+    rank: ClassVar[Literal[2]] = 2
+
+    def inverse_transform_points(self, points: Array) -> JaxArray:
+        """Map ``(N, 2)`` ``(x, y)`` reference points into the query frame."""
+        return self._map_points(points, direction="backward")
+
+
 @dataclass(frozen=True, kw_only=True)
-class StalignObsFit(StalignFit):
+class StalignObsFit(_PlanarFit):
     """A fit from :func:`~squidpy.experimental.tl.stalign_align_obs`.
 
     Both clouds are rasterised into density images at ``dx`` and those are what the fit ran
@@ -187,16 +199,11 @@ class StalignObsFit(StalignFit):
     #: The fitted query cloud, ``(N, 2)`` ``(x, y)``, already mapped into the reference frame.
     aligned_points: JaxArray | None = None
 
-    rank: ClassVar[Literal[2]] = 2
     kind: ClassVar[Literal["obs"]] = "obs"
-
-    def inverse_transform_points(self, points: Array) -> JaxArray:
-        """Map ``(N, 2)`` ``(x, y)`` reference points into the query frame."""
-        return self._map_points(points, direction="backward")
 
 
 @dataclass(frozen=True, kw_only=True)
-class StalignImageFit(StalignFit):
+class StalignImageFit(_PlanarFit):
     """A fit from :func:`~squidpy.experimental.tl.stalign_align_image`.
 
     Both sides are real images, so both frames survive and the frame-dependent operations
@@ -208,30 +215,19 @@ class StalignImageFit(StalignFit):
     query_axes: tuple[JaxArray, JaxArray]
     #: Row-column physical axes of the reference raster the fit ran on.
     ref_axes: tuple[JaxArray, JaxArray]
-    #: The query coordinate system the fit's units came from. :meth:`StalignFit.transform`
-    #: checks the coordinates it is given against this frame.
-    coordinate_system: str = "global"
 
-    rank: ClassVar[Literal[2]] = 2
     kind: ClassVar[Literal["image"]] = "image"
 
-    def inverse_transform_points(self, points: Array) -> JaxArray:
-        """Map ``(N, 2)`` ``(x, y)`` reference points into the query frame."""
-        return self._map_points(points, direction="backward")
-
-    def deformation_grid(
-        self,
-        *,
-        query_axes: Sequence[Array] | None = None,
-        ref_axes: Sequence[Array] | None = None,
-    ) -> JaxArray:
+    def deformation_grid(self, *, query_axes: Sequence[Array] | None = None) -> JaxArray:
         """The query grid evaluated in the reference frame, row-column, shape ``(2, *grid)``.
 
         The same transform the objective uses, not an approximation for plotting.
-        ``query_axes`` / ``ref_axes`` override the axes the fit ran on, for a raster other
-        than the fitted one.
+        ``query_axes`` overrides the axes the fit ran on, for a raster other than the fitted one.
         """
-        return self._grid("forward", query_axes, ref_axes)
+        from ._stalign_impl._core import transform_grid_row_col
+
+        axes = self.query_axes if query_axes is None else query_axes
+        return transform_grid_row_col(axes, self.velocity_grid, self.velocity, self.affine, direction="forward")
 
     def warp_image(
         self,
@@ -257,19 +253,6 @@ class StalignImageFit(StalignFit):
         """Resample a reference image onto the query grid; see :meth:`warp_image`."""
         return self._warp(image, "backward", query_axes, ref_axes)
 
-    def _grid(
-        self,
-        direction: Literal["forward", "backward"],
-        query_axes: Sequence[Array] | None,
-        ref_axes: Sequence[Array] | None,
-    ) -> JaxArray:
-        from ._stalign_impl._core import transform_grid_row_col
-
-        source_axes = self.query_axes if query_axes is None else query_axes
-        target_axes = self.ref_axes if ref_axes is None else ref_axes
-        axes = source_axes if direction == "forward" else target_axes
-        return transform_grid_row_col(axes, self.velocity_grid, self.velocity, self.affine, direction=direction)
-
     def _warp(
         self,
         image: Array,
@@ -277,16 +260,21 @@ class StalignImageFit(StalignFit):
         query_axes: Sequence[Array] | None,
         ref_axes: Sequence[Array] | None,
     ) -> JaxArray:
-        from ._stalign_impl._core import interp
+        from ._stalign_impl._core import interp, transform_grid_row_col
         from ._stalign_impl._helpers import as_chw, explicit_axes
 
         arr = as_chw(image, name="image")
-        source_axes = self.query_axes if query_axes is None else query_axes
-        target_axes = self.ref_axes if ref_axes is None else ref_axes
+        query = self.query_axes if query_axes is None else query_axes
+        ref = self.ref_axes if ref_axes is None else ref_axes
         # pulling an image one way samples it through the grid of the other
-        grid = self._grid("backward" if direction == "forward" else "forward", source_axes, target_axes)
-        sampled_axes, name = (source_axes, "query_axes") if direction == "forward" else (target_axes, "ref_axes")
-        return interp(explicit_axes(sampled_axes, arr.shape[1:], name), arr, grid)
+        if direction == "forward":
+            grid_axes, sampled, name, grid_direction = ref, query, "query_axes", "backward"
+        else:
+            grid_axes, sampled, name, grid_direction = query, ref, "ref_axes", "forward"
+        grid = transform_grid_row_col(
+            grid_axes, self.velocity_grid, self.velocity, self.affine, direction=grid_direction
+        )
+        return interp(explicit_axes(sampled, arr.shape[1:], name), arr, grid)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -305,9 +293,6 @@ class StalignVolumeFit(StalignFit):
     ref_axes: tuple[JaxArray, JaxArray, JaxArray]
     #: Physical ``(y, x)`` axes of the section the fit ran on.
     query_axes: tuple[JaxArray, JaxArray]
-    #: The query coordinate system the fit's units came from. :meth:`StalignFit.transform`
-    #: checks the coordinates it is given against this frame.
-    coordinate_system: str = "global"
 
     rank: ClassVar[Literal[3]] = 3
     kind: ClassVar[Literal["volume"]] = "volume"
@@ -483,7 +468,7 @@ def fit_stalign_obs(
     """Array-in / array-out core of :func:`~squidpy.experimental.tl.stalign_align_obs`, which documents it."""
     _require_jax()
 
-    from ._stalign_impl._core import lddmm, transform_points_row_col
+    from ._stalign_impl._core import lddmm
     from ._stalign_impl._helpers import rasterize_cloud, validate_points
 
     opts = resolve_params(solver_params, StalignObsParams, arg_name="solver_params")
@@ -509,13 +494,8 @@ def fit_stalign_obs(
         points_target=tgt_lm,
         **{key: value for key, value in opts.items() if key not in _CONSUMED_KEYS},
     )
-    aligned_rc = transform_points_row_col(
-        fit_result["velocity_grid"], fit_result["velocity"], fit_result["affine"], source_rc, direction="forward"
-    )
-    return StalignObsFit(
-        **fit_result,
-        aligned_points=aligned_rc[:, ::-1],
-    )
+    fit = StalignObsFit(**fit_result)
+    return replace(fit, aligned_points=fit.transform_points(query))
 
 
 def fit_stalign_image(

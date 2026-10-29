@@ -13,7 +13,7 @@ from spatialdata import SpatialData
 from squidpy._validators import normalize_choice
 from squidpy.types import StalignImageParams, StalignObsParams, StalignVolumeParams
 
-from ._io import read_coords, resolve_table, write_coords, writeback_affine_sdata
+from ._io import assert_table_coords_share_frame, read_coords, resolve_table, write_coords, writeback_affine_sdata
 from ._landmark import apply_affine, fit_landmarks
 from ._stalign import (
     StalignFit,
@@ -100,6 +100,8 @@ def stalign_align_obs(
     *,
     spatial_key: str | tuple[str, str] = "spatial",
     table_key: str | tuple[str | None, str | None] | None = None,
+    ref_coordinate_system: str = "global",
+    query_coordinate_system: str = "global",
     landmarks_ref: Array | None = None,
     landmarks_query: Array | None = None,
     **solver_params: Unpack[StalignObsParams],
@@ -123,6 +125,10 @@ def stalign_align_obs(
         For SpatialData input, which table holds the coordinates. A single key applies
         to both sides; a ``(ref, query)`` pair addresses each side separately (entries
         may be ``None`` for an AnnData side).
+    ref_coordinate_system, query_coordinate_system
+        For SpatialData input, the coordinate system each table's ``obsm`` coordinates are
+        in. Refused when the element a table annotates is not placed there by the identity,
+        since ``obsm`` holds that element's intrinsic coordinates.
     landmarks_ref, landmarks_query
         Optional paired ``(x, y)`` landmark arrays (matched by row order). They contribute
         the point-matching term the solver weights by ``sigmaP``, and derive the starting
@@ -151,14 +157,21 @@ def stalign_align_obs(
 
     ref_adata = resolve_table(data_ref, ref_table, side="reference")
     query_adata = resolve_table(query_container, query_table, side="query")
+    for container, adata, key, cs in (
+        (data_ref, ref_adata, ref_spatial, ref_coordinate_system),
+        (query_container, query_adata, query_spatial, query_coordinate_system),
+    ):
+        if isinstance(container, SpatialData):
+            assert_table_coords_share_frame(container, adata=adata, spatial_key=key, coordinate_system=cs)
 
-    return fit_stalign_obs(
+    fit = fit_stalign_obs(
         ref=read_coords(ref_adata, key=ref_spatial, side="reference", name="spatial_key"),
         query=read_coords(query_adata, key=query_spatial, side="query", name="spatial_key"),
         landmarks_ref=landmarks_ref,
         landmarks_query=landmarks_query,
         **solver_params,
     )
+    return dataclasses.replace(fit, coordinate_system=query_coordinate_system)
 
 
 def stalign_align_image(
@@ -189,10 +202,8 @@ def stalign_align_image(
     image_key
         Name of the image element, or a ``(ref, query)`` pair.
     ref_coordinate_system, query_coordinate_system
-        Coordinate systems to read each element's physical axes in. The scale and
-        translation the elements carry supply the units, so two images at different
-        resolutions need nothing restated: and nothing can be restated to contradict
-        the container.
+        Coordinate systems to read each element's physical axes in. The units come from each
+        element's own transformation, so nothing is passed separately.
     scale
         Multiscale level to fit on, or a ``(ref, query)`` pair. A coarser level fits faster;
         its physical axes come from that level's own transformation, so the units stay right.
@@ -418,8 +429,8 @@ def align_landmarks(
         to. Given it, the affine is applied and written instead of returned; mutually
         exclusive with ``target_coordinate_system``.
     target_coordinate_system
-        Register the fitted affine as a SpatialData transformation into this
-        coordinate system instead of materialising anything: every element registered
+        Register the fitted affine as a SpatialData transformation into this coordinate
+        system, normally the reference's, instead of materialising anything: every element registered
         to the query's coordinate system inherits the alignment. Requires the
         landmarks to come from shapes elements, and refuses when the reference sits in
         the same coordinate system of the same object (it would be dragged along).

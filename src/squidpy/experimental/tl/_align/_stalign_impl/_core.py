@@ -412,8 +412,6 @@ def lddmm(
     *,
     L: np.ndarray | jax.Array,
     T: np.ndarray | jax.Array,
-    initial_velocity: np.ndarray | jax.Array | None = None,
-    velocity_grid: Sequence[np.ndarray | jax.Array] | None = None,
     points_source: np.ndarray | jax.Array | None = None,
     points_target: np.ndarray | jax.Array | None = None,
     a: float,
@@ -455,22 +453,8 @@ def lddmm(
         source_landmarks = jnp.asarray(points_source, dtype=jax_dtype())
         target_landmarks = jnp.asarray(points_target, dtype=jax_dtype())
 
-    if (initial_velocity is None) != (velocity_grid is None):
-        raise ValueError("Expected `initial_velocity` and `velocity_grid` to be provided together.")
-    if velocity_grid is None:
-        xv = _build_velocity_grid(x_source, a=a, expand=expand)
-        velocity = jnp.zeros((nt, *(axis.shape[0] for axis in xv), ndim), dtype=jax_dtype())
-    else:
-        xv = tuple(jnp.asarray(axis, dtype=jax_dtype()) for axis in velocity_grid)
-        if len(xv) != ndim:
-            raise ValueError(f"Expected `velocity_grid` to have {ndim} axes, found {len(xv)}.")
-        velocity = jnp.asarray(initial_velocity, dtype=jax_dtype())
-        expected = (velocity.shape[0] if velocity.ndim else 0, *(axis.shape[0] for axis in xv), ndim)
-        if velocity.shape != expected:
-            raise ValueError(
-                f"Expected `initial_velocity` to have shape (nt, "
-                f"{', '.join(str(axis.shape[0]) for axis in xv)}, {ndim}), found {velocity.shape}."
-            )
+    xv = _build_velocity_grid(x_source, a=a, expand=expand)
+    velocity = jnp.zeros((nt, *(axis.shape[0] for axis in xv), ndim), dtype=jax_dtype())
     kernel, ll, dv_prod = _build_regularizer(xv, a=a, p=p)
 
     match_weights = jnp.full(target_image.shape[1:], 0.5, dtype=target_image.dtype)

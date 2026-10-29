@@ -151,12 +151,6 @@ class StalignObsParams(TypedDict, total=False):
     initial_affine: Annotated[Array | None, Default(None)]
     """Homogeneous ``(3, 3)`` affine in ``(x, y)`` to start from."""
 
-    initial_velocity: Annotated[Array | None, Default(None)]
-    """Continuation state from a prior fit, in the solver's row-column convention."""
-
-    velocity_grid: Annotated[tuple[Array, Array] | None, Default(None)]
-    """Axes ``initial_velocity`` lives on, row-column."""
-
     a: Annotated[float, Default(500.0)]
     """Sobolev kernel width, the spatial scale the velocity field is smoothed over, so it
     sets how local a deformation can be."""
@@ -209,11 +203,11 @@ class StalignObsParams(TypedDict, total=False):
     """Fixed per-channel background means. ``None`` estimates them during fitting."""
 
     tol: Annotated[float | None, Default(None)]
-    """Relative objective improvement below which the fit stops early. ``None`` always runs
-    ``niter``."""
+    """Stop once the objective's relative drop over the last ``patience`` iterations is below
+    this. ``None`` always runs ``niter``."""
 
     patience: Annotated[int, Default(25)]
-    """Iterations the improvement must stay under ``tol`` before stopping."""
+    """Window, in iterations, that ``tol`` compares the objective across."""
 
     dx: Annotated[float, Default(30.0)]
     """Grid spacing of the density rasters."""
@@ -235,12 +229,6 @@ class StalignImageParams(TypedDict, total=False):
 
     initial_affine: Annotated[Array | None, Default(None)]
     """Homogeneous ``(3, 3)`` affine in ``(x, y)`` to start from."""
-
-    initial_velocity: Annotated[Array | None, Default(None)]
-    """Continuation state from a prior fit, in the solver's row-column convention."""
-
-    velocity_grid: Annotated[tuple[Array, Array] | None, Default(None)]
-    """Axes ``initial_velocity`` lives on, row-column."""
 
     a: Annotated[float, Default(20.0)]
     """Sobolev kernel width, the spatial scale the velocity field is smoothed over, so it
@@ -294,11 +282,11 @@ class StalignImageParams(TypedDict, total=False):
     """Fixed per-channel background means. ``None`` estimates them during fitting."""
 
     tol: Annotated[float | None, Default(None)]
-    """Relative objective improvement below which the fit stops early. ``None`` always runs
-    ``niter``."""
+    """Stop once the objective's relative drop over the last ``patience`` iterations is below
+    this. ``None`` always runs ``niter``."""
 
     patience: Annotated[int, Default(25)]
-    """Iterations the improvement must stay under ``tol`` before stopping."""
+    """Window, in iterations, that ``tol`` compares the objective across."""
 
 
 class StalignVolumeParams(TypedDict, total=False):
@@ -309,12 +297,6 @@ class StalignVolumeParams(TypedDict, total=False):
     energy, and ``initial_affine``, which is a named ``(4, 4)`` argument on the function
     rather than a solver key.
     """
-
-    initial_velocity: Annotated[Array | None, Default(None)]
-    """Continuation state from a prior fit, in the solver's row-column convention."""
-
-    velocity_grid: Annotated[tuple[Array, Array, Array] | None, Default(None)]
-    """Axes ``initial_velocity`` lives on, row-column."""
 
     a: Annotated[float, Default(500.0)]
     """Sobolev kernel width, the spatial scale the velocity field is smoothed over, so it
@@ -365,8 +347,8 @@ class StalignVolumeParams(TypedDict, total=False):
     """Fixed per-channel background means. ``None`` estimates them during fitting."""
 
     tol: Annotated[float | None, Default(None)]
-    """Relative objective improvement below which the fit stops early. ``None`` always runs
-    ``niter``."""
+    """Stop once the objective's relative drop over the last ``patience`` iterations is below
+    this. ``None`` always runs ``niter``."""
 
     patience: Annotated[int, Default(25)]
-    """Iterations the improvement must stay under ``tol`` before stopping."""
+    """Window, in iterations, that ``tol`` compares the objective across."""
