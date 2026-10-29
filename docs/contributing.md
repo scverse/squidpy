@@ -106,7 +106,7 @@ only because an outdated sphinx plugin pins an older version.
 To initalize a virtual environment in the `.venv` directory of your project, simply run
 
 ```bash
-uv sync --all-extras
+uv sync --all-extras --all-groups
 ```
 
 The `.venv` directory is typically automatically discovered by IDEs such as VS Code.
@@ -122,7 +122,7 @@ we describe how you can manage environments manually using `pip`:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev,test,doc]"
+pip install -e ".[jax,leiden]" --group dev --group test --group docs  # pip >= 25.1
 ```
 
 The `.venv` directory is typically automatically discovered by IDEs such as VS Code.
