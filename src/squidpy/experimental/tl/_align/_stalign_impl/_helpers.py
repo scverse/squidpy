@@ -43,13 +43,7 @@ def validate_points(points: Array, *, name: str) -> jax.Array:
 
 
 def as_chw(image: Array, *, name: str, ndim: int = 2) -> jax.Array:
-    """Coerce an image to channels-first, promoting an unchannelled array.
-
-    ``ndim`` is the number of *spatial* axes: 2 for a ``(y, x)`` section, 3 for a
-    ``(z, y, x)`` volume. Not :func:`jnp.atleast_3d`, which appends the new axis:
-    turning a ``(y, x)`` image into ``(y, x, 1)``, y channels of x by 1, instead of a
-    single ``(1, y, x)`` channel.
-    """
+    """Coerce an image to channels-first, promoting an unchannelled array."""
     arr = jnp.asarray(image, dtype=jax_dtype())
     if arr.ndim == ndim:
         return arr[None]
@@ -61,17 +55,16 @@ def as_chw(image: Array, *, name: str, ndim: int = 2) -> jax.Array:
 
 def resolve_axes(axes: Sequence[Array] | None, shape: tuple[int, ...], name: str) -> tuple[jax.Array, ...]:
     """Physical axes for one side, at any rank: explicit if given, otherwise centred pixel units."""
+    # JAX clamps out-of-bounds indices, so a single-sample axis would interpolate with a zero step
+    if any(size < 2 for size in shape):
+        raise ValueError(f"Expected each `{name}` axis to contain at least two coordinates, found shape {shape}.")
     if axes is None:
         return centred_axes(shape, (1.0,) * len(shape))
     return explicit_axes(axes, shape, name)
 
 
 def centred_axes(shape: tuple[int, ...], scale: Sequence[float]) -> tuple[jax.Array, ...]:
-    """Physical axes for ``shape``, centred on the origin and spaced by ``scale``.
-
-    Centring is what lets the affine initialise near identity: with axes running from 0
-    the translation would have to carry the whole half-extent before the fit even starts.
-    """
+    """Physical axes for ``shape``, centred on the origin and spaced by ``scale``."""
     dtype = jax_dtype()
     if len(scale) != len(shape):
         raise ValueError(f"Expected {len(shape)} scale entries for a {len(shape)}-axis image, found {len(scale)}.")
@@ -91,8 +84,6 @@ def explicit_axes(value: Sequence[Array], shape: tuple[int, ...], name: str) -> 
     lengths = tuple(axis.shape[0] for axis in resolved)
     if lengths != shape:
         raise ValueError(f"Expected `{name}` lengths {shape}, found {lengths}.")
-    if any(length < 2 for length in lengths):
-        raise ValueError(f"Expected each `{name}` axis to contain at least two coordinates.")
     if not all(jnp.allclose(jnp.diff(axis), axis[1] - axis[0]) for axis in resolved):
         raise ValueError(f"Expected each `{name}` axis to be evenly spaced.")
     return resolved
@@ -114,10 +105,7 @@ def affine_from_points(
     points_source: jax.Array,
     points_target: jax.Array,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Compute an affine initialization from corresponding landmarks.
-
-    Fewer than 3 pairs give a translation-only start; 3 or more must not be collinear.
-    """
+    """Compute an affine initialization from corresponding landmarks."""
     source = np.asarray(points_source, dtype=float)
     target = np.asarray(points_target, dtype=float)
     if source.shape != target.shape:

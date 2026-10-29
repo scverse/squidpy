@@ -80,11 +80,7 @@ def writeback_affine_sdata(
     moving_cs: str | None,
     target_cs: str | None,
 ) -> None:
-    """Register the fitted affine on every element living in ``moving_cs``.
-
-    Non-destructive: it adds a transformation into ``target_cs`` so the whole
-    coordinate system inherits the alignment. Nothing is materialised.
-    """
+    """Register the fitted affine on every element living in ``moving_cs``."""
     from spatialdata.transformations import Affine, Sequence, get_transformation, set_transformation
 
     sd_affine = Affine(np.asarray(matrix), input_axes=("x", "y"), output_axes=("x", "y"))

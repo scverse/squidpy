@@ -384,7 +384,7 @@ def test_grid_length_is_stable_against_float_rounding(step):
     """``np.arange(lo, hi + step, step)`` had an unstable length; the grid does not."""
     from squidpy.experimental.im._rasterize_points import axis
 
-    assert axis is _core._axis
+    assert axis is _core.stable_axis
     for start, n in ((-400.4123, 33), (0.1, 41), (-1234.567, 77)):
         assert axis(start, start + n * step, step).size == n
 
@@ -967,7 +967,7 @@ def test_slice_regularizer_axes_diverge_from_upstream(slice_reference, slice_vel
         sigmaR=_SLICE_PARAMS["sigmaR"],
         sigmaP=None,
     )
-    reg_energy = aux[3]
+    reg_energy = aux[1]
 
     correct = rel(reg_energy, slice_reference["ER_3axis"])
     against_upstream = rel(reg_energy, slice_reference["ER_2axis"])

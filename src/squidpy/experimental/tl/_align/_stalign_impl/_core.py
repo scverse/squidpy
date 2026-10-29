@@ -11,7 +11,7 @@ import jax.numpy as jnp
 import jax.scipy as jsp
 import numpy as np
 
-from squidpy.experimental.im import _rasterize_points
+from squidpy.experimental.im._rasterize_points import axis as stable_axis
 
 __all__ = ["interp", "jax_dtype", "lddmm", "transform_grid_row_col", "transform_points_row_col"]
 
@@ -44,35 +44,19 @@ def interp(
     image: jax.Array,
     phii: jax.Array,
 ) -> jax.Array:
-    """Linearly interpolate a channels-first image on physical coordinates, at any rank.
-
-    Out-of-domain samples take the nearest edge value, upstream's ``padding_mode="border"``.
-    """
-    arr = jnp.asarray(image)
-    coords = jnp.asarray(phii)
+    """Linearly interpolate a channels-first image on physical coordinates, at any rank."""
     ndim = len(x)
-    if coords.shape[0] != ndim:
+    if phii.shape[0] != ndim:
         raise ValueError(
-            f"Expected interpolation coordinates to have leading axis of size {ndim}, found `{coords.shape}`."
+            f"Expected interpolation coordinates to have leading axis of size {ndim}, found `{phii.shape}`."
         )
-    # JAX clamps out-of-bounds indices, so a single-sample axis would give a zero step
-    for axis, values in enumerate(x):
-        if values.shape[0] < 2:
-            raise ValueError(
-                f"Expected interpolation axis {axis} to have at least two coordinates, found "
-                f"{values.shape[0]}. A single sample defines no spacing."
-            )
-
-    if arr.ndim == ndim:
-        arr = arr[None, ...]
-
-    idx = jnp.stack([((coords[axis] - x[axis][0]) / (x[axis][1] - x[axis][0])).reshape(-1) for axis in range(ndim)])
+    channelled = image if image.ndim == ndim + 1 else image[None]
+    idx = jnp.stack([((phii[axis] - x[axis][0]) / (x[axis][1] - x[axis][0])).reshape(-1) for axis in range(ndim)])
 
     def _sample(channel: jax.Array) -> jax.Array:
-        values = jsp.ndimage.map_coordinates(channel, idx, order=1, mode="nearest")
-        return values.reshape(coords.shape[1:])
+        return jsp.ndimage.map_coordinates(channel, idx, order=1, mode="nearest").reshape(phii.shape[1:])
 
-    return jax.vmap(_sample)(arr)
+    return jax.vmap(_sample)(channelled)
 
 
 def transform_points_row_col(
@@ -125,13 +109,7 @@ def transform_grid_row_col(
 
 
 def _contrast_transform(source_image: jax.Array, target_image: jax.Array, weights: jax.Array) -> jax.Array:
-    """Weighted ridge fit mapping source intensities onto target intensities.
-
-    The coefficients are held constant with respect to the optimisation. This is an
-    expectation-maximisation M step, solved exactly at the current estimate, not a
-    quantity to descend on: differentiating through the solve would silently turn the
-    alternating minimisation into a joint one and change the search direction.
-    """
+    """Weighted ridge fit mapping source intensities onto target intensities."""
     flat_source = source_image.reshape(source_image.shape[0], -1)
     flat_target = target_image.reshape(target_image.shape[0], -1)
     flat_weights = weights.reshape(-1)
@@ -145,9 +123,6 @@ def _contrast_transform(source_image: jax.Array, target_image: jax.Array, weight
     return (coefficients.T @ design).reshape(target_image.shape)
 
 
-_axis = _rasterize_points.axis
-
-
 def _build_velocity_grid(x_source: Axes, *, a: float, expand: float) -> tuple[jax.Array, ...]:
     minimum = np.array([axis[0] for axis in x_source], dtype=float)
     maximum = np.array([axis[-1] for axis in x_source], dtype=float)
@@ -156,7 +131,7 @@ def _build_velocity_grid(x_source: Axes, *, a: float, expand: float) -> tuple[ja
     step = a * 0.5
     dtype = jax_dtype()
     return tuple(
-        jnp.asarray(_axis(mid - half, mid + half, step), dtype=dtype)
+        jnp.asarray(stable_axis(mid - half, mid + half, step), dtype=dtype)
         for mid, half in zip(center, half_width, strict=True)
     )
 
@@ -243,16 +218,7 @@ def _update_mixture_weights(
 
 
 def _velocity_axes(velocity: jax.Array) -> tuple[int, ...]:
-    """The spatial axes of a ``(nt, *grid, ndim)`` velocity field.
-
-    Both the regularisation energy and the Sobolev smoothing of its gradient have to
-    transform the *same* axes, or the regulariser being descended on is not the one being
-    measured. Upstream's 3D path transforms only two of the three spatial axes in the
-    energy while smoothing over all three (STalign.py:1215 vs its 3D energy term), and
-    autograd carries that discrepancy into the search direction; squidpy uses every
-    spatial axis in both places. At rank 2 the two readings coincide, so the 2D path is
-    unaffected.
-    """
+    """The spatial axes of a ``(nt, *grid, ndim)`` velocity field."""
     return tuple(range(1, velocity.ndim - 1))
 
 
@@ -274,7 +240,7 @@ def _lddmm_loss(
     sigmaM: float,
     sigmaR: float,
     sigmaP: float | None,
-) -> tuple[jax.Array, tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]]:
+) -> tuple[jax.Array, tuple[jax.Array, jax.Array]]:
     affine = _to_affine(linear, translation)
     source_grid = transform_grid_row_col(x_target, xv, velocity, affine, direction="backward")
     warped_source = interp(x_source, source_image, source_grid)
@@ -290,14 +256,14 @@ def _lddmm_loss(
         reg_energy = reg_energy / velocity.shape[axis]
     reg_energy = reg_energy / sigmaR**2
 
-    transformed_points = transform_points_row_col(xv, velocity, affine, points_source, direction="forward")
     if points_source.shape[0] == 0:
         point_energy = jnp.array(0.0, dtype=source_image.dtype)
     else:
+        transformed_points = transform_points_row_col(xv, velocity, affine, points_source, direction="forward")
         point_energy = jnp.sum((transformed_points - points_target) ** 2) / (2.0 * sigmaP**2)
 
     total = match_energy + reg_energy + point_energy
-    return total, (contrast_source, transformed_points, match_energy, reg_energy, point_energy)
+    return total, (contrast_source, reg_energy)
 
 
 # static only where Python needs the value; the tuning scalars stay traced
@@ -337,12 +303,7 @@ def _lddmm_run(
     estimate_muA,
     estimate_muB,
 ):
-    """The gradient descent, as one compiled loop.
-
-    Jitted as a whole rather than per-iteration: `lax.while_loop` outside a `jit` re-traces
-    its body on every call, and tracing `value_and_grad` through the interpolation and FFTs
-    costs about as much as a thousand iterations of actually running it.
-    """
+    """The gradient descent, as one compiled loop."""
     loss_and_grad = jax.value_and_grad(_lddmm_loss, argnums=(0, 1, 2), has_aux=True)
 
     dtype = jax_dtype()
@@ -474,33 +435,7 @@ def lddmm(
     tol: float | None,
     patience: int,
 ) -> dict[str, Any]:
-    """Fit an LDDMM registration of ``I`` onto ``J`` by gradient descent.
-
-    Every tuning parameter is required; the ``fit_stalign_*`` functions resolve them from
-    the ``Stalign*Params`` schemas in :mod:`squidpy.types`. Only the ``initial_velocity`` /
-    ``velocity_grid`` / ``points_*`` sentinels default to ``None``, meaning "not supplied",
-    and ``sigmaP``, which weights the point term and so is needed only with ``points_*``.
-
-    The rank is read off ``len(xI)``: two axes registers a section onto a section, three
-    registers a section into a reference volume. Nothing in the descent is rank-specific.
-
-    Parameters
-    ----------
-    tol
-        Stop once the objective's relative improvement over the last ``patience``
-        iterations falls below this. ``None`` always runs the full ``niter``.
-    patience
-        Window for the ``tol`` test. Compared against ``patience`` iterations ago rather
-        than the previous step because the mixture weights only move every 5th iteration,
-        so the objective plateaus and then jumps: a one-step test would stop on a
-        plateau.
-
-    Returns
-    -------
-    A dict keyed by the ``StalignFit`` field names: the fitted ``affine``,
-    ``velocity`` and ``velocity_grid``, the mixture weights, the per-iteration
-    ``energies`` trace, and the ``n_iter`` actually run.
-    """
+    """Fit an LDDMM registration of ``I`` onto ``J`` by gradient descent."""
     x_source = tuple(jnp.asarray(axis) for axis in xI)
     x_target = tuple(jnp.asarray(axis) for axis in xJ)
     ndim = len(x_source)

@@ -452,20 +452,7 @@ def _initial_affine_and_landmarks(
     landmarks_query: Array | None,
     initial_affine: Array | None,
 ) -> tuple[JaxArray, JaxArray, JaxArray | None, JaxArray | None]:
-    """Resolve the starting affine and the row-col landmark pair the point term uses.
-
-    Landmarks are ``(x, y)``, matched by row order, and in the same units as the fit's
-    coordinates: cell coordinates for a point-cloud fit, the images' physical axes for an
-    image fit.
-
-    The two initialisers are not exclusive. Landmarks play two roles: they always
-    contribute the point-matching term the solver weights by ``sigmaP``, and they *also*
-    derive the starting affine when ``initial_affine`` is absent. Passing both is how you
-    keep the matching term while pinning the start yourself.
-
-    The derived start is translation-only for fewer than 3 pairs, and refuses collinear
-    landmarks (a line leaves the affine undetermined); ``initial_affine`` bypasses both.
-    """
+    """Resolve the starting affine and the row-col landmark pair the point term uses."""
     import jax.numpy as jnp
 
     from ._stalign_impl._core import jax_dtype

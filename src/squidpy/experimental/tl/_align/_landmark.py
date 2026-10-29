@@ -20,10 +20,7 @@ def check_spans_plane(points: np.ndarray, *, name: str, method: str) -> None:
 
 
 def fit_landmarks(ref: np.ndarray, query: np.ndarray, *, method: Literal["similarity", "affine"]) -> NDArrayA:
-    """Fit the homogeneous ``(3, 3)`` ``(x, y)`` affine mapping paired ``query`` landmarks onto ``ref``.
-
-    The core of :func:`~squidpy.experimental.tl.align_landmarks`, which documents ``method``.
-    """
+    """Fit the homogeneous ``(3, 3)`` ``(x, y)`` affine mapping paired ``query`` landmarks onto ``ref``."""
     ref = validate_xy(ref, name="ref")
     query = validate_xy(query, name="query")
     if ref.shape != query.shape:

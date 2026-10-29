@@ -21,13 +21,7 @@ __all__ = ["axis", "rasterize", "rasterize_points", "sample_volume"]
 
 
 def axis(start: float, stop: float, step: float) -> np.ndarray:
-    """``step``-spaced samples covering ``[start, stop)``, with a stable length.
-
-    ``arange(start, stop, step)`` on floats derives its length from the arguments by
-    floating-point division, so a ``stop`` that is itself a sum of floats can yield one
-    more or one fewer sample than intended. Taking the count first makes the length a
-    function of the interval alone.
-    """
+    """``step``-spaced samples covering ``[start, stop)``, with a stable length."""
     count = max(int(np.ceil((stop - start) / step)), 1)
     return start + step * np.arange(count, dtype=float)
 
@@ -40,18 +34,7 @@ def rasterize(
     blur: float | Sequence[float],
     expand: float,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Rasterize a point cloud into a multi-scale Gaussian density image.
-
-    Each point deposits unit mass bilinearly across its four neighbouring cells of a
-    regular ``dx``-spaced grid; every ``blur`` scale is then an isotropic Gaussian blur
-    of that histogram, so each point becomes a unit-integral Gaussian. ``blur`` sets the
-    kernel width: ``sigma = 2 * blur`` pixels, i.e. ``2 * blur * dx`` in physical units.
-    Total mass is preserved exactly, including for points near the border.
-
-    Returns
-    -------
-    ``(grid_x, grid_y, image)``, the image being ``(len(blur), len(grid_y), len(grid_x))``.
-    """
+    """Rasterize a point cloud into a multi-scale Gaussian density image."""
     x = np.asarray(x, dtype=float).reshape(-1)
     y = np.asarray(y, dtype=float).reshape(-1)
     if x.shape != y.shape:
@@ -88,11 +71,7 @@ def rasterize(
 
 
 def _deposit(x: np.ndarray, y: np.ndarray, grid_x: np.ndarray, grid_y: np.ndarray, dx: float) -> np.ndarray:
-    """Spread each point's unit mass bilinearly over its four neighbouring cells.
-
-    Snapping to the nearest cell would quantise every position by up to half a cell, which
-    at a typical ``dx`` is comparable to the features being registered.
-    """
+    """Spread each point's unit mass bilinearly over its four neighbouring cells."""
     n_rows, n_cols = grid_y.size, grid_x.size
     col_f = (x - grid_x[0]) / dx
     row_f = (y - grid_y[0]) / dx
@@ -115,14 +94,7 @@ def _deposit(x: np.ndarray, y: np.ndarray, grid_x: np.ndarray, grid_y: np.ndarra
 
 
 def _blur_conserving(histogram: np.ndarray, *, sigma: float) -> np.ndarray:
-    """Gaussian blur that keeps every point's mass on the grid.
-
-    ``mode="constant"`` lets a kernel centred near the border spill off the edge, so
-    points there contribute less than one unit and the density is biased low around the
-    rim. The mass a point at cell ``c`` retains is ``sum_p K(p - c)``, which by symmetry
-    of ``K`` equals ``gaussian_filter(ones)[c]``: dividing by that before blurring
-    makes the total exactly the number of points, wherever they lie.
-    """
+    """Gaussian blur that keeps every point's mass on the grid."""
     from scipy.ndimage import gaussian_filter
 
     retained = gaussian_filter(np.ones_like(histogram), sigma=sigma, mode="constant")
