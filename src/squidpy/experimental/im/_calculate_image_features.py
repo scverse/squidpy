@@ -324,6 +324,7 @@ def _featurize_tile(
     channel_names: list[str],
     *,
     cp_config: dict[str, Any] | None = None,
+    channel_ranges: np.ndarray | None = None,
 ) -> pd.DataFrame:
     """Compute all requested features for a single tile.
 
@@ -341,7 +342,7 @@ def _featurize_tile(
     feature_blocks: list[pd.DataFrame] = []
 
     if cp_config is not None and tile_image is not None:
-        feature_blocks.append(_compute_cp_measure_features(tile_image, tile_labels, cp_config))
+        feature_blocks.append(_compute_cp_measure_features(tile_image, tile_labels, cp_config, channel_ranges))
 
     if parsed.skimage_morphology_props is not None or parsed.skimage_intensity_props is not None:
         feature_blocks.append(
@@ -360,13 +361,50 @@ def _featurize_tile(
     return pd.concat(feature_blocks, axis=1).reindex(cell_ids)
 
 
+def _channel_ranges(
+    image_da: xr.DataArray,
+    channel_names: list[str],
+    intensity_range: Literal["auto"] | dict[str, tuple[float, float]] | None,
+) -> np.ndarray | None:
+    """Per-channel ``(low, high)`` intensities, shape ``(C, 2)``, that cp_measure's input is scaled to 0-1 by.
+
+    ``"auto"`` takes 0 and the 99.9th percentile of each channel, from a strided sample of about a million pixels
+    of the whole image, so that every tile is scaled the same way.
+    """
+    if intensity_range is None:
+        return None
+    if isinstance(intensity_range, str):
+        if intensity_range != "auto":
+            raise ValueError(f"`intensity_range` must be 'auto', a mapping or None, got {intensity_range!r}.")
+        h, w = yx_size(image_da)
+        step = max(1, int(np.sqrt(h * w / 1e6)))
+        # reads every chunk once; a fraction of the cost of the featurization itself
+        sample = np.asarray(image_da.isel(y=slice(None, None, step), x=slice(None, None, step)).values)
+        high = np.percentile(sample.reshape(sample.shape[0], -1), 99.9, axis=1)
+        low = np.zeros_like(high)
+    else:
+        missing = [c for c in channel_names if c not in intensity_range]
+        if missing:
+            raise ValueError(f"`intensity_range` has no range for channel(s) {missing}.")
+        low, high = np.array([intensity_range[c] for c in channel_names], dtype=float).T
+    high = np.where(high > low, high, low + 1)  # an empty channel stays at 0
+    return np.stack([low, high], axis=1).astype(np.float32)
+
+
 def _compute_cp_measure_features(
-    tile_image: np.ndarray, tile_labels: np.ndarray, cp_config: dict[str, Any]
+    tile_image: np.ndarray,
+    tile_labels: np.ndarray,
+    cp_config: dict[str, Any],
+    channel_ranges: np.ndarray | None = None,
 ) -> pd.DataFrame:
     """cp_measure features for a tile, indexed by original label ID.
 
-    Columns keep cp_measure's raw CellProfiler names (CamelCase / ``__channel``).
+    Columns keep cp_measure's raw CellProfiler names (CamelCase / ``__channel``). With ``channel_ranges``
+    (from :func:`_channel_ranges`) the tile is first scaled to 0-1 per channel, as CellProfiler expects.
     """
+    if channel_ranges is not None:
+        low, high = channel_ranges[:, 0, None, None], channel_ranges[:, 1, None, None]
+        tile_image = np.clip((tile_image.astype(np.float32) - low) / (high - low), 0, 1)
     # cp_measure assumes dense 1..N IDs and index-errors on sparse IDs.
     contiguous_labels, _, inverse = relabel_sequential(tile_labels)
     with warnings.catch_warnings():
@@ -895,6 +933,7 @@ def calculate_image_features(
     align_mode: Literal["strict", "rasterize"] = "strict",
     key_added: str | None = None,
     invalid_as_zero: bool = False,
+    intensity_range: Literal["auto"] | dict[str, tuple[float, float]] | None = "auto",
     drop_constant_features: bool = True,
     n_jobs: int = 1,
     inplace: bool = True,
@@ -984,6 +1023,14 @@ def calculate_image_features(
     invalid_as_zero
         If ``True``, replace ``inf``/``NaN`` with zero. ``False`` keeps
         them, so undefined features stay distinguishable from genuine zeros.
+    intensity_range
+        How the image is scaled to 0-1 before cp_measure, which, like CellProfiler, works on 0-1 images: its
+        texture features quantize them into 256 gray levels. ``"auto"`` (default) maps each channel from 0 to its
+        99.9th percentile, estimated once on the whole image, and clips above it. Without this, a 16-bit image is
+        mapped by its full dtype range, and a channel that uses a small part of it (common for fluorescence) falls
+        into one or two gray levels in most cells, whose texture is then undefined (``NaN``). A mapping of channel
+        name to ``(low, high)`` sets the ranges explicitly; ``None`` passes the image unchanged. Only cp_measure
+        features are affected; their intensities are on the scaled 0-1 range.
     drop_constant_features
         If ``True``, drop zero-variance feature columns (they break
         scaling/PCA downstream). Applied per call and skipped for a single cell;
@@ -1089,6 +1136,12 @@ def calculate_image_features(
 
     # Build cp_measure config once; the same dict is reused for every tile.
     cp_config = _build_cp_config(parsed.cp_flags, channel_names) if parsed.cp_flags is not None else None
+    # one intensity range per channel for the whole image, so that every tile is scaled alike
+    channel_ranges = (
+        _channel_ranges(image_da, channel_names, intensity_range)
+        if cp_config is not None and image_da is not None
+        else None
+    )
 
     # --- Warmup: compute centroids without materializing full arrays ---
     cell_info = _compute_centroids(sdata, labels_key=labels_key, labels_da=labels_da, scale=scale)
@@ -1112,7 +1165,9 @@ def calculate_image_features(
                 tile_lbl = extract_labels_tile_lazy(labels_da, spec)
                 return _featurize_tile(None, tile_lbl, parsed, channel_names, cp_config=cp_config)
             tile_img, tile_lbl = extract_tile_lazy(image_da, labels_da, spec)
-            return _featurize_tile(tile_img, tile_lbl, parsed, channel_names, cp_config=cp_config)
+            return _featurize_tile(
+                tile_img, tile_lbl, parsed, channel_names, cp_config=cp_config, channel_ranges=channel_ranges
+            )
 
     # cp_measure is GIL-bound, so kind="processes" (an active Client wins if set).
     results = _run_tiled(

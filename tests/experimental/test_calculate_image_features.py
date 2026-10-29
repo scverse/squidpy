@@ -1196,3 +1196,71 @@ class TestParallelEngine:
             )
         assert any("Materializing labels onto the image grid" in r.getMessage() for r in recs_parallel)
         pd.testing.assert_frame_equal(serial, parallel[serial.columns], rtol=1e-5, atol=1e-6)
+
+
+def _dim_uint16_sdata():
+    """A 16-bit image whose single channel uses values 0-300 only, as dim fluorescence stains do."""
+    rng = np.random.default_rng(0)
+    image = rng.integers(0, 300, (1, 120, 120), dtype=np.uint16)
+    labels = np.zeros((120, 120), dtype=np.int32)
+    for i, (y, x) in enumerate([(y, x) for y in range(5, 100, 30) for x in range(5, 100, 30)], start=1):
+        labels[y : y + 25, x : x + 25] = i
+    return SpatialData(
+        images={"img": Image2DModel.parse(image, dims=("c", "y", "x"), c_coords=["dim"])},
+        labels={"lbl": Labels2DModel.parse(xr.DataArray(labels, dims=["y", "x"]))},
+    )
+
+
+class TestIntensityRange:
+    """cp_measure input scaling (``intensity_range``)."""
+
+    def _texture(self, **kwargs):
+        result = sq.experimental.im.calculate_image_features(
+            _dim_uint16_sdata(),
+            image_key="img",
+            labels_key="lbl",
+            features=["cp_measure:texture"],
+            drop_constant_features=False,
+            inplace=False,
+            **kwargs,
+        )
+        return result[:, result.var_names.str.startswith("Contrast_")].X
+
+    def test_auto_defines_texture_of_a_dim_channel(self):
+        """Scaled to its own range, a dim 16-bit channel has texture in every cell."""
+        assert np.isfinite(self._texture()).all()
+
+    def test_none_keeps_the_dtype_range(self):
+        """Unscaled, values 0-300 of 65535 fall into two gray levels: texture is degenerate."""
+        auto, raw = self._texture(), self._texture(intensity_range=None)
+        assert not np.allclose(np.nan_to_num(raw), auto)
+
+    def test_intensities_on_unit_range(self):
+        result = sq.experimental.im.calculate_image_features(
+            _dim_uint16_sdata(), image_key="img", labels_key="lbl", features=["cp_measure:intensity"], inplace=False
+        )
+        mean = result[:, result.var_names.str.startswith("Intensity_MeanIntensity")].X
+        assert (mean >= 0).all() and (mean <= 1).all()
+
+    def test_explicit_ranges(self):
+        """An explicit (low, high) per channel is used as given."""
+        kwargs = {"image_key": "img", "labels_key": "lbl", "features": ["cp_measure:intensity"], "inplace": False}
+        full = sq.experimental.im.calculate_image_features(
+            _dim_uint16_sdata(), intensity_range={"dim": (0, 600)}, **kwargs
+        )
+        half = sq.experimental.im.calculate_image_features(
+            _dim_uint16_sdata(), intensity_range={"dim": (0, 300)}, **kwargs
+        )
+        mean = [r[:, r.var_names.str.startswith("Intensity_MeanIntensity")].X for r in (full, half)]
+        np.testing.assert_allclose(mean[0] * 2, mean[1], rtol=1e-4)
+
+    def test_missing_channel_raises(self):
+        with pytest.raises(ValueError, match="no range for channel"):
+            sq.experimental.im.calculate_image_features(
+                _dim_uint16_sdata(),
+                image_key="img",
+                labels_key="lbl",
+                features=["cp_measure:intensity"],
+                intensity_range={"other": (0, 1)},
+                inplace=False,
+            )
