@@ -1,6 +1,6 @@
 """STalign port vs the original, on outputs upstream computed (scverse/squidpy#1243).
 
-The reference values come from squidpy-ports' generator, published there as one zarr store;
+The reference values come from squidpy-ports' generator, published there as an AnnData in a zarr store;
 https://theislab.github.io/squidpy-ports/reference-bundle.html says what it holds and why.
 Rank 2 is section-to-section (upstream ``LDDMM``), rank 3 section-into-volume
 (``LDDMM_3D_to_slice``). Needs ``JAX_ENABLE_X64=1``.
@@ -38,9 +38,9 @@ from squidpy.experimental.tl._align._stalign import fit_stalign_image, fit_stali
 from squidpy.experimental.tl._align._stalign_impl import _core, _helpers  # noqa: E402
 
 _BUNDLE_URL = (
-    "https://github.com/theislab/squidpy-ports/releases/download/stalign-reference-v1/stalign_reference.zarr.zip"
+    "https://github.com/theislab/squidpy-ports/releases/download/stalign-reference-v2/stalign_reference.zarr.zip"
 )
-_BUNDLE_SHA256 = "8097705b69f23f2124d7ba3e2820a81ffdfb153d8e1c031301d51f43361a7f22"
+_BUNDLE_SHA256 = "f78d0978da9170057ef63bcc8119c69d2fcde1feee3f6405e8ffabc5eccb5538"
 
 
 #: The fixture parameters the bundle was generated with; `test_params_match_the_bundle` checks them.
@@ -66,15 +66,15 @@ MIXED_TARGET_STEP = 30.0
 
 class Bundle(NamedTuple):
     arrays: dict[str, dict[str, np.ndarray]]
-    #: Attributes per group; ``""`` is the root's.
-    attrs: dict[str, dict]
+    provenance: dict[str, dict]
+    fixtures: dict
 
 
 @pytest.fixture(scope="session")
 def bundle() -> Bundle:
     """The reference bundle, downloaded once and read into memory."""
+    import anndata as ad
     import pooch
-    import zarr
     from scanpy import settings
     from zarr.storage import ZipStore
 
@@ -82,19 +82,20 @@ def bundle() -> Bundle:
         _BUNDLE_URL, known_hash=f"sha256:{_BUNDLE_SHA256}", path=settings.datasetdir, progressbar=False
     )
     with ZipStore(path, mode="r") as store:
-        root = zarr.open_group(store, mode="r")
-        groups = dict(root.groups())
-        arrays = {name: {key: array[...] for key, array in group.arrays()} for name, group in groups.items()}
-        attrs = {name: dict(group.attrs) for name, group in groups.items()} | {"": dict(root.attrs)}
-    return Bundle(arrays, attrs)
+        uns = dict(ad.read_zarr(store).uns)
+    fixtures = uns.pop("fixtures")
+    arrays = {
+        name: {key: value for key, value in section.items() if key != "provenance"} for name, section in uns.items()
+    }
+    return Bundle(arrays, {name: section["provenance"] for name, section in uns.items()}, fixtures)
 
 
 def test_params_match_the_bundle(bundle):
-    root = bundle.attrs[""]
-    assert root["SEED"] == SEED
-    assert root["RASTER_PARAMS"] == RASTER_PARAMS
-    assert root["LDDMM_PARAMS"] == LDDMM_PARAMS
-    assert root["MIXED_TARGET_STEP"] == MIXED_TARGET_STEP
+    fixtures = bundle.fixtures
+    assert fixtures["SEED"] == SEED
+    assert {key: np.asarray(value).tolist() for key, value in fixtures["RASTER_PARAMS"].items()} == RASTER_PARAMS
+    assert fixtures["LDDMM_PARAMS"] == LDDMM_PARAMS
+    assert fixtures["MIXED_TARGET_STEP"] == MIXED_TARGET_STEP
 
 
 EXACT = 1e-12
@@ -164,27 +165,13 @@ def _transform_rc(result: StalignObsFit, points_rc, *, inverse: bool = False) ->
     return np.asarray(got)[:, ::-1]
 
 
-@pytest.mark.parametrize(
-    "name",
-    [
-        "primitives",
-        "energy",
-        "gradients",
-        "trajectory_n1",
-        "trajectory_n5",
-        "trajectory_n50",
-        "converged_n500",
-        "image_trajectory",
-        "image_trajectory_matched",
-        "slice_trajectory",
-    ],
-)
-def test_every_fixture_carries_provenance(bundle, name):
-    """Every group records which upstream and which generator run produced it."""
-    payload = bundle.attrs[name]["provenance"]
-    assert payload["upstream_sha"] == "b2068edc98974efa54537eca194736e177bbe11d"
-    for key in ("ports_commit", "torch", "numpy", "python", "platform", "generated_utc"):
-        assert payload[key], f"{name}: empty provenance field {key!r}"
+def test_every_section_carries_provenance(bundle):
+    """Every section records which upstream and which generator run produced it."""
+    assert len(bundle.provenance) == 11
+    for name, payload in bundle.provenance.items():
+        assert payload["upstream_sha"] == "b2068edc98974efa54537eca194736e177bbe11d", name
+        for key in ("ports_commit", "torch", "numpy", "python", "platform", "generated_utc"):
+            assert payload[key], f"{name}: empty provenance field {key!r}"
 
 
 def test_fixture_samples_are_off_grid(primitives):
