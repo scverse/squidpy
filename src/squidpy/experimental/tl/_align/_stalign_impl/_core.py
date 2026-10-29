@@ -13,7 +13,7 @@ import numpy as np
 
 from squidpy.experimental.im import _rasterize_points
 
-__all__ = ["interp", "jax_dtype", "lddmm", "reverse_axes", "transform_grid_row_col", "transform_points_row_col"]
+__all__ = ["interp", "jax_dtype", "lddmm", "transform_grid_row_col", "transform_points_row_col"]
 
 #: One coordinate vector per spatial axis; the solver reads its rank off ``len(axes)``.
 Axes = Sequence[jax.Array]
@@ -27,17 +27,6 @@ def jax_dtype() -> jnp.dtype:
     return jnp.float64 if jax.config.x64_enabled else jnp.float32
 
 
-def reverse_axes(ndim: int) -> jax.Array:
-    """Homogeneous ``(ndim + 1, ndim + 1)`` matrix reversing the spatial axis order.
-
-    The solver works in array order (``(y, x)`` at rank 2, ``(z, y, x)`` at rank 3)
-    while callers speak ``(x, y)`` / ``(x, y, z)``. Conjugating an affine by this matrix
-    converts between the two conventions, and being its own inverse it serves both
-    directions.
-    """
-    return jnp.asarray(np.eye(ndim + 1)[[*reversed(range(ndim)), ndim]], dtype=jax_dtype())
-
-
 def _to_affine(linear: jax.Array, translation: jax.Array) -> jax.Array:
     ndim = linear.shape[0]
     dtype = linear.dtype
@@ -48,10 +37,6 @@ def _to_affine(linear: jax.Array, translation: jax.Array) -> jax.Array:
         ),
         axis=0,
     )
-
-
-def _grid_points(x: Axes) -> jax.Array:
-    return jnp.stack(jnp.meshgrid(*x, indexing="ij"))
 
 
 def interp(
@@ -133,7 +118,7 @@ def transform_grid_row_col(
 ) -> jax.Array:
     """Map the dense grid spanned by ``axes``, returned as ``(len(axes), *grid_shape)``."""
     ndim = len(axes)
-    grid = _grid_points(axes)
+    grid = jnp.stack(jnp.meshgrid(*axes, indexing="ij"))
     points = jnp.moveaxis(grid, 0, -1).reshape((-1, ndim))
     transformed = transform_points_row_col(xv, velocity, affine, points, direction=direction)
     return jnp.moveaxis(transformed.reshape((*grid.shape[1:], ndim)), -1, 0)

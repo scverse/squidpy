@@ -367,7 +367,7 @@ def test_contrast_transform_freezes_the_ridge_coefficients():
         return jnp.sum(_core._contrast_transform(x, target, weights) ** 2)
 
     def leaky(x):
-        # _contrast_transform verbatim, minus the stop_gradient: the bug as it was.
+        # _contrast_transform without the stop_gradient
         flat_source = x.reshape(x.shape[0], -1)
         flat_target = target.reshape(target.shape[0], -1)
         design = jnp.concatenate((jnp.ones((1, flat_source.shape[1]), dtype=x.dtype), flat_source), axis=0)

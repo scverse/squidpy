@@ -12,7 +12,7 @@ import numpy as np
 from squidpy._validators import validate_xy
 from squidpy.experimental.im._rasterize_points import rasterize
 
-from ._core import jax_dtype, reverse_axes
+from ._core import jax_dtype
 
 if TYPE_CHECKING:
     from fast_array_utils.types import HasArrayNamespace as Array
@@ -100,7 +100,8 @@ def affine_xy_to_rc(matrix: Array, *, name: str = "initial_affine", ndim: int = 
     affine_xy = jnp.asarray(matrix, dtype=dtype)
     if affine_xy.shape != (ndim + 1, ndim + 1):
         raise ValueError(f"Expected `{name}` to have shape ({ndim + 1}, {ndim + 1}), found {affine_xy.shape}.")
-    swap = reverse_axes(ndim)
+    # reverse the spatial axes, keep the homogeneous one
+    swap = jnp.asarray(np.eye(ndim + 1)[[*reversed(range(ndim)), ndim]], dtype=dtype)
     affine_rc = swap @ affine_xy @ swap
     return affine_rc[:ndim, :ndim], affine_rc[:ndim, ndim]
 

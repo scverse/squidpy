@@ -152,7 +152,7 @@ def test_slice_fit_initialises_on_the_volume_centre_not_its_corner(scale: float)
     placed = np.asarray(fit.transform_points(centre_xy))[0]
     expected_xy = (size - 1) / 2
     np.testing.assert_allclose(placed[:2], [expected_xy, expected_xy], atol=1e-6)
-    # and the slice it was asked to centre on, which `initial_scale` used to shift
+    # and on the slice it was asked to centre on
     np.testing.assert_allclose(placed[2], float(np.asarray(fit.ref_axes[0])[3]), atol=1e-6)
 
 
@@ -272,7 +272,6 @@ def test_one_sided_landmarks_are_refused(missing: str) -> None:
     ids=["raster_knob_on_image", "rank2_knob_on_volume", "typo_on_obs"],
 )
 def test_unknown_solver_keys_are_refused(fit: str, key: str) -> None:
-    # a key outside the fit's schema used to be dropped or passed on silently
     from squidpy.experimental.tl._align import _stalign
 
     volume = np.random.default_rng(0).random((1, 6, 12, 12))
