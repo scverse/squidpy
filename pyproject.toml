@@ -83,6 +83,9 @@ dependencies = [
   "xarray>=2024.10",
   "zarr>=3",
 ]
+optional-dependencies.jax = [
+  "jax>=0.4",
+]
 optional-dependencies.leiden = [
   "leidenalg",
   "spatialleiden>=0.4",
@@ -294,6 +297,7 @@ filterwarnings = [
 ]
 markers = [
   "internet: tests that require internet",
+  "jax: tests that need the jax extra; the only ones the jax CI env runs",
   # the below markers are just there because we import from anndata.tests.helpers,
   # which means pytest sees them despite us not using them.
   "gpu: tests that require GPU",

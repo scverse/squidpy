@@ -1,0 +1,123 @@
+"""Numeric helpers for STalign point-cloud registration."""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
+
+import jax
+import jax.numpy as jnp
+import numpy as np
+
+from squidpy._validators import validate_xy
+from squidpy.experimental.im._rasterize_points import rasterize
+
+from ._core import jax_dtype
+
+if TYPE_CHECKING:
+    from fast_array_utils.types import HasArrayNamespace as Array
+
+__all__ = [
+    "resolve_axes",
+    "affine_from_points",
+    "affine_xy_to_rc",
+    "as_chw",
+    "explicit_axes",
+    "rasterize_cloud",
+    "validate_points",
+]
+
+
+def rasterize_cloud(
+    points_rc: jax.Array, *, dx: float, blur: float | Sequence[float], expand: float
+) -> tuple[tuple[jax.Array, jax.Array], jax.Array]:
+    """Rasterize a row-col cloud into a ``((grid_y, grid_x), image)`` density."""
+    grid_x, grid_y, image = rasterize(points_rc[:, 1], points_rc[:, 0], dx=dx, blur=blur, expand=expand)
+    return (grid_y, grid_x), image
+
+
+def validate_points(points: Array, *, name: str) -> jax.Array:
+    """Coerce ``points`` to a finite ``(n, 2)`` JAX array."""
+    return jnp.asarray(validate_xy(points, name=name), dtype=jax_dtype())
+
+
+def as_chw(image: Array, *, name: str, ndim: int = 2) -> jax.Array:
+    """Coerce an image to channels-first, promoting an unchannelled array."""
+    arr = jnp.asarray(image, dtype=jax_dtype())
+    if arr.ndim == ndim:
+        return arr[None]
+    if arr.ndim != ndim + 1:
+        spatial = ", ".join("zyx"[-ndim:])
+        raise ValueError(f"Expected `{name}` to be a `({spatial})` or `(c, {spatial})` image, found shape {arr.shape}.")
+    return arr
+
+
+def resolve_axes(axes: Sequence[Array] | None, shape: tuple[int, ...], name: str) -> tuple[jax.Array, ...]:
+    """Physical axes for one side, at any rank: explicit if given, otherwise centred pixel units."""
+    # JAX clamps out-of-bounds indices, so a single-sample axis would interpolate with a zero step
+    if any(size < 2 for size in shape):
+        raise ValueError(f"Expected each `{name}` axis to contain at least two coordinates, found shape {shape}.")
+    if axes is None:
+        # centred on the origin, so the affine can start near identity
+        return tuple(jnp.arange(size, dtype=jax_dtype()) - (size - 1) / 2.0 for size in shape)
+    return explicit_axes(axes, shape, name)
+
+
+def explicit_axes(value: Sequence[Array], shape: tuple[int, ...], name: str) -> tuple[jax.Array, ...]:
+    """Validate caller-supplied physical axes against the image they describe."""
+    dtype = jax_dtype()
+    resolved = tuple(jnp.asarray(axis, dtype=dtype) for axis in value)
+    if len(resolved) != len(shape):
+        raise ValueError(f"Expected `{name}` to hold {len(shape)} coordinate vectors, found {len(resolved)}.")
+    if any(axis.ndim != 1 for axis in resolved):
+        raise ValueError(f"Expected each `{name}` axis to be one-dimensional.")
+    lengths = tuple(axis.shape[0] for axis in resolved)
+    if lengths != shape:
+        raise ValueError(f"Expected `{name}` lengths {shape}, found {lengths}.")
+    # checked on the caller's values: after a cast to float32, coordinates in the hundreds
+    # already carry spacing errors above allclose's tolerance
+    given = [np.asarray(axis, dtype=float) for axis in value]
+    if not all(np.allclose(np.diff(axis), axis[1] - axis[0]) for axis in given):
+        raise ValueError(f"Expected each `{name}` axis to be evenly spaced.")
+    return resolved
+
+
+def affine_xy_to_rc(matrix: Array, *, name: str = "initial_affine", ndim: int = 2) -> tuple[jax.Array, jax.Array]:
+    """Split a homogeneous ``(x, y[, z])`` affine into array-order ``(linear, translation)``."""
+    dtype = jax_dtype()
+    affine_xy = jnp.asarray(matrix, dtype=dtype)
+    if affine_xy.shape != (ndim + 1, ndim + 1):
+        raise ValueError(f"Expected `{name}` to have shape ({ndim + 1}, {ndim + 1}), found {affine_xy.shape}.")
+    # reverse the spatial axes, keep the homogeneous one
+    swap = jnp.asarray(np.eye(ndim + 1)[[*reversed(range(ndim)), ndim]], dtype=dtype)
+    affine_rc = swap @ affine_xy @ swap
+    return affine_rc[:ndim, :ndim], affine_rc[:ndim, ndim]
+
+
+def affine_from_points(
+    points_source: jax.Array,
+    points_target: jax.Array,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute an affine initialization from corresponding landmarks."""
+    source = np.asarray(points_source, dtype=float)
+    target = np.asarray(points_target, dtype=float)
+    if source.shape != target.shape:
+        raise ValueError(
+            f"Expected `points_source` and `points_target` to have the same shape, found "
+            f"`{source.shape}` and `{target.shape}`."
+        )
+
+    if source.shape[0] < 3:
+        linear = np.eye(2, dtype=float)
+        translation = np.mean(target, axis=0) - np.mean(source, axis=0)
+        return linear, translation
+
+    from skimage.transform import estimate_transform
+
+    from .._landmark import check_spans_plane
+
+    for name, points in (("landmarks_query", source), ("landmarks_ref", target)):
+        check_spans_plane(points, name=f"`{name}`", method="The landmark-derived initial affine")
+    model_obj = estimate_transform("affine", src=source, dst=target)
+    affine = np.asarray(model_obj.params)
+    return affine[:2, :2], affine[:2, -1]
