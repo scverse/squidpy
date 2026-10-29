@@ -59,7 +59,11 @@ def _read_image(container: SpatialData, key: str, *, side: str, ndim: int, scale
 
     from squidpy.experimental.im._utils import get_element_data
 
-    element = get_element_data(container.images[key], scale, "image", key)
+    node = container.images[key]
+    levels = list(node.keys()) if hasattr(node, "keys") else ["scale0"]
+    if scale not in levels:
+        raise KeyError(f"`scale={scale!r}`: no such level for `image_key={key!r}` on the {side}. Available: {levels}.")
+    element = get_element_data(node, scale, "image", key)
     if ndim == 3 and "z" not in element.dims:
         raise ValueError(
             f"`image_key={key!r}` on the {side} is a 2D image, but this needs a volume with a `z` axis. "
@@ -490,10 +494,10 @@ def align_landmarks(
 
         moving_cs = _coordinate_system_of(query_container, element=query_lm_key, side="query")
         # registering moves everything in `moving_cs`, a reference there included
-        if (
-            data_ref is query_container
-            and ref_table is None
-            and _coordinate_system_of(data_ref, element=ref_lm_key, side="reference") == moving_cs
+        if data_ref is query_container and (
+            _table_regions_in(data_ref, ref_table, moving_cs)
+            if ref_table is not None
+            else _coordinate_system_of(data_ref, element=ref_lm_key, side="reference") == moving_cs
         ):
             raise ValueError(
                 f"The reference and query are both in coordinate system {moving_cs!r}, so registering "
@@ -547,7 +551,21 @@ def _read_landmarks(
 
     coordinate_system = _coordinate_system_of(container, element=landmark_key, side=side)
     geometry = transform(container.shapes[landmark_key], to_coordinate_system=coordinate_system).geometry
+    if not (geometry.geom_type == "Point").all():
+        raise ValueError(
+            f"`landmark_key={landmark_key!r}` on the {side} holds {sorted(set(geometry.geom_type))} geometries; "
+            f"landmarks must be points."
+        )
     return np.column_stack([geometry.x.to_numpy(), geometry.y.to_numpy()])
+
+
+def _table_regions_in(sdata: SpatialData, table_key: str, coordinate_system: str) -> bool:
+    """Whether any element the table annotates is registered to ``coordinate_system``."""
+    from spatialdata.transformations import get_transformation
+
+    region = sdata.tables[table_key].uns.get("spatialdata_attrs", {}).get("region")
+    regions = [region] if isinstance(region, str) else list(region or [])
+    return any(name in sdata and coordinate_system in get_transformation(sdata[name], get_all=True) for name in regions)
 
 
 def _coordinate_system_of(sdata: SpatialData, *, element: str, side: str) -> str:

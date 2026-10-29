@@ -29,24 +29,24 @@ def writeback_affine_sdata(
     from spatialdata.transformations import Affine, Sequence, get_transformation, set_transformation
 
     sd_affine = Affine(np.asarray(matrix), input_axes=("x", "y"), output_axes=("x", "y"))
-    touched = False
-    for _, _, element in sdata.gen_elements():
-        if isinstance(element, AnnData):
-            continue
-        if moving_cs not in get_transformation(element, get_all=True):
-            continue
+    moving = [
+        (name, element)
+        for _, name, element in sdata.gen_elements()
+        if not isinstance(element, AnnData) and moving_cs in get_transformation(element, get_all=True)
+    ]
+    if not moving:
+        raise KeyError(f"No elements in the SpatialData are registered to coordinate system {moving_cs!r}.")
+    for name, element in moving:
         if target_cs in get_transformation(element, get_all=True):
             raise ValueError(
-                f"An element is already registered to {target_cs!r}; writing the alignment there "
+                f"Element {name!r} is already registered to {target_cs!r}; writing the alignment there "
                 f"would replace its existing placement. Pass a `target_coordinate_system` that is "
                 f"not already in use."
             )
+    for _, element in moving:
         # compose after the element's existing transform into `moving_cs`
         existing = get_transformation(element, to_coordinate_system=moving_cs)
         set_transformation(element, Sequence([existing, sd_affine]), to_coordinate_system=target_cs)
-        touched = True
-    if not touched:
-        raise KeyError(f"No elements in the SpatialData are registered to coordinate system {moving_cs!r}.")
 
 
 def resolve_table(container: AnnData | SpatialData, table_key: str | None, *, side: str) -> AnnData:

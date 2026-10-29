@@ -8,6 +8,7 @@ a whole SpatialData coordinate system.
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import pytest
 import spatialdata as sd
 from anndata import AnnData
@@ -431,3 +432,54 @@ def test_sample_volume_reads_values_and_refuses_mismatched_axes() -> None:
         sample_volume(image, np.array([[0.0, 0.0]]), axes=[np.arange(4.0), axes[1]])
     with pytest.raises(ValueError, match=r"evenly spaced"):
         sample_volume(image, np.array([[0.0, 0.0]]), axes=[np.array([0.0, 1.0, 3.0]), axes[1]])
+
+
+def test_a_refused_registration_writes_nothing() -> None:
+    from spatialdata.models import PointsModel
+    from spatialdata.transformations import Identity, get_transformation
+
+    sdata = sd.SpatialData(
+        shapes={"lm_ref": _shapes(_REF, "ref_cs"), "lm_query": _shapes(_QUERY, "query_cs")},
+        points={
+            "free": PointsModel.parse(_QUERY, transformations={"query_cs": Identity()}),
+            "placed": PointsModel.parse(_QUERY, transformations={"query_cs": Identity(), "ref_cs": Identity()}),
+        },
+    )
+    with pytest.raises(ValueError, match=r"'placed' is already registered"):
+        align_landmarks(sdata, landmark_key=("lm_ref", "lm_query"), method="affine", target_coordinate_system="ref_cs")
+    assert "ref_cs" not in get_transformation(sdata.points["free"], get_all=True)
+
+
+def test_polygon_landmarks_are_refused() -> None:
+    import geopandas
+    import shapely
+    from spatialdata.models import ShapesModel
+    from spatialdata.transformations import Identity
+
+    square = shapely.Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
+    polygons = ShapesModel.parse(geopandas.GeoDataFrame(geometry=[square] * 4), transformations={"global": Identity()})
+    sdata = sd.SpatialData(shapes={"lm_ref": polygons, "lm_query": _shapes(_QUERY)})
+    with pytest.raises(ValueError, match=r"landmarks must be points"):
+        align_landmarks(sdata, landmark_key=("lm_ref", "lm_query"), method="affine")
+
+
+def test_a_table_reference_whose_elements_would_move_is_refused() -> None:
+    from spatialdata.models import PointsModel, TableModel
+    from spatialdata.transformations import Identity
+
+    ref = _adata(_REF)
+    ref.obs["region"] = pd.Categorical(["cells_ref"] * len(_REF))
+    ref.obs["instance"] = np.arange(len(_REF))
+    sdata = sd.SpatialData(
+        shapes={"lm_query": _shapes(_QUERY, "query_cs")},
+        points={"cells_ref": PointsModel.parse(_REF, transformations={"query_cs": Identity()})},
+        tables={"t": TableModel.parse(ref, region="cells_ref", region_key="region", instance_key="instance")},
+    )
+    with pytest.raises(ValueError, match=r"would move the reference too"):
+        align_landmarks(
+            sdata,
+            landmark_key=("landmarks", "lm_query"),
+            table_key=("t", None),
+            method="affine",
+            target_coordinate_system="ref_cs",
+        )

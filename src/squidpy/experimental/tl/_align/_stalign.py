@@ -278,14 +278,15 @@ class StalignImageFit(StalignFit):
         ref_axes: Sequence[Array] | None,
     ) -> JaxArray:
         from ._stalign_impl._core import interp
-        from ._stalign_impl._helpers import as_chw
+        from ._stalign_impl._helpers import as_chw, explicit_axes
 
         arr = as_chw(image, name="image")
         source_axes = self.query_axes if query_axes is None else query_axes
         target_axes = self.ref_axes if ref_axes is None else ref_axes
         # pulling an image one way samples it through the grid of the other
         grid = self._grid("backward" if direction == "forward" else "forward", source_axes, target_axes)
-        return interp(source_axes if direction == "forward" else target_axes, arr, grid)
+        sampled_axes, name = (source_axes, "query_axes") if direction == "forward" else (target_axes, "ref_axes")
+        return interp(explicit_axes(sampled_axes, arr.shape[1:], name), arr, grid)
 
 
 @dataclass(frozen=True, kw_only=True)

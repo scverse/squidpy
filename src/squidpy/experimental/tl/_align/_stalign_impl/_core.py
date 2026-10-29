@@ -398,7 +398,7 @@ def _lddmm_run(
         older = energies[jnp.maximum(iteration - 1 - patience, 0)]
         improving = (older - recent) > tol * jnp.abs(older)
         # keep the window after the E step switches on, where the objective jumps
-        warming_up = iteration < MIXTURE_E_STEP_START + 2 + patience
+        warming_up = iteration < jnp.maximum(MIXTURE_E_STEP_START, diffeo_start) + 2 + patience
         return (iteration < niter) & (warming_up | improving)
 
     return jax.lax.while_loop(_keep_going, _step, initial)

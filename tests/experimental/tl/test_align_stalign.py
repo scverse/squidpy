@@ -6,13 +6,17 @@ whole path executes and writes where it says it does, not that the fit converges
 
 from __future__ import annotations
 
+import importlib
+import os
+
 import numpy as np
 import pytest
 from anndata import AnnData
 from spatialdata import SpatialData
 from spatialdata.models import Image2DModel, Image3DModel
 
-pytest.importorskip("jax")
+# the jax CI env sets JAX_ENABLE_X64, and there a missing jax must fail rather than skip
+jax = importlib.import_module("jax") if os.environ.get("JAX_ENABLE_X64") else pytest.importorskip("jax")
 pytestmark = pytest.mark.jax
 
 from squidpy.experimental.tl import (  # noqa: E402
@@ -495,3 +499,27 @@ def test_image_fit_on_a_coarser_scale_keeps_physical_units() -> None:
 
     for axis in fit.query_axes:
         np.testing.assert_allclose(np.asarray(axis), np.arange(8.0) * 2)
+
+
+def test_early_stopping_waits_for_the_deformation_phase() -> None:
+    from squidpy.experimental.tl._align._stalign import fit_stalign_image
+
+    yy, xx = np.mgrid[:24, :24]
+    ref = np.exp(-((xx - 10) ** 2 + (yy - 12) ** 2) / 20.0)[None]
+    fit = fit_stalign_image(ref, ref, a=4.0, nt=1, niter=130, diffeo_start=100, tol=1.0, patience=5)
+    assert fit.n_iter > 100, "stopped before the velocity was ever updated"
+
+
+def test_misspelled_scale_is_refused() -> None:
+    sdata = _sdata_image(np.random.default_rng(0).random((1, 16, 16)), "image", scale_factors=[2])
+    with pytest.raises(KeyError, match=r"Available: \['scale0', 'scale1'\]"):
+        stalign_align_image(sdata, sdata, image_key="image", scale="scale2", **IMAGE_SOLVER)
+
+
+def test_warp_image_refuses_an_image_that_does_not_match_its_axes() -> None:
+    from squidpy.experimental.tl._align._stalign import fit_stalign_image
+
+    image = np.random.default_rng(0).random((1, 12, 12))
+    fit = fit_stalign_image(image, image, a=4.0, nt=1, niter=1)
+    with pytest.raises(ValueError, match=r"query_axes"):
+        fit.warp_image(np.zeros((1, 24, 24)))

@@ -47,3 +47,8 @@ def test_key_added_stores_the_image_and_none_leaves_sdata_alone(xy: np.ndarray) 
 def test_unknown_points_key_lists_what_is_available(xy: np.ndarray) -> None:
     with pytest.raises(KeyError, match=r"Available: \['cells'\]"):
         rasterize_points(_sdata(xy), points_key="nope")
+
+
+def test_an_image_smaller_than_the_points_is_refused(xy: np.ndarray) -> None:
+    with pytest.raises(ValueError, match=r"at least 1"):
+        rasterize_points(_sdata(xy), points_key="cells", expand=0.5)

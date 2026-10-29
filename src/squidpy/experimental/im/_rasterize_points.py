@@ -43,8 +43,10 @@ def rasterize(
         raise ValueError("Expected at least one point to rasterize.")
     if dx <= 0:
         raise ValueError("Expected `dx` to be positive.")
-    if expand <= 0:
-        raise ValueError("Expected `expand` to be positive.")
+    if expand < 1:
+        raise ValueError(
+            f"Expected `expand` to be at least 1, found {expand}: below 1 the image is smaller than the points."
+        )
 
     blur_values = np.atleast_1d(np.asarray(blur, dtype=float))
     if blur_values.ndim != 1 or np.any(blur_values <= 0):
@@ -115,7 +117,8 @@ def rasterize_points(
 
     Each point deposits unit mass bilinearly over its four neighbouring pixels, and the
     result is blurred once per ``blur`` scale, so every point becomes a unit-integral
-    Gaussian and the total intensity is exactly the number of points. Passing several
+    Gaussian and the total intensity is the number of points, as long as the margin ``expand``
+    leaves is at least one pixel. Passing several
     ``blur`` values returns them as channels, which is what a coarse-to-fine registration
     wants.
 

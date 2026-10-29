@@ -8,12 +8,15 @@ Rank 2 is section-to-section (upstream ``LDDMM``), rank 3 section-into-volume
 
 from __future__ import annotations
 
+import importlib
+import os
 from typing import NamedTuple
 
 import numpy as np
 import pytest
 
-jax = pytest.importorskip("jax")
+# the jax CI env sets JAX_ENABLE_X64, and there a missing jax must fail rather than skip
+jax = importlib.import_module("jax") if os.environ.get("JAX_ENABLE_X64") else pytest.importorskip("jax")
 if not jax.config.jax_enable_x64:
     pytest.skip("needs JAX_ENABLE_X64=1: upstream is float64 throughout", allow_module_level=True)
 pytestmark = [pytest.mark.jax, pytest.mark.internet]
