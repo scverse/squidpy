@@ -389,19 +389,16 @@ def test_score_perms_matches_scanpy_per_permutation(mode: str):
     from sklearn.neighbors import kneighbors_graph
     from sklearn.preprocessing import normalize
 
-    from squidpy._constants._constants import SpatialAutocorr
-
     n, n_genes, n_perms = 300, 4, 6
     rng = np.random.default_rng(0)
     g = csr_matrix(kneighbors_graph(rng.random((n, 2)), 5, mode="connectivity"))
     normalize(g, norm="l1", axis=1, copy=False)
     vals = rng.random((n_genes, n), dtype=np.float32)
 
-    autocorr = SpatialAutocorr(mode)
-    moran = autocorr == SpatialAutocorr.MORAN
-    observed, got = _score_perms(g, vals, mode=autocorr, n_perms=n_perms, rng=0, n_jobs=1, show_progress_bar=False)
+    moran = mode == "moran"
+    observed, got = _score_perms(g, vals, mode=mode, n_perms=n_perms, rng=0, n_jobs=1, show_progress_bar=False)
 
-    func = morans_i if autocorr == SpatialAutocorr.MORAN else gearys_c
+    func = morans_i if moran else gearys_c
     expected = np.stack([func(g[gen.permutation(n), :], vals) for gen in np.random.default_rng(0).spawn(n_perms)])
     np.testing.assert_allclose(observed, func(g, vals), rtol=1e-9)
 
@@ -444,17 +441,14 @@ def test_score_perms_thread_invariant(mode: str):
     from sklearn.neighbors import kneighbors_graph
     from sklearn.preprocessing import normalize
 
-    from squidpy._constants._constants import SpatialAutocorr
-
     n, n_perms = 300, 8
     rng = np.random.default_rng(0)
     g = csr_matrix(kneighbors_graph(rng.random((n, 2)), 5, mode="connectivity"))
     normalize(g, norm="l1", axis=1, copy=False)
     vals = rng.random((3, n), dtype=np.float32)
 
-    autocorr = SpatialAutocorr(mode)
-    serial = _score_perms(g, vals, mode=autocorr, n_perms=n_perms, rng=0, n_jobs=1, show_progress_bar=False)
-    threaded = _score_perms(g, vals, mode=autocorr, n_perms=n_perms, rng=0, n_jobs=4, show_progress_bar=False)
+    serial = _score_perms(g, vals, mode=mode, n_perms=n_perms, rng=0, n_jobs=1, show_progress_bar=False)
+    threaded = _score_perms(g, vals, mode=mode, n_perms=n_perms, rng=0, n_jobs=4, show_progress_bar=False)
     np.testing.assert_array_equal(serial[0], threaded[0])
     assert serial[1].keys() == threaded[1].keys()
     for key in serial[1]:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import dask.array as da
 import numpy as np
@@ -13,10 +13,10 @@ from skimage.feature import peak_local_max
 from skimage.filters import threshold_otsu
 from skimage.segmentation import watershed
 
-from squidpy._constants._constants import SegmentationBackend
 from squidpy._constants._pkg_constants import Key
-from squidpy._docs import d, inject_docs
+from squidpy._docs import d
 from squidpy._utils import NDArrayA, singledispatchmethod
+from squidpy._validators import normalize_choice
 from squidpy.im._container import ImageContainer
 
 __all__ = ["SegmentationModel", "SegmentationWatershed", "SegmentationCustom"]
@@ -267,12 +267,11 @@ class SegmentationCustom(SegmentationModel):
 
 
 @d.dedent
-@inject_docs(m=SegmentationBackend)
 def segment(
     img: ImageContainer,
     layer: str | None = None,
     library_id: str | Sequence[str] | None = None,
-    method: str | SegmentationModel | Callable[..., NDArrayA] = "watershed",
+    method: Literal["log", "dog", "doh", "watershed"] | SegmentationModel | Callable[..., NDArrayA] = "watershed",
     channel: int | None = 0,
     chunks: str | int | tuple[int, int] | None = None,
     lazy: bool = False,
@@ -292,44 +291,48 @@ def segment(
     method
         Segmentation method to use. Valid options are:
 
-            - `{m.WATERSHED.s!r}` - :func:`skimage.segmentation.watershed`.
+            - `'watershed'` - :func:`skimage.segmentation.watershed`.
 
         %(custom_fn)s
     channel
         Channel index to use for segmentation. If `None`, use all channels.
     %(chunks_lazy)s
-    %(layer_added)s If `None`, use ``'segmented_{{model}}'``.
+    %(layer_added)s If `None`, use ``'segmented_{model}'``.
     thresh
         Threshold for creation of masked image. The areas to segment should be contained in this mask.
         If `None`, it is determined by `Otsu's method <https://en.wikipedia.org/wiki/Otsu%27s_method>`_.
-        Only used if ``method = {m.WATERSHED.s!r}``.
+        Only used if ``method = 'watershed'``.
     geq
         Treat ``thresh`` as upper or lower bound for defining areas to segment. If ``geq = True``, mask is defined
         as ``mask = arr >= thresh``, meaning high values in ``arr`` denote areas to segment.
-        Only used if ``method = {m.WATERSHED.s!r}``.
+        Only used if ``method = 'watershed'``.
     %(copy_cont)s
     %(segment_kwargs)s
 
     Returns
     -------
-    If ``copy = True``, returns a new container with the segmented image in ``'{{layer_added}}'``.
+    If ``copy = True``, returns a new container with the segmented image in ``'{layer_added}'``.
 
     Otherwise, modifies the ``img`` with the following key:
 
-        - :class:`squidpy.im.ImageContainer` ``['{{layer_added}}']`` - the segmented image.
+        - :class:`squidpy.im.ImageContainer` ``['{layer_added}']`` - the segmented image.
     """
     layer = img._get_layer(layer)
-    kind = SegmentationBackend.CUSTOM if callable(method) else SegmentationBackend(method)
+    kind = (
+        "custom"
+        if callable(method)
+        else normalize_choice(method, ("log", "dog", "doh", "watershed", "custom"), name="method")
+    )
     layer_new = Key.img.segment(kind, layer_added=layer_added)
     kwargs["chunks"] = chunks
     library_id = img._get_library_ids(library_id)
 
     if not isinstance(method, SegmentationModel):
-        if kind == SegmentationBackend.WATERSHED:
+        if kind == "watershed":
             if channel is None and img[layer].shape[-1] > 1:
                 raise ValueError("Watershed segmentation does not work with multiple channels.")
             method: SegmentationModel = SegmentationWatershed()  # type: ignore[no-redef]
-        elif kind == SegmentationBackend.CUSTOM:
+        elif kind == "custom":
             if not callable(method):
                 raise TypeError(f"Expected `method` to be a callable, found `{type(method)}`.")
             method = SegmentationCustom(func=method)

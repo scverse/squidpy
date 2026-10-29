@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -14,17 +14,16 @@ from sklearn.preprocessing import LabelEncoder
 from spatialdata import SpatialData
 
 from squidpy._compat import old_positionals
-from squidpy._constants._constants import RipleyStat
 from squidpy._constants._pkg_constants import Key
-from squidpy._docs import d, inject_docs
+from squidpy._docs import d
 from squidpy._utils import NDArrayA, RNGLike, SeedLike, deprecated_randomness_param
+from squidpy._validators import normalize_choice
 from squidpy.gr._utils import _assert_categorical_obs, _assert_spatial_basis, _save_data, extract_adata_if_sdata
 
 __all__ = ["ripley"]
 
 
 @d.dedent
-@inject_docs(key=Key.obsm.spatial, rp=RipleyStat)
 @old_positionals(
     "cluster_key",
     "mode",
@@ -63,31 +62,31 @@ def ripley(
     %(rng_versionchanged)s
 
     According to the `'mode'` argument, it calculates one of the following Ripley's statistics:
-    `{rp.F.s!r}`, `{rp.G.s!r}` or `{rp.L.s!r}` statistics.
+    `'F'`, `'G'` or `'L'` statistics.
 
-    `{rp.F.s!r}`, `{rp.G.s!r}` are defined as:
-
-    .. math::
-
-        F(t),G(t)=P( d_{{i,j}} \le t )
-
-    Where :math:`d_{{i,j}}` represents:
-
-        - distances to a random Spatial Poisson Point Process for `{rp.F.s!r}`.
-        - distances to any other point of the dataset for `{rp.G.s!r}`.
-
-    `{rp.L.s!r}` we first need to compute :math:`K(t)`, which is defined as:
+    `'F'`, `'G'` are defined as:
 
     .. math::
 
-        K(t) = \frac{{1}}{{\lambda}} \sum_{{i \ne j}} \frac{{I(d_{{i,j}}<t)}}{{n}}
+        F(t),G(t)=P( d_{i,j} \le t )
+
+    Where :math:`d_{i,j}` represents:
+
+        - distances to a random Spatial Poisson Point Process for `'F'`.
+        - distances to any other point of the dataset for `'G'`.
+
+    `'L'` we first need to compute :math:`K(t)`, which is defined as:
+
+    .. math::
+
+        K(t) = \frac{1}{\lambda} \sum_{i \ne j} \frac{I(d_{i,j}<t)}{n}
 
 
     and then we apply a variance-stabilizing transformation:
 
     .. math::
 
-        L(t) = (\frac{{K(t)}}{{\pi}})^{{1/2}}
+        L(t) = (\frac{K(t)}{\pi})^{1/2}
 
 
     Parameters
@@ -110,7 +109,7 @@ def ripley(
     n_observations
         How many observations to generate for the Spatial Poisson Point Process.
     max_dist
-        Maximum distances for the support. If `None`, `max_dist=`:math:`\sqrt{{area \over 2}}`.
+        Maximum distances for the support. If `None`, `max_dist=`:math:`\sqrt{area \over 2}`.
     n_steps
         Number of steps for the support.
     %(rng)s
@@ -132,9 +131,7 @@ def ripley(
     coordinates = adata.obsm[spatial_key]
     clusters = adata.obs[cluster_key].values
 
-    mode = RipleyStat(mode)  # type: ignore[assignment]
-    if TYPE_CHECKING:
-        assert isinstance(mode, RipleyStat)
+    mode = normalize_choice(mode, ("F", "G", "L"), name="mode")
 
     # prepare support
     N = coordinates.shape[0]
@@ -156,19 +153,17 @@ def ripley(
 
     for i in np.arange(np.max(cluster_idx) + 1):
         coord_c = coordinates[cluster_idx == i, :]
-        if mode == RipleyStat.F:
+        if mode == "F":
             random = _ppp(hull, n_simulations=1, n_observations=n_observations, rng=obs_rng)
             tree_c = NearestNeighbors(metric=metric, n_neighbors=n_neigh).fit(coord_c)
             distances, _ = tree_c.kneighbors(random, n_neighbors=n_neigh)
             bins, obs_stats = _f_g_function(distances.squeeze(), support)
-        elif mode == RipleyStat.G:
+        elif mode == "G":
             tree_c = NearestNeighbors(metric=metric, n_neighbors=n_neigh).fit(coord_c)
             distances, _ = tree_c.kneighbors(coordinates[cluster_idx != i, :], n_neighbors=n_neigh)
             bins, obs_stats = _f_g_function(distances.squeeze(), support)
-        elif mode == RipleyStat.L:
-            bins, obs_stats = _l_function(coord_c, support, N, area, metric)
         else:
-            raise NotImplementedError(f"Mode `{mode.s!r}` is not yet implemented.")
+            bins, obs_stats = _l_function(coord_c, support, N, area, metric)
         obs_arr[i] = obs_stats
 
     sims = np.empty((n_simulations, len(bins)))
@@ -176,18 +171,16 @@ def ripley(
 
     for i in range(n_simulations):
         random_i = _ppp(hull, n_simulations=1, n_observations=n_observations, rng=sim_rngs[i])
-        if mode == RipleyStat.F:
+        if mode == "F":
             tree_i = NearestNeighbors(metric=metric, n_neighbors=n_neigh).fit(random_i)
             distances_i, _ = tree_i.kneighbors(random, n_neighbors=1)
             _, stats_i = _f_g_function(distances_i.squeeze(), support)
-        elif mode == RipleyStat.G:
+        elif mode == "G":
             tree_i = NearestNeighbors(metric=metric, n_neighbors=n_neigh).fit(random_i)
             distances_i, _ = tree_i.kneighbors(coordinates, n_neighbors=1)
             _, stats_i = _f_g_function(distances_i.squeeze(), support)
-        elif mode == RipleyStat.L:
-            _, stats_i = _l_function(random_i, support, N, area, metric)
         else:
-            raise NotImplementedError(f"Mode `{mode.s!r}` is not yet implemented.")
+            _, stats_i = _l_function(random_i, support, N, area, metric)
 
         for j in range(obs_arr.shape[0]):
             pvalues[j] += stats_i >= obs_arr[j]
@@ -200,9 +193,6 @@ def ripley(
     sims_df = _reshape_res(sims.T, columns=np.arange(n_simulations), index=bins, var_name="simulations")
 
     res = {f"{mode}_stat": obs_df, "sims_stat": sims_df, "bins": bins, "pvalues": pvalues}
-
-    if TYPE_CHECKING:
-        assert isinstance(res, dict)
 
     if copy:
         logg.info("Finish", time=start)

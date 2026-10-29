@@ -10,7 +10,8 @@ from squidpy._params import Default, defaults_of, resolve_params
 from squidpy.experimental.im._stain._decomposition import validate_macenko_params, validate_vahadane_params
 from squidpy.experimental.im._stain._reinhard import validate_reinhard_params
 
-SPECS = pytest.mark.parametrize("spec", [getattr(types, name) for name in types.__all__], ids=types.__all__)
+PARAMS = [name for name in types.__all__ if name.endswith("Params")]  # the result types carry no defaults
+SPECS = pytest.mark.parametrize("spec", [getattr(types, name) for name in PARAMS], ids=PARAMS)
 
 #: The validator each spec is resolved with, mirroring the method dispatch in the public functions.
 VALIDATORS = {
