@@ -439,3 +439,25 @@ def test_align_landmarks_rejects_container_arguments_for_arrays():
         align_landmarks(points, points, landmark_key="lm")
     with pytest.raises(ValueError, match="must be the matching"):
         align_landmarks(points)
+
+
+def test_apply_affine_maps_points_and_refuses_a_3d_matrix() -> None:
+    from squidpy.experimental.tl import apply_affine
+
+    shift = np.eye(3)
+    shift[:2, 2] = _SHIFT
+    np.testing.assert_allclose(apply_affine(shift, _REF), _QUERY)
+    with pytest.raises(ValueError, match=r"\(3, 3\)"):
+        apply_affine(np.eye(4), _REF)
+
+
+def test_sample_volume_reads_values_and_refuses_mismatched_axes() -> None:
+    from squidpy.experimental.im import sample_volume
+
+    image = np.arange(12.0).reshape(3, 4)  # (y, x)
+    axes = [np.arange(3.0), np.arange(4.0) * 2]
+    np.testing.assert_allclose(sample_volume(image, np.array([[2.0, 1.0]]), axes=axes), [5.0])
+    with pytest.raises(ValueError, match=r"to match `volume`"):
+        sample_volume(image, np.array([[0.0, 0.0]]), axes=[np.arange(4.0), axes[1]])
+    with pytest.raises(ValueError, match=r"evenly spaced"):
+        sample_volume(image, np.array([[0.0, 0.0]]), axes=[np.array([0.0, 1.0, 3.0]), axes[1]])

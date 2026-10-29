@@ -62,7 +62,8 @@ def apply_affine(matrix: np.ndarray, points: np.ndarray) -> NDArrayA:
     -------
     The mapped ``(N, 2)`` coordinates.
     """
-    coords = np.asarray(points, dtype=float)
-    if coords.ndim != 2 or coords.shape[1] != 2:
-        raise ValueError(f"Expected an (N, 2) coordinate array, found shape {coords.shape}.")
+    coords = validate_xy(points, name="points")
+    matrix = np.asarray(matrix, dtype=float)
+    if matrix.shape != (3, 3):
+        raise ValueError(f"Expected `matrix` to be a homogeneous (3, 3) affine, found shape {matrix.shape}.")
     return coords @ matrix[:2, :2].T + matrix[:2, 2]

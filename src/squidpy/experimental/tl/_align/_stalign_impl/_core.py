@@ -606,6 +606,11 @@ def lddmm(
     ) = final
 
     affine = _to_affine(linear, translation)
+    if not (jnp.all(jnp.isfinite(affine)) and jnp.all(jnp.isfinite(velocity))):
+        raise FloatingPointError(
+            f"The fit diverged: non-finite parameters after {int(completed)} iterations. "
+            f"Lower the step sizes `epL`, `epT` or `epV`."
+        )
     return {
         "affine": affine,
         "velocity": velocity,

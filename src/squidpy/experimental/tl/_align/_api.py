@@ -103,6 +103,13 @@ def _read_image(container: SpatialData, key: str, *, side: str, ndim: int = 2) -
     from squidpy.experimental.im._utils import get_element_data
 
     element = get_element_data(container.images[key], "scale0", "image", key)
+    if ndim == 3 and "z" not in element.dims:
+        raise ValueError(
+            f"`image_key={key!r}` on the {side} is a 2D image, but this needs a volume with a `z` axis. "
+            f"Use `stalign_align_image` to register two 2D images."
+        )
+    if ndim == 2 and "z" in element.dims:
+        raise ValueError(f"`image_key={key!r}` on the {side} is a volume, but this needs a 2D image.")
     return _as_chw(element.data, what=f"`image_key={key!r}`", ndim=ndim)
 
 
@@ -330,8 +337,7 @@ def _element_axes(
     if np.any(np.abs(off_diagonal) > 1e-9):
         raise ValueError(
             f"`image_key={key!r}` on the {side} carries a rotation or shear into "
-            f"{coordinate_system!r}, which cannot be expressed as per-axis coordinates. "
-            f"Pass the axes explicitly, or move the rotation into the fit's initialisation."
+            f"{coordinate_system!r}, which cannot be expressed as per-axis coordinates."
         )
     scale = np.diag(matrix[: len(spatial), : len(spatial)])
     offset = matrix[: len(spatial), -1]

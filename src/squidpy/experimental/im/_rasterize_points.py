@@ -246,10 +246,18 @@ def sample_volume(
     if arr.ndim not in {ndim, ndim + 1}:
         raise ValueError(f"Expected `volume` to have {ndim} or {ndim + 1} axes, found shape {arr.shape}.")
     resolved = [np.asarray(axis, dtype=float) for axis in axes]
+    spatial_shape = arr.shape[-ndim:]
     for position, values in enumerate(resolved):
         # a single-sample axis has no spacing to divide by
         if values.ndim != 1 or values.shape[0] < 2:
             raise ValueError(f"Expected `axes[{position}]` to hold at least two coordinates, found {values.shape}.")
+        if values.shape[0] != spatial_shape[position]:
+            raise ValueError(
+                f"Expected `axes[{position}]` to have {spatial_shape[position]} entries to match `volume`, "
+                f"found {values.shape[0]}."
+            )
+        if not np.allclose(np.diff(values), values[1] - values[0]):
+            raise ValueError(f"Expected `axes[{position}]` to be evenly spaced.")
     pts = np.asarray(points, dtype=float)
     if pts.ndim != 2 or pts.shape[1] != ndim:
         raise ValueError(f"Expected an (N, {ndim}) array of `(x, y[, z])` points, found shape {pts.shape}.")

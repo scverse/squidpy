@@ -251,7 +251,7 @@ def test_landmarks_and_initial_affine_are_not_exclusive() -> None:
     assert not np.allclose(pinned.affine, derived.affine), "the given affine must win over the derived one"
 
     # the point-cloud path shares the resolution, so it accepts the same combination
-    assert fit_stalign_obs(ALIGN_PTS, ALIGN_PTS + 0.4, initial_affine=np.eye(3), **landmarks, **TINY_SOLVER)
+    fit_stalign_obs(ALIGN_PTS, ALIGN_PTS + 0.4, initial_affine=np.eye(3), **landmarks, **TINY_SOLVER)
 
 
 @pytest.mark.parametrize("missing", ["landmarks_ref", "landmarks_query"])
@@ -459,3 +459,30 @@ def test_volume_initial_affine_maps_the_volume_onto_the_section() -> None:
     np.testing.assert_allclose(
         fit.transform_points(np.array([[0.0, 0.0], [1.0, 3.0]])), [[-1.0, -2.0, -0.5], [0.0, 1.0, -0.5]], atol=1e-5
     )
+
+
+# --- mistakes that used to pass silently -------------------------------------------------
+
+
+def test_unevenly_spaced_axes_are_refused() -> None:
+    from squidpy.experimental.tl._align._stalign import fit_stalign_image
+
+    image = np.random.default_rng(0).random((1, 8, 8))
+    uneven = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0])
+    with pytest.raises(ValueError, match=r"evenly spaced"):
+        fit_stalign_image(image, image, ref_axes=[np.arange(8.0), uneven], niter=1)
+
+
+def test_a_diverging_fit_raises() -> None:
+    from squidpy.experimental.tl._align._stalign import fit_stalign_image
+
+    yy, xx = np.mgrid[:32, :32]
+    ref = np.exp(-((xx - 12) ** 2 + (yy - 17) ** 2) / 20.0)[None]
+    with pytest.raises(FloatingPointError, match=r"diverged"):
+        fit_stalign_image(ref, np.roll(ref, 3, axis=2), a=4.0, nt=1, niter=5, diffeo_start=0, epV=1e200)
+
+
+def test_a_2d_image_with_channels_is_not_read_as_a_volume() -> None:
+    sdata = _sdata_image(np.random.default_rng(0).random((5, 12, 12)), "section")
+    with pytest.raises(ValueError, match=r"needs a volume with a `z` axis"):
+        stalign_align_volume(sdata, sdata, image_key=("section", "section"), **IMAGE_SOLVER)

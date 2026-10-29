@@ -86,11 +86,15 @@ def explicit_axes(value: Sequence[Array], shape: tuple[int, ...], name: str) -> 
     resolved = tuple(jnp.asarray(axis, dtype=dtype) for axis in value)
     if len(resolved) != len(shape):
         raise ValueError(f"Expected `{name}` to hold {len(shape)} coordinate vectors, found {len(resolved)}.")
+    if any(axis.ndim != 1 for axis in resolved):
+        raise ValueError(f"Expected each `{name}` axis to be one-dimensional.")
     lengths = tuple(axis.shape[0] for axis in resolved)
-    if any(axis.ndim != 1 for axis in resolved) or lengths != shape:
+    if lengths != shape:
         raise ValueError(f"Expected `{name}` lengths {shape}, found {lengths}.")
     if any(length < 2 for length in lengths):
         raise ValueError(f"Expected each `{name}` axis to contain at least two coordinates.")
+    if not all(jnp.allclose(jnp.diff(axis), axis[1] - axis[0]) for axis in resolved):
+        raise ValueError(f"Expected each `{name}` axis to be evenly spaced.")
     return resolved
 
 
