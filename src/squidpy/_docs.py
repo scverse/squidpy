@@ -158,6 +158,14 @@ _n_jobs_threads = f"""\
 n_jobs
     Number of parallel threads to use.
 {_n_jobs_thread_rules}"""
+_working_memory = """\
+working_memory
+    Memory for the function's temporary working buffers, as in scikit-learn: a number of MiB, or a
+    string such as ``"16GB"``, ``"512MiB"`` or ``"1.5TB"`` (``KB``/``MB``/``GB``/``TB`` are powers of
+    1000, ``KiB``/``MiB``/``GiB``/``TiB`` powers of 1024). Larger buffers let more work be done per pass.
+    If `None`, an eighth of the memory available to the process, honouring SLURM and container limits.
+    It is in addition to the input data, which is already in memory, and covers the whole call (not
+    per thread)."""
 _show_progress_bar = """\
 show_progress_bar
     Whether to show the progress bar or not."""
@@ -498,6 +506,7 @@ d = DocstringProcessor(
     parallelize=_parallelize,
     n_jobs=_n_jobs,
     n_jobs_threads=_n_jobs_threads,
+    working_memory=_working_memory,
     show_progress_bar=_show_progress_bar,
     channels=_channels,
     segment_kwargs=_segment_kwargs,
