@@ -393,9 +393,8 @@ def test_volume_deformation_grid_is_the_transform_the_objective_uses() -> None:
         **VOLUME_SOLVER,
     )
 
-    backward = result.deformation_grid()
-    assert backward.shape == (3, 1, 12, 12), "the section is lifted onto z = 0, hence the length-1 z"
-    assert result.deformation_grid(direction="forward").shape == (3, 5, 12, 12)
+    grid = result.deformation_grid()
+    assert grid.shape == (3, 1, 12, 12), "the section is lifted onto z = 0, hence the length-1 z"
 
     internal = transform_grid_row_col(
         (jnp.zeros(1, dtype=jax_dtype()), *result.query_axes),
@@ -404,22 +403,7 @@ def test_volume_deformation_grid_is_the_transform_the_objective_uses() -> None:
         result.affine,
         direction="backward",
     )
-    assert jnp.array_equal(backward, internal)
-
-
-def test_volume_deformation_grid_rejects_a_bad_direction() -> None:
-    volume = np.random.default_rng(0).random((1, 5, 12, 12))
-    result = stalign_align_volume(
-        _sdata_image(volume, "volume"),
-        _sdata_image(volume[:, 2], "section"),
-        image_key=("volume", "section"),
-        **VOLUME_SOLVER,
-    )
-    with pytest.raises(ValueError, match=r"Expected `direction` to be one of"):
-        result.deformation_grid(direction="sideways")
-    np.testing.assert_array_equal(
-        result.deformation_grid(direction="FORWARD"), result.deformation_grid(direction="forward")
-    )
+    assert jnp.array_equal(grid, internal)
 
 
 # --- numeric correctness: the smoke tests above would pass a swapped axis or direction ---
@@ -433,7 +417,7 @@ def test_landmark_start_maps_query_landmarks_onto_ref_both_ways() -> None:
     fit = fit_stalign_image(*_pair(), landmarks_ref=_LM_REF, landmarks_query=lm_query, niter=0)
 
     np.testing.assert_allclose(fit.transform_points(lm_query), _LM_REF, atol=1e-4)
-    np.testing.assert_allclose(fit.transform_points(_LM_REF, direction="backward"), lm_query, atol=1e-4)
+    np.testing.assert_allclose(fit.inverse_transform_points(_LM_REF), lm_query, atol=1e-4)
 
 
 def test_landmark_start_refuses_collinear_landmarks() -> None:
@@ -458,8 +442,9 @@ def test_image_fit_recovers_an_x_shift() -> None:
 
     np.testing.assert_allclose(fit.transform_points(np.zeros((1, 2))), [[-3.0, 0.0]], atol=0.05)
     assert np.abs(np.asarray(fit.warp_image(query)) - ref).mean() < 0.01 * np.abs(query - ref).mean()
+    assert np.abs(np.asarray(fit.inverse_warp_image(ref)) - query).mean() < 0.01 * np.abs(query - ref).mean()
     pts = np.array([[1.0, 2.0], [-3.0, 4.0]])
-    np.testing.assert_allclose(fit.transform_points(fit.transform_points(pts), direction="backward"), pts, atol=1e-3)
+    np.testing.assert_allclose(fit.inverse_transform_points(fit.transform_points(pts)), pts, atol=1e-3)
 
 
 def test_volume_initial_affine_maps_the_volume_onto_the_section() -> None:

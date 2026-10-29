@@ -10,7 +10,6 @@ import numpy as np
 from fast_array_utils.types import HasArrayNamespace as Array
 
 from squidpy._params import resolve_params
-from squidpy._validators import normalize_choice
 from squidpy.types import (
     StalignImageParams,
     StalignObsParams,
@@ -67,23 +66,19 @@ class StalignFit:
     #: Which entry point produced the fit; what :meth:`from_uns` decodes on.
     kind: ClassVar[Literal["obs", "image", "volume"]]
 
-    def transform_points(
-        self,
-        points: Array,
-        *,
-        direction: Literal["forward", "backward"] = "forward",
-    ) -> JaxArray:
-        """Map ``(N, 2)`` ``(x, y)`` points through the fit.
+    def transform_points(self, points: Array) -> JaxArray:
+        """Map ``(N, 2)`` ``(x, y)`` query points into the reference frame.
 
         Evaluated per point, not at the nearest raster cell, so it does not quantise to the
-        fit's grid. ``"forward"`` maps the query into the reference frame, ``"backward"``
-        the reverse: both meaningful at rank 2, where the two images are flat.
+        fit's grid.
         """
+        return self._map_points(points, direction="forward")
+
+    def _map_points(self, points: Array, *, direction: Literal["forward", "backward"]) -> JaxArray:
         import jax.numpy as jnp
 
         from ._stalign_impl._core import jax_dtype, transform_points_row_col
 
-        direction = normalize_choice(direction, ("forward", "backward"), name="direction")
         pts = jnp.asarray(points, dtype=jax_dtype())
         if pts.ndim != 2 or pts.shape[1] != 2:
             raise ValueError(f"Expected an (N, 2) `(x, y)` array, found shape {pts.shape}.")
@@ -202,6 +197,10 @@ class StalignObsFit(StalignFit):
     rank: ClassVar[Literal[2]] = 2
     kind: ClassVar[Literal["obs"]] = "obs"
 
+    def inverse_transform_points(self, points: Array) -> JaxArray:
+        """Map ``(N, 2)`` ``(x, y)`` reference points into the query frame."""
+        return self._map_points(points, direction="backward")
+
 
 @dataclass(frozen=True, kw_only=True)
 class StalignImageFit(StalignFit):
@@ -223,62 +222,77 @@ class StalignImageFit(StalignFit):
     rank: ClassVar[Literal[2]] = 2
     kind: ClassVar[Literal["image"]] = "image"
 
+    def inverse_transform_points(self, points: Array) -> JaxArray:
+        """Map ``(N, 2)`` ``(x, y)`` reference points into the query frame."""
+        return self._map_points(points, direction="backward")
+
     def deformation_grid(
         self,
         *,
-        direction: Literal["forward", "backward"] = "forward",
         query_axes: Sequence[Array] | None = None,
         ref_axes: Sequence[Array] | None = None,
     ) -> JaxArray:
-        """The dense row-column coordinate transform of the fit, shape ``(2, *grid)``.
+        """The query grid evaluated in the reference frame, row-column, shape ``(2, *grid)``.
 
-        The *same* call on the *same* fitted ``affine``/``velocity``/``velocity_grid`` that
-        the objective samples through: not an approximation for plotting. Given the same
-        axes it agrees with the internal transform exactly.
-
-        ``"forward"`` evaluates the query grid in the reference frame; ``"backward"`` the
-        reverse. ``query_axes`` / ``ref_axes`` override the axes the fit ran on, for
-        evaluating the transform on a raster other than the fitted one.
+        The same transform the objective uses, not an approximation for plotting.
+        ``query_axes`` / ``ref_axes`` override the axes the fit ran on, for a raster other
+        than the fitted one.
         """
-        from ._stalign_impl._core import transform_grid_row_col
-
-        direction = normalize_choice(direction, ("forward", "backward"), name="direction")
-        source_axes = self.query_axes if query_axes is None else query_axes
-        target_axes = self.ref_axes if ref_axes is None else ref_axes
-        axes = source_axes if direction == "forward" else target_axes
-        return transform_grid_row_col(axes, self.velocity_grid, self.velocity, self.affine, direction=direction)
+        return self._grid("forward", query_axes, ref_axes)
 
     def warp_image(
         self,
         image: Array,
         *,
-        direction: Literal["forward", "backward"] = "forward",
         query_axes: Sequence[Array] | None = None,
         ref_axes: Sequence[Array] | None = None,
     ) -> JaxArray:
-        """Resample an image through the fit.
+        """Resample a query image onto the reference grid.
 
-        ``"forward"`` resamples the query image onto the reference's grid; ``"backward"``
-        the reference onto the query's. Resampling a *forward* map means sampling through
-        the *backward* grid, which is why the two are crossed below.
-
-        ``query_axes`` / ``ref_axes`` override the axes the fit ran on: for warping an
-        image of the same scene at a different resolution than the fit used.
+        ``query_axes`` / ``ref_axes`` override the axes the fit ran on: for an image of the
+        same scene at a different resolution than the fit used.
         """
+        return self._warp(image, "forward", query_axes, ref_axes)
+
+    def inverse_warp_image(
+        self,
+        image: Array,
+        *,
+        query_axes: Sequence[Array] | None = None,
+        ref_axes: Sequence[Array] | None = None,
+    ) -> JaxArray:
+        """Resample a reference image onto the query grid; see :meth:`warp_image`."""
+        return self._warp(image, "backward", query_axes, ref_axes)
+
+    def _grid(
+        self,
+        direction: Literal["forward", "backward"],
+        query_axes: Sequence[Array] | None,
+        ref_axes: Sequence[Array] | None,
+    ) -> JaxArray:
+        from ._stalign_impl._core import transform_grid_row_col
+
+        source_axes = self.query_axes if query_axes is None else query_axes
+        target_axes = self.ref_axes if ref_axes is None else ref_axes
+        axes = source_axes if direction == "forward" else target_axes
+        return transform_grid_row_col(axes, self.velocity_grid, self.velocity, self.affine, direction=direction)
+
+    def _warp(
+        self,
+        image: Array,
+        direction: Literal["forward", "backward"],
+        query_axes: Sequence[Array] | None,
+        ref_axes: Sequence[Array] | None,
+    ) -> JaxArray:
         from ._stalign_impl._core import interp
         from ._stalign_impl._helpers import as_chw
 
-        direction = normalize_choice(direction, ("forward", "backward"), name="direction")
         arr = as_chw(image, name="image")
         source_axes = self.query_axes if query_axes is None else query_axes
         target_axes = self.ref_axes if ref_axes is None else ref_axes
-        grid = self.deformation_grid(
-            direction="backward" if direction == "forward" else "forward",
-            query_axes=source_axes,
-            ref_axes=target_axes,
-        )
-        sampling_axes = source_axes if direction == "forward" else target_axes
-        return interp(sampling_axes, arr, grid)
+        # pulling an image one way samples it through the grid of the other
+        grid = self._grid("backward" if direction == "forward" else "forward", source_axes, target_axes)
+        return interp(source_axes if direction == "forward" else target_axes, arr, grid)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -304,65 +318,37 @@ class StalignVolumeFit(StalignFit):
     rank: ClassVar[Literal[3]] = 3
     kind: ClassVar[Literal["volume"]] = "volume"
 
-    def transform_points(
-        self,
-        points: Array,
-        *,
-        direction: Literal["forward", "backward"] | None = None,
-    ) -> JaxArray:
-        """Map ``(N, 2)`` ``(x, y)`` section points to ``(N, 3)`` ``(x, y, z)`` in the volume.
-
-        ``direction`` is accepted only to keep the signature compatible with
-        :meth:`StalignFit.transform_points` and must be left at ``None``: the section is the
-        fixed image and it is flat, so only the section-into-volume map is defined.
-        """
+    def transform_points(self, points: Array) -> JaxArray:
+        """Map ``(N, 2)`` ``(x, y)`` section points to ``(N, 3)`` ``(x, y, z)`` in the volume."""
         import jax.numpy as jnp
 
         from ._stalign_impl._core import jax_dtype, transform_points_row_col
 
-        if direction is not None:
-            raise ValueError(
-                "`direction` does not apply at rank 3: the section is the fixed image and it "
-                "is flat, so only the section-into-volume map is defined."
-            )
         pts = jnp.asarray(points, dtype=jax_dtype())
         if pts.ndim != 2 or pts.shape[1] != 2:
             raise ValueError(f"Expected an (N, 2) `(x, y)` array, found shape {pts.shape}.")
-        # the section is the fixed image, so section -> reference is the backward map
+        # the volume is the solver's moving image, so section -> volume is its backward map
         lifted = jnp.stack((jnp.zeros(pts.shape[0], dtype=pts.dtype), pts[:, 1], pts[:, 0]), axis=1)
         transformed = transform_points_row_col(
             self.velocity_grid, self.velocity, self.affine, lifted, direction="backward"
         )
         return transformed[:, ::-1]
 
-    def deformation_grid(
-        self,
-        *,
-        direction: Literal["forward", "backward"] = "backward",
-        query_axes: Sequence[Array] | None = None,
-        ref_axes: Sequence[Array] | None = None,
-    ) -> JaxArray:
-        """The dense row-column coordinate transform of the fit, shape ``(3, *grid)``.
+    def deformation_grid(self, *, query_axes: Sequence[Array] | None = None) -> JaxArray:
+        """The section grid, lifted to ``z = 0``, evaluated in the volume: row-column, ``(3, 1, *grid)``.
 
-        Which element is fixed flips with the rank, so the natural direction does too: the
-        *volume* is the moving image here, so ``"backward"`` (evaluating the section's
-        lifted grid in the volume's frame) is the default and the one the objective
-        samples through.
+        The same transform the objective uses. ``query_axes`` overrides the section axes the
+        fit ran on.
         """
         import jax.numpy as jnp
 
         from ._stalign_impl._core import jax_dtype, transform_grid_row_col
 
-        direction = normalize_choice(direction, ("forward", "backward"), name="direction")
-        volume_axes = tuple(self.ref_axes if ref_axes is None else ref_axes)
         section_axes = tuple(self.query_axes if query_axes is None else query_axes)
-        if len(volume_axes) != 3 or len(section_axes) != 2:
-            raise ValueError(
-                f"Expected 3 reference axes and 2 query axes, found {len(volume_axes)} and {len(section_axes)}."
-            )
+        if len(section_axes) != 2:
+            raise ValueError(f"Expected 2 query axes, found {len(section_axes)}.")
         lifted = (jnp.zeros(1, dtype=jax_dtype()), *section_axes)
-        axes = volume_axes if direction == "forward" else lifted
-        return transform_grid_row_col(axes, self.velocity_grid, self.velocity, self.affine, direction=direction)
+        return transform_grid_row_col(lifted, self.velocity_grid, self.velocity, self.affine, direction="backward")
 
 
 def fit_stalign_volume(

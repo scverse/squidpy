@@ -157,9 +157,10 @@ def fitted(primitives, velocity_grid):
     )
 
 
-def _transform_rc(result: StalignObsFit, points_rc, *, direction: str = "forward") -> np.ndarray:
-    """``transform_points`` on row-col points, for comparison with upstream."""
-    got = result.transform_points(np.asarray(points_rc)[:, ::-1], direction=direction)
+def _transform_rc(result: StalignObsFit, points_rc, *, inverse: bool = False) -> np.ndarray:
+    """``transform_points`` (or its inverse) on row-col points, for comparison with upstream."""
+    method = result.inverse_transform_points if inverse else result.transform_points
+    got = method(np.asarray(points_rc)[:, ::-1])
     return np.asarray(got)[:, ::-1]
 
 
@@ -223,18 +224,11 @@ def test_regularizer_matches_upstream(primitives, velocity_grid):
 
 
 def test_transform_grid_backward_matches_upstream(primitives, source_grid, target_grid, velocity_grid):
-    """``deformation_grid(direction='backward')`` at rank 2 vs ``STalign.build_transform('b')``."""
+    """The reference grid in the query frame, the one ``warp_image`` samples through, vs ``STalign.build_transform('b')``."""
     axes, _ = target_grid
-    query_axes, _ = source_grid
-    result = StalignImageFit(
-        affine=jnp.asarray(primitives["to_A"]),
-        velocity=jnp.asarray(primitives["velocity"]),
-        velocity_grid=velocity_grid,
-        query_axes=query_axes,
-        ref_axes=axes,
+    got = _core.transform_grid_row_col(
+        axes, velocity_grid, jnp.asarray(primitives["velocity"]), jnp.asarray(primitives["to_A"]), direction="backward"
     )
-    # Backward evaluates the *reference* grid in the query frame.
-    got = result.deformation_grid(direction="backward")
     error = rel(np.moveaxis(np.asarray(got), 0, -1), primitives["grid_backward"])
     assert error < EXACT
 
@@ -419,14 +413,14 @@ def test_grid_length_is_stable_against_float_rounding(step):
     ),
 )
 def test_transform_points_backward_matches_upstream(fitted, primitives):
-    got = _transform_rc(fitted, primitives["points"], direction="backward")
+    got = _transform_rc(fitted, primitives["points"], inverse=True)
     assert rel(got, primitives["points_backward"]) < EXACT
 
 
 def test_backward_transform_inverts_better(fitted, primitives):
     """squidpy's backward map is the better inverse of the forward one."""
     points = np.asarray(primitives["points"])
-    roundtrip = _transform_rc(fitted, primitives["points_forward"], direction="backward")
+    roundtrip = _transform_rc(fitted, primitives["points_forward"], inverse=True)
     ours = rel(roundtrip, points)
     theirs = rel(primitives["points_roundtrip"], points)
     assert ours <= theirs
@@ -851,7 +845,7 @@ def test_slice_interp_matches_upstream(slice_reference, slice_axes):
 
 
 def test_slice_grid_backward_matches_upstream(slice_reference, slice_axes, slice_velocity_grid):
-    """``deformation_grid(direction='backward')`` at rank 3 vs ``build_transform3D``."""
+    """``deformation_grid`` at rank 3 vs ``build_transform3D``."""
     reference, section = slice_axes
     xv = slice_velocity_grid
     result = StalignVolumeFit(
@@ -861,7 +855,7 @@ def test_slice_grid_backward_matches_upstream(slice_reference, slice_axes, slice
         ref_axes=reference,
         query_axes=section,
     )
-    got = result.deformation_grid(direction="backward")
+    got = result.deformation_grid()
     error = rel(np.moveaxis(np.asarray(got), 0, -1), slice_reference["grid_backward"])
     assert error < EXACT
 
