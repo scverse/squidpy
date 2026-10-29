@@ -227,8 +227,11 @@ def test_image_landmarks_reach_the_solver() -> None:
     ref, query = _pair()
     solver = {"a": 4.0, "nt": 1, "niter": 3, "epV": 1.0}
 
-    plain = fit_stalign_image(ref, query, **solver)
-    with_landmarks = fit_stalign_image(ref, query, landmarks_ref=_LM_REF, landmarks_query=_LM_QUERY, **solver)
+    # the same start for both, so only the point term can tell them apart
+    plain = fit_stalign_image(ref, query, initial_affine=np.eye(3), **solver)
+    with_landmarks = fit_stalign_image(
+        ref, query, landmarks_ref=_LM_REF, landmarks_query=_LM_QUERY, initial_affine=np.eye(3), **solver
+    )
 
     assert not np.allclose(plain.affine, with_landmarks.affine)
 
@@ -519,3 +522,20 @@ def test_warp_image_refuses_an_image_that_does_not_match_its_axes() -> None:
     fit = fit_stalign_image(image, image, a=4.0, nt=1, niter=1)
     with pytest.raises(ValueError, match=r"query_axes"):
         fit.warp_image(np.zeros((1, 24, 24)))
+
+
+def test_a_kernel_too_wide_for_the_image_says_so() -> None:
+    from squidpy.experimental.tl._align._stalign import fit_stalign_image
+
+    image = np.random.default_rng(0).random((1, 12, 12))
+    with pytest.raises(ValueError, match=r"Lower `a`"):
+        fit_stalign_image(image, image, a=500.0, niter=1)
+
+
+def test_landmark_pairs_must_match_with_an_initial_affine() -> None:
+    from squidpy.experimental.tl._align._stalign import fit_stalign_image
+
+    with pytest.raises(ValueError, match=r"pair up row by row"):
+        fit_stalign_image(
+            *_pair(), landmarks_ref=_LM_REF, landmarks_query=_LM_REF[:1], initial_affine=np.eye(3), niter=1
+        )

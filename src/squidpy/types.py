@@ -223,8 +223,10 @@ class StalignImageParams(TypedDict, total=False):
     """The LDDMM controls :func:`~squidpy.experimental.tl.stalign_align_image` takes.
 
     Every key is optional and falls back to the default shown with it. The same schema as
-    :class:`~squidpy.types.StalignObsParams` minus the rasterization knobs, and with the
-    step sizes retuned: a kernel width in pixels is not one in cell coordinates.
+    :class:`~squidpy.types.StalignObsParams` minus the rasterization knobs. Lengths and step
+    sizes (``a``, ``epL``, ``epT``, ``epV``) are in the units of the coordinate system the images
+    are read in; the defaults assume roughly pixel-sized units, so rescale them for images
+    placed in microns.
     """
 
     initial_affine: Annotated[Array | None, Default(None)]

@@ -130,10 +130,16 @@ def _build_velocity_grid(x_source: Axes, *, a: float, expand: float) -> tuple[ja
     half_width = (maximum - minimum) * expand / 2.0
     step = a * 0.5
     dtype = jax_dtype()
-    return tuple(
+    grid = tuple(
         jnp.asarray(stable_axis(mid - half, mid + half, step), dtype=dtype)
         for mid, half in zip(center, half_width, strict=True)
     )
+    if any(axis.shape[0] < 2 for axis in grid):
+        raise ValueError(
+            f"The velocity grid has fewer than two samples along an axis: `a={a}` is too large for an "
+            f"image spanning {(maximum - minimum).tolist()} (times `expand={expand}`). Lower `a`, or raise `expand`."
+        )
+    return grid
 
 
 def _build_regularizer(

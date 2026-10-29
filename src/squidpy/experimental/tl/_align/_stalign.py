@@ -445,6 +445,11 @@ def _initial_affine_and_landmarks(
         # landmarks arrive as (x, y); the solver runs in row-col
         source_landmarks = validate_points(landmarks_query, name="landmarks_query")[:, ::-1]
         target_landmarks = validate_points(landmarks_ref, name="landmarks_ref")[:, ::-1]
+        if source_landmarks.shape != target_landmarks.shape:
+            raise ValueError(
+                f"Expected `landmarks_ref` and `landmarks_query` to pair up row by row, found "
+                f"{target_landmarks.shape[0]} and {source_landmarks.shape[0]} landmarks."
+            )
 
     if initial_affine is not None:
         linear, translation = affine_xy_to_rc(initial_affine)
