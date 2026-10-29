@@ -64,6 +64,7 @@ dependencies = [
   "pandas>=2.1",
   "pillow>=8",
   "pooch>=1.6",
+  "pynndescent<0.7",                    # 0.7 returns csr_array, scanpy<=1.12.5 neighbors calls .getnnz on it
   "pyyaml>=6",
   "scanpy>=1.9.3",
   "scikit-image>=0.26",
