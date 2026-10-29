@@ -41,30 +41,9 @@ from squidpy.experimental.tl._align._stalign import fit_stalign_image, fit_stali
 from squidpy.experimental.tl._align._stalign_impl import _core, _helpers  # noqa: E402
 
 _BUNDLE_URL = (
-    "https://github.com/theislab/squidpy-ports/releases/download/stalign-reference-v2/stalign_reference.zarr.zip"
+    "https://github.com/theislab/squidpy-ports/releases/download/stalign-reference-v3/stalign_reference.zarr.zip"
 )
-_BUNDLE_SHA256 = "f78d0978da9170057ef63bcc8119c69d2fcde1feee3f6405e8ffabc5eccb5538"
-
-
-#: The fixture parameters the bundle was generated with; `test_params_match_the_bundle` checks them.
-SEED = 20240501
-RASTER_PARAMS = {"dx": 30.0, "blur": [2.0, 1.0, 0.5], "expand": 1.1}
-LDDMM_PARAMS = {
-    "a": 200.0,
-    "p": 2.0,
-    "expand": 2.0,
-    "nt": 3,
-    "diffeo_start": 0,
-    "epL": 2e-08,
-    "epT": 0.2,
-    "epV": 2000.0,
-    "sigmaM": 1.0,
-    "sigmaB": 2.0,
-    "sigmaA": 5.0,
-    "sigmaR": 500000.0,
-    "sigmaP": 20.0,
-}
-MIXED_TARGET_STEP = 30.0
+_BUNDLE_SHA256 = "e5add8445590c9da2b5e42631f25b10f7838fb2b694b8438c7d762f49a899702"
 
 
 class Bundle(NamedTuple):
@@ -93,12 +72,10 @@ def bundle() -> Bundle:
     return Bundle(arrays, {name: section["provenance"] for name, section in uns.items()}, fixtures)
 
 
-def test_params_match_the_bundle(bundle):
-    fixtures = bundle.fixtures
-    assert fixtures["SEED"] == SEED
-    assert {key: np.asarray(value).tolist() for key, value in fixtures["RASTER_PARAMS"].items()} == RASTER_PARAMS
-    assert fixtures["LDDMM_PARAMS"] == LDDMM_PARAMS
-    assert fixtures["MIXED_TARGET_STEP"] == MIXED_TARGET_STEP
+@pytest.fixture(scope="session")
+def params(bundle) -> dict:
+    """Every parameter the bundle's sections were generated with."""
+    return bundle.fixtures
 
 
 EXACT = 1e-12
@@ -201,9 +178,11 @@ def test_interp_matches_upstream(primitives, source_grid):
     assert error < EXACT
 
 
-def test_regularizer_matches_upstream(primitives, velocity_grid):
+def test_regularizer_matches_upstream(primitives, velocity_grid, params):
     """``LL``/``K``/``DV`` vs STalign.py:1078-1090."""
-    kernel, ll, dv_prod = _core._build_regularizer(velocity_grid, a=LDDMM_PARAMS["a"], p=LDDMM_PARAMS["p"])
+    kernel, ll, dv_prod = _core._build_regularizer(
+        velocity_grid, a=params["LDDMM_PARAMS"]["a"], p=params["LDDMM_PARAMS"]["p"]
+    )
     for name, got, expected in (
         ("LL", ll, primitives["regularizer_LL"]),
         ("K", kernel, primitives["regularizer_K"]),
@@ -254,10 +233,12 @@ def test_to_affine_matches_upstream(primitives):
     np.testing.assert_allclose(np.asarray(got), primitives["to_A"], rtol=0, atol=0)
 
 
-def _loss_arguments(primitives, source_grid, target_grid, velocity_grid, *, nt, with_points):
+def _loss_arguments(primitives, source_grid, target_grid, velocity_grid, params, *, nt, with_points):
     source_axes, source_image = source_grid
     target_axes, target_image = target_grid
-    kernel, ll, dv_prod = _core._build_regularizer(velocity_grid, a=LDDMM_PARAMS["a"], p=LDDMM_PARAMS["p"])
+    kernel, ll, dv_prod = _core._build_regularizer(
+        velocity_grid, a=params["LDDMM_PARAMS"]["a"], p=params["LDDMM_PARAMS"]["p"]
+    )
     empty = jnp.zeros((0, 2))
     landmarks_source = jnp.asarray(primitives["landmarks_query"])[:, ::-1]
     landmarks_target = jnp.asarray(primitives["landmarks_ref"])[:, ::-1]
@@ -275,9 +256,9 @@ def _loss_arguments(primitives, source_grid, target_grid, velocity_grid, *, nt, 
             "dv_prod": dv_prod,
             "points_source": landmarks_source if with_points else empty,
             "points_target": landmarks_target if with_points else empty,
-            "sigmaM": LDDMM_PARAMS["sigmaM"],
-            "sigmaR": LDDMM_PARAMS["sigmaR"],
-            "sigmaP": LDDMM_PARAMS["sigmaP"],
+            "sigmaM": params["LDDMM_PARAMS"]["sigmaM"],
+            "sigmaR": params["LDDMM_PARAMS"]["sigmaR"],
+            "sigmaP": params["LDDMM_PARAMS"]["sigmaP"],
         },
         jnp.zeros((nt, velocity_grid[0].shape[0], velocity_grid[1].shape[0], 2)),
     )
@@ -286,11 +267,13 @@ def _loss_arguments(primitives, source_grid, target_grid, velocity_grid, *, nt, 
 @pytest.mark.parametrize("nt", [1, 3])
 @pytest.mark.parametrize("with_points", [False, True])
 @pytest.mark.parametrize("warm", [False, True], ids=["v_zero", "v_nonzero"])
-def test_energy_matches_upstream(primitives, source_grid, target_grid, velocity_grid, nt, with_points, warm, bundle):
+def test_energy_matches_upstream(
+    primitives, source_grid, target_grid, velocity_grid, nt, with_points, warm, bundle, params
+):
     """``_lddmm_loss`` vs upstream's ``E`` at iteration 0 -- the two optimise the same function."""
     energy = bundle.arrays["energy"]
     _, kwargs, velocity = _loss_arguments(
-        primitives, source_grid, target_grid, velocity_grid, nt=nt, with_points=with_points
+        primitives, source_grid, target_grid, velocity_grid, nt=nt, with_points=with_points, params=params
     )
     key = f"E_nt{nt}_{'points' if with_points else 'nopoints'}"
     if warm:
@@ -302,21 +285,29 @@ def test_energy_matches_upstream(primitives, source_grid, target_grid, velocity_
     assert error < EXACT, f"squidpy {float(total)!r} vs upstream {float(energy[key])!r}"
 
 
-def test_energy_budget_is_not_vacuous(primitives, source_grid, target_grid, velocity_grid, bundle):
+def test_energy_budget_is_not_vacuous(primitives, source_grid, target_grid, velocity_grid, bundle, params):
     """A tolerance that a perturbed run also passes is decoration, not a test."""
     energy = bundle.arrays["energy"]
-    _, kwargs, velocity = _loss_arguments(primitives, source_grid, target_grid, velocity_grid, nt=3, with_points=True)
+    _, kwargs, velocity = _loss_arguments(
+        primitives, source_grid, target_grid, velocity_grid, nt=3, with_points=True, params=params
+    )
     kwargs["sigmaM"] *= 1.0001
     total, _ = _core._lddmm_loss(jnp.asarray(energy["L"]), jnp.asarray(energy["T"]), velocity, **kwargs)
     assert rel(total, energy["E_nt3_points"]) > EXACT
 
 
 @pytest.fixture(scope="session", params=[False, True], ids=["v_zero", "v_nonzero"])
-def measured_gradients(request, primitives, source_grid, target_grid, velocity_grid, bundle):
+def measured_gradients(request, primitives, source_grid, target_grid, velocity_grid, bundle, params):
     """Gradients of ``_lddmm_loss``, at ``v = 0`` and at a non-zero velocity."""
     gradients = bundle.arrays["gradients"]
     kernel, kwargs, velocity = _loss_arguments(
-        primitives, source_grid, target_grid, velocity_grid, nt=LDDMM_PARAMS["nt"], with_points=True
+        primitives,
+        source_grid,
+        target_grid,
+        velocity_grid,
+        nt=params["LDDMM_PARAMS"]["nt"],
+        with_points=True,
+        params=params,
     )
     suffix = ""
     if request.param:
@@ -340,9 +331,9 @@ def test_gradients_match_upstream(measured_gradients, component, key):
     assert error < EXACT
 
 
-def test_contrast_transform_freezes_the_ridge_coefficients():
+def test_contrast_transform_freezes_the_ridge_coefficients(params):
     """Regression guard, stated without reference to upstream."""
-    rng = np.random.default_rng(SEED)
+    rng = np.random.default_rng(params["SEED"])
     warped = jnp.asarray(rng.normal(size=(3, 12, 15)) ** 2)
     target = jnp.asarray(rng.normal(size=(3, 12, 15)) ** 2)
     weights = jnp.asarray(rng.uniform(0.2, 0.8, size=(12, 15)))
@@ -367,17 +358,17 @@ def test_contrast_transform_freezes_the_ridge_coefficients():
     assert error > 1e-6, "the ridge coefficients are being differentiated through again"
 
 
-def test_rasterize_grid_matches_upstream(primitives):
+def test_rasterize_grid_matches_upstream(primitives, params):
     """The raster axes are identical to upstream's."""
-    grid_x, grid_y, _ = _helpers.rasterize(primitives["ref"][:, 0], primitives["ref"][:, 1], **RASTER_PARAMS)
+    grid_x, grid_y, _ = _helpers.rasterize(primitives["ref"][:, 0], primitives["ref"][:, 1], **params["RASTER_PARAMS"])
     np.testing.assert_allclose(grid_x, primitives["raster_ref_x"], rtol=0, atol=1e-9)
     np.testing.assert_allclose(grid_y, primitives["raster_ref_y"], rtol=0, atol=1e-9)
 
 
-def test_velocity_grid_matches_upstream(primitives, source_grid):
+def test_velocity_grid_matches_upstream(primitives, source_grid, params):
     """The velocity grid has upstream's length, without its off-by-one."""
     axes, _ = source_grid
-    built = _core._build_velocity_grid(axes, a=LDDMM_PARAMS["a"], expand=LDDMM_PARAMS["expand"])
+    built = _core._build_velocity_grid(axes, a=params["LDDMM_PARAMS"]["a"], expand=params["LDDMM_PARAMS"]["expand"])
     np.testing.assert_allclose(np.asarray(built[0]), primitives["xv_upstream_0"], rtol=0, atol=1e-9)
     np.testing.assert_allclose(np.asarray(built[1]), primitives["xv_upstream_1"], rtol=0, atol=1e-9)
 
@@ -443,26 +434,26 @@ def test_interp_outside_domain_is_border_padding(primitives, source_grid):
 RASTER_BUDGET = 0.06
 
 
-def test_rasterize_stays_within_budget(primitives):
+def test_rasterize_stays_within_budget(primitives, params):
     """Rasterisation is a deliberate speedup, so it gets a measured budget rather than equality."""
-    _, _, got = _helpers.rasterize(primitives["ref"][:, 0], primitives["ref"][:, 1], **RASTER_PARAMS)
+    _, _, got = _helpers.rasterize(primitives["ref"][:, 0], primitives["ref"][:, 1], **params["RASTER_PARAMS"])
     expected = primitives["raster_ref"]
     got = np.asarray(got)
     assert got.shape == expected.shape
 
-    for index, blur in enumerate(RASTER_PARAMS["blur"]):
+    for index, blur in enumerate(params["RASTER_PARAMS"]["blur"]):
         error = rel(got[index], expected[index])
         correlation = float(np.corrcoef(got[index].ravel(), expected[index].ravel())[0, 1])
         assert error < RASTER_BUDGET, f"blur={blur}: relL2 {error:.4%} exceeds {RASTER_BUDGET:.0%}"
         assert correlation > 0.99, f"blur={blur}: correlation {correlation:.5f}"
 
 
-def test_rasterize_conserves_mass(primitives):
+def test_rasterize_conserves_mass(primitives, params):
     """Every point contributes exactly one unit, wherever it sits."""
     n_points = primitives["ref"].shape[0]
-    _, _, got = _helpers.rasterize(primitives["ref"][:, 0], primitives["ref"][:, 1], **RASTER_PARAMS)
+    _, _, got = _helpers.rasterize(primitives["ref"][:, 0], primitives["ref"][:, 1], **params["RASTER_PARAMS"])
 
-    for index, blur in enumerate(RASTER_PARAMS["blur"]):
+    for index, blur in enumerate(params["RASTER_PARAMS"]["blur"]):
         mass = float(np.asarray(got)[index].sum())
         assert mass == pytest.approx(n_points, rel=1e-9), f"blur={blur}: {mass:.2f} of {n_points}"
 
@@ -472,7 +463,7 @@ def _residual(linear, translation, source, target) -> float:
     return float(np.linalg.norm(source @ np.asarray(linear).T + np.asarray(translation) - target))
 
 
-def test_affine_from_points_is_equivalent_when_well_conditioned(primitives):
+def test_affine_from_points_is_equivalent_when_well_conditioned(primitives, params):
     """The affine from landmarks: different estimators, equivalent when well conditioned."""
     source = np.asarray(primitives["landmarks_query"])[:, ::-1]
     target = np.asarray(primitives["landmarks_ref"])[:, ::-1]
@@ -489,9 +480,9 @@ def test_affine_from_points_is_equivalent_when_well_conditioned(primitives):
         landmarks_query=primitives["landmarks_query"],
         landmarks_ref=primitives["landmarks_ref"],
         niter=0,
-        dx=RASTER_PARAMS["dx"],
-        blur=RASTER_PARAMS["blur"],
-        raster_expand=RASTER_PARAMS["expand"],
+        dx=params["RASTER_PARAMS"]["dx"],
+        blur=params["RASTER_PARAMS"]["blur"],
+        raster_expand=params["RASTER_PARAMS"]["expand"],
     )
     affine = np.asarray(fit.affine)
     linear, translation = affine[:2, :2], affine[:2, 2]
@@ -508,7 +499,7 @@ def test_affine_from_points_refuses_ill_conditioning(primitives):
         _helpers.affine_from_points(jnp.asarray(source), jnp.asarray(target))
 
 
-def _run_lddmm(primitives, source_grid, target_grid, snapshot, niter):
+def _run_lddmm(primitives, source_grid, target_grid, snapshot, niter, params):
     return _core.lddmm(
         *source_grid,
         *target_grid,
@@ -517,7 +508,7 @@ def _run_lddmm(primitives, source_grid, target_grid, snapshot, niter):
         points_source=jnp.asarray(primitives["landmarks_query"])[:, ::-1],
         points_target=jnp.asarray(primitives["landmarks_ref"])[:, ::-1],
         niter=niter,
-        **LDDMM_PARAMS,
+        **params["LDDMM_PARAMS"],
         **_SOLVER_TAIL,
     )
 
@@ -526,32 +517,15 @@ _TRAJECTORY_BUDGET = {1: 1e-10, 5: 1e-9, 50: 1e-6}
 
 
 @pytest.mark.parametrize("niter", [1, 5, 50])
-def test_trajectory_matches_upstream(primitives, niter, bundle, source_grid, target_grid):
+def test_trajectory_matches_upstream(primitives, niter, bundle, source_grid, target_grid, params):
     """Run the real loop for ``n`` steps and compare every state it carries."""
     snapshot = bundle.arrays[f"trajectory_n{niter}"]
-    result = _run_lddmm(primitives, source_grid, target_grid, snapshot, niter)
+    result = _run_lddmm(primitives, source_grid, target_grid, snapshot, niter, params=params)
 
     budget = _TRAJECTORY_BUDGET[niter]
     for name, field in _FIELDS.items():
         error = rel(result[field], snapshot[name])
         assert error < budget, f"n={niter} {name}: {error:.3e} exceeds {budget:.0e}"
-
-
-_IMAGE_PARAMS = {
-    "a": 8.0,
-    "p": 2.0,
-    "expand": 2.0,
-    "nt": 2,
-    "diffeo_start": 4,
-    "epV": 1.0,
-    "epL": 2e-8,
-    "epT": 2e-1,
-    "sigmaM": 1.0,
-    "sigmaB": 2.0,
-    "sigmaA": 5.0,
-    "sigmaR": 5e5,
-}
-_IMAGE_ITERS = 12
 
 
 def _placement(axis: np.ndarray) -> tuple[float, float]:
@@ -592,7 +566,7 @@ def image_reference(bundle):
     return bundle.arrays["image_trajectory"]
 
 
-def _public_image_fit(fixture, *, swap_roles=False):
+def _public_image_fit(fixture, params, *, swap_roles=False):
     """The image fit through the public ``stalign_align_image``, from SpatialData containers."""
     ax_moving = (fixture["source_axis_0"], fixture["source_axis_1"])
     ax_fixed = (fixture["target_axis_0"], fixture["target_axis_1"])
@@ -601,20 +575,20 @@ def _public_image_fit(fixture, *, swap_roles=False):
     affine = _affine_xy(fixture["start_L"], fixture["start_T"])
     first, second = (moving, fixed) if swap_roles else (fixed, moving)
     return stalign_align_image(
-        first, second, image_key="image", initial_affine=affine, niter=_IMAGE_ITERS, **_IMAGE_PARAMS
+        first, second, image_key="image", initial_affine=affine, niter=params["IMAGE_ITERS"], **params["IMAGE_PARAMS"]
     )
 
 
-def test_public_image_call_reproduces_upstream(image_reference):
+def test_public_image_call_reproduces_upstream(image_reference, params):
     """``stalign_align_image`` from SpatialData containers, against upstream's own result."""
-    fit = _public_image_fit(image_reference)
+    fit = _public_image_fit(image_reference, params=params)
     error = rel(fit.affine, image_reference["A"])
     assert error < 1e-10, f"the public call disagrees with upstream by {error:.3e}"
 
 
-def test_public_image_call_is_role_sensitive(image_reference):
+def test_public_image_call_is_role_sensitive(image_reference, params):
     """Swapping ref and query must be *loud*, not a 1e-5 wobble."""
-    swapped = _public_image_fit(image_reference, swap_roles=True)
+    swapped = _public_image_fit(image_reference, swap_roles=True, params=params)
     assert rel(swapped.affine, image_reference["A"]) > 1e-3
 
 
@@ -624,9 +598,9 @@ def image_mixed_units(bundle):
     return bundle.arrays["image_mixed_units"]
 
 
-def _fit_mixed_units(fixture, niter):
+def _fit_mixed_units(fixture, niter, params):
     """The image path on the mixed-unit axes, from the fixture's own ``a``."""
-    params = {**_IMAGE_PARAMS, "a": float(fixture["a"])}
+    params = {**params["IMAGE_PARAMS"], "a": float(fixture["a"])}
     return fit_stalign_image(
         fixture["ref"],
         fixture["query"],
@@ -637,24 +611,24 @@ def _fit_mixed_units(fixture, niter):
     )
 
 
-def test_mixed_unit_velocity_grid_matches_upstream(image_mixed_units):
+def test_mixed_unit_velocity_grid_matches_upstream(image_mixed_units, params):
     """The velocity grid upstream builds when the two sides disagree about units."""
-    fit = _fit_mixed_units(image_mixed_units, 0)
+    fit = _fit_mixed_units(image_mixed_units, 0, params=params)
     for axis, key in zip(fit.velocity_grid, ("xv_0", "xv_1"), strict=True):
         np.testing.assert_allclose(np.asarray(axis), image_mixed_units[key], rtol=0, atol=1e-9)
 
 
-def test_mixed_unit_axes_are_actually_mixed(image_mixed_units):
+def test_mixed_unit_axes_are_actually_mixed(image_mixed_units, params):
     """The fixture is only meaningful while the two sides really carry different units."""
     source_step = float(image_mixed_units["source_axis_0"][1] - image_mixed_units["source_axis_0"][0])
     target_step = float(image_mixed_units["target_axis_0"][1] - image_mixed_units["target_axis_0"][0])
     assert source_step == pytest.approx(1.0)
-    assert target_step == pytest.approx(MIXED_TARGET_STEP)
+    assert target_step == pytest.approx(params["MIXED_TARGET_STEP"])
 
 
-def test_image_path_axes_match_the_reference(image_reference):
+def test_image_path_axes_match_the_reference(image_reference, params):
     """The image entry point's coordinate convention, checked before its results."""
-    fit = fit_stalign_image(image_reference["ref"], image_reference["query"], niter=0, **_IMAGE_PARAMS)
+    fit = fit_stalign_image(image_reference["ref"], image_reference["query"], niter=0, **params["IMAGE_PARAMS"])
 
     for got, expected in (
         (fit.query_axes[0], image_reference["source_axis_0"]),
@@ -665,7 +639,7 @@ def test_image_path_axes_match_the_reference(image_reference):
         np.testing.assert_allclose(np.asarray(got), expected, rtol=0, atol=1e-12)
 
 
-def _run_image(fixture):
+def _run_image(fixture, params):
     """Drive the solver on the image fixture, from the reference's own starting affine."""
     source = (jnp.asarray(fixture["source_axis_0"]), jnp.asarray(fixture["source_axis_1"]))
     target = (jnp.asarray(fixture["target_axis_0"]), jnp.asarray(fixture["target_axis_1"]))
@@ -676,32 +650,32 @@ def _run_image(fixture):
         jnp.asarray(fixture["ref"]),
         L=fixture["start_L"],
         T=fixture["start_T"],
-        niter=_IMAGE_ITERS,
-        **_IMAGE_PARAMS,
+        niter=params["IMAGE_ITERS"],
+        **params["IMAGE_PARAMS"],
         **_SOLVER_TAIL,
     )
 
 
 @pytest.mark.parametrize("name", ["A", "v", "WM", "WA", "WB"])
-def test_image_path_matches_upstream(image_reference, name):
+def test_image_path_matches_upstream(image_reference, name, params):
     """The image entry point vs upstream's LDDMM on the same images, axes and start."""
-    result = _run_image(image_reference)
+    result = _run_image(image_reference, params=params)
     error = rel(result[_FIELDS[name]], image_reference[name])
     assert error < 1e-10, f"{name}: {error:.3e}"
 
 
-def test_image_energy_trace_matches_upstream(image_reference):
+def test_image_energy_trace_matches_upstream(image_reference, params):
     """Every iteration of the objective, not just the endpoint."""
-    result = _run_image(image_reference)
+    result = _run_image(image_reference, params=params)
     got = np.asarray(result["energies"])
     expected = np.asarray(image_reference["energies"])
     worst = float(np.max(np.abs(got - expected) / np.abs(expected)))
     assert worst < 1e-10
 
 
-def test_image_warp_matches_upstream(image_reference):
+def test_image_warp_matches_upstream(image_reference, params):
     """``warp_image`` vs ``STalign.transform_image_source_to_target``."""
-    result = _run_image(image_reference)
+    result = _run_image(image_reference, params=params)
     fit = StalignImageFit(
         affine=result["affine"],
         velocity=result["velocity"],
@@ -713,7 +687,7 @@ def test_image_warp_matches_upstream(image_reference):
     assert error < 1e-9
 
 
-def test_on_grid_sampling_costs_six_orders_of_magnitude(bundle):
+def test_on_grid_sampling_costs_six_orders_of_magnitude(bundle, params):
     """Sampling exactly on grid lines costs agreement, measured rather than asserted."""
     matched = bundle.arrays["image_trajectory_matched"]
     axes = (jnp.asarray(matched["axis_0"]), jnp.asarray(matched["axis_1"]))
@@ -724,8 +698,8 @@ def test_on_grid_sampling_costs_six_orders_of_magnitude(bundle):
         jnp.asarray(matched["ref"]),
         L=matched["start_L"],
         T=matched["start_T"],
-        niter=_IMAGE_ITERS,
-        **_IMAGE_PARAMS,
+        niter=params["IMAGE_ITERS"],
+        **params["IMAGE_PARAMS"],
         **_SOLVER_TAIL,
     )
     degraded = rel(result["velocity"], matched["v"])
@@ -735,17 +709,17 @@ def test_on_grid_sampling_costs_six_orders_of_magnitude(bundle):
     )
 
 
-def test_converged_solution_matches_upstream(primitives, bundle, source_grid, target_grid):
+def test_converged_solution_matches_upstream(primitives, bundle, source_grid, target_grid, params):
     """500 iterations -- "enough to actually converge", per #1243."""
     snapshot = bundle.arrays["converged_n500"]
-    result = _run_lddmm(primitives, source_grid, target_grid, snapshot, 500)
+    result = _run_lddmm(primitives, source_grid, target_grid, snapshot, 500, params=params)
 
     energy = rel(result["energies"][result["n_iter"] - 1], snapshot["E_last"])
     assert energy < 0.01, f"final energy differs by {energy:.3%}"
 
     before = float(np.mean(np.linalg.norm(primitives["landmarks_query"] - primitives["landmarks_ref"], axis=1)))
     after = float(snapshot["tre_mean"])
-    assert after < 0.4 * RASTER_PARAMS["dx"], f"reference did not converge: TRE {after:.2f}"
+    assert after < 0.4 * params["RASTER_PARAMS"]["dx"], f"reference did not converge: TRE {after:.2f}"
     assert after < before / 5.0, f"reference barely moved: TRE {before:.2f} -> {after:.2f}"
 
     converged = StalignObsFit(
@@ -757,25 +731,9 @@ def test_converged_solution_matches_upstream(primitives, bundle, source_grid, ta
     aligned = _transform_rc(converged, np.asarray(primitives["query"])[:, ::-1])
     displacement = np.linalg.norm(aligned - np.asarray(snapshot["aligned_points_rc"]), axis=1)
     percentile = float(np.percentile(displacement, 95))
-    assert percentile < 0.1 * RASTER_PARAMS["dx"], (
+    assert percentile < 0.1 * params["RASTER_PARAMS"]["dx"], (
         f"95th-percentile point disagreement {percentile:.4f} exceeds a tenth of a grid cell"
     )
-
-
-_SLICE_PARAMS = {
-    "a": 8.0,
-    "p": 2.0,
-    "expand": 1.25,
-    "nt": 2,
-    "epL": 1e-9,
-    "epT": 1e-2,
-    "epV": 1.0,
-    "sigmaM": 1.0,
-    "sigmaB": 2.0,
-    "sigmaA": 5.0,
-    "sigmaR": 1e8,
-}
-_SLICE_ITERS = 12
 
 
 @pytest.fixture(scope="session")
@@ -802,19 +760,21 @@ def test_slice_to_affine_matches_upstream(slice_reference):
     np.testing.assert_allclose(np.asarray(got), slice_reference["to_A"], rtol=0, atol=0)
 
 
-def test_slice_velocity_grid_matches_upstream(slice_reference, slice_axes):
+def test_slice_velocity_grid_matches_upstream(slice_reference, slice_axes, params):
     """``_build_velocity_grid`` at rank 3 vs the grid upstream builds for itself."""
     reference, _ = slice_axes
-    built = _core._build_velocity_grid(reference, a=_SLICE_PARAMS["a"], expand=_SLICE_PARAMS["expand"])
+    built = _core._build_velocity_grid(
+        reference, a=params["SLICE_PARAMS"]["a"], expand=params["SLICE_PARAMS"]["expand"]
+    )
     assert len(built) == 3
     for axis, got in enumerate(built):
         np.testing.assert_allclose(np.asarray(got), slice_reference[f"xv_{axis}"], rtol=0, atol=1e-9)
 
 
-def test_slice_regularizer_matches_upstream(slice_reference, slice_velocity_grid):
+def test_slice_regularizer_matches_upstream(slice_reference, slice_velocity_grid, params):
     """``LL``/``K``/``DV`` at rank 3 vs STalign.py:1384-1397."""
     xv = slice_velocity_grid
-    kernel, ll, dv_prod = _core._build_regularizer(xv, a=_SLICE_PARAMS["a"], p=_SLICE_PARAMS["p"])
+    kernel, ll, dv_prod = _core._build_regularizer(xv, a=params["SLICE_PARAMS"]["a"], p=params["SLICE_PARAMS"]["p"])
     for name, got, expected in (
         ("LL", ll, slice_reference["regularizer_LL"]),
         ("K", kernel, slice_reference["regularizer_K"]),
@@ -849,8 +809,9 @@ def test_slice_grid_backward_matches_upstream(slice_reference, slice_axes, slice
     assert error < EXACT
 
 
-def _run_slice(fixture, niter=_SLICE_ITERS):
+def _run_slice(fixture, params, niter=None):
     """Drive the rank-3 solver from the reference's own axes, images and starting affine."""
+    niter = params["SLICE_ITERS"] if niter is None else niter
     reference = tuple(jnp.asarray(fixture[f"ref_axis_{axis}"]) for axis in range(3))
     section = tuple(jnp.asarray(fixture[f"query_axis_{axis}"]) for axis in range(2))
     target = (jnp.zeros(1, dtype=section[0].dtype), *section)
@@ -863,22 +824,22 @@ def _run_slice(fixture, niter=_SLICE_ITERS):
         T=jnp.asarray(fixture["start_T"]),
         niter=niter,
         diffeo_start=niter + 1,
-        **_SLICE_PARAMS,
+        **params["SLICE_PARAMS"],
         **_SOLVER_TAIL,
     )
 
 
 @pytest.mark.parametrize("name", ["A", "WM", "WA", "WB"])
-def test_slice_path_matches_upstream(slice_reference, name):
+def test_slice_path_matches_upstream(slice_reference, name, params):
     """The rank-3 solver vs upstream's ``LDDMM_3D_to_slice`` on the same inputs."""
-    result = _run_slice(slice_reference)
+    result = _run_slice(slice_reference, params=params)
     error = rel(result[_FIELDS[name]], slice_reference[name])
     assert error < 1e-10, f"{name}: {error:.3e}"
 
 
-def test_slice_energy_trace_matches_upstream(slice_reference):
+def test_slice_energy_trace_matches_upstream(slice_reference, params):
     """Every iteration of the rank-3 objective, not just the endpoint."""
-    result = _run_slice(slice_reference)
+    result = _run_slice(slice_reference, params=params)
     got = np.asarray(result["energies"])
     expected = np.asarray(slice_reference["energies"])
     worst = float(np.max(np.abs(got - expected) / np.abs(expected)))
@@ -944,11 +905,11 @@ def test_slice_sample_volume_matches_upstream(slice_reference, slice_axes, order
     assert error < EXACT
 
 
-def test_slice_regularizer_axes_diverge_from_upstream(slice_reference, slice_velocity_grid, slice_axes):
+def test_slice_regularizer_axes_diverge_from_upstream(slice_reference, slice_velocity_grid, slice_axes, params):
     """squidpy's rank-3 regulariser is the 3-axis one, upstream's the 2-axis one."""
     xv = slice_velocity_grid
     reference, section = slice_axes
-    kernel, ll, dv_prod = _core._build_regularizer(xv, a=_SLICE_PARAMS["a"], p=_SLICE_PARAMS["p"])
+    kernel, ll, dv_prod = _core._build_regularizer(xv, a=params["SLICE_PARAMS"]["a"], p=params["SLICE_PARAMS"]["p"])
     target_image = jnp.asarray(slice_reference["query"])[:, None]
 
     _, aux = _core._lddmm_loss(
@@ -965,8 +926,8 @@ def test_slice_regularizer_axes_diverge_from_upstream(slice_reference, slice_vel
         dv_prod=dv_prod,
         points_source=jnp.zeros((0, 3)),
         points_target=jnp.zeros((0, 3)),
-        sigmaM=_SLICE_PARAMS["sigmaM"],
-        sigmaR=_SLICE_PARAMS["sigmaR"],
+        sigmaM=params["SLICE_PARAMS"]["sigmaM"],
+        sigmaR=params["SLICE_PARAMS"]["sigmaR"],
         sigmaP=None,
     )
     reg_energy = aux[1]
@@ -980,7 +941,7 @@ def test_slice_regularizer_axes_diverge_from_upstream(slice_reference, slice_vel
     )
 
 
-def test_slice_fit_reaches_the_same_place_as_the_solver(slice_reference):
+def test_slice_fit_reaches_the_same_place_as_the_solver(slice_reference, params):
     """``fit_stalign_volume`` vs the solver it wraps, driven to the same starting affine."""
     swap = np.eye(4)[[2, 1, 0, 3]]
     fit = fit_stalign_volume(
@@ -989,20 +950,21 @@ def test_slice_fit_reaches_the_same_place_as_the_solver(slice_reference):
         ref_axes=[slice_reference[f"ref_axis_{axis}"] for axis in range(3)],
         query_axes=[slice_reference[f"query_axis_{axis}"] for axis in range(2)],
         initial_affine=np.linalg.inv(swap @ np.asarray(slice_reference["to_A"]) @ swap),
-        niter=_SLICE_ITERS,
-        diffeo_start=_SLICE_ITERS + 1,
-        **_SLICE_PARAMS,
+        niter=params["SLICE_ITERS"],
+        diffeo_start=params["SLICE_ITERS"] + 1,
+        **params["SLICE_PARAMS"],
         **_SOLVER_TAIL,
     )
     error = rel(fit.affine, slice_reference["A"])
     assert error < 1e-10
 
 
-def _public_volume_fit(fixture, niter=_SLICE_ITERS):
+def _public_volume_fit(fixture, params, niter=None):
     """The rank-3 fit through the public ``stalign_align_volume``, from SpatialData containers."""
+    niter = params["SLICE_ITERS"] if niter is None else niter
     reference_axes = [np.asarray(fixture[f"ref_axis_{axis}"]) for axis in range(3)]
     section_axes = [np.asarray(fixture[f"query_axis_{axis}"]) for axis in range(2)]
-    forwarded = {"niter": niter, "diffeo_start": niter + 1, **_SLICE_PARAMS}
+    forwarded = {"niter": niter, "diffeo_start": niter + 1, **params["SLICE_PARAMS"]}
     return stalign_align_volume(
         _as_sdata(_channels_first(fixture["ref"], ndim=3), reference_axes),
         _as_sdata(_channels_first(fixture["query"], ndim=2), section_axes),
@@ -1012,9 +974,9 @@ def _public_volume_fit(fixture, niter=_SLICE_ITERS):
     )
 
 
-def test_public_volume_call_keeps_the_axes_it_was_given(slice_reference):
+def test_public_volume_call_keeps_the_axes_it_was_given(slice_reference, params):
     """``stalign_align_volume`` reads back exactly the axes its containers were given."""
-    fit = _public_volume_fit(slice_reference)
+    fit = _public_volume_fit(slice_reference, params=params)
 
     for axis in range(3):
         expected = np.asarray(slice_reference[f"ref_axis_{axis}"])
@@ -1024,9 +986,9 @@ def test_public_volume_call_keeps_the_axes_it_was_given(slice_reference):
         np.testing.assert_allclose(np.asarray(fit.query_axes[axis]), expected, rtol=0, atol=1e-9)
 
 
-def test_public_volume_call_reproduces_upstream(slice_reference):
+def test_public_volume_call_reproduces_upstream(slice_reference, params):
     """``stalign_align_volume`` from SpatialData containers, against upstream's own result."""
-    fit = _public_volume_fit(slice_reference)
+    fit = _public_volume_fit(slice_reference, params=params)
     error = rel(fit.affine, slice_reference["A"])
     assert error < 1e-10, f"the public rank-3 call disagrees with upstream by {error:.3e}"
 
