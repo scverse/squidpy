@@ -13,7 +13,7 @@ from spatialdata import SpatialData
 from squidpy._validators import normalize_choice
 from squidpy.types import StalignImageParams, StalignObsParams, StalignVolumeParams
 
-from ._io import writeback_affine_sdata
+from ._io import read_coords, resolve_table, write_coords, writeback_affine_sdata
 from ._landmark import apply_affine, fit_landmarks
 from ._stalign import (
     StalignFit,
@@ -50,50 +50,6 @@ def _resolve_pair(value: str | tuple[str | None, str | None], *, name: str) -> t
     raise ValueError(f"`{name}` must be a single key or a `(ref, query)` pair, got {value!r}.")
 
 
-def _resolve_table(container: AnnData | SpatialData, table_key: str | None, *, side: str) -> AnnData:
-    """Resolve a container plus ``table_key`` to the AnnData holding the data."""
-    if isinstance(container, AnnData):
-        if table_key is not None:
-            raise ValueError(
-                f"`table_key` was given for the {side}, but the {side} is an AnnData, which has no tables. "
-                f"Pass `table_key=None` for it (use a `(ref, query)` pair to address mixed containers)."
-            )
-        return container
-    if not isinstance(container, SpatialData):
-        raise TypeError(f"Expected the {side} to be an AnnData or SpatialData, got {type(container).__name__}.")
-    if table_key is None:
-        raise ValueError(
-            f"The {side} is a SpatialData, which may hold several tables; pass `table_key` to say "
-            f"which one holds the data. Available: {sorted(container.tables)}."
-        )
-    if table_key not in container.tables:
-        raise KeyError(
-            f"`table_key={table_key!r}`: no such table in the {side}. Available: {sorted(container.tables)}."
-        )
-    return container.tables[table_key]
-
-
-def _read_coords_2d(adata: AnnData, *, key: str, side: str, name: str) -> np.ndarray:
-    """Read a validated ``(N, 2)`` coordinate array from ``obsm``."""
-    if key not in adata.obsm:
-        raise KeyError(f"`{name}={key!r}`: no `obsm[{key!r}]` on the {side}. Available: {sorted(adata.obsm)}.")
-    coords = np.asarray(adata.obsm[key])
-    if coords.ndim != 2 or coords.shape[1] != 2:
-        raise ValueError(f"`{name}={key!r}` on the {side} must be an (N, 2) array, found shape {coords.shape}.")
-    return coords
-
-
-def _as_chw(value: Array, *, what: str, ndim: int = 2) -> np.ndarray:
-    """Promote an unchannelled array with ``ndim`` spatial axes to a single-channel one."""
-    array = np.asarray(value)
-    if array.ndim == ndim:
-        array = array[None]
-    if array.ndim != ndim + 1:
-        spatial = ", ".join("zyx"[-ndim:])
-        raise ValueError(f"{what} must be a ({spatial}) or (c, {spatial}) image, found shape {array.shape}.")
-    return array
-
-
 def _read_image(container: SpatialData, key: str, *, side: str, ndim: int, scale: str) -> xr.DataArray:
     """The image element's DataArray at ``scale``."""
     if not isinstance(container, SpatialData):
@@ -112,26 +68,6 @@ def _read_image(container: SpatialData, key: str, *, side: str, ndim: int, scale
     if ndim == 2 and "z" in element.dims:
         raise ValueError(f"`image_key={key!r}` on the {side} is a volume, but this needs a 2D image.")
     return element
-
-
-def _write_coords(
-    container: AnnData | SpatialData,
-    table_key: str | None,
-    spatial_key: str,
-    key_added: str,
-    *,
-    transform: Callable[[np.ndarray], Array],
-    spatial_key_name: str,
-    inplace: bool = True,
-) -> np.ndarray | None:
-    """Transform ``obsm[spatial_key]`` and write it to ``obsm[key_added]`` on the query."""
-    adata = _resolve_table(container, table_key, side="query")
-    coords = _read_coords_2d(adata, key=spatial_key, side="query", name=spatial_key_name)
-    transformed = np.asarray(transform(coords))
-    if not inplace:
-        return transformed
-    adata.obsm[key_added] = transformed
-    return None
 
 
 def _query_of(
@@ -209,12 +145,12 @@ def stalign_align_obs(
         key_name="table_key",
     )
 
-    ref_adata = _resolve_table(data_ref, ref_table, side="reference")
-    query_adata = _resolve_table(query_container, query_table, side="query")
+    ref_adata = resolve_table(data_ref, ref_table, side="reference")
+    query_adata = resolve_table(query_container, query_table, side="query")
 
     return fit_stalign_obs(
-        ref=_read_coords_2d(ref_adata, key=ref_spatial, side="reference", name="spatial_key"),
-        query=_read_coords_2d(query_adata, key=query_spatial, side="query", name="spatial_key"),
+        ref=read_coords(ref_adata, key=ref_spatial, side="reference", name="spatial_key"),
+        query=read_coords(query_adata, key=query_spatial, side="query", name="spatial_key"),
         landmarks_ref=landmarks_ref,
         landmarks_query=landmarks_query,
         **solver_params,
@@ -312,8 +248,8 @@ def _fit_raster[F: StalignFit](
     query = _read_image(query_container, query_image, side="query", ndim=2, scale=query_scale)
     return dataclasses.replace(
         fit_fn(
-            ref=_as_chw(ref.data, what=f"`image_key={ref_image!r}`", ndim=ref_ndim),
-            query=_as_chw(query.data, what=f"`image_key={query_image!r}`", ndim=2),
+            ref=np.asarray(ref.data),
+            query=np.asarray(query.data),
             ref_axes=_element_axes(ref, ref_image, coordinate_system=ref_coordinate_system, side="reference"),
             query_axes=_element_axes(query, query_image, coordinate_system=query_coordinate_system, side="query"),
             **fit_kwargs,
@@ -342,33 +278,6 @@ def _element_axes(element: xr.DataArray, key: str, *, coordinate_system: str, si
         np.arange(element.sizes[dim], dtype=float) * step + shift
         for dim, step, shift in zip(spatial, scale, offset, strict=True)
     ]
-
-
-def _assert_table_coords_share_frame(
-    sdata: SpatialData, *, adata: AnnData, spatial_key: str, coordinate_system: str
-) -> None:
-    """Refuse to transform ``obsm`` coordinates that are not in ``coordinate_system``."""
-    from spatialdata.transformations import get_transformation
-
-    region = adata.uns.get("spatialdata_attrs", {}).get("region")
-    regions = [region] if isinstance(region, str) else list(region or [])
-    for name in regions:
-        if name not in sdata:
-            continue
-        matrix = np.asarray(
-            get_transformation(sdata[name], to_coordinate_system=coordinate_system).to_affine_matrix(
-                input_axes=("x", "y"), output_axes=("x", "y")
-            ),
-            dtype=float,
-        )
-        if not np.allclose(matrix, np.eye(3)):
-            raise ValueError(
-                f"`spatial_key={spatial_key!r}` lives in the intrinsic frame of element {name!r}, which "
-                f"carries a non-identity transformation into {coordinate_system!r}: the coordinate system "
-                f"the fit's units come from. Transforming it would silently produce wrong reference "
-                f"coordinates. Store the coordinates in {coordinate_system!r} units, or apply "
-                f"`StalignFit.transform_points` to coordinates you have placed there yourself."
-            )
 
 
 def stalign_align_volume(
@@ -605,7 +514,7 @@ def align_landmarks(
     matrix = fit_fn(ref_lm, query_lm)
     if key_added is None:
         return matrix
-    return _write_coords(
+    return write_coords(
         query_container,
         query_table,
         spatial_key,
@@ -624,8 +533,8 @@ def _read_landmarks(
 ) -> np.ndarray:
     """Read ``(N, 2)`` ``(x, y)`` landmarks from an ``obsm`` key or a shapes element."""
     if isinstance(container, AnnData) or table_key is not None:
-        adata = _resolve_table(container, table_key, side=side)
-        return _read_coords_2d(adata, key=landmark_key, side=side, name="landmark_key")
+        adata = resolve_table(container, table_key, side=side)
+        return read_coords(adata, key=landmark_key, side=side, name="landmark_key")
     if not isinstance(container, SpatialData):
         raise TypeError(f"Expected the {side} to be an AnnData or SpatialData, got {type(container).__name__}.")
     if landmark_key not in container.shapes:

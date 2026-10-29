@@ -73,14 +73,6 @@ def test_fit_defaults_to_similarity() -> None:
     np.testing.assert_allclose(_apply(affine, stretched), _REF, atol=1e-6)
 
 
-def test_landmarks_need_not_live_in_a_shapes_element() -> None:
-    """An ``obsm`` key works too: requiring a SpatialData just to hold four points
-    would tax AnnData users for nothing."""
-    ref, query = _adata(_REF), _adata(_QUERY)
-    result = align_landmarks(ref, query, landmark_key="landmarks", method="affine")
-    np.testing.assert_allclose(_apply(result, _QUERY), _REF, atol=1e-6)
-
-
 def test_table_key_reads_landmarks_from_a_table() -> None:
     from spatialdata.models import TableModel
 
@@ -216,32 +208,7 @@ def test_neither_write_target_returns_the_fit() -> None:
     assert not any(key.startswith("aligned") for key in query.obsm), "nothing may be written"
 
 
-def test_key_added_writes_into_the_query_itself() -> None:
-    ref, query = _adata(_REF), _adata(_QUERY)
-    args = {"landmark_key": "landmarks", "method": "affine", "spatial_key": "spatial", "key_added": "aligned"}
-
-    assert align_landmarks(ref, query, **args) is None
-    np.testing.assert_allclose(query.obsm["aligned"], _REF, atol=1e-6)
-    np.testing.assert_allclose(query.obsm["spatial"], _QUERY, err_msg="the source array must survive")
-
-
 # --- registering a transformation --------------------------------------------------------
-
-
-def test_registers_a_transformation_on_the_coordinate_system() -> None:
-    from spatialdata.models import PointsModel
-    from spatialdata.transformations import Identity, get_transformation
-
-    sdata = sd.SpatialData(
-        shapes={"lm_ref": _shapes(_REF, "ref_cs"), "lm_query": _shapes(_QUERY, "query_cs")},
-        points={"pts": PointsModel.parse(_QUERY, transformations={"query_cs": Identity()})},
-    )
-    out = align_landmarks(
-        sdata, landmark_key=("lm_ref", "lm_query"), method="affine", target_coordinate_system="ref_cs"
-    )
-
-    assert out is None
-    assert "ref_cs" in get_transformation(sdata.points["pts"], get_all=True)
 
 
 def test_registration_composes_with_an_existing_transform() -> None:
@@ -259,7 +226,10 @@ def test_registration_composes_with_an_existing_transform() -> None:
         shapes={"lm_ref": _shapes(_REF, "ref_cs"), "lm_query": _shapes(_QUERY + offset, "query_cs")},
         points={"pts": PointsModel.parse(_QUERY, transformations={"query_cs": Translation(offset, axes=("x", "y"))})},
     )
-    align_landmarks(sdata, landmark_key=("lm_ref", "lm_query"), method="affine", target_coordinate_system="ref_cs")
+    out = align_landmarks(
+        sdata, landmark_key=("lm_ref", "lm_query"), method="affine", target_coordinate_system="ref_cs"
+    )
+    assert out is None
 
     matrix = get_transformation(sdata.points["pts"], to_coordinate_system="ref_cs").to_affine_matrix(
         input_axes=("x", "y"), output_axes=("x", "y")

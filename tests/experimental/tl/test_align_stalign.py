@@ -21,7 +21,7 @@ from squidpy.experimental.tl import (  # noqa: E402
     stalign_align_obs,
     stalign_align_volume,
 )
-from squidpy.experimental.tl._align._io import fit_from_uns  # noqa: E402
+from squidpy.experimental.tl._align._stalign import fit_from_uns  # noqa: E402
 
 #: A small asymmetric point cloud: enough structure to align, small enough to be instant.
 ALIGN_PTS = np.array([[10.0, 1.0], [12.0, 1.0], [11.0, 2.0], [10.0, 3.0], [12.0, 3.0]])

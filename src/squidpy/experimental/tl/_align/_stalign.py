@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Unpack
 
 import numpy as np
@@ -15,6 +15,8 @@ from squidpy.types import (
     StalignObsParams,
     StalignVolumeParams,
 )
+
+from ._io import assert_table_coords_share_frame, resolve_table, write_coords
 
 if TYPE_CHECKING:
     import jax
@@ -75,13 +77,10 @@ class StalignFit:
         return self._map_points(points, direction="forward")
 
     def _map_points(self, points: Array, *, direction: Literal["forward", "backward"]) -> JaxArray:
-        import jax.numpy as jnp
+        from ._stalign_impl._core import transform_points_row_col
+        from ._stalign_impl._helpers import validate_points
 
-        from ._stalign_impl._core import jax_dtype, transform_points_row_col
-
-        pts = jnp.asarray(points, dtype=jax_dtype())
-        if pts.ndim != 2 or pts.shape[1] != 2:
-            raise ValueError(f"Expected an (N, 2) `(x, y)` array, found shape {pts.shape}.")
+        pts = validate_points(points, name="points")
         # The solver runs in row-col; swap at both boundaries.
         transformed_rc = transform_points_row_col(
             self.velocity_grid, self.velocity, self.affine, pts[:, ::-1], direction=direction
@@ -125,17 +124,15 @@ class StalignFit:
         """
         from spatialdata import SpatialData
 
-        from ._api import _assert_table_coords_share_frame, _resolve_table, _write_coords
-
         fitted_in = getattr(self, "coordinate_system", None)  # only the raster fits record one
         if isinstance(data, SpatialData) and fitted_in is not None:
-            _assert_table_coords_share_frame(
+            assert_table_coords_share_frame(
                 data,
-                adata=_resolve_table(data, table_key, side="query"),
+                adata=resolve_table(data, table_key, side="query"),
                 spatial_key=spatial_key,
                 coordinate_system=fitted_in,
             )
-        return _write_coords(
+        return write_coords(
             data,
             table_key,
             spatial_key,
@@ -158,10 +155,8 @@ class StalignFit:
         SpatialData transformation. Not automatic, because a rank-3 velocity field runs to
         hundreds of megabytes.
         """
-        from ._api import _resolve_table
-        from ._io import fit_to_uns
 
-        fit_to_uns(self, _resolve_table(data, table_key, side="query"), key)
+        fit_to_uns(self, resolve_table(data, table_key, side="query"), key)
 
     @classmethod
     def from_uns(
@@ -175,10 +170,8 @@ class StalignFit:
 
         Returns whichever class the stored ``kind`` names, whatever class this is called on.
         """
-        from ._api import _resolve_table
-        from ._io import fit_from_uns
 
-        return fit_from_uns(_resolve_table(data, table_key, side="query"), key)
+        return fit_from_uns(resolve_table(data, table_key, side="query"), key)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -322,11 +315,10 @@ class StalignVolumeFit(StalignFit):
         """Map ``(N, 2)`` ``(x, y)`` section points to ``(N, 3)`` ``(x, y, z)`` in the volume."""
         import jax.numpy as jnp
 
-        from ._stalign_impl._core import jax_dtype, transform_points_row_col
+        from ._stalign_impl._core import transform_points_row_col
+        from ._stalign_impl._helpers import validate_points
 
-        pts = jnp.asarray(points, dtype=jax_dtype())
-        if pts.ndim != 2 or pts.shape[1] != 2:
-            raise ValueError(f"Expected an (N, 2) `(x, y)` array, found shape {pts.shape}.")
+        pts = validate_points(points, name="points")
         # the volume is the solver's moving image, so section -> volume is its backward map
         lifted = jnp.stack((jnp.zeros(pts.shape[0], dtype=pts.dtype), pts[:, 1], pts[:, 0]), axis=1)
         transformed = transform_points_row_col(
@@ -568,3 +560,66 @@ def fit_stalign_image(
         query_axes=(source_grid[0], source_grid[1]),
         ref_axes=(target_grid[0], target_grid[1]),
     )
+
+
+#: Fit fields holding one array per axis, stored keyed by axis index: anndata has no tuple writer.
+_AXIS_KEYS = frozenset({"velocity_grid", "ref_axes", "query_axes"})
+
+
+_SCALAR_KEYS = frozenset({"n_iter"})
+
+
+#: Fit fields that are plain strings; `np.asarray` would round-trip them as 0-d arrays.
+_STR_KEYS = frozenset({"coordinate_system"})
+
+
+_KINDS: dict[str, type[StalignFit]] = {
+    "obs": StalignObsFit,
+    "image": StalignImageFit,
+    "volume": StalignVolumeFit,
+}
+
+
+def fit_to_uns(fit_result: StalignFit, adata: AnnData, key: str) -> None:
+    """Encode a fit into ``adata.uns[key]`` in a form that survives a write."""
+    stored: dict[str, object] = {"kind": fit_result.kind}
+    for spec in fields(fit_result):
+        value = getattr(fit_result, spec.name)
+        if value is None:
+            # anndata cannot encode None; the class default restores it
+            continue
+        if spec.name in _AXIS_KEYS:
+            stored[spec.name] = {str(axis): np.asarray(a) for axis, a in enumerate(value)}
+        elif spec.name in _SCALAR_KEYS:
+            stored[spec.name] = int(value)
+        elif spec.name in _STR_KEYS:
+            stored[spec.name] = str(value)
+        else:
+            stored[spec.name] = np.asarray(value)
+    adata.uns[key] = stored
+
+
+def fit_from_uns(adata: AnnData, key: str) -> StalignFit:
+    """Decode a fit written by :func:`fit_to_uns`, as numpy arrays."""
+    if key not in adata.uns:
+        raise KeyError(f"`key={key!r}`: no `uns[{key!r}]`. Available: {sorted(adata.uns)}.")
+    stored = adata.uns[key]
+    if not isinstance(stored, dict) or "kind" not in stored:
+        found = sorted(stored) if isinstance(stored, dict) else type(stored).__name__
+        raise ValueError(f"`uns[{key!r}]` carries no `kind`, so it is not a stored STalign fit. Found: {found}.")
+    kind = str(stored["kind"])
+    if kind not in _KINDS:
+        raise ValueError(f"`uns[{key!r}]` names an unknown fit kind {kind!r}. Expected one of {sorted(_KINDS)}.")
+    decoded: dict[str, object] = {}
+    for name, value in stored.items():
+        if name == "kind":
+            continue
+        if name in _AXIS_KEYS:
+            decoded[name] = tuple(np.asarray(value[str(axis)]) for axis in range(len(value)))
+        elif name in _SCALAR_KEYS:
+            decoded[name] = int(value)
+        elif name in _STR_KEYS:
+            decoded[name] = str(value)
+        else:
+            decoded[name] = np.asarray(value)
+    return _KINDS[kind](**decoded)  # type: ignore[arg-type]
