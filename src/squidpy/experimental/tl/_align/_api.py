@@ -424,10 +424,9 @@ def stalign_align_volume(
         Uniform scale of the initial affine. A little under 1 is a common start.
     initial_affine
         Homogeneous ``(4, 4)`` affine in ``(x, y, z)``, replacing the three ``initial_*``
-        arguments above. The escape hatch when the initialisation needs to be exact. It maps
-        the reference *volume* onto the query section, because here the volume is what gets
-        warped. That is the reverse of the 2D paths, whose ``initial_affine`` maps the query
-        onto the reference.
+        arguments above, mapping query section points into the reference volume like
+        :meth:`~squidpy.experimental.tl.StalignVolumeFit.transform_points` does. The escape
+        hatch when the initialisation needs to be exact.
     solver_params
         LDDMM solver tuning; see
         :class:`~squidpy.types.StalignVolumeParams`.

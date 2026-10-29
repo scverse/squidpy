@@ -396,6 +396,9 @@ def fit_stalign_volume(
                 "`initial_scale` construction, so they are mutually exclusive."
             )
         linear, translation = affine_xy_to_rc(initial_affine, ndim=3)
+        # the solver moves the volume onto the section, the inverse of section -> volume
+        linear = jnp.linalg.inv(linear)
+        translation = -linear @ translation
     else:
         slice_index = source_image.shape[1] // 2 if initial_slice is None else initial_slice
         if not -source_image.shape[1] <= slice_index < source_image.shape[1]:

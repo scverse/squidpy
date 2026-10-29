@@ -447,8 +447,8 @@ def test_image_fit_recovers_an_x_shift() -> None:
     np.testing.assert_allclose(fit.inverse_transform_points(fit.transform_points(pts)), pts, atol=1e-3)
 
 
-def test_volume_initial_affine_maps_the_volume_onto_the_section() -> None:
-    """The (x, y, z) affine maps volume -> section, so section points land at ``p - t``."""
+def test_volume_initial_affine_maps_the_section_into_the_volume() -> None:
+    """Like the 2D paths, the (x, y, z) affine maps query -> reference: section points land at ``p + t``."""
     from squidpy.experimental.tl._align._stalign import fit_stalign_volume
 
     volume = np.random.default_rng(0).random((1, 6, 12, 12))
@@ -457,7 +457,7 @@ def test_volume_initial_affine_maps_the_volume_onto_the_section() -> None:
     fit = fit_stalign_volume(volume, volume[:, 3], initial_affine=affine, a=3.0, nt=1, niter=0)
 
     np.testing.assert_allclose(
-        fit.transform_points(np.array([[0.0, 0.0], [1.0, 3.0]])), [[-1.0, -2.0, -0.5], [0.0, 1.0, -0.5]], atol=1e-5
+        fit.transform_points(np.array([[0.0, 0.0], [1.0, 3.0]])), [[1.0, 2.0, 0.5], [2.0, 5.0, 0.5]], atol=1e-5
     )
 
 

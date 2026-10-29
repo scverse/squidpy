@@ -999,7 +999,7 @@ def test_slice_fit_reaches_the_same_place_as_the_solver(slice_reference):
         slice_reference["query"],
         ref_axes=[slice_reference[f"ref_axis_{axis}"] for axis in range(3)],
         query_axes=[slice_reference[f"query_axis_{axis}"] for axis in range(2)],
-        initial_affine=swap @ np.asarray(slice_reference["to_A"]) @ swap,
+        initial_affine=np.linalg.inv(swap @ np.asarray(slice_reference["to_A"]) @ swap),
         niter=_SLICE_ITERS,
         diffeo_start=_SLICE_ITERS + 1,
         **_SLICE_PARAMS,
@@ -1018,7 +1018,7 @@ def _harness_shaped_volume_fit(fixture, niter=_SLICE_ITERS):
         _as_sdata(_channels_first(fixture["ref"], ndim=3), reference_axes),
         _as_sdata(_channels_first(fixture["query"], ndim=2), section_axes),
         image_key="image",
-        initial_affine=_affine_xy(fixture["start_L"], fixture["start_T"]),
+        initial_affine=np.linalg.inv(_affine_xy(fixture["start_L"], fixture["start_T"])),
         **forwarded,
     )
 
