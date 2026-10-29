@@ -1,8 +1,4 @@
-"""Smoke tests for the STalign align functions.
-
-Deliberately tiny: `TINY_SOLVER` runs one or two iterations, so these assert that the
-whole path executes and writes where it says it does, not that the fit converges.
-"""
+"""Tests for the STalign align functions: each path runs and writes where it says, plus small numeric checks."""
 
 from __future__ import annotations
 
@@ -58,7 +54,7 @@ def test_obs_fit_returns_a_result_and_applies_to_a_copy() -> None:
     assert not hasattr(result, "deformation_grid")
 
     handed_back = result.transform(query, inplace=False)
-    assert handed_back.shape == ALIGN_PTS.shape
+    np.testing.assert_allclose(handed_back, np.asarray(result.aligned_points), rtol=1e-6)
     assert "spatial_aligned" not in query.obsm, "`inplace=False` must leave the input untouched"
 
     # one fit, applied more than once, and writing agrees with what was handed back

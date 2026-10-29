@@ -7,7 +7,7 @@ from spatialdata import SpatialData
 from spatialdata.models import PointsModel
 from spatialdata.transformations import get_transformation
 
-from squidpy.experimental.im import rasterize_points
+from squidpy.experimental.im import rasterize_points, sample_volume
 
 
 def _sdata(xy: np.ndarray) -> SpatialData:
@@ -52,3 +52,13 @@ def test_unknown_points_key_lists_what_is_available(xy: np.ndarray) -> None:
 def test_an_image_smaller_than_the_points_is_refused(xy: np.ndarray) -> None:
     with pytest.raises(ValueError, match=r"at least 1"):
         rasterize_points(_sdata(xy), points_key="cells", expand=0.5)
+
+
+def test_sample_volume_reads_values_and_refuses_mismatched_axes() -> None:
+    image = np.arange(12.0).reshape(3, 4)  # (y, x)
+    axes = [np.arange(3.0), np.arange(4.0) * 2]
+    np.testing.assert_allclose(sample_volume(image, np.array([[2.0, 1.0]]), axes=axes), [5.0])
+    with pytest.raises(ValueError, match=r"to match `volume`"):
+        sample_volume(image, np.array([[0.0, 0.0]]), axes=[np.arange(4.0), axes[1]])
+    with pytest.raises(ValueError, match=r"evenly spaced"):
+        sample_volume(image, np.array([[0.0, 0.0]]), axes=[np.array([0.0, 1.0, 3.0]), axes[1]])

@@ -592,7 +592,7 @@ def image_reference(bundle):
     return bundle.arrays["image_trajectory"]
 
 
-def _harness_shaped_fit(fixture, *, swap_roles=False):
+def _public_image_fit(fixture, *, swap_roles=False):
     """The image fit through the public ``stalign_align_image``, from SpatialData containers."""
     ax_moving = (fixture["source_axis_0"], fixture["source_axis_1"])
     ax_fixed = (fixture["target_axis_0"], fixture["target_axis_1"])
@@ -605,16 +605,16 @@ def _harness_shaped_fit(fixture, *, swap_roles=False):
     )
 
 
-def test_replay_image_call_reproduces_upstream(image_reference):
-    """The call the notebook replay actually issues, against upstream's own result."""
-    fit = _harness_shaped_fit(image_reference)
+def test_public_image_call_reproduces_upstream(image_reference):
+    """``stalign_align_image`` from SpatialData containers, against upstream's own result."""
+    fit = _public_image_fit(image_reference)
     error = rel(fit.affine, image_reference["A"])
-    assert error < 1e-10, f"the replay's own call disagrees with upstream by {error:.3e}"
+    assert error < 1e-10, f"the public call disagrees with upstream by {error:.3e}"
 
 
-def test_replay_image_call_is_role_sensitive(image_reference):
+def test_public_image_call_is_role_sensitive(image_reference):
     """Swapping ref and query must be *loud*, not a 1e-5 wobble."""
-    swapped = _harness_shaped_fit(image_reference, swap_roles=True)
+    swapped = _public_image_fit(image_reference, swap_roles=True)
     assert rel(swapped.affine, image_reference["A"]) > 1e-3
 
 
@@ -639,10 +639,9 @@ def _fit_mixed_units(fixture, niter):
 
 def test_mixed_unit_velocity_grid_matches_upstream(image_mixed_units):
     """The velocity grid upstream builds when the two sides disagree about units."""
-    fit = _fit_mixed_units(image_mixed_units, _IMAGE_ITERS)
-    got = tuple(int(np.asarray(axis).size) for axis in fit.velocity_grid)
-    expected = (int(image_mixed_units["xv_0"].size), int(image_mixed_units["xv_1"].size))
-    assert got == expected, f"velocity grid {got} against upstream's {expected}"
+    fit = _fit_mixed_units(image_mixed_units, 0)
+    for axis, key in zip(fit.velocity_grid, ("xv_0", "xv_1"), strict=True):
+        np.testing.assert_allclose(np.asarray(axis), image_mixed_units[key], rtol=0, atol=1e-9)
 
 
 def test_mixed_unit_axes_are_actually_mixed(image_mixed_units):
@@ -999,7 +998,7 @@ def test_slice_fit_reaches_the_same_place_as_the_solver(slice_reference):
     assert error < 1e-10
 
 
-def _harness_shaped_volume_fit(fixture, niter=_SLICE_ITERS):
+def _public_volume_fit(fixture, niter=_SLICE_ITERS):
     """The rank-3 fit through the public ``stalign_align_volume``, from SpatialData containers."""
     reference_axes = [np.asarray(fixture[f"ref_axis_{axis}"]) for axis in range(3)]
     section_axes = [np.asarray(fixture[f"query_axis_{axis}"]) for axis in range(2)]
@@ -1013,9 +1012,9 @@ def _harness_shaped_volume_fit(fixture, niter=_SLICE_ITERS):
     )
 
 
-def test_replay_volume_call_resolves_the_axes_it_was_given(slice_reference):
-    """The rank-3 half of the question the rank-2 seam answered: are the axes bit-faithful?"""
-    fit = _harness_shaped_volume_fit(slice_reference)
+def test_public_volume_call_keeps_the_axes_it_was_given(slice_reference):
+    """``stalign_align_volume`` reads back exactly the axes its containers were given."""
+    fit = _public_volume_fit(slice_reference)
 
     for axis in range(3):
         expected = np.asarray(slice_reference[f"ref_axis_{axis}"])
@@ -1025,11 +1024,11 @@ def test_replay_volume_call_resolves_the_axes_it_was_given(slice_reference):
         np.testing.assert_allclose(np.asarray(fit.query_axes[axis]), expected, rtol=0, atol=1e-9)
 
 
-def test_replay_volume_call_reproduces_upstream(slice_reference):
-    """The rank-3 counterpart of ``test_replay_image_call_reproduces_upstream``."""
-    fit = _harness_shaped_volume_fit(slice_reference)
+def test_public_volume_call_reproduces_upstream(slice_reference):
+    """``stalign_align_volume`` from SpatialData containers, against upstream's own result."""
+    fit = _public_volume_fit(slice_reference)
     error = rel(fit.affine, slice_reference["A"])
-    assert error < 1e-10, f"the replay's own rank-3 call disagrees with upstream by {error:.3e}"
+    assert error < 1e-10, f"the public rank-3 call disagrees with upstream by {error:.3e}"
 
 
 def test_rank_three_defaults_are_actually_different_from_rank_two():

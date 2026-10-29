@@ -152,8 +152,6 @@ def test_similarity_refuses_landmarks_at_a_single_place(side: str) -> None:
     ref, query = (same, _REF[:3]) if side == "ref" else (_REF[:3], same)
     with pytest.raises(ValueError, match=rf"`similarity` needs `{side}` landmarks at two distinct places"):
         align_landmarks(ref, query)
-    with pytest.raises(ValueError, match="at least 2 landmark pairs"):
-        align_landmarks(_REF[:1], _QUERY[:1])
 
 
 @pytest.mark.parametrize("method", ["similarity", "affine"])
@@ -270,17 +268,6 @@ def test_key_added_with_shapes_landmarks_says_what_to_do() -> None:
         align_landmarks(sdata, landmark_key=("lm_ref", "lm_query"), key_added="aligned")
 
 
-def test_registered_result_is_stamped_with_the_coordinate_systems() -> None:
-
-    sdata = sd.SpatialData(shapes={"lm_ref": _shapes(_REF, "ref_cs"), "lm_query": _shapes(_QUERY, "query_cs")})
-    align_landmarks(sdata, landmark_key=("lm_ref", "lm_query"), target_coordinate_system="aligned")
-    # write-back is exercised above; here we only care that no error is raised and the
-    # transformation landed on the query landmarks element itself
-    from spatialdata.transformations import get_transformation
-
-    assert "aligned" in get_transformation(sdata.shapes["lm_query"], get_all=True)
-
-
 def test_shared_coordinate_system_is_refused() -> None:
     """Registering moves everything in the coordinate system: including the reference.
 
@@ -367,6 +354,8 @@ def test_too_few_landmarks() -> None:
     ref, query = _adata(_REF[:2]), _adata(_QUERY[:2])
     with pytest.raises(ValueError, match="at least 3 landmark pairs"):
         align_landmarks(ref, query, landmark_key="landmarks", method="affine")
+    with pytest.raises(ValueError, match="at least 2 landmark pairs"):
+        align_landmarks(_REF[:1], _QUERY[:1])
 
 
 def test_length_mismatch() -> None:
@@ -420,18 +409,6 @@ def test_apply_affine_maps_points_and_refuses_a_3d_matrix() -> None:
     np.testing.assert_allclose(apply_affine(shift, _REF), _QUERY)
     with pytest.raises(ValueError, match=r"\(3, 3\)"):
         apply_affine(np.eye(4), _REF)
-
-
-def test_sample_volume_reads_values_and_refuses_mismatched_axes() -> None:
-    from squidpy.experimental.im import sample_volume
-
-    image = np.arange(12.0).reshape(3, 4)  # (y, x)
-    axes = [np.arange(3.0), np.arange(4.0) * 2]
-    np.testing.assert_allclose(sample_volume(image, np.array([[2.0, 1.0]]), axes=axes), [5.0])
-    with pytest.raises(ValueError, match=r"to match `volume`"):
-        sample_volume(image, np.array([[0.0, 0.0]]), axes=[np.arange(4.0), axes[1]])
-    with pytest.raises(ValueError, match=r"evenly spaced"):
-        sample_volume(image, np.array([[0.0, 0.0]]), axes=[np.array([0.0, 1.0, 3.0]), axes[1]])
 
 
 def test_a_refused_registration_writes_nothing() -> None:
