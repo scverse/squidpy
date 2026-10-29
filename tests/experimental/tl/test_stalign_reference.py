@@ -1,6 +1,7 @@
 """STalign port vs the original, on outputs upstream computed (scverse/squidpy#1243).
 
-The reference values come from squidpy-ports' generator, published there as one zarr store.
+The reference values come from squidpy-ports' generator, published there as one zarr store;
+https://theislab.github.io/squidpy-ports/reference-bundle.html says what it holds and why.
 Rank 2 is section-to-section (upstream ``LDDMM``), rank 3 section-into-volume
 (``LDDMM_3D_to_slice``). Needs ``JAX_ENABLE_X64=1``.
 """
@@ -36,7 +37,7 @@ from squidpy.experimental.tl._align._stalign_impl import _core, _helpers  # noqa
 _BUNDLE_URL = (
     "https://github.com/theislab/squidpy-ports/releases/download/stalign-reference-v1/stalign_reference.zarr.zip"
 )
-_BUNDLE_SHA256 = "699692fb2d1bca46b60ea484b6dc0337e67eb36bd4f8fd40c3d59466bcf9012e"
+_BUNDLE_SHA256 = "8097705b69f23f2124d7ba3e2820a81ffdfb153d8e1c031301d51f43361a7f22"
 
 
 @cache
