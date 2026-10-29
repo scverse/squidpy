@@ -32,6 +32,7 @@ overrides.matrix.extras.features = [
 # the STalign reference tests compare against upstream's float64
 overrides.matrix.extras.env-vars = [
   { key = "JAX_ENABLE_X64", value = "1", if = ["jax"] },
+  { key = "HATCH_TEST_ARGS", value = " -m jax", if = ["jax"] },
 ]
 # default commands (only `cov-report` is overridden)
 scripts.run = "pytest{env:HATCH_TEST_ARGS:} -p no:cov {args}"

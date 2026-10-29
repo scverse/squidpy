@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 
 jax = pytest.importorskip("jax")
+pytestmark = pytest.mark.jax
 
 import anndata as ad  # noqa: E402
 import jax.numpy as jnp  # noqa: E402

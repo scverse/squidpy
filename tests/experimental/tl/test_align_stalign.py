@@ -14,6 +14,7 @@ from spatialdata.models import Image2DModel, Image3DModel
 from tests.experimental.conftest import ALIGN_PTS, TINY_SOLVER, make_adata
 
 pytest.importorskip("jax")
+pytestmark = pytest.mark.jax
 
 from squidpy.experimental.tl import (  # noqa: E402
     StalignFit,
