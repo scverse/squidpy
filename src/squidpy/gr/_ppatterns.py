@@ -447,7 +447,12 @@ def _score_perms(
     tptr, tind, tdat = gt.indptr, gt.indices, gt.data
     # Constant features have a zero denominator; scanpy drops them and reports `nan`, so seed with it.
     score = np.full(n_features, np.nan, dtype=np.float64)
-    count_ge = np.zeros(n_features, dtype=np.int64)  # integer tally of `sims >= score`, so exact
+    # integer tallies of `sims >= score` and `sims <= score`, so exact. Both, because the observed
+    # score comes out of the same kernel as the permuted ones, so ties are bit-exact: a sparse gene
+    # whose non-zero cells touch no other non-zero cell sits at the floor of its null, tied by most
+    # permutations, and one tally folded two-sided would call every such gene maximally significant.
+    count_ge = np.zeros(n_features, dtype=np.int64)
+    count_le = np.zeros(n_features, dtype=np.int64)
     # Mean and variance accumulate as sums of `sims - score`. Both are plain sums, so blocks merge
     # with `+=` and no Welford state is carried. `s1/n` is the observed score's distance from the
     # permutation mean, so `s2/n - (s1/n)**2` loses about eps*z**2: ~1e-13 at z=27, against ~1e-16
@@ -482,6 +487,7 @@ def _score_perms(
             score[m] = _autocorr_perms(*args, identity, moran)[0]
         sims = _autocorr_perms(*args, perms, moran)
         count_ge[m] += int((sims >= score[m]).sum())
+        count_le[m] += int((sims <= score[m]).sum())
         shifted = sims - score[m]
         s1[m] += shifted.sum()
         s2[m] += (shifted * shifted).sum()
@@ -519,6 +525,7 @@ def _score_perms(
     return score, {
         "n_perms": n_perms,
         "count_ge": count_ge,
+        "count_le": count_le,
         "mean": score + mean_shift,
         "var": np.where(ran, s2 / n_perms - mean_shift**2, np.nan),
     }
@@ -702,7 +709,7 @@ def _p_value_calc(
         (n_features,).
     sims
         Permutation accumulators from `_score_perms`: ``n_perms`` and, per feature, the
-        ``count_ge`` tally plus the ``mean``/``var`` of the permuted scores.
+        ``count_ge``/``count_le`` tallies plus the ``mean``/``var`` of the permuted scores.
     weights
         The spatial connectivity graph, used for the analytic (normality) p-value.
     params
@@ -724,9 +731,8 @@ def _p_value_calc(
         return results
 
     n_perms = sims["n_perms"]
-    large_perm = sims["count_ge"].copy()  # copy: the fold below writes in place
-    # subtract total perm for negative values
-    large_perm[(n_perms - large_perm) < large_perm] = n_perms - large_perm[(n_perms - large_perm) < large_perm]
+    # two-sided: the smaller tail, ties counted in both
+    large_perm = np.minimum(sims["count_ge"], sims["count_le"])
     # get p-value based on permutation
     p_sim: NDArrayA = (large_perm + 1) / (n_perms + 1)
 

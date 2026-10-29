@@ -144,10 +144,15 @@ def test_spatial_autocorr_offset_feature_precision(mode: str, stat: str):
     np.testing.assert_allclose(df.loc["offset", stat], df.loc["plain", stat], rtol=1e-8)
 
 
-def test_spatial_autocorr_ties_match_scanpy():
-    """A gene with one non-zero count ties most permutations exactly; ties must count as in scanpy."""
+@pytest.mark.parametrize("mode", ["moran", "geary"])
+def test_spatial_autocorr_ties_both_tails(mode: str):
+    """A gene with one non-zero count ties most permutations exactly; ties count in both tails.
+
+    Folding ``sims >= obs`` alone calls a gene at the floor of its null, where every permutation
+    ties or exceeds it, maximally significant.
+    """
     import scipy.sparse as sps
-    from scanpy.metrics import gearys_c
+    from scanpy.metrics import gearys_c, morans_i
     from sklearn.preprocessing import normalize
 
     from squidpy.gr import spatial_neighbors_knn
@@ -159,16 +164,18 @@ def test_spatial_autocorr_ties_match_scanpy():
     adata = AnnData(sps.csr_matrix(X))
     adata.obsm["spatial"] = rng.random((300, 2))
     spatial_neighbors_knn(adata, n_neighs=6)
-    df = spatial_autocorr(adata, mode="geary", n_perms=50, rng=0, copy=True).loc[adata.var_names]
+    df = spatial_autocorr(adata, mode=mode, n_perms=50, rng=0, copy=True).loc[adata.var_names]
 
     # the pre-numba algorithm: scanpy on the row-permuted graph, one spawned generator per permutation
+    stat = morans_i if mode == "moran" else gearys_c
     g = normalize(adata.obsp["spatial_connectivities"], norm="l1", axis=1)
     vals = adata.X.T
-    obs = gearys_c(g, vals)
-    sims = np.stack([gearys_c(g[gen.permutation(300), :], vals) for gen in np.random.default_rng(0).spawn(50)])
-    large = (sims >= obs).sum(axis=0)
-    large = np.minimum(large, 50 - large)
-    assert large[0] > 0  # the scenario really has ties
+    obs = stat(g, vals)
+    sims = np.stack([stat(g[gen.permutation(300), :], vals) for gen in np.random.default_rng(0).spawn(50)])
+    ties = np.isclose(sims, obs, rtol=1e-9, atol=1e-12)  # scanpy's own arithmetic differs by an ulp
+    above, below = ((sims > obs) & ~ties).sum(axis=0), ((sims < obs) & ~ties).sum(axis=0)
+    large = np.minimum(above, below) + ties.sum(axis=0)
+    assert ties[:, 0].sum() > 25  # the scenario really has ties
     np.testing.assert_array_equal(df["pval_sim"].values, (large + 1) / 51)
 
 
