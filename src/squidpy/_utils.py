@@ -326,60 +326,20 @@ def thread_map(
     return _run(None)
 
 
-def available_memory() -> int | None:
-    """Bytes this process may still allocate, or ``None`` if the OS does not say.
-
-    Free RAM capped by every cgroup limit above the process: inside a SLURM job or a container the
-    node's free memory is not what the process may use, and sizing buffers by it gets the job
-    OOM-killed. The limit usually sits on an ancestor (SLURM sets it on the job, the process lives in
-    a step/task child whose own limit is "max"), so the whole chain up to the root is checked.
-    Handles cgroup v2 and v1; elsewhere the free RAM alone.
-    """
-    try:
-        avail = os.sysconf("SC_AVPHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")
-    except (AttributeError, OSError, ValueError):
-        return None
-    try:
-        with open("/proc/self/cgroup") as f:
-            entries = [line.rstrip("\n").split(":", 2) for line in f]
-    except OSError:
-        return avail
-    for hierarchy, controllers, path in entries:
-        if hierarchy == "0":  # v2: one unified tree
-            root, names = "/sys/fs/cgroup", ("memory.max", "memory.current")
-        elif "memory" in controllers.split(","):  # v1: the memory controller's own tree
-            root, names = "/sys/fs/cgroup/memory", ("memory.limit_in_bytes", "memory.usage_in_bytes")
-        else:
-            continue
-        parts = [p for p in path.split("/") if p]
-        for depth in range(len(parts), -1, -1):  # the process's own cgroup, then each ancestor
-            base = "/".join([root, *parts[:depth]])
-            try:
-                with open(f"{base}/{names[0]}") as lim, open(f"{base}/{names[1]}") as cur:
-                    limit, used = lim.read().strip(), int(cur.read())
-            except (OSError, ValueError):
-                continue
-            if limit != "max" and int(limit) < 2**60:  # v1 reports "no limit" as a huge number
-                avail = min(avail, int(limit) - used)
-    return max(avail, 0)
-
-
 _MEM_UNITS = {
     "b": 1, "kb": 10**3, "mb": 10**6, "gb": 10**9, "tb": 10**12,
     "kib": 2**10, "mib": 2**20, "gib": 2**30, "tib": 2**40,
 }  # fmt: skip
 
 
-def memory_budget(working_memory: float | str | None, *, floor: int) -> int:
+def memory_budget(working_memory: float | str | None, *, default: int) -> int:
     """Bytes a function may use for its working buffers.
 
     ``working_memory`` as given: a number of MiB (as scikit-learn's ``working_memory``), or a string
-    with a unit such as ``"16GB"`` or ``"512MiB"``. If `None`, an eighth of :func:`available_memory`,
-    but at least ``floor`` (also the answer when the OS does not report free memory).
+    with a unit such as ``"16GB"`` or ``"512MiB"``. If `None`, ``default``.
     """
     if working_memory is None:
-        free = available_memory()
-        return floor if free is None else max(floor, free // 8)
+        return default
     if isinstance(working_memory, str):
         m = re.fullmatch(r"\s*(\d+(?:\.\d*)?|\.\d+)\s*([kmgt]i?b|b)?\s*", working_memory.lower())
         if m is None:

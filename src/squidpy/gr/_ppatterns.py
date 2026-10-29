@@ -63,14 +63,9 @@ _PERM_BLOCK_SIZE = 2**28
 
 
 def _perm_block_entries(working_memory: float | str | None) -> int:
-    """Permutation entries held at once: ``working_memory`` worth of int32, by default at least `_PERM_BLOCK_SIZE`.
-
-    Each block re-pays a scatter over the feature, which at 100M cells (two permutations per block
-    under the fixed cap) dominates the run, so the default grows with free memory: an eighth of it
-    holds 100 permutations of 100M cells in one block.
-    """
+    """Permutation entries held at once: ``working_memory`` worth of int32, `_PERM_BLOCK_SIZE` by default."""
     item = np.dtype(np.int32).itemsize
-    return memory_budget(working_memory, floor=_PERM_BLOCK_SIZE * item) // item
+    return memory_budget(working_memory, default=_PERM_BLOCK_SIZE * item) // item
 
 
 @d.dedent
@@ -175,8 +170,9 @@ def spatial_autocorr(
     %(copy)s
     %(n_jobs_threads)s
     %(working_memory)s
-        Here: the permutation buffer, ``n_perms`` x ``n_cells`` int32; every feature is revisited
-        once per block of permutations that fits.
+        Here: the permutation buffer, ``n_perms`` x ``n_cells`` int32, 1 GiB by default (less if the
+        whole ``n_perms`` x ``n_cells`` fits). Every feature is revisited once per block of
+        permutations that fits, so on very large data more memory means fewer passes.
     %(show_progress_bar)s
 
     Returns
