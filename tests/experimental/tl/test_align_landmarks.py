@@ -13,7 +13,6 @@ import spatialdata as sd
 from anndata import AnnData
 
 from squidpy.experimental.tl import align_landmarks
-from tests.experimental.conftest import make_adata
 
 # square corners; query = ref shifted by (5, 7) -> a pure translation both models recover
 _REF = np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]])
@@ -23,7 +22,10 @@ _QUERY = _REF + _SHIFT
 
 def _adata(points: np.ndarray, *, key: str = "spatial") -> AnnData:
     """The landmarks and the coordinates they move are the same points in these tests."""
-    return make_adata(points, key=key, landmarks=points)
+    adata = AnnData(np.zeros((len(points), 1)))
+    adata.obsm[key] = points.copy()
+    adata.obsm["landmarks"] = points.copy()
+    return adata
 
 
 def _shapes(points: np.ndarray, cs: str = "global"):

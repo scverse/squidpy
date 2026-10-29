@@ -8,10 +8,9 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from anndata import AnnData
 from spatialdata import SpatialData
 from spatialdata.models import Image2DModel, Image3DModel
-
-from tests.experimental.conftest import ALIGN_PTS, TINY_SOLVER, make_adata
 
 pytest.importorskip("jax")
 pytestmark = pytest.mark.jax
@@ -24,8 +23,19 @@ from squidpy.experimental.tl import (  # noqa: E402
 )
 from squidpy.experimental.tl._align._io import fit_from_uns  # noqa: E402
 
+#: A small asymmetric point cloud: enough structure to align, small enough to be instant.
+ALIGN_PTS = np.array([[10.0, 1.0], [12.0, 1.0], [11.0, 2.0], [10.0, 3.0], [12.0, 3.0]])
+
+#: Smallest solver settings that still exercise the full code path.
+TINY_SOLVER = {"dx": 0.5, "blur": 1.0, "a": 1.0, "expand": 1.0, "nt": 1, "niter": 1, "epV": 1.0}
 IMAGE_SOLVER = {"a": 4.0, "nt": 1, "niter": 2, "epV": 1.0}
 VOLUME_SOLVER = {"a": 3.0, "nt": 1, "niter": 2, "epV": 1.0}
+
+
+def make_adata(coords: np.ndarray) -> AnnData:
+    adata = AnnData(np.zeros((len(coords), 1)))
+    adata.obsm["spatial"] = coords.copy()
+    return adata
 
 
 def _sdata_image(array: np.ndarray, key: str, **kwargs: object) -> SpatialData:
