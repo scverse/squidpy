@@ -1188,13 +1188,24 @@ def test_niche_cellcharter_bayesian_mixture_caps_k(dummy_adata2: AnnData):
     assert 1 <= dummy_adata2.obs["cellcharter_niche"].nunique() <= 5
 
 
-def test_niche_cellcharter_rejects_a_clusterer_without_k(dummy_adata2: AnnData):
-    from sklearn.cluster import DBSCAN
+def test_niche_cellcharter_rejects_n_clusters_without_k(dummy_adata2: AnnData):
+    from sklearn.cluster import AffinityPropagation
 
     with pytest.raises(TypeError, match=r"must implement fit_predict"):
         calculate_niche_cellcharter(dummy_adata2, distance=2, n_clusters=3, clusterer=object())
-    with pytest.raises(TypeError, match=r"takes neither 'n_components' nor 'n_clusters'"):
-        calculate_niche_cellcharter(dummy_adata2, distance=2, n_clusters=3, clusterer=DBSCAN())
+    for n_clusters in (3, (2, 3)):
+        with pytest.raises(TypeError, match=r"so 'n_clusters' must stay None"):
+            calculate_niche_cellcharter(
+                dummy_adata2, distance=2, n_clusters=n_clusters, clusterer=AffinityPropagation()
+            )
+
+
+def test_niche_cellcharter_takes_a_clusterer_without_k(dummy_adata2: AnnData):
+    from sklearn.cluster import AffinityPropagation
+
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    calculate_niche_cellcharter(dummy_adata2, distance=2, rng=0, clusterer=AffinityPropagation())
+    assert dummy_adata2.obs["cellcharter_niche"].notna().all()
 
 
 def test_niche_cellcharter_warns_on_sweep_arguments_with_a_fixed_k(dummy_adata2: AnnData):

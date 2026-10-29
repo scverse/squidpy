@@ -28,7 +28,7 @@ from squidpy._utils import (
 )
 from squidpy._validators import assert_isinstance, assert_key_in_adata, normalize_choice
 from squidpy.gr._autok import _K_PARAMS, AutoKClusterer
-from squidpy.gr._clusterers import Clusterer, KClusterer, LeidenClusterer
+from squidpy.gr._clusterers import Clusterer, LeidenClusterer
 from squidpy.gr._nhood import (
     _aggregate_over,
     _assert_hop_request,
@@ -617,8 +617,8 @@ def calculate_niche_cellcharter(
     aggregation: str = "mean",
     rng: SeedLike | RNGLike | None = None,
     spatial_connectivities_key: str = "spatial_connectivities",
-    n_clusters: int | tuple[int, int] | Sequence[int] = 10,
-    clusterer: KClusterer | None = None,
+    n_clusters: int | tuple[int, int] | Sequence[int] | None = None,
+    clusterer: Clusterer | None = None,
     max_runs: int = 10,
     convergence_tol: float = 1e-2,
     store_labels: bool = False,
@@ -659,8 +659,8 @@ def calculate_niche_cellcharter(
        ``aggregation``.
     3. Concatenates the observation's own representation with every ring's aggregate.
     4. Fits a Gaussian mixture model with ``n_clusters`` mixture components, or with the
-       most stable K when ``n_clusters`` requests a sweep.
-    5. Uses the GMM component assignments as niche labels.
+       most stable K when ``n_clusters`` requests a sweep, or ``clusterer`` when given.
+    5. Uses the cluster assignments as niche labels.
 
     Consequently, each niche corresponds to a probabilistic cluster in a
     feature space that encodes both an observation's features and its broader
@@ -687,20 +687,22 @@ def calculate_niche_cellcharter(
         Seeds the Gaussian mixture clustering step.
     %(niche_spatial_conn_key)s
     n_clusters
-        Number of Gaussian mixture components, and therefore the number of niche
-        labels produced per library or dataset. A ``(min, max)`` tuple or a sequence of
-        K values instead selects the most stable of them, fitting each candidate up to
-        ``max_runs`` times, as :func:`~squidpy.gr.cluster_auto_k` does. The sweep keeps the
-        best of several fits per K, so rerunning with the selected K as an int does not
-        reproduce its labels; use ``store_labels`` to keep the runners-up instead.
+        Number of clusters, and therefore the number of niche labels produced per library
+        or dataset. ``None`` means 10. A ``(min, max)`` tuple or a sequence of K values
+        instead selects the most stable of them, fitting each candidate up to ``max_runs``
+        times, as :func:`~squidpy.gr.cluster_auto_k` does. The sweep keeps the best of
+        several fits per K, so rerunning with the selected K as an int does not reproduce
+        its labels; use ``store_labels`` to keep the runners-up instead. Must stay ``None``
+        for a ``clusterer`` that takes no number of clusters.
     clusterer
-        The :class:`~squidpy.gr.KClusterer` to fit, e.g. a
+        The :class:`~squidpy.gr.Clusterer` to fit, e.g. a
         :class:`~sklearn.mixture.GaussianMixture` with a different ``covariance_type`` or
-        ``reg_covar``, or :class:`~sklearn.cluster.KMeans`. It is cloned, and its number of
-        clusters and ``random_state`` are set from ``n_clusters`` and ``rng``. For a
-        :class:`~sklearn.mixture.BayesianGaussianMixture`, which infers its own K, an int
-        ``n_clusters`` is the upper bound. Defaults to ``GaussianMixture()``, CellCharter's
-        model.
+        ``reg_covar``, or :class:`~sklearn.cluster.KMeans`. It is cloned and its
+        ``random_state`` is set from ``rng``. A :class:`~squidpy.gr.KClusterer` also gets
+        its number of clusters from ``n_clusters``; for a
+        :class:`~sklearn.mixture.BayesianGaussianMixture`, which infers its own K, that is
+        the upper bound. Any other clusterer is fitted as it is, and cannot sweep K.
+        Defaults to ``GaussianMixture()``, CellCharter's model.
     max_runs
         Maximum number of repetitions per candidate K. Only used when ``n_clusters``
         requests a sweep.
@@ -756,34 +758,37 @@ def calculate_niche_cellcharter(
     )
 
     # `GaussianMixture`'s default 'kmeans' init is CellCharter's, for a fixed K and in the sweep alike
-    if clusterer is not None and not isinstance(clusterer, KClusterer):
+    if clusterer is not None and not isinstance(clusterer, Clusterer):
         raise TypeError(f"'clusterer' must implement fit_predict, get_params and set_params, got {clusterer!r}")
-    mixture = GaussianMixture() if clusterer is None else clone(clusterer)
-    params = mixture.get_params()
+    model = GaussianMixture() if clusterer is None else clone(clusterer)
+    params = model.get_params()
     k_param = next((name for name in _K_PARAMS if name in params), None)
-    if k_param is None:
-        raise TypeError(
-            f"{type(mixture).__name__} takes neither 'n_components' nor 'n_clusters' to set from 'n_clusters'"
+    sweep = n_clusters is not None and not isinstance(n_clusters, int | np.integer)
+    if not sweep and (max_runs, convergence_tol, store_labels) != (10, 1e-2, False):
+        warnings.warn(
+            "'max_runs', 'convergence_tol' and 'store_labels' only apply to a sweep; pass a tuple or a "
+            "sequence as 'n_clusters' to select K",
+            UserWarning,
+            stacklevel=2,
         )
     fit: Clusterer
-    if isinstance(n_clusters, int | np.integer):
-        if (max_runs, convergence_tol, store_labels) != (10, 1e-2, False):
-            warnings.warn(
-                "'max_runs', 'convergence_tol' and 'store_labels' only apply to a sweep; pass a tuple or a "
-                "sequence as 'n_clusters' to select K",
-                UserWarning,
-                stacklevel=2,
+    if k_param is None:
+        if n_clusters is not None:
+            raise TypeError(
+                f"{type(model).__name__} takes neither 'n_components' nor 'n_clusters', so 'n_clusters' must stay None"
             )
-        fit = mixture.set_params(**{k_param: int(n_clusters)})
-    else:
+        fit = model
+    elif sweep:
         fit = AutoKClusterer(
             n_clusters=n_clusters,
-            clusterer=mixture,
+            clusterer=model,
             max_runs=max_runs,
             convergence_tol=convergence_tol,
             store_labels=store_labels,
             uns_key=f"{key_added}_autok",
         )
+    else:
+        fit = model.set_params(**{k_param: 10 if n_clusters is None else int(n_clusters)})
     clusterers = {key_added: fit}
 
     return calculate_niche_custom(
