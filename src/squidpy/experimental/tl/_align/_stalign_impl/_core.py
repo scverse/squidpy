@@ -304,7 +304,7 @@ def _lddmm_loss(
     points_target: jax.Array,
     sigmaM: float,
     sigmaR: float,
-    sigmaP: float,
+    sigmaP: float | None,
 ) -> tuple[jax.Array, tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]]:
     affine = _to_affine(linear, translation)
     source_grid = transform_grid_row_col(x_target, xv, velocity, affine, direction="backward")
