@@ -57,7 +57,6 @@ def test_spatial_autocorr_reproducibility(dummy_adata: AnnData, n_jobs: int, mod
     rng = np.random.RandomState(42)
     spatial_autocorr(dummy_adata, mode=mode)
     dummy_adata.var["highly_variable"] = rng.choice([True, False], size=dummy_adata.var_names.shape)
-    # seed will work only when multiprocessing/loky
     df_1 = spatial_autocorr(dummy_adata, mode=mode, copy=True, n_jobs=n_jobs, rng=np.random.default_rng(42), n_perms=50)
     df_2 = spatial_autocorr(dummy_adata, mode=mode, copy=True, n_jobs=n_jobs, rng=np.random.default_rng(42), n_perms=50)
 
