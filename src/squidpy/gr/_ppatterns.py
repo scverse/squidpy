@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from numba import njit, prange
+from numba_progress import ProgressBar
 from scanpy import logging as logg
 from scanpy.metrics import gearys_c, morans_i
 from scipy import stats
@@ -473,18 +474,15 @@ def _score_perms(
     def fill(i: int, perms: NDArrayA, lo: int) -> None:
         perms[i] = rngs[lo + i].permutation(n_cells)
 
-    for lo in range(0, n_perms, block):
-        perms = buffer[: min(block, n_perms - lo)]
-        # drained before the feature map starts, so no worker reads `perms` while it is filled
-        thread_map(partial(fill, perms=perms, lo=lo), range(len(perms)), n_jobs=n_jobs)
-        # each feature belongs to one worker, so the writes in `run_feature` never collide
-        thread_map(
-            partial(run_feature, perms=perms),
-            range(n_features),
-            n_jobs=pool_workers,
-            show_progress_bar=show_progress_bar,
-            unit="feature",
-        )
+    n_blocks = -(-n_perms // block)
+    # one bar over every block: each block revisits every feature
+    with ProgressBar(total=n_blocks * n_features, unit="feature", disable=not show_progress_bar) as pbar:
+        for lo in range(0, n_perms, block):
+            perms = buffer[: min(block, n_perms - lo)]
+            # drained before the feature map starts, so no worker reads `perms` while it is filled
+            thread_map(partial(fill, perms=perms, lo=lo), range(len(perms)), n_jobs=n_jobs)
+            # each feature belongs to one worker, so the writes in `run_feature` never collide
+            thread_map(partial(run_feature, perms=perms), range(n_features), n_jobs=pool_workers, progress_bar=pbar)
     # Constant features never ran, so they keep scanpy's `nan` rather than a zero mean/variance.
     ran = ~np.isnan(score)
     mean_shift = np.where(ran, s1 / n_perms, np.nan)

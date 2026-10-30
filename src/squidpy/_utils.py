@@ -275,6 +275,7 @@ def thread_map(
     n_jobs: int = 1,
     show_progress_bar: bool = False,
     unit: str = "item",
+    progress_bar: ProgressBar | None = None,
 ) -> list[Any]:
     """Map *fn* over *items* using a thread pool with an optional progress bar.
 
@@ -291,6 +292,9 @@ def thread_map(
         Whether to display a ``numba_progress`` progress bar.
     unit
         Label shown next to the progress counter.
+    progress_bar
+        An open bar to advance by one per item instead of a new one, so that several calls share
+        a bar; ``show_progress_bar`` and ``unit`` are then ignored.
 
     Returns
     -------
@@ -317,6 +321,8 @@ def thread_map(
         with ThreadPoolExecutor(max_workers=n_jobs) as pool:
             return _consume(pool.map(fn, items))
 
+    if progress_bar is not None:
+        return _run(progress_bar)
     if show_progress_bar:
         from numba_progress import ProgressBar
 
