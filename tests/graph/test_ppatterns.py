@@ -185,40 +185,6 @@ def test_spatial_autocorr_csc_connectivities(dummy_adata: AnnData, mode: str):
     np.testing.assert_array_equal(csc.obsp[key].toarray(), before.toarray())
 
 
-def test_spatial_autocorr_v183_positional_backend(dummy_adata: AnnData):
-    """A v1.8.3 positional call through ``backend`` binds every value and warns about ``backend``.
-
-    Delete this together with the ``backend`` shim. The positional signature it pins only exists
-    because `@deprecated_params` keeps accepting `backend` in its v1.8.3 slot; once that is dropped
-    for 1.10.0 there is no positional form left to protect and the call below starts raising.
-    """
-    kw = {"mode": "moran", "n_perms": 20, "rng": 0, "copy": True, "n_jobs": 1, "show_progress_bar": False}
-    expected = spatial_autocorr(dummy_adata, **kw)
-    args = (
-        "spatial_connectivities",
-        None,
-        "moran",
-        True,
-        20,
-        False,
-        "fdr_bh",
-        "X",
-        None,
-        0,
-        False,
-        True,
-        1,
-        "loky",
-        False,
-    )
-    with pytest.warns(FutureWarning) as record:
-        got = spatial_autocorr(dummy_adata, *args)
-    messages = [str(w.message) for w in record]
-    assert any("`backend`" in m for m in messages)
-    assert any("`seed`" in m for m in messages)
-    assert_frame_equal(got, expected)
-
-
 @pytest.mark.parametrize("mode", ["moran", "geary"])
 def test_spatial_autocorr_var_norm_formula(dummy_adata: AnnData, mode: str):
     """Analytic ``var_norm`` must use the variance matching the chosen statistic.
