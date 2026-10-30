@@ -306,24 +306,10 @@ def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
     perms: NDArrayA,
     moran: bool,
 ) -> tuple[float, NDArrayA]:
-    """Observed score of one feature, and its scores over the row-permuted graph, one per row of ``perms``.
+    """Observed score of one feature and its score under each permutation in ``perms``.
 
-    The observed score is the unpermuted case of the same arithmetic, so a permutation that leaves
-    the score unchanged ties it exactly.
-
-    Both statistics sum, over the rows of ``g[perm, :]``, a per-row quantity that depends on the
-    permutation only through *which* row is visited, so those quantities are accumulated once per
-    row of the unpermuted graph rather than re-derived for every permutation.
-
-    ``nz`` lists the cells where this feature is non-zero. Both statistics split into a term that
-    only touches those cells and a term that is permutation-invariant (``sum(perm)`` over a bijection
-    is ``sum``), so the per-permutation loop costs ``O(len(nz))`` rather than ``O(n_cells)``. Pass
-    ``arange(n)`` for a dense feature.
-
-    ``xv`` must already be :class:`numpy.float64`, and ``tdat`` the float64 graph weights,
-    matching the casts :mod:`scanpy` applies before its own kernels.
-
-    Serial and ``nogil``: `_score_perms` runs it on many features at once from a thread pool.
+    ``nz``: the feature's non-zero cells (``arange(n)`` if dense); ``xv``: their values as float64;
+    ``tdat``: float64 weights of the transposed graph.
     """
     n_perms, n = perms.shape
     out = np.empty(n_perms, dtype=np.float64)
@@ -422,12 +408,7 @@ def _score_perms(
     working_memory: int | str | None,
     show_progress_bar: bool,
 ) -> tuple[NDArrayA, dict[str, Any]]:
-    """Observed scores ``(n_features,)`` and the permutation accumulators `_p_value_calc` needs.
-
-    The permutation scores are only ever reduced along the permutation axis, so the
-    ``(n_perms, n_features)`` matrix is never materialized: a tally, plus sums of the scores
-    shifted by the observed one, carry the same information in ``O(n_features)``.
-    """
+    """Observed scores ``(n_features,)`` and the permutation accumulators `_p_value_calc` needs."""
     n_cells = g.shape[0]
     # Match the casts scanpy applies to its own inputs, so the kernel sees the same numbers.
     g = g.astype(np.float64, copy=False)
