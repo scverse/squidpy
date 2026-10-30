@@ -26,8 +26,8 @@ __all__ = ["cluster_auto_k"]
 def cluster_auto_k(
     data: AnnData | SpatialData,
     *,
+    use_rep: str,
     n_clusters: tuple[int, int] | Sequence[int] = (2, 10),
-    use_rep: str | None = None,
     max_runs: int = 10,
     convergence_tol: float = 1e-2,
     clusterer: KClusterer | None = None,
@@ -37,7 +37,7 @@ def cluster_auto_k(
     copy: bool = False,
     table_key: str | None = None,
 ) -> AnnData | None:
-    """Select the number of clusters (K) of a Gaussian mixture by clustering stability.
+    """Select the number of clusters (K) by clustering stability.
 
     Every candidate K is fitted ``max_runs`` times, and each K is scored by how similar its
     labeling is to the labeling of the adjacent K across runs (Fowlkes-Mallows). The most
@@ -49,14 +49,15 @@ def cluster_auto_k(
     Parameters
     ----------
     %(adata)s
+    use_rep
+        Key in :attr:`anndata.AnnData.obsm` holding the representation to cluster, such as the
+        embedding :func:`~squidpy.gr.calculate_niche_cellcharter` stores, or ``'X'`` for
+        :attr:`~anndata.AnnData.X`.
     n_clusters
         Numbers of clusters to select from: a ``(min, max)`` tuple for every K in that range,
         or a sequence of K values, which need not be consecutive. As in CellCharter, each K
         is scored by its agreement with K-1 and K+1, so those are fitted too. K < 2 cannot
         be scored and is dropped with a warning.
-    use_rep
-        Key in ``adata.obsm`` holding the representation to cluster. If ``None``, uses
-        ``adata.X``.
     max_runs
         Maximum number of repetitions per candidate K. Must be at least 2, since a single
         run leaves stability undefined.
@@ -90,11 +91,12 @@ def cluster_auto_k(
           plus one ``['{key_added}_k{K}']`` per fitted K if ``store_labels``. Categories are
           ``'0'`` to ``'K-1'``, including any component left empty.
         - :attr:`anndata.AnnData.uns` ``['{key_added}']`` - a dict with the selected
-          ``best_k``, the per-K diagnostics ``table``, the full ``stability`` matrix,
-          ``n_runs`` and ``converged``.
+          ``best_k``, the per-K diagnostics ``table``, the raw ``stability`` values as a
+          DataFrame indexed by the scored K, ``n_runs`` and ``converged``.
 
     To select the number of niches, run this on the embedding
-    :func:`~squidpy.gr.calculate_niche_cellcharter` stores, via ``use_rep``.
+    :func:`~squidpy.gr.calculate_niche_cellcharter` stores, via ``use_rep``. With a
+    ``cluster_mask`` there, pass the same subset here, e.g. ``adata[mask]``.
 
     Notes
     -----
@@ -105,17 +107,17 @@ def cluster_auto_k(
     assert_isinstance(copy, bool, name="copy")
     orig_adata = extract_adata_if_sdata(data, table_key=table_key)
 
-    if use_rep is not None:
-        assert_isinstance(use_rep, str, name="use_rep")
+    assert_isinstance(use_rep, str, name="use_rep")
+    if use_rep != "X":
         assert_key_in_adata(orig_adata, use_rep, attr="obsm")
 
     assert_isinstance(max_runs, int, name="max_runs")
     assert_isinstance(convergence_tol, (float, int), name="convergence_tol")
 
     adata = orig_adata.copy() if copy else orig_adata
-    X = adata.obsm[use_rep] if use_rep is not None else adata.X
+    X = adata.X if use_rep == "X" else adata.obsm[use_rep]
     if X is None:
-        raise ValueError("'adata.X' is None. Pass a representation via 'use_rep'.")
+        raise ValueError("'adata.X' is None. Pass a representation in 'adata.obsm' via 'use_rep'.")
     if clusterer is None:
         clusterer = GaussianMixture()
     if issparse(X) and isinstance(clusterer, GaussianMixture):
@@ -151,6 +153,8 @@ def cluster_auto_k(
             adata, attr="obs", key=column, data=pd.Series(labels, index=adata.obs_names), prefix=column == key_added
         )
     uns = {key: value for key, value in result._asdict().items() if key != "labels"}  # labels are in obs
+    # one column per run comparison; string names, as h5ad stores them
+    uns["stability"] = pd.DataFrame(result.stability, index=pd.Index(scored, name="k")).rename(columns=str)
     _save_data(adata, attr="uns", key=key_added, data=uns)
 
     return adata if copy else None

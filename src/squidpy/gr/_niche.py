@@ -685,17 +685,17 @@ def calculate_niche_cellcharter(
     %(niche_spatial_conn_key)s
     n_clusters
         Number of clusters, and therefore the number of niche labels produced per library
-        or dataset. ``None`` means 10. To select it by stability as CellCharter's
-        ``ClusterAutoK`` does, run :func:`~squidpy.gr.cluster_auto_k` with
-        ``use_rep=embedding_key_added`` on the result. Must stay ``None`` for a
-        ``clusterer`` that takes no number of clusters.
+        or dataset. ``None`` keeps the K of a given ``clusterer``, and means 10 otherwise.
+        To select it by stability as CellCharter's ``ClusterAutoK`` does, run
+        :func:`~squidpy.gr.cluster_auto_k` with ``use_rep=embedding_key_added`` on the
+        result. Must stay ``None`` for a ``clusterer`` that takes no number of clusters.
     clusterer
         The :class:`~squidpy.gr.Clusterer` to fit, e.g. a
         :class:`~sklearn.mixture.GaussianMixture` with a different ``covariance_type`` or
         ``reg_covar``, or :class:`~sklearn.cluster.KMeans`. It is cloned and its
-        ``random_state`` is set from ``rng``; one with a number of clusters gets it from
-        ``n_clusters``, which for a :class:`~sklearn.mixture.BayesianGaussianMixture` is an
-        upper bound. Defaults to ``GaussianMixture()``, CellCharter's model.
+        ``random_state`` is set from ``rng``; ``n_clusters``, when given, sets its number of
+        clusters, which for a :class:`~sklearn.mixture.BayesianGaussianMixture` is an upper
+        bound. Defaults to ``GaussianMixture()``, CellCharter's model.
     n_pca_components
         Number of principal components of ``adata.X`` aggregated over the hop rings. ``None``
         uses 10, the latent width scVI defaults to, or one fewer than the smallest dimension of
@@ -752,8 +752,10 @@ def calculate_niche_cellcharter(
                 f"{type(model).__name__} takes neither 'n_components' nor 'n_clusters', so 'n_clusters' must stay None"
             )
         fit = model
-    else:
-        fit = model.set_params(**{k_param: 10 if n_clusters is None else int(n_clusters)})
+    elif n_clusters is not None:
+        fit = model.set_params(**{k_param: int(n_clusters)})
+    else:  # keep a given clusterer's own K
+        fit = model if clusterer is not None else model.set_params(**{k_param: 10})
     clusterers = {key_added: fit}
 
     return calculate_niche_custom(

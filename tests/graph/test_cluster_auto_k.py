@@ -117,7 +117,7 @@ def test_sweep_convergence():
     assert exhausted.n_runs == 3
 
 
-def test_sweep_uses_kmeans_init_but_overridable(monkeypatch):
+def test_sweep_fits_the_given_mixture(monkeypatch):
     from squidpy.gr import _autok
 
     seen: list[str] = []
@@ -129,10 +129,6 @@ def test_sweep_uses_kmeans_init_but_overridable(monkeypatch):
 
     monkeypatch.setattr(_autok, "clone", spy)
 
-    sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, rng=0)
-    assert set(seen) == {"kmeans"}
-
-    seen.clear()
     sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, clusterer=GaussianMixture(init_params="random_from_data"), rng=0)
     assert set(seen) == {"random_from_data"}
 
@@ -186,7 +182,7 @@ def test_best_k_is_the_most_stable_scored_k():
 
 def test_cluster_auto_k_on_adata():
     adata = AnnData(make_blobs())
-    assert cluster_auto_k(adata, n_clusters=(2, 4), max_runs=3, rng=0) is None
+    assert cluster_auto_k(adata, use_rep="X", n_clusters=(2, 4), max_runs=3, rng=0) is None
 
     diagnostics = adata.uns["cluster_auto_k"]
     assert list(diagnostics["table"].index) == [1, 2, 3, 4, 5]
@@ -209,19 +205,20 @@ def test_cluster_auto_k_keeps_empty_components_as_categories(monkeypatch):
 
     monkeypatch.setattr(_cluster_auto_k, "sweep_auto_k", sweep_leaving_k3_empty)
     adata = AnnData(make_blobs())
-    cluster_auto_k(adata, n_clusters=(2, 4), max_runs=2, rng=0)
+    cluster_auto_k(adata, use_rep="X", n_clusters=(2, 4), max_runs=2, rng=0)
     assert list(adata.obs["cluster_auto_k"].cat.categories) == ["0", "1", "2"], "as CellCharter, every K is a category"
 
 
 def test_cluster_auto_k_uns_roundtrips_h5ad(tmp_path):
     adata = AnnData(make_blobs())
-    cluster_auto_k(adata, n_clusters=(2, 4), max_runs=2, rng=0)
+    cluster_auto_k(adata, use_rep="X", n_clusters=(2, 4), max_runs=2, rng=0)
     adata.write_h5ad(tmp_path / "autok.h5ad")
     original, reloaded = adata.uns["cluster_auto_k"], read_h5ad(tmp_path / "autok.h5ad").uns["cluster_auto_k"]
 
     assert set(reloaded) == {"table", "stability", "best_k", "n_runs", "converged"}
     assert_frame_equal(reloaded["table"], original["table"])
-    np.testing.assert_allclose(reloaded["stability"], original["stability"])
+    assert_frame_equal(reloaded["stability"], original["stability"])
+    assert list(original["stability"].index) == [2, 3, 4], "rows are the scored K"
     assert (reloaded["best_k"], reloaded["n_runs"], reloaded["converged"]) == (
         original["best_k"],
         original["n_runs"],
@@ -231,7 +228,7 @@ def test_cluster_auto_k_uns_roundtrips_h5ad(tmp_path):
 
 def test_cluster_auto_k_copy():
     adata = AnnData(make_blobs())
-    out = cluster_auto_k(adata, n_clusters=(2, 4), max_runs=3, rng=0, copy=True)
+    out = cluster_auto_k(adata, use_rep="X", n_clusters=(2, 4), max_runs=3, rng=0, copy=True)
 
     assert list(out.obs.columns) == ["cluster_auto_k"]
     assert "cluster_auto_k" in out.uns
@@ -255,12 +252,12 @@ def test_cluster_auto_k_rejects_a_missing_representation():
 def test_cluster_auto_k_rejects_sparse_input():
     adata = AnnData(csr_matrix(make_blobs()))
     with pytest.raises(TypeError, match=r"does not support sparse input"):
-        cluster_auto_k(adata, n_clusters=(2, 4), max_runs=2, rng=0)
+        cluster_auto_k(adata, use_rep="X", n_clusters=(2, 4), max_runs=2, rng=0)
 
 
 def test_cluster_auto_k_store_labels_adds_every_fitted_k():
     adata = AnnData(make_blobs())
-    cluster_auto_k(adata, n_clusters=(2, 3), max_runs=2, rng=0, store_labels=True)
+    cluster_auto_k(adata, use_rep="X", n_clusters=(2, 3), max_runs=2, rng=0, store_labels=True)
 
     fitted = list(adata.uns["cluster_auto_k"]["table"].index)
     assert list(adata.obs.columns) == ["cluster_auto_k", *(f"cluster_auto_k_k{k}" for k in fitted)]
@@ -273,7 +270,7 @@ def test_cluster_auto_k_store_labels_adds_every_fitted_k():
 
 def test_cluster_auto_k_honours_key_added():
     adata = AnnData(make_blobs())
-    cluster_auto_k(adata, n_clusters=(2, 3), max_runs=2, rng=0, key_added="sweep")
+    cluster_auto_k(adata, use_rep="X", n_clusters=(2, 3), max_runs=2, rng=0, key_added="sweep")
     assert list(adata.obs.columns) == ["sweep"]
     assert "sweep" in adata.uns
 
@@ -283,8 +280,8 @@ def test_cluster_auto_k_takes_spatialdata():
     from spatialdata.models import TableModel
 
     sdata = SpatialData(tables={"table": TableModel.parse(AnnData(make_blobs()))})
-    cluster_auto_k(sdata, n_clusters=(2, 4), max_runs=2, rng=0, table_key="table")
-    expected = cluster_auto_k(AnnData(make_blobs()), n_clusters=(2, 4), max_runs=2, rng=0, copy=True)
+    cluster_auto_k(sdata, use_rep="X", n_clusters=(2, 4), max_runs=2, rng=0, table_key="table")
+    expected = cluster_auto_k(AnnData(make_blobs()), use_rep="X", n_clusters=(2, 4), max_runs=2, rng=0, copy=True)
     np.testing.assert_array_equal(sdata.tables["table"].obs["cluster_auto_k"], expected.obs["cluster_auto_k"])
 
 
@@ -293,9 +290,16 @@ class _NoiseLabeler(KMeans):
         return np.full(len(X), -1)
 
 
-def test_sweep_rejects_negative_labels():
-    with pytest.raises(ValueError, match=r"returned negative labels"):
+class _OneBasedLabeler(KMeans):
+    def predict(self, X, sample_weight=None):
+        return super().predict(X) + 1
+
+
+def test_sweep_rejects_labels_outside_range():
+    with pytest.raises(ValueError, match=r"returned labels outside 0\.\.\d+"):
         sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, clusterer=_NoiseLabeler(n_init=1), rng=0)
+    with pytest.raises(ValueError, match=r"returned labels outside 0\.\.\d+"):
+        sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, clusterer=_OneBasedLabeler(n_init=1), rng=0)
 
 
 # parity with the reference implementation
@@ -330,7 +334,7 @@ def test_expand_n_clusters_matches_cellcharter(n_clusters):
 def test_cluster_auto_k_scores_every_listed_k():
     """Non-consecutive K values are each scored against K-1 and K+1, as in CellCharter."""
     adata = AnnData(make_blobs())
-    cluster_auto_k(adata, n_clusters=[2, 5], max_runs=2, rng=0)
+    cluster_auto_k(adata, use_rep="X", n_clusters=[2, 5], max_runs=2, rng=0)
     table = adata.uns["cluster_auto_k"]["table"]
     assert list(table.index) == [1, 2, 3, 4, 5, 6]
     assert table["stability_mean"].notna().tolist() == [False, True, False, False, True, False]
@@ -376,7 +380,9 @@ def test_seed_is_keyed_by_run_and_k_not_by_position():
 def test_cluster_auto_k_takes_a_clusterer():
     """Any KClusterer, not only the default mixture."""
     adata = AnnData(make_blobs())
-    cluster_auto_k(adata, n_clusters=(2, 4), clusterer=KMeans(n_init=1), max_runs=3, rng=0, key_added="kmeans_k")
+    cluster_auto_k(
+        adata, use_rep="X", n_clusters=(2, 4), clusterer=KMeans(n_init=1), max_runs=3, rng=0, key_added="kmeans_k"
+    )
 
     assert adata.obs["kmeans_k"].notna().all()
     assert adata.uns["kmeans_k"]["best_k"] in scored(adata.uns["kmeans_k"]["table"])
@@ -385,11 +391,15 @@ def test_cluster_auto_k_takes_a_clusterer():
 def test_cluster_auto_k_rejects_a_clusterer_that_cannot_be_swept():
     """A clusterer without a seed gives one labeling per K however many runs, so it is refused."""
     with pytest.raises(ValueError, match=r"AgglomerativeClustering takes no 'random_state'"):
-        cluster_auto_k(AnnData(make_blobs()), n_clusters=(2, 4), clusterer=AgglomerativeClustering(), rng=0)
+        cluster_auto_k(
+            AnnData(make_blobs()), use_rep="X", n_clusters=(2, 4), clusterer=AgglomerativeClustering(), rng=0
+        )
 
 
 def test_cluster_auto_k_takes_a_sparse_representation_with_a_clusterer():
     """The dense-only guard is about the default mixture, not about every clusterer."""
     adata = AnnData(csr_matrix(make_blobs()))
-    cluster_auto_k(adata, n_clusters=(2, 4), clusterer=KMeans(n_init=1), max_runs=3, rng=0, key_added="sparse_k")
+    cluster_auto_k(
+        adata, use_rep="X", n_clusters=(2, 4), clusterer=KMeans(n_init=1), max_runs=3, rng=0, key_added="sparse_k"
+    )
     assert adata.obs["sparse_k"].notna().all()

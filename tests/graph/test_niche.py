@@ -1080,7 +1080,7 @@ def test_niche_cellcharter_takes_a_mixture(dummy_adata2: AnnData):
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
     mixture = GaussianMixture(covariance_type="diag")
     calculate_niche_cellcharter(dummy_adata2, distance=2, rng=0, n_clusters=3, clusterer=mixture)
-    assert dummy_adata2.obs["cellcharter_niche"].nunique() <= 3
+    assert dummy_adata2.obs["cellcharter_niche"].nunique() == 3
     assert mixture.get_params()["n_components"] == 1, "the mixture passed in is cloned, not set"
 
 
@@ -1090,6 +1090,14 @@ def test_niche_cellcharter_sets_k_on_a_non_mixture(dummy_adata2: AnnData):
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
     calculate_niche_cellcharter(dummy_adata2, distance=2, rng=0, n_clusters=3, clusterer=KMeans(n_init=1))
     assert dummy_adata2.obs["cellcharter_niche"].nunique() == 3, "KMeans spells K 'n_clusters'"
+
+
+def test_niche_cellcharter_keeps_a_given_clusterers_k(dummy_adata2: AnnData):
+    from sklearn.cluster import KMeans
+
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    calculate_niche_cellcharter(dummy_adata2, distance=2, rng=0, clusterer=KMeans(n_clusters=2, n_init=1))
+    assert dummy_adata2.obs["cellcharter_niche"].nunique() == 2, "n_clusters=None keeps the clusterer's own K"
 
 
 def test_niche_cellcharter_takes_a_clusterer_without_k(dummy_adata2: AnnData):
@@ -1114,6 +1122,6 @@ def test_niche_cellcharter_embedding_feeds_cluster_auto_k():
 
     adata = _tiny(n=80)
     calculate_niche_cellcharter(adata, distance=2, rng=0)
-    cluster_auto_k(adata, n_clusters=(2, 3), use_rep="niche_embedding", max_runs=2, rng=0, key_added="niche_k")
-    assert adata.uns["niche_k"]["best_k"] in {2, 3}
-    assert adata.obs["niche_k"].notna().all()
+    cluster_auto_k(adata, use_rep="niche_embedding", n_clusters=(2, 3), max_runs=2, rng=0, key_added="niche_k")
+    assert list(adata.uns["niche_k"]["table"].index) == [1, 2, 3, 4]
+    assert len(adata.obs["niche_k"].cat.categories) == adata.uns["niche_k"]["best_k"]

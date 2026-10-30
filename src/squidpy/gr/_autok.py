@@ -1,4 +1,4 @@
-"""Stability-based selection of the number of clusters (K) for a Gaussian mixture.
+"""Stability-based selection of the number of clusters (K).
 
 Reimplements CellCharter's ``ClusterAutoK`` (https://github.com/CSOgroup/cellcharter).
 
@@ -126,7 +126,7 @@ def _stability_frame(n_clusters: Sequence[int], interior: Sequence[int], stabili
 def check_k_clusterer(clusterer: KClusterer) -> str:
     """Name of *clusterer*'s number-of-clusters parameter, rejecting what cannot be swept."""
     if not isinstance(clusterer, KClusterer):
-        raise ValueError(
+        raise TypeError(
             f"{type(clusterer).__name__} is not a clusterer squidpy can re-fit: that needs "
             "'fit_predict' to assign one label per observation, plus 'get_params' and "
             "'set_params' to be re-fitted with a new number of clusters and seed"
@@ -164,10 +164,8 @@ def _fit_once(clusterer: KClusterer, k_param: str, X: Array, k: int, random_stat
         ) from err
     # every run's labeling is kept for the whole sweep, so store them narrow
     labels = np.asarray(labels)
-    if labels.min() < 0:  # e.g. -1 for noise, which uint32 would silently wrap around
-        raise ValueError(
-            f"{type(est).__name__} returned negative labels at K={k}; the sweep needs one cluster per observation"
-        )
+    if labels.min() < 0 or labels.max() >= k:  # e.g. -1 for noise, or labels counted from 1
+        raise ValueError(f"{type(est).__name__} returned labels outside 0..{k - 1} at K={k}")
     labels = labels.astype(np.uint32, copy=False)
     # only picks which run's labeling is kept per K: negative log-likelihood for a mixture,
     # inertia for KMeans, NaN (keep the first run) for clusterers without `score`
