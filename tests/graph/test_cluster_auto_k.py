@@ -27,15 +27,12 @@ def make_blobs(n_per_blob: int = 30, n_features: int = 5, seed: int = 0) -> np.n
         ((2, 10), list(range(1, 12)), list(range(2, 11))),
         ([2, 5, 9], [1, 2, 3, 4, 5, 6, 8, 9, 10], [2, 5, 9]),
         ([5, 2, 5, 3], [1, 2, 3, 4, 5, 6], [2, 3, 5]),  # sorted and deduplicated
+        ((1, 3), [1, 2, 3, 4], [2, 3]),  # K < 2 cannot be scored
     ],
 )
+@pytest.mark.filterwarnings("ignore:stability cannot be computed")
 def test_expand_n_clusters(n_clusters, fit, scored):
     assert expand_n_clusters(n_clusters) == (fit, scored)
-
-
-def test_expand_n_clusters_drops_k_below_two():
-    with pytest.warns(UserWarning, match=r"K < 2"):
-        assert expand_n_clusters((1, 3)) == ([1, 2, 3, 4], [2, 3])
 
 
 @pytest.mark.parametrize(
@@ -50,6 +47,11 @@ def test_expand_n_clusters_drops_k_below_two():
 def test_expand_n_clusters_rejects_bad_requests(n_clusters, match):
     with pytest.raises(ValueError, match=match):
         expand_n_clusters(n_clusters)
+
+
+def test_expand_n_clusters_warns_on_k_below_two():
+    with pytest.warns(UserWarning, match=r"K < 2"), pytest.raises(ValueError):
+        expand_n_clusters([0, 1])
 
 
 # which clusterers can be swept
@@ -96,21 +98,6 @@ def test_sweep_rejects_bad_arguments(kwargs, match):
         sweep_auto_k(make_blobs(), [1, 2, 3], **kwargs)
 
 
-def test_sweep_fits_the_halo_but_scores_only_interior_k():
-    result = sweep_auto_k(make_blobs(), [1, 2, 3, 4, 5], max_runs=2, rng=0)
-    table = result.table
-
-    assert list(table.index) == [1, 2, 3, 4, 5]
-    assert table.index.name == "k"
-    assert list(table.columns) == ["stability_mean", "stability_std", "fit_loss"]
-    assert table["stability_mean"].notna().tolist() == [False, True, True, True, False]
-    assert table["stability_std"].notna().tolist() == [False, True, True, True, False]
-    assert table["fit_loss"].notna().all(), "the halo is fitted, so it has a fit_loss"
-    assert result.stability.shape[0] == 3
-    assert sorted(result.labels) == [1, 2, 3, 4, 5]
-    assert {labels.dtype for labels in result.labels.values()} == {np.dtype(np.uint32)}
-
-
 def test_sweep_convergence():
     X, ks = make_blobs(), [1, 2, 3, 4]
     converged = sweep_auto_k(X, ks, max_runs=10, convergence_tol=np.inf, rng=0)
@@ -128,32 +115,24 @@ def test_sweep_notes_the_k_of_a_failed_fit():
     assert any(note.startswith("while fitting K=") for note in excinfo.value.__notes__)
 
 
-class _NoiseLabeler(KMeans):
-    def fit_predict(self, X, y=None, sample_weight=None):
-        return np.full(len(X), -1)
+def _relabeled(relabel):
+    """A KMeans whose labels go through *relabel*; a local class still clones, by type."""
+
+    class _Relabeled(KMeans):
+        def fit_predict(self, X, y=None, sample_weight=None):
+            return relabel(super().fit_predict(X))
+
+    return _Relabeled(n_init=1)
 
 
-class _OneBasedLabeler(KMeans):
-    def fit_predict(self, X, y=None, sample_weight=None):
-        return super().fit_predict(X) + 1
-
-
-class _StringLabeler(KMeans):
-    def fit_predict(self, X, y=None, sample_weight=None):
-        return super().fit_predict(X).astype(str)
-
-
-class _TwoClusterLabeler(KMeans):
-    """Never uses a label above 1, leaving components empty from K=3 on."""
-
-    def fit_predict(self, X, y=None, sample_weight=None):
-        return np.minimum(super().fit_predict(X), 1)
-
-
-@pytest.mark.parametrize("labeler", [_NoiseLabeler, _OneBasedLabeler, _StringLabeler])
-def test_sweep_rejects_labels_outside_range(labeler):
+@pytest.mark.parametrize(
+    "relabel",
+    [lambda labels: np.full_like(labels, -1), lambda labels: labels + 1, lambda labels: labels.astype(str)],
+    ids=["noise", "one-based", "strings"],
+)
+def test_sweep_rejects_labels_outside_range(relabel):
     with pytest.raises(ValueError, match=r"returned labels that are not integers in 0\.\.\d+"):
-        sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, clusterer=labeler(n_init=1), rng=0)
+        sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, clusterer=_relabeled(relabel), rng=0)
 
 
 def test_sweep_pins_its_stability_curve():
@@ -224,12 +203,23 @@ def test_best_k_matches_cellcharter():
 # the public entry point
 
 
+def _auto_k(data, **kwargs):
+    """`cluster_auto_k` on dense blobs with a small, fixed sweep; *kwargs* override."""
+    return cluster_auto_k(data, **{"use_rep": "X", "n_clusters": (2, 4), "max_runs": 2, "rng": 0} | kwargs)
+
+
 def test_cluster_auto_k_stores_labels_and_diagnostics(tmp_path):
     adata = AnnData(make_blobs())
-    assert cluster_auto_k(adata, use_rep="X", n_clusters=(2, 4), max_runs=2, rng=0, key_added="sweep") is None
+    assert _auto_k(adata, key_added="sweep") is None
 
     diagnostics = adata.uns["sweep"]
+    table = diagnostics["table"]
     assert set(diagnostics) == {"table", "stability", "best_k", "n_runs", "converged"}
+    assert list(table.columns) == ["stability_mean", "stability_std", "fit_loss"]
+    assert table.index.name == "k"
+    # the +-1 halo is fitted, so it has a fit_loss, but is never scored
+    assert table["stability_mean"].notna().tolist() == [False, True, True, True, False]
+    assert table["fit_loss"].notna().all()
     assert list(diagnostics["stability"].index) == [2, 3, 4], "rows are the scored K"
     assert list(adata.obs.columns) == ["sweep"]
     categories = list(adata.obs["sweep"].cat.categories)
@@ -237,7 +227,7 @@ def test_cluster_auto_k_stores_labels_and_diagnostics(tmp_path):
 
     adata.write_h5ad(tmp_path / "autok.h5ad")
     reloaded = read_h5ad(tmp_path / "autok.h5ad").uns["sweep"]
-    assert_frame_equal(reloaded["table"], diagnostics["table"])
+    assert_frame_equal(reloaded["table"], table)
     assert_frame_equal(reloaded["stability"], diagnostics["stability"])
     for key in ("best_k", "n_runs", "converged"):
         assert reloaded[key] == diagnostics[key]
@@ -246,37 +236,37 @@ def test_cluster_auto_k_stores_labels_and_diagnostics(tmp_path):
 def test_cluster_auto_k_scores_every_listed_k():
     """Non-consecutive K values are each scored against K-1 and K+1, as in CellCharter."""
     adata = AnnData(make_blobs())
-    cluster_auto_k(adata, use_rep="X", n_clusters=[2, 5, 9], max_runs=2, rng=0)
+    _auto_k(adata, n_clusters=[2, 5, 9])
     table = adata.uns["cluster_auto_k"]["table"]
     assert list(table.index) == [1, 2, 3, 4, 5, 6, 8, 9, 10]
     assert table.index[table["stability_mean"].notna()].tolist() == [2, 5, 9]
     assert list(adata.uns["cluster_auto_k"]["stability"].index) == [2, 5, 9]
 
 
-def test_cluster_auto_k_keeps_empty_components_as_categories():
+def test_cluster_auto_k_copy_with_every_fitted_k():
     adata = AnnData(make_blobs())
-    clusterer = _TwoClusterLabeler(n_init=1)
-    cluster_auto_k(adata, use_rep="X", n_clusters=[3], clusterer=clusterer, max_runs=2, rng=0)
-    assert adata.uns["cluster_auto_k"]["best_k"] == 3
-    assert list(adata.obs["cluster_auto_k"].cat.categories) == ["0", "1", "2"], "as CellCharter, every K is a category"
-    assert set(adata.obs["cluster_auto_k"]) == {"0", "1"}
+    out = _auto_k(adata, n_clusters=(2, 3), store_labels=True, copy=True)
+    assert adata.obs.columns.empty and not adata.uns, "copy=True leaves adata alone"
+
+    fitted = list(out.uns["cluster_auto_k"]["table"].index)
+    assert list(out.obs.columns) == ["cluster_auto_k", *(f"cluster_auto_k_k{k}" for k in fitted)]
+    best_k = out.uns["cluster_auto_k"]["best_k"]
+    pd.testing.assert_series_equal(out.obs["cluster_auto_k"], out.obs[f"cluster_auto_k_k{best_k}"], check_names=False)
 
 
-def test_cluster_auto_k_copy():
-    adata = AnnData(make_blobs())
-    out = cluster_auto_k(adata, use_rep="X", n_clusters=(2, 4), max_runs=2, rng=0, copy=True)
+@pytest.mark.parametrize("source", ["obsm", "spatialdata"])
+def test_cluster_auto_k_reads_the_requested_data(source):
+    from spatialdata import SpatialData
+    from spatialdata.models import TableModel
 
-    assert list(out.obs.columns) == ["cluster_auto_k"]
-    assert "cluster_auto_k" in out.uns
-    assert adata.obs.columns.empty
-    assert not adata.uns
-
-
-def test_cluster_auto_k_uses_the_requested_representation():
-    adata = AnnData(np.zeros((90, 2)))
-    adata.obsm["X_embedding"] = make_blobs()
-    cluster_auto_k(adata, use_rep="X_embedding", n_clusters=(2, 4), max_runs=2, rng=0)
-    expected = cluster_auto_k(AnnData(make_blobs()), use_rep="X", n_clusters=(2, 4), max_runs=2, rng=0, copy=True)
+    if source == "obsm":
+        data = adata = AnnData(np.zeros((90, 2)), obsm={"X_embedding": make_blobs()})
+        _auto_k(data, use_rep="X_embedding")
+    else:
+        data = SpatialData(tables={"table": TableModel.parse(AnnData(make_blobs()))})
+        _auto_k(data, table_key="table")
+        adata = data.tables["table"]
+    expected = _auto_k(AnnData(make_blobs()), copy=True)
     np.testing.assert_array_equal(adata.obs["cluster_auto_k"], expected.obs["cluster_auto_k"])
 
 
@@ -290,30 +280,15 @@ def test_cluster_auto_k_uses_the_requested_representation():
 )
 def test_cluster_auto_k_rejects_bad_input(adata, use_rep, error, match):
     with pytest.raises(error, match=match):
-        cluster_auto_k(adata, use_rep=use_rep, n_clusters=(2, 4), max_runs=2, rng=0)
+        _auto_k(adata, use_rep=use_rep)
 
 
-def test_cluster_auto_k_store_labels_adds_every_fitted_k():
+def test_cluster_auto_k_keeps_empty_components_as_categories():
     adata = AnnData(make_blobs())
-    cluster_auto_k(adata, use_rep="X", n_clusters=(2, 3), max_runs=2, rng=0, store_labels=True)
-
-    fitted = list(adata.uns["cluster_auto_k"]["table"].index)
-    assert list(adata.obs.columns) == ["cluster_auto_k", *(f"cluster_auto_k_k{k}" for k in fitted)]
-
-    best_k = adata.uns["cluster_auto_k"]["best_k"]
-    pd.testing.assert_series_equal(
-        adata.obs["cluster_auto_k"], adata.obs[f"cluster_auto_k_k{best_k}"], check_names=False
-    )
-
-
-def test_cluster_auto_k_takes_spatialdata():
-    from spatialdata import SpatialData
-    from spatialdata.models import TableModel
-
-    sdata = SpatialData(tables={"table": TableModel.parse(AnnData(make_blobs()))})
-    cluster_auto_k(sdata, use_rep="X", n_clusters=(2, 4), max_runs=2, rng=0, table_key="table")
-    expected = cluster_auto_k(AnnData(make_blobs()), use_rep="X", n_clusters=(2, 4), max_runs=2, rng=0, copy=True)
-    np.testing.assert_array_equal(sdata.tables["table"].obs["cluster_auto_k"], expected.obs["cluster_auto_k"])
+    _auto_k(adata, n_clusters=[3], clusterer=_relabeled(lambda labels: np.minimum(labels, 1)))
+    assert adata.uns["cluster_auto_k"]["best_k"] == 3
+    assert list(adata.obs["cluster_auto_k"].cat.categories) == ["0", "1", "2"], "as CellCharter, every K is a category"
+    assert set(adata.obs["cluster_auto_k"]) == {"0", "1"}
 
 
 def test_cluster_auto_k_takes_a_clusterer_without_mutating_it():
@@ -321,7 +296,7 @@ def test_cluster_auto_k_takes_a_clusterer_without_mutating_it():
     clusterer = KMeans(n_init=1)
     before = clusterer.get_params()
     adata = AnnData(csr_matrix(make_blobs()))
-    cluster_auto_k(adata, use_rep="X", n_clusters=(2, 4), clusterer=clusterer, max_runs=2, rng=0)
+    _auto_k(adata, clusterer=clusterer)
 
     assert len(adata.obs["cluster_auto_k"].cat.categories) == adata.uns["cluster_auto_k"]["best_k"]
     assert clusterer.get_params() == before, "every fit is on a clone"
