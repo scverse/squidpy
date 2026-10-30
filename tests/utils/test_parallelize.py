@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
+import threading
 from collections.abc import Callable
 from functools import partial
+from multiprocessing import active_children
 
 import dask.array as da
 import numba
@@ -61,6 +63,89 @@ def func(request) -> Callable:
         "dask": partial(wrap_numba_check, inner_function=dask_func),
         "vanilla": partial(wrap_numba_check, inner_function=vanilla_func),
     }[request.param]
+
+
+@pytest.fixture
+def parallelize_resources():
+    threads = set(threading.enumerate())
+    processes = set(active_children())
+    numba_threads = numba.get_num_threads()
+    yield threads, processes
+
+    # A failing regression must not leave its manager or progress thread behind.
+    for process in set(active_children()) - processes:
+        process.terminate()
+        process.join(timeout=5)
+    for thread in set(threading.enumerate()) - threads:
+        if thread.name == "ParallelizeUpdateThread":
+            thread.join(timeout=5)
+    numba.set_num_threads(numba_threads)
+
+
+@pytest.mark.parametrize("n_jobs", [1, 2])
+@pytest.mark.parametrize(
+    "error", [ValueError("Callback failed"), KeyboardInterrupt("Callback interrupted")], ids=["error", "interrupt"]
+)
+def test_parallelize_cleans_up_progress_on_error(parallelize_resources, n_jobs, error):
+    threads, processes = parallelize_resources
+
+    def callback(chunk, *, queue):
+        raise error
+
+    run = parallelize(callback, [1, 2], n_jobs=n_jobs, backend="threading", show_progress_bar=True)
+
+    with pytest.raises(type(error)) as exc_info:
+        run()
+
+    assert exc_info.value is error
+    assert not [thread for thread in set(threading.enumerate()) - threads if not thread.daemon]
+    assert not set(active_children()) - processes
+
+
+def test_parallelize_stops_progress_during_update(parallelize_resources, monkeypatch):
+    from tqdm.auto import tqdm as auto_tqdm
+    from tqdm.std import tqdm as std_tqdm
+
+    updating = threading.Event()
+    release = threading.Event()
+    bars, errors = [], []
+    original_update = std_tqdm.update
+    original_join = threading.Thread.join
+    error = ValueError("Callback failed after update")
+
+    def hold_update(bar, n=1):
+        bars.append(bar)
+        updating.set()
+        assert release.wait(10), "Progress update was not released"
+        return original_update(bar, n)
+
+    def release_update_before_join(thread, *args, **kwargs):
+        if thread.name == "ParallelizeUpdateThread":
+            release.set()
+        return original_join(thread, *args, **kwargs)
+
+    def callback(chunk, *, queue):
+        queue.put(Signal.UPDATE)
+        assert updating.wait(10), "Progress update did not start"
+        raise error
+
+    monkeypatch.setattr(std_tqdm, "update", hold_update)
+    monkeypatch.setattr(auto_tqdm, "update", hold_update)
+    monkeypatch.setattr(threading.Thread, "join", release_update_before_join)
+    monkeypatch.setattr(threading, "excepthook", lambda args: errors.append(args.exc_value))
+
+    try:
+        run = parallelize(callback, [1], n_jobs=1, backend="threading", show_progress_bar=True)
+        with pytest.raises(ValueError) as exc_info:
+            run()
+
+        assert exc_info.value is error
+        assert not errors
+        assert bars and all(bar.disable for bar in bars)
+    finally:
+        release.set()
+        for bar in bars:
+            bar.close()
 
 
 # Timeouts are also useful because some processes don't return in
