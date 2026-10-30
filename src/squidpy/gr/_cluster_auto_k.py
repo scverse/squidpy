@@ -7,15 +7,13 @@ from collections.abc import Sequence
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from scipy.sparse import issparse
-from sklearn.mixture import BayesianGaussianMixture, GaussianMixture
 from spatialdata import SpatialData
 from spatialdata._logging import logger as logg
 
 from squidpy._docs import d
 from squidpy._utils import RNGLike, SeedLike
 from squidpy._validators import assert_isinstance, assert_key_in_adata
-from squidpy.gr._autok import check_k_clusterer, expand_n_clusters, sweep_auto_k
+from squidpy.gr._autok import expand_n_clusters, sweep_auto_k
 from squidpy.gr._clusterers import KClusterer
 from squidpy.gr._utils import _save_data, extract_adata_if_sdata
 
@@ -118,20 +116,11 @@ def cluster_auto_k(
     X = orig_adata.X if use_rep == "X" else orig_adata.obsm[use_rep]
     if X is None:
         raise ValueError("'adata.X' is None. Pass a representation in 'adata.obsm' via 'use_rep'.")
-    if clusterer is None:
-        clusterer = GaussianMixture()
-    check_k_clusterer(clusterer)
-    if issparse(X) and isinstance(clusterer, GaussianMixture | BayesianGaussianMixture):
-        raise TypeError(
-            f"'{type(clusterer).__name__}' does not support sparse input. Pass a dense representation via "
-            "'use_rep', or densify with 'adata.X = adata.X.toarray()'."
-        )
 
     candidates, scored = expand_n_clusters(n_clusters)
-    adata = orig_adata.copy() if copy else orig_adata
     logg.info(
         f"Selecting the number of clusters over K={candidates} with up to {max_runs} runs each "
-        f"({len(candidates) * max_runs} {type(clusterer).__name__} fits at most)"
+        f"({len(candidates) * max_runs} fits at most)"
     )
 
     result = sweep_auto_k(
@@ -145,6 +134,8 @@ def cluster_auto_k(
     )
     logg.info(f"Selected K={result.best_k} after {result.n_runs} runs")
 
+    # copied only now, so a request the sweep rejects never pays for it
+    adata = orig_adata.copy() if copy else orig_adata
     columns = {key_added: result.best_k}
     if store_labels:
         columns |= {f"{key_added}_k{k}": k for k in result.labels}

@@ -19,12 +19,7 @@ from sklearn.metrics import fowlkes_mallows_score, mean_absolute_percentage_erro
 from sklearn.mixture import GaussianMixture
 
 from squidpy._utils import RNGLike, SeedLike, legacy_random
-from squidpy.gr._clusterers import KClusterer
-
-# The two spellings of the number-of-clusters parameter, in the order they are tried.
-# `n_clusters` first: SpectralClustering takes both, and there `n_components` is the
-# width of the spectral embedding, not the number of clusters.
-_K_PARAMS = ("n_clusters", "n_components")
+from squidpy.gr._clusterers import KClusterer, k_param
 
 
 class ClusterAutoKResult(NamedTuple):
@@ -110,23 +105,20 @@ def _score_block(
     return [score_fn(run_a[low], run_b[high]) for low, high in pairs]
 
 
-def _stability_frame(n_clusters: Sequence[int], interior: Sequence[int], stability: np.ndarray) -> pd.DataFrame:
-    """Per-K stability diagnostics indexed by K, carrying ``NaN`` on the unscored halo rows."""
+def _stability_frame(
+    n_clusters: Sequence[int], interior: Sequence[int], stability: np.ndarray, fit_loss: Mapping[int, float]
+) -> pd.DataFrame:
+    """Per-K diagnostics indexed by K, carrying ``NaN`` stability on the unscored halo rows."""
     per_k_mean = dict(zip(interior, stability.mean(axis=1), strict=True))
     per_k_std = dict(zip(interior, stability.std(axis=1), strict=True))
     return pd.DataFrame(
         {
             "stability_mean": [per_k_mean.get(k, np.nan) for k in n_clusters],
             "stability_std": [per_k_std.get(k, np.nan) for k in n_clusters],
+            "fit_loss": [fit_loss[k] for k in n_clusters],
         },
         index=pd.Index(n_clusters, name="k"),
     )
-
-
-def k_param(clusterer: KClusterer) -> str | None:
-    """Name of *clusterer*'s number-of-clusters parameter, ``None`` if it takes none."""
-    params = clusterer.get_params()
-    return next((name for name in _K_PARAMS if name in params), None)
 
 
 def check_k_clusterer(clusterer: KClusterer) -> str:
@@ -151,22 +143,14 @@ def check_k_clusterer(clusterer: KClusterer) -> str:
     return name
 
 
-def _fit_once(clusterer: KClusterer, k_param: str, X: Array, k: int, random_state: int) -> tuple[np.ndarray, float]:
+def _fit_once(clusterer: KClusterer, k_name: str, X: Array, k: int, random_state: int) -> tuple[np.ndarray, float]:
     """One run: a fresh clone of *clusterer* at ``k``, seeded by ``random_state``."""
-    est = clone(clusterer).set_params(**{k_param: k, "random_state": random_state})
+    est = clone(clusterer).set_params(**{k_name: k, "random_state": random_state})
     try:
-        # transductive clusterers only expose `fit_predict`
-        labels = est.fit(X).predict(X) if hasattr(est, "predict") else est.fit_predict(X)
-    except ValueError as err:  # a failed fit otherwise aborts the whole sweep opaquely
-        hint = (
-            " Increase the mixture's 'reg_covar' (e.g. clusterer=GaussianMixture(reg_covar=1e-4)), "
-            "pass float64 data, or request a smaller range of K values."
-            if "ill-defined empirical covariance" in str(err)
-            else ""
-        )
-        raise ValueError(
-            f"the fit at K={k} failed (K-1 and K+1 of every requested K are fitted too): {err}{hint}"
-        ) from err
+        labels = est.fit_predict(X)
+    except ValueError as err:
+        err.add_note(f"while fitting K={k} (K-1 and K+1 of every requested K are fitted too)")
+        raise
     # every run's labeling is kept for the whole sweep, so store them narrow
     labels = np.asarray(labels)
     # e.g. -1 for noise, labels counted from 1, or strings
@@ -232,7 +216,7 @@ def sweep_auto_k(
 
     if clusterer is None:
         clusterer = GaussianMixture()
-    k_param = check_k_clusterer(clusterer)
+    k_name = check_k_clusterer(clusterer)
 
     base = legacy_random(np.random.default_rng(rng))
 
@@ -256,7 +240,7 @@ def sweep_auto_k(
         run_labels: dict[int, np.ndarray] = {}
         for k in ks:
             random_state = int(np.random.SeedSequence([base, run, k]).generate_state(1)[0])
-            labels, fit_loss = _fit_once(clusterer, k_param, X, k, random_state)
+            labels, fit_loss = _fit_once(clusterer, k_name, X, k, random_state)
             run_labels[k] = labels
             if k not in best_loss or fit_loss < best_loss[k]:
                 best_loss[k], best_labels[k] = fit_loss, labels
@@ -275,8 +259,7 @@ def sweep_auto_k(
         labels_per_run.append(run_labels)
 
     stability = mirror_stability(blocks)[rows]
-    table = _stability_frame(ks, scored, stability)
-    table.insert(2, "fit_loss", [best_loss[k] for k in ks])
+    table = _stability_frame(ks, scored, stability, best_loss)
     return ClusterAutoKResult(
         table=table,
         stability=stability,

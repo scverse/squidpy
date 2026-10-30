@@ -122,33 +122,32 @@ def test_sweep_convergence():
     assert exhausted.n_runs == 3
 
 
-@pytest.mark.parametrize(
-    ("X", "clusterer", "hint"),
-    [
-        # only two distinct points, so without regularisation every covariance is singular
-        (np.repeat(np.array([[0.0, 0.0], [1.0, 1.0]]), 15, axis=0), GaussianMixture(reg_covar=0.0), True),
-        (np.zeros((2, 2)), None, False),  # fewer samples than components
-    ],
-)
-def test_sweep_explains_a_failed_fit(X, clusterer, hint):
-    with pytest.raises(ValueError, match=r"the fit at K=\d+ failed") as excinfo:
-        sweep_auto_k(X, [2, 3, 4], max_runs=2, clusterer=clusterer, rng=0)
-    assert ("clusterer=GaussianMixture(reg_covar" in str(excinfo.value)) == hint
+def test_sweep_notes_the_k_of_a_failed_fit():
+    with pytest.raises(ValueError) as excinfo:
+        sweep_auto_k(np.zeros((2, 2)), [2, 3, 4], max_runs=2, rng=0)  # fewer samples than components
+    assert any(note.startswith("while fitting K=") for note in excinfo.value.__notes__)
 
 
 class _NoiseLabeler(KMeans):
-    def predict(self, X, sample_weight=None):
+    def fit_predict(self, X, y=None, sample_weight=None):
         return np.full(len(X), -1)
 
 
 class _OneBasedLabeler(KMeans):
-    def predict(self, X, sample_weight=None):
-        return super().predict(X) + 1
+    def fit_predict(self, X, y=None, sample_weight=None):
+        return super().fit_predict(X) + 1
 
 
 class _StringLabeler(KMeans):
-    def predict(self, X, sample_weight=None):
-        return super().predict(X).astype(str)
+    def fit_predict(self, X, y=None, sample_weight=None):
+        return super().fit_predict(X).astype(str)
+
+
+class _TwoClusterLabeler(KMeans):
+    """Never uses a label above 1, leaving components empty from K=3 on."""
+
+    def fit_predict(self, X, y=None, sample_weight=None):
+        return np.minimum(super().fit_predict(X), 1)
 
 
 @pytest.mark.parametrize("labeler", [_NoiseLabeler, _OneBasedLabeler, _StringLabeler])
@@ -254,20 +253,13 @@ def test_cluster_auto_k_scores_every_listed_k():
     assert list(adata.uns["cluster_auto_k"]["stability"].index) == [2, 5, 9]
 
 
-def test_cluster_auto_k_keeps_empty_components_as_categories(monkeypatch):
-    from squidpy.gr import _cluster_auto_k
-
-    real = _cluster_auto_k.sweep_auto_k
-
-    def sweep_leaving_k3_empty(*args, **kwargs):
-        result = real(*args, **kwargs)
-        result.labels[3][:] = np.minimum(result.labels[3], 1)  # component 2 never used
-        return result._replace(best_k=3)
-
-    monkeypatch.setattr(_cluster_auto_k, "sweep_auto_k", sweep_leaving_k3_empty)
+def test_cluster_auto_k_keeps_empty_components_as_categories():
     adata = AnnData(make_blobs())
-    cluster_auto_k(adata, use_rep="X", n_clusters=(2, 4), max_runs=2, rng=0)
+    clusterer = _TwoClusterLabeler(n_init=1)
+    cluster_auto_k(adata, use_rep="X", n_clusters=[3], clusterer=clusterer, max_runs=2, rng=0)
+    assert adata.uns["cluster_auto_k"]["best_k"] == 3
     assert list(adata.obs["cluster_auto_k"].cat.categories) == ["0", "1", "2"], "as CellCharter, every K is a category"
+    assert set(adata.obs["cluster_auto_k"]) == {"0", "1"}
 
 
 def test_cluster_auto_k_copy():
@@ -292,7 +284,7 @@ def test_cluster_auto_k_uses_the_requested_representation():
     ("adata", "use_rep", "error", "match"),
     [
         (AnnData(make_blobs()), "not_there", KeyError, r"not_there"),
-        (AnnData(csr_matrix(make_blobs())), "X", TypeError, r"does not support sparse input"),
+        (AnnData(csr_matrix(make_blobs())), "X", TypeError, r"dense data is required"),
         (AnnData(obs=pd.DataFrame(index=[str(i) for i in range(90)])), "X", ValueError, r"'adata.X' is None"),
     ],
 )
@@ -325,7 +317,7 @@ def test_cluster_auto_k_takes_spatialdata():
 
 
 def test_cluster_auto_k_takes_a_clusterer_without_mutating_it():
-    """A sparse representation is fine for KMeans: the dense-only guard is about mixtures."""
+    """KMeans also takes a sparse representation, which the default mixture does not."""
     clusterer = KMeans(n_init=1)
     before = clusterer.get_params()
     adata = AnnData(csr_matrix(make_blobs()))
