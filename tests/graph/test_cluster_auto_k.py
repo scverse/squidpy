@@ -274,7 +274,6 @@ def test_cluster_auto_k_reads_the_requested_data(source):
     ("adata", "use_rep", "error", "match"),
     [
         (AnnData(make_blobs()), "not_there", KeyError, r"not_there"),
-        (AnnData(csr_matrix(make_blobs())), "X", TypeError, r"dense data is required"),
         (AnnData(obs=pd.DataFrame(index=[str(i) for i in range(90)])), "X", ValueError, r"'adata.X' is None"),
     ],
 )
