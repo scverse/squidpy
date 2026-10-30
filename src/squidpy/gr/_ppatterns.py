@@ -111,7 +111,7 @@ def spatial_autocorr(
 
     %(rng_versionchanged)s
 
-    .. versionchanged:: 1.9.0
+    .. versionchanged:: 1.8.5
         Permutations run on a thread pool, and ``n_jobs = None`` now uses all ``NUMBA_NUM_THREADS``
         threads instead of one process. Pass ``n_jobs = 1`` for the old serial default.
 
