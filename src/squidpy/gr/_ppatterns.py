@@ -391,12 +391,6 @@ def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
     return observed, out
 
 
-def _chunks(n: int, workers: int) -> list[range]:
-    """Contiguous index runs over ``n``, ~4 per worker so the pool can balance uneven items."""
-    step = max(1, -(-n // (workers * 4)))
-    return [range(s, min(s + step, n)) for s in range(0, n, step)]
-
-
 def _score_perms(
     g: spmatrix,
     vals: NDArrayA | spmatrix,
@@ -476,27 +470,20 @@ def _score_perms(
         s1[m] += shifted.sum()
         s2[m] += (shifted * shifted).sum()
 
-    def fill(chunk: range, perms: NDArrayA, lo: int) -> None:
-        for i in chunk:
-            perms[i] = rngs[lo + i].permutation(n_cells)
-
-    # Each worker takes a contiguous run of features rather than one at a time; a single feature is
-    # short enough that per-item dispatch would cost about as much as the work. Each `m` belongs to
-    # one worker, so the writes in `run_feature` never collide.
-    def run_chunk(chunk: range, perms: NDArrayA) -> None:
-        for m in chunk:
-            run_feature(m, perms)
+    def fill(i: int, perms: NDArrayA, lo: int) -> None:
+        perms[i] = rngs[lo + i].permutation(n_cells)
 
     for lo in range(0, n_perms, block):
         perms = buffer[: min(block, n_perms - lo)]
         # drained before the feature map starts, so no worker reads `perms` while it is filled
-        thread_map(partial(fill, perms=perms, lo=lo), _chunks(len(perms), n_jobs), n_jobs=n_jobs)
+        thread_map(partial(fill, perms=perms, lo=lo), range(len(perms)), n_jobs=n_jobs)
+        # each feature belongs to one worker, so the writes in `run_feature` never collide
         thread_map(
-            partial(run_chunk, perms=perms),
-            _chunks(n_features, pool_workers),
+            partial(run_feature, perms=perms),
+            range(n_features),
             n_jobs=pool_workers,
             show_progress_bar=show_progress_bar,
-            unit="feature chunk",
+            unit="feature",
         )
     # Constant features never ran, so they keep scanpy's `nan` rather than a zero mean/variance.
     ran = ~np.isnan(score)
