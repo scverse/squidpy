@@ -474,15 +474,19 @@ def _score_perms(
     def fill(i: int, perms: NDArrayA, lo: int) -> None:
         perms[i] = rngs[lo + i].permutation(n_cells)
 
-    n_blocks = -(-n_perms // block)
-    # one bar over every block: each block revisits every feature
-    with ProgressBar(total=n_blocks * n_features, unit="feature", disable=not show_progress_bar) as pbar:
+    # one tick per permuted score (a feature under one permutation), however the permutations are blocked
+    with ProgressBar(total=n_features * n_perms, unit="score", unit_scale=True, disable=not show_progress_bar) as pbar:
+
+        def step(m: int, perms: NDArrayA) -> None:
+            run_feature(m, perms)
+            pbar.update(len(perms))  # atomic, so the workers can share the bar
+
         for lo in range(0, n_perms, block):
             perms = buffer[: min(block, n_perms - lo)]
             # drained before the feature map starts, so no worker reads `perms` while it is filled
             thread_map(partial(fill, perms=perms, lo=lo), range(len(perms)), n_jobs=n_jobs)
             # each feature belongs to one worker, so the writes in `run_feature` never collide
-            thread_map(partial(run_feature, perms=perms), range(n_features), n_jobs=pool_workers, progress_bar=pbar)
+            thread_map(partial(step, perms=perms), range(n_features), n_jobs=pool_workers)
     # Constant features never ran, so they keep scanpy's `nan` rather than a zero mean/variance.
     ran = ~np.isnan(score)
     mean_shift = np.where(ran, s1 / n_perms, np.nan)
