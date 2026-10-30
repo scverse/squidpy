@@ -8,14 +8,14 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from scipy.sparse import issparse
-from sklearn.mixture import GaussianMixture
+from sklearn.mixture import BayesianGaussianMixture, GaussianMixture
 from spatialdata import SpatialData
 from spatialdata._logging import logger as logg
 
 from squidpy._docs import d
 from squidpy._utils import RNGLike, SeedLike
 from squidpy._validators import assert_isinstance, assert_key_in_adata
-from squidpy.gr._autok import expand_n_clusters, sweep_auto_k
+from squidpy.gr._autok import check_k_clusterer, expand_n_clusters, sweep_auto_k
 from squidpy.gr._clusterers import KClusterer
 from squidpy.gr._utils import _save_data, extract_adata_if_sdata
 
@@ -96,7 +96,8 @@ def cluster_auto_k(
 
     To select the number of niches, run this on the embedding
     :func:`~squidpy.gr.calculate_niche_cellcharter` stores, via ``use_rep``. With a
-    ``cluster_mask`` there, pass the same subset here, e.g. ``adata[mask]``.
+    ``cluster_mask`` there, pass the same subset here as a copy, ``adata[mask].copy()``,
+    since results written to a view are lost.
 
     Notes
     -----
@@ -114,19 +115,20 @@ def cluster_auto_k(
     assert_isinstance(max_runs, int, name="max_runs")
     assert_isinstance(convergence_tol, (float, int), name="convergence_tol")
 
-    adata = orig_adata.copy() if copy else orig_adata
-    X = adata.X if use_rep == "X" else adata.obsm[use_rep]
+    X = orig_adata.X if use_rep == "X" else orig_adata.obsm[use_rep]
     if X is None:
         raise ValueError("'adata.X' is None. Pass a representation in 'adata.obsm' via 'use_rep'.")
     if clusterer is None:
         clusterer = GaussianMixture()
-    if issparse(X) and isinstance(clusterer, GaussianMixture):
+    check_k_clusterer(clusterer)
+    if issparse(X) and isinstance(clusterer, GaussianMixture | BayesianGaussianMixture):
         raise TypeError(
-            "'GaussianMixture' does not support sparse input. Pass a dense representation via "
+            f"'{type(clusterer).__name__}' does not support sparse input. Pass a dense representation via "
             "'use_rep', or densify with 'adata.X = adata.X.toarray()'."
         )
 
     candidates, scored = expand_n_clusters(n_clusters)
+    adata = orig_adata.copy() if copy else orig_adata
     logg.info(
         f"Selecting the number of clusters over K={candidates} with up to {max_runs} runs each "
         f"({len(candidates) * max_runs} {type(clusterer).__name__} fits at most)"

@@ -123,6 +123,12 @@ def _stability_frame(n_clusters: Sequence[int], interior: Sequence[int], stabili
     )
 
 
+def k_param(clusterer: KClusterer) -> str | None:
+    """Name of *clusterer*'s number-of-clusters parameter, ``None`` if it takes none."""
+    params = clusterer.get_params()
+    return next((name for name in _K_PARAMS if name in params), None)
+
+
 def check_k_clusterer(clusterer: KClusterer) -> str:
     """Name of *clusterer*'s number-of-clusters parameter, rejecting what cannot be swept."""
     if not isinstance(clusterer, KClusterer):
@@ -131,19 +137,18 @@ def check_k_clusterer(clusterer: KClusterer) -> str:
             "'fit_predict' to assign one label per observation, plus 'get_params' and "
             "'set_params' to be re-fitted with a new number of clusters and seed"
         )
-    params = clusterer.get_params()
-    k_param = next((name for name in _K_PARAMS if name in params), None)
-    if k_param is None:
-        raise ValueError(
+    name = k_param(clusterer)
+    if name is None:
+        raise TypeError(
             f"{type(clusterer).__name__} takes neither 'n_components' nor 'n_clusters', so there "
             "is no number of clusters to sweep"
         )
-    if "random_state" not in params:
-        raise ValueError(
+    if "random_state" not in clusterer.get_params():
+        raise TypeError(
             f"{type(clusterer).__name__} takes no 'random_state', so every run of a K returns the "
             "same labeling and there is nothing to compare across runs"
         )
-    return k_param
+    return name
 
 
 def _fit_once(clusterer: KClusterer, k_param: str, X: Array, k: int, random_state: int) -> tuple[np.ndarray, float]:
@@ -164,8 +169,9 @@ def _fit_once(clusterer: KClusterer, k_param: str, X: Array, k: int, random_stat
         ) from err
     # every run's labeling is kept for the whole sweep, so store them narrow
     labels = np.asarray(labels)
-    if labels.min() < 0 or labels.max() >= k:  # e.g. -1 for noise, or labels counted from 1
-        raise ValueError(f"{type(est).__name__} returned labels outside 0..{k - 1} at K={k}")
+    # e.g. -1 for noise, labels counted from 1, or strings
+    if not np.issubdtype(labels.dtype, np.integer) or labels.min() < 0 or labels.max() >= k:
+        raise ValueError(f"{type(est).__name__} returned labels that are not integers in 0..{k - 1} at K={k}")
     labels = labels.astype(np.uint32, copy=False)
     # only picks which run's labeling is kept per K: negative log-likelihood for a mixture,
     # inertia for KMeans, NaN (keep the first run) for clusterers without `score`

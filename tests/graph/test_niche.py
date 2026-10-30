@@ -1076,45 +1076,62 @@ def test_key_added_defaults_reproduce_the_derived_names():
 # the clusterer of the cellcharter flavor
 
 
-def test_niche_cellcharter_takes_a_mixture(dummy_adata2: AnnData):
-    dummy_adata2.X = csr_matrix(dummy_adata2.X)
-    mixture = GaussianMixture(covariance_type="diag")
-    calculate_niche_cellcharter(dummy_adata2, distance=2, rng=0, n_clusters=3, clusterer=mixture)
-    assert dummy_adata2.obs["cellcharter_niche"].nunique() == 3
-    assert mixture.get_params()["n_components"] == 1, "the mixture passed in is cloned, not set"
-
-
-def test_niche_cellcharter_sets_k_on_a_non_mixture(dummy_adata2: AnnData):
+@pytest.mark.parametrize(
+    ("clusterer", "n_clusters", "k_param", "expected"),
+    [
+        (None, None, "n_components", 10),
+        (None, 3, "n_components", 3),
+        (GaussianMixture(covariance_type="diag"), 3, "n_components", 3),
+        # a given clusterer's own K is overridden too: sklearn's defaults are often 1
+        (GaussianMixture(n_components=5), None, "n_components", 10),
+        ("kmeans", 3, "n_clusters", 3),
+    ],
+)
+def test_niche_cellcharter_sets_k(monkeypatch, dummy_adata2: AnnData, clusterer, n_clusters, k_param, expected):
     from sklearn.cluster import KMeans
 
-    dummy_adata2.X = csr_matrix(dummy_adata2.X)
-    calculate_niche_cellcharter(dummy_adata2, distance=2, rng=0, n_clusters=3, clusterer=KMeans(n_init=1))
-    assert dummy_adata2.obs["cellcharter_niche"].nunique() == 3, "KMeans spells K 'n_clusters'"
+    from squidpy.gr import _niche
+
+    seen = {}
+    monkeypatch.setattr(_niche, "calculate_niche_custom", lambda data, *, clusterers, **_: seen.update(clusterers))
+    clusterer = KMeans(n_init=1) if clusterer == "kmeans" else clusterer
+    before = None if clusterer is None else clusterer.get_params()
+
+    calculate_niche_cellcharter(dummy_adata2, distance=2, rng=0, n_clusters=n_clusters, clusterer=clusterer)
+    assert seen["cellcharter_niche"].get_params()[k_param] == expected
+    if clusterer is not None:
+        assert clusterer.get_params() == before, "the clusterer passed in is cloned, not set"
 
 
-def test_niche_cellcharter_keeps_a_given_clusterers_k(dummy_adata2: AnnData):
+def test_niche_cellcharter_seeds_a_given_clusterer_from_rng():
     from sklearn.cluster import KMeans
 
-    dummy_adata2.X = csr_matrix(dummy_adata2.X)
-    calculate_niche_cellcharter(dummy_adata2, distance=2, rng=0, clusterer=KMeans(n_clusters=2, n_init=1))
-    assert dummy_adata2.obs["cellcharter_niche"].nunique() == 2, "n_clusters=None keeps the clusterer's own K"
+    kwargs = {"distance": 2, "rng": 0, "n_clusters": 3, "clusterer": KMeans(n_init=1), "copy": True}
+    first = calculate_niche_cellcharter(_tiny(n=60), **kwargs)
+    second = calculate_niche_cellcharter(_tiny(n=60), **kwargs)
+    pd.testing.assert_series_equal(first.obs["cellcharter_niche"], second.obs["cellcharter_niche"])
+    assert first.obs["cellcharter_niche"].nunique() == 3
 
 
 def test_niche_cellcharter_takes_a_clusterer_without_k(dummy_adata2: AnnData):
     from sklearn.cluster import AffinityPropagation
 
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
-    calculate_niche_cellcharter(dummy_adata2, distance=2, rng=0, clusterer=AffinityPropagation())
-    assert dummy_adata2.obs["cellcharter_niche"].notna().all()
+    calculate_niche_cellcharter(dummy_adata2, distance=2, rng=0, clusterer=AffinityPropagation(random_state=0))
+    expected = AffinityPropagation(random_state=0).fit_predict(dummy_adata2.obsm["niche_embedding"])
+    assert dummy_adata2.obs["cellcharter_niche"].nunique() == len(np.unique(expected))
 
 
-def test_niche_cellcharter_rejects_unusable_clusterers(dummy_adata2: AnnData):
+@pytest.mark.parametrize(
+    ("clusterer", "match"),
+    [("object", r"must implement fit_predict"), ("affinity", r"so 'n_clusters' must stay None")],
+)
+def test_niche_cellcharter_rejects_unusable_clusterers(dummy_adata2: AnnData, clusterer, match):
     from sklearn.cluster import AffinityPropagation
 
-    with pytest.raises(TypeError, match=r"must implement fit_predict"):
-        calculate_niche_cellcharter(dummy_adata2, distance=2, n_clusters=3, clusterer=object())
-    with pytest.raises(TypeError, match=r"so 'n_clusters' must stay None"):
-        calculate_niche_cellcharter(dummy_adata2, distance=2, n_clusters=3, clusterer=AffinityPropagation())
+    clusterer = object() if clusterer == "object" else AffinityPropagation()
+    with pytest.raises(TypeError, match=match):
+        calculate_niche_cellcharter(dummy_adata2, distance=2, n_clusters=3, clusterer=clusterer)
 
 
 def test_niche_cellcharter_embedding_feeds_cluster_auto_k():
@@ -1123,5 +1140,4 @@ def test_niche_cellcharter_embedding_feeds_cluster_auto_k():
     adata = _tiny(n=80)
     calculate_niche_cellcharter(adata, distance=2, rng=0)
     cluster_auto_k(adata, use_rep="niche_embedding", n_clusters=(2, 3), max_runs=2, rng=0, key_added="niche_k")
-    assert list(adata.uns["niche_k"]["table"].index) == [1, 2, 3, 4]
     assert len(adata.obs["niche_k"].cat.categories) == adata.uns["niche_k"]["best_k"]

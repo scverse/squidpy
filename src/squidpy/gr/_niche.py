@@ -27,7 +27,7 @@ from squidpy._utils import (
     legacy_random,
 )
 from squidpy._validators import assert_isinstance, assert_key_in_adata, normalize_choice
-from squidpy.gr._autok import _K_PARAMS
+from squidpy.gr._autok import k_param
 from squidpy.gr._clusterers import Clusterer, LeidenClusterer
 from squidpy.gr._nhood import (
     _aggregate_over,
@@ -681,11 +681,12 @@ def calculate_niche_cellcharter(
         average local expression program. ``"variance"`` emphasizes local
         heterogeneity in the feature representation.
     %(rng)s
-        Seeds the Gaussian mixture clustering step.
+        Seeds the clustering step.
     %(niche_spatial_conn_key)s
     n_clusters
         Number of clusters, and therefore the number of niche labels produced per library
-        or dataset. ``None`` keeps the K of a given ``clusterer``, and means 10 otherwise.
+        or dataset. ``None`` means 10, also for a given ``clusterer``, whose own K is
+        overridden.
         To select it by stability as CellCharter's ``ClusterAutoK`` does, run
         :func:`~squidpy.gr.cluster_auto_k` with ``use_rep=embedding_key_added`` on the
         result. Must stay ``None`` for a ``clusterer`` that takes no number of clusters.
@@ -693,9 +694,8 @@ def calculate_niche_cellcharter(
         The :class:`~squidpy.gr.Clusterer` to fit, e.g. a
         :class:`~sklearn.mixture.GaussianMixture` with a different ``covariance_type`` or
         ``reg_covar``, or :class:`~sklearn.cluster.KMeans`. It is cloned and its
-        ``random_state`` is set from ``rng``; ``n_clusters``, when given, sets its number of
-        clusters, which for a :class:`~sklearn.mixture.BayesianGaussianMixture` is an upper
-        bound. Defaults to ``GaussianMixture()``, CellCharter's model.
+        ``random_state`` is set from ``rng`` and its number of clusters from ``n_clusters``,
+        which for a :class:`~sklearn.mixture.BayesianGaussianMixture` is an upper bound. Defaults to ``GaussianMixture()``, CellCharter's model.
     n_pca_components
         Number of principal components of ``adata.X`` aggregated over the hop rings. ``None``
         uses 10, the latent width scVI defaults to, or one fewer than the smallest dimension of
@@ -743,19 +743,16 @@ def calculate_niche_cellcharter(
     if clusterer is not None and not isinstance(clusterer, Clusterer):
         raise TypeError(f"'clusterer' must implement fit_predict, get_params and set_params, got {clusterer!r}")
     model = GaussianMixture() if clusterer is None else clone(clusterer)
-    params = model.get_params()
-    k_param = next((name for name in _K_PARAMS if name in params), None)
+    k_name = k_param(model)
     fit: Clusterer
-    if k_param is None:
+    if k_name is None:
         if n_clusters is not None:
             raise TypeError(
                 f"{type(model).__name__} takes neither 'n_components' nor 'n_clusters', so 'n_clusters' must stay None"
             )
         fit = model
-    elif n_clusters is not None:
-        fit = model.set_params(**{k_param: int(n_clusters)})
-    else:  # keep a given clusterer's own K
-        fit = model if clusterer is not None else model.set_params(**{k_param: 10})
+    else:  # overrides a given clusterer's own K, whose sklearn default is often 1
+        fit = model.set_params(**{k_name: 10 if n_clusters is None else int(n_clusters)})
     clusterers = {key_added: fit}
 
     return calculate_niche_custom(

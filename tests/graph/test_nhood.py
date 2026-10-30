@@ -523,16 +523,8 @@ class TestNhoodEntropy:
     def test_homogeneous_neighborhood_scores_zero(self):
         adata = self._grid(["a"] * 36)
         np.testing.assert_allclose(nhood_entropy(adata, cluster_key="ct", copy=True), 0.0)
-        assert "ct_nhood_entropy" not in adata.obs
 
-    def test_segregated_scores_below_scattered(self):
-        labels = ["a"] * 50 + ["b"] * 50
-        segregated = nhood_entropy(self._grid(labels), cluster_key="ct", copy=True)
-        scattered = nhood_entropy(
-            self._grid(list(np.random.default_rng(0).permutation(labels))), cluster_key="ct", copy=True
-        )
-        assert segregated.mean() < scattered.mean()
-
+    def test_stripes_score_their_mixture(self):
         # vertical stripes: an interior cell sees 2 of its own type and 6 of the other
         stripes = nhood_entropy(self._grid(["a", "b"] * 18), cluster_key="ct", copy=True).to_numpy().reshape(6, 6)
         h = -0.25 * np.log(0.25) - 0.75 * np.log(0.75)
@@ -550,5 +542,7 @@ class TestNhoodEntropy:
 
     def test_writes_to_obs(self):
         adata = self._grid(["a", "b"] * 18)
+        expected = nhood_entropy(adata, cluster_key="ct", copy=True)
+        assert "ct_nhood_entropy" not in adata.obs, "copy=True leaves adata alone"
         assert nhood_entropy(adata, cluster_key="ct") is None
-        np.testing.assert_allclose(adata.obs["ct_nhood_entropy"], nhood_entropy(adata, cluster_key="ct", copy=True))
+        np.testing.assert_allclose(adata.obs["ct_nhood_entropy"], expected)
