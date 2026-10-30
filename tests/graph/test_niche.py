@@ -7,10 +7,9 @@ import numpy as np
 import pandas as pd
 import pytest
 import scanpy as sc
-from anndata import AnnData, read_h5ad
+from anndata import AnnData
 from fast_array_utils.conv import to_dense
 from pandas import Series
-from pandas.testing import assert_frame_equal
 from scanpy.pp import neighbors
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import dijkstra
@@ -1074,130 +1073,23 @@ def test_key_added_defaults_reproduce_the_derived_names():
     assert "utag_niche_res=1.0" in adata.obs.columns
 
 
-# the stability sweep selecting the number of mixture components
+# the clusterer of the cellcharter flavor
 
 
-def test_niche_cellcharter_auto_k_stores_per_k_diagnostics(dummy_adata2: AnnData):
-    dummy_adata2.X = csr_matrix(dummy_adata2.X)
-    calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean", rng=0, n_clusters=(2, 3), max_runs=2)
-
-    assert "cellcharter_niche" in dummy_adata2.obs.columns
-
-    diagnostics = dummy_adata2.uns["cellcharter_niche_autok"]
-    assert set(diagnostics) == {"table", "stability", "best_k", "n_runs", "converged"}
-
-    table = diagnostics["table"]
-    assert list(table.index) == [1, 2, 3, 4], "a (min, max) request gains a +-1 halo"
-    assert table.loc[[1, 4], "stability_mean"].isna().all(), "the halo is fitted but not scored"
-
-    interior = table.index[table["stability_mean"].notna()].tolist()
-    assert interior == [2, 3]
-    assert diagnostics["stability"].shape[0] == len(interior)
-    assert table["nll"].notna().all()
-    assert diagnostics["best_k"] in interior
-
-
-def test_niche_cellcharter_auto_k_store_labels(dummy_adata2: AnnData):
-    dummy_adata2.X = csr_matrix(dummy_adata2.X)
-    calculate_niche_cellcharter(
-        dummy_adata2, distance=2, aggregation="mean", rng=0, n_clusters=(2, 3), max_runs=2, store_labels=True
-    )
-
-    for k in dummy_adata2.uns["cellcharter_niche_autok"]["table"].index:
-        column = f"cellcharter_niche_k{k}"
-        assert column in dummy_adata2.obs.columns
-        assert dummy_adata2.obs[column].nunique() == k
-
-
-def test_niche_cellcharter_auto_k_labels_go_through_postprocessing(dummy_adata2: AnnData):
-    dummy_adata2.X = csr_matrix(dummy_adata2.X)
-    calculate_niche_cellcharter(
-        dummy_adata2,
-        distance=2,
-        aggregation="mean",
-        rng=0,
-        n_clusters=(2, 3),
-        max_runs=2,
-        store_labels=True,
-        min_niche_size=100,  # larger than the object, so every label is dropped
-    )
-
-    for k in dummy_adata2.uns["cellcharter_niche_autok"]["table"].index:
-        assert (dummy_adata2.obs[f"cellcharter_niche_k{k}"] == "not_a_niche").all()
-
-
-def test_niche_cellcharter_auto_k_diagnostics_roundtrip_h5ad(dummy_adata2: AnnData, tmp_path):
-    dummy_adata2.X = csr_matrix(dummy_adata2.X)
-    calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean", rng=0, n_clusters=(2, 3), max_runs=2)
-
-    path = tmp_path / "niche.h5ad"
-    dummy_adata2.write_h5ad(path)
-    restored = read_h5ad(path)
-
-    original = dummy_adata2.uns["cellcharter_niche_autok"]
-    reloaded = restored.uns["cellcharter_niche_autok"]
-    assert set(reloaded) == set(original)
-    assert_frame_equal(reloaded["table"], original["table"])
-    assert reloaded["converged"] == original["converged"]
-    assert reloaded["best_k"] == original["best_k"]
-
-
-@pytest.mark.parametrize("n_clusters", [3, (2, 3)])
-def test_niche_cellcharter_takes_a_mixture(dummy_adata2: AnnData, n_clusters):
+def test_niche_cellcharter_takes_a_mixture(dummy_adata2: AnnData):
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
     mixture = GaussianMixture(covariance_type="diag")
-    calculate_niche_cellcharter(
-        dummy_adata2, distance=2, aggregation="mean", rng=0, n_clusters=n_clusters, max_runs=2, clusterer=mixture
-    )
-    assert dummy_adata2.obs["cellcharter_niche"].notna().all()
+    calculate_niche_cellcharter(dummy_adata2, distance=2, rng=0, n_clusters=3, clusterer=mixture)
+    assert dummy_adata2.obs["cellcharter_niche"].nunique() <= 3
     assert mixture.get_params()["n_components"] == 1, "the mixture passed in is cloned, not set"
 
 
-def test_niche_cellcharter_auto_k_takes_a_sequence(dummy_adata2: AnnData):
-    dummy_adata2.X = csr_matrix(dummy_adata2.X)
-    calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean", rng=0, n_clusters=[2, 3, 4], max_runs=2)
-    assert dummy_adata2.uns["cellcharter_niche_autok"]["best_k"] in {2, 3, 4}, "every listed K is scored"
-
-
-def test_niche_cellcharter_auto_k_is_reproducible_and_takes_a_mask():
-    adata = _tiny(n=80)
-    keep = Series(np.arange(80) < 60, index=adata.obs_names)
-    kw = {"distance": 2, "rng": 0, "n_clusters": (2, 3), "max_runs": 2, "cluster_mask": keep}
-    first = calculate_niche_cellcharter(adata, copy=True, **kw)
-    second = calculate_niche_cellcharter(adata, copy=True, **kw)
-    assert (first.obs["cellcharter_niche"].astype(str)[60:] == "not_a_niche").all()
-    pd.testing.assert_series_equal(first.obs["cellcharter_niche"], second.obs["cellcharter_niche"])
-
-
-@pytest.mark.parametrize("n_clusters", [3, (2, 3)])
-def test_niche_cellcharter_takes_any_k_clusterer(dummy_adata2: AnnData, n_clusters):
+def test_niche_cellcharter_sets_k_on_a_non_mixture(dummy_adata2: AnnData):
     from sklearn.cluster import KMeans
 
     dummy_adata2.X = csr_matrix(dummy_adata2.X)
-    calculate_niche_cellcharter(
-        dummy_adata2, distance=2, rng=0, n_clusters=n_clusters, max_runs=2, clusterer=KMeans(n_init=1)
-    )
-    assert dummy_adata2.obs["cellcharter_niche"].nunique() in {2, 3}
-
-
-def test_niche_cellcharter_bayesian_mixture_caps_k(dummy_adata2: AnnData):
-    from sklearn.mixture import BayesianGaussianMixture
-
-    dummy_adata2.X = csr_matrix(dummy_adata2.X)
-    calculate_niche_cellcharter(dummy_adata2, distance=2, rng=0, n_clusters=5, clusterer=BayesianGaussianMixture())
-    assert 1 <= dummy_adata2.obs["cellcharter_niche"].nunique() <= 5
-
-
-def test_niche_cellcharter_rejects_n_clusters_without_k(dummy_adata2: AnnData):
-    from sklearn.cluster import AffinityPropagation
-
-    with pytest.raises(TypeError, match=r"must implement fit_predict"):
-        calculate_niche_cellcharter(dummy_adata2, distance=2, n_clusters=3, clusterer=object())
-    for n_clusters in (3, (2, 3)):
-        with pytest.raises(TypeError, match=r"so 'n_clusters' must stay None"):
-            calculate_niche_cellcharter(
-                dummy_adata2, distance=2, n_clusters=n_clusters, clusterer=AffinityPropagation()
-            )
+    calculate_niche_cellcharter(dummy_adata2, distance=2, rng=0, n_clusters=3, clusterer=KMeans(n_init=1))
+    assert dummy_adata2.obs["cellcharter_niche"].nunique() == 3, "KMeans spells K 'n_clusters'"
 
 
 def test_niche_cellcharter_takes_a_clusterer_without_k(dummy_adata2: AnnData):
@@ -1208,7 +1100,20 @@ def test_niche_cellcharter_takes_a_clusterer_without_k(dummy_adata2: AnnData):
     assert dummy_adata2.obs["cellcharter_niche"].notna().all()
 
 
-def test_niche_cellcharter_warns_on_sweep_arguments_with_a_fixed_k(dummy_adata2: AnnData):
-    dummy_adata2.X = csr_matrix(dummy_adata2.X)
-    with pytest.warns(UserWarning, match=r"only apply to a sweep"):
-        calculate_niche_cellcharter(dummy_adata2, distance=2, aggregation="mean", rng=0, n_clusters=3, max_runs=3)
+def test_niche_cellcharter_rejects_unusable_clusterers(dummy_adata2: AnnData):
+    from sklearn.cluster import AffinityPropagation
+
+    with pytest.raises(TypeError, match=r"must implement fit_predict"):
+        calculate_niche_cellcharter(dummy_adata2, distance=2, n_clusters=3, clusterer=object())
+    with pytest.raises(TypeError, match=r"so 'n_clusters' must stay None"):
+        calculate_niche_cellcharter(dummy_adata2, distance=2, n_clusters=3, clusterer=AffinityPropagation())
+
+
+def test_niche_cellcharter_embedding_feeds_cluster_auto_k():
+    from squidpy.gr import cluster_auto_k
+
+    adata = _tiny(n=80)
+    calculate_niche_cellcharter(adata, distance=2, rng=0)
+    cluster_auto_k(adata, n_clusters=(2, 3), use_rep="niche_embedding", max_runs=2, rng=0, key_added="niche_k")
+    assert adata.uns["niche_k"]["best_k"] in {2, 3}
+    assert adata.obs["niche_k"].notna().all()

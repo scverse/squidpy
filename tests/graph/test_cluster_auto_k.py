@@ -6,21 +6,11 @@ import pytest
 from anndata import AnnData, read_h5ad
 from pandas.testing import assert_frame_equal
 from scipy.sparse import csr_matrix
-from sklearn.base import clone
 from sklearn.cluster import AgglomerativeClustering, KMeans
-from sklearn.metrics import fowlkes_mallows_score
 from sklearn.mixture import GaussianMixture
 
-from squidpy.gr import cluster_auto_k, cluster_stability
-from squidpy.gr._autok import (
-    AutoKClusterer,
-    _score_block,
-    expand_n_clusters,
-    mirror_stability,
-    sweep_auto_k,
-    to_uns,
-)
-from squidpy.gr._autok import cluster_stability as _cluster_stability
+from squidpy.gr import cluster_auto_k
+from squidpy.gr._autok import expand_n_clusters, mirror_stability, sweep_auto_k
 
 
 def scored(table: pd.DataFrame) -> list[int]:
@@ -111,8 +101,8 @@ def test_sweep_scores_only_interior_but_fits_the_halo():
     assert scored(result.table) == [2, 3, 4]
     assert result.stability.shape[0] == 3
     assert result.best_k in scored(result.table)
-    # nll is defined for every fitted K, including the halo
-    assert result.table["nll"].notna().all()
+    # fit_loss is defined for every fitted K, including the halo
+    assert result.table["fit_loss"].notna().all()
     assert sorted(result.labels) == [1, 2, 3, 4, 5]
 
 
@@ -176,12 +166,12 @@ def test_table_halo_unscored():
 
     assert list(frame.index) == [1, 2, 3, 4, 5]
     assert frame.index.name == "k"
-    assert list(frame.columns) == ["stability_mean", "stability_std", "nll"]
+    assert list(frame.columns) == ["stability_mean", "stability_std", "fit_loss"]
 
     halo = frame.loc[[1, 5]]
     assert halo["stability_mean"].isna().all()
     assert halo["stability_std"].isna().all()
-    assert not halo["nll"].isna().any(), "the halo is fitted, so it has an nll"
+    assert not halo["fit_loss"].isna().any(), "the halo is fitted, so it has a fit_loss"
 
     assert scored(result.table) == [2, 3, 4], "the halo is never scored, so it can never be best"
 
@@ -189,23 +179,6 @@ def test_table_halo_unscored():
 def test_best_k_is_the_most_stable_scored_k():
     result = sweep_auto_k(make_blobs(), [1, 2, 3, 4, 5], max_runs=3, rng=0)
     assert result.best_k == scored(result.table)[int(np.argmax(result.stability.mean(axis=1)))]
-
-
-def test_to_uns_carries_only_what_survives_h5ad(tmp_path):
-    result = sweep_auto_k(make_blobs(), [1, 2, 3, 4, 5], max_runs=2, rng=0)
-    adata = AnnData(np.zeros((result.stability.shape[0], 1), dtype=np.float32))
-    adata.uns["autok"] = to_uns(result)
-
-    path = tmp_path / "autok.h5ad"
-    adata.write_h5ad(path)
-    reloaded = read_h5ad(path).uns["autok"]
-
-    assert set(reloaded) == set(result._fields) - {"labels"}, "`labels` is K-keyed, so uns cannot hold it"
-    assert_frame_equal(reloaded["table"], result.table)
-    np.testing.assert_allclose(reloaded["stability"], result.stability)
-    assert reloaded["best_k"] == result.best_k
-    assert reloaded["n_runs"] == result.n_runs
-    assert reloaded["converged"] == result.converged
 
 
 # the public entry point
@@ -222,6 +195,38 @@ def test_cluster_auto_k_on_adata():
     assert adata.obs["cluster_auto_k"].dtype == "category"
     categories = list(adata.obs["cluster_auto_k"].cat.categories)
     assert categories == [str(i) for i in sorted(map(int, categories))], "string labels in numeric order, like leiden"
+
+
+def test_cluster_auto_k_keeps_empty_components_as_categories(monkeypatch):
+    from squidpy.gr import _cluster_auto_k
+
+    real = _cluster_auto_k.sweep_auto_k
+
+    def sweep_leaving_k3_empty(*args, **kwargs):
+        result = real(*args, **kwargs)
+        result.labels[3][:] = np.minimum(result.labels[3], 1)  # component 2 never used
+        return result._replace(best_k=3)
+
+    monkeypatch.setattr(_cluster_auto_k, "sweep_auto_k", sweep_leaving_k3_empty)
+    adata = AnnData(make_blobs())
+    cluster_auto_k(adata, n_clusters=(2, 4), max_runs=2, rng=0)
+    assert list(adata.obs["cluster_auto_k"].cat.categories) == ["0", "1", "2"], "as CellCharter, every K is a category"
+
+
+def test_cluster_auto_k_uns_roundtrips_h5ad(tmp_path):
+    adata = AnnData(make_blobs())
+    cluster_auto_k(adata, n_clusters=(2, 4), max_runs=2, rng=0)
+    adata.write_h5ad(tmp_path / "autok.h5ad")
+    original, reloaded = adata.uns["cluster_auto_k"], read_h5ad(tmp_path / "autok.h5ad").uns["cluster_auto_k"]
+
+    assert set(reloaded) == {"table", "stability", "best_k", "n_runs", "converged"}
+    assert_frame_equal(reloaded["table"], original["table"])
+    np.testing.assert_allclose(reloaded["stability"], original["stability"])
+    assert (reloaded["best_k"], reloaded["n_runs"], reloaded["converged"]) == (
+        original["best_k"],
+        original["n_runs"],
+        original["converged"],
+    )
 
 
 def test_cluster_auto_k_copy():
@@ -273,114 +278,14 @@ def test_cluster_auto_k_honours_key_added():
     assert "sweep" in adata.uns
 
 
-def test_cluster_auto_k_is_reproducible_from_the_rng():
-    adata = AnnData(make_blobs())
-    first = cluster_auto_k(adata, n_clusters=(2, 4), max_runs=3, rng=0, copy=True)
-    second = cluster_auto_k(adata, n_clusters=(2, 4), max_runs=3, rng=0, copy=True)
-    pd.testing.assert_series_equal(first.obs["cluster_auto_k"], second.obs["cluster_auto_k"])
-
-
-# scoring labelings that were produced elsewhere
-
-
-def _runs(ks: list[int], n_runs: int, seed: int = 0) -> list[dict[int, np.ndarray]]:
-    rng = np.random.default_rng(seed)
-    return [{k: rng.integers(0, k, 40) for k in ks} for _ in range(n_runs)]
-
-
-def test_cluster_stability_pairs_runs_like_the_sweep():
-    ks = [2, 3, 4, 5]
-    runs = _runs(ks, n_runs=4)
-    pairs = list(zip(ks[:-1], ks[1:], strict=True))
-
-    expected: list[list[float]] = []
-    for i, new in enumerate(runs):  # the incremental pairing inside `sweep_auto_k`
-        expected.extend(_score_block(new, stored, pairs, fowlkes_mallows_score) for stored in runs[:i])
-
-    _, stability = _cluster_stability({k: [run[k] for run in runs] for k in ks})
-    assert stability.shape == (len(ks) - 2, 2 * len(expected))
-    # column order is arbitrary
-    np.testing.assert_allclose(np.sort(mirror_stability(expected), axis=1), np.sort(stability, axis=1))
-
-
-def test_cluster_stability_returns_only_interior_k():
-    ks = [2, 3, 4, 5, 6]
-    interior, stability = _cluster_stability({k: [run[k] for run in _runs(ks, n_runs=2)] for k in ks})
-    assert interior == [3, 4, 5]
-    assert stability.shape[0] == len(interior)
-
-
-def test_cluster_stability_honours_score_fn():
-    ks = [2, 3, 4]
-    labels = {k: [run[k] for run in _runs(ks, n_runs=3)] for k in ks}
-    _, stability = _cluster_stability(labels, score_fn=lambda a, b: 1.0)
-    np.testing.assert_allclose(stability, 1.0)
-
-
-@pytest.mark.parametrize(
-    ("n_runs_per_k", "match"),
-    [
-        ({2: 2, 3: 2}, r"at least 3 K values"),
-        ({2: 2, 3: 3, 4: 2}, r"same number of runs"),
-        ({2: 1, 3: 1, 4: 1}, r"at least 2 runs"),
-    ],
-)
-def test_cluster_stability_rejects_unusable_input(n_runs_per_k: dict[int, int], match: str):
-    labels = {k: [np.zeros(4, dtype=int)] * n for k, n in n_runs_per_k.items()}
-    with pytest.raises(ValueError, match=match):
-        _cluster_stability(labels)
-
-
-def _adata_with_runs(ks: list[int], n_runs: int) -> tuple[AnnData, dict[int, list[str]]]:
-    runs = _runs(ks, n_runs=n_runs)
-    adata = AnnData(np.zeros((40, 2), dtype=np.float32))
-    keys = {}
-    for k in ks:
-        keys[k] = [f"clust_k{k}_run{r}" for r in range(n_runs)]
-        for r, run in enumerate(runs):
-            adata.obs[keys[k][r]] = pd.Categorical(run[k])
-    return adata, keys
-
-
-def test_cluster_stability_scores_obs_columns():
-    adata, keys = _adata_with_runs([2, 3, 4], n_runs=3)
-
-    stored = cluster_stability(adata, cluster_keys=keys, copy=True).uns["cluster_stability"]
-    df = stored["table"]
-    assert list(df.index) == [2, 3, 4]
-    # only the interior K is scored, the bounds are a halo that is compared against but never selectable
-    assert df["stability_mean"].isna().tolist() == [True, False, True]
-    assert stored["best_k"] == df["stability_mean"].idxmax() == 3
-    assert stored["stability"].shape[0] == 1
-
-
-def test_cluster_stability_writes_to_uns():
-    adata, keys = _adata_with_runs([2, 3, 4], n_runs=2)
-    expected = cluster_stability(adata, cluster_keys=keys, copy=True).uns["cluster_stability"]
-    assert "cluster_stability" not in adata.uns
-
-    assert cluster_stability(adata, cluster_keys=keys, key_added="my_stability") is None
-    pd.testing.assert_frame_equal(adata.uns["my_stability"]["table"], expected["table"])
-
-
-def test_cluster_stability_takes_a_score_fn():
-    adata, keys = _adata_with_runs([2, 3, 4], n_runs=2)
-    cluster_stability(adata, cluster_keys=keys, score_fn=lambda a, b: 0.25)
-    assert adata.uns["cluster_stability"]["table"].loc[3, "stability_mean"] == 0.25
-
-
 def test_cluster_auto_k_takes_spatialdata():
     from spatialdata import SpatialData
     from spatialdata.models import TableModel
 
     sdata = SpatialData(tables={"table": TableModel.parse(AnnData(make_blobs()))})
     cluster_auto_k(sdata, n_clusters=(2, 4), max_runs=2, rng=0, table_key="table")
-    assert sdata.tables["table"].obs["cluster_auto_k"].notna().all()
-
-
-def test_cluster_auto_k_rejects_sparse_input_for_a_given_mixture():
-    with pytest.raises(TypeError, match=r"does not support sparse input"):
-        cluster_auto_k(AnnData(csr_matrix(make_blobs())), n_clusters=(2, 4), clusterer=GaussianMixture(reg_covar=1e-4))
+    expected = cluster_auto_k(AnnData(make_blobs()), n_clusters=(2, 4), max_runs=2, rng=0, copy=True)
+    np.testing.assert_array_equal(sdata.tables["table"].obs["cluster_auto_k"], expected.obs["cluster_auto_k"])
 
 
 class _NoiseLabeler(KMeans):
@@ -391,19 +296,6 @@ class _NoiseLabeler(KMeans):
 def test_sweep_rejects_negative_labels():
     with pytest.raises(ValueError, match=r"returned negative labels"):
         sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, clusterer=_NoiseLabeler(n_init=1), rng=0)
-
-
-def test_cluster_stability_rejects_a_missing_column():
-    adata, keys = _adata_with_runs([2, 3, 4], n_runs=2)
-    keys[3] = ["not_a_column", *keys[3][1:]]
-    with pytest.raises(KeyError, match=r"not_a_column"):
-        cluster_stability(adata, cluster_keys=keys)
-
-
-def test_cluster_stability_rejects_empty_cluster_keys():
-    adata = AnnData(np.zeros((10, 2), dtype=np.float32))
-    with pytest.raises(ValueError, match=r"at least 3 K values"):
-        cluster_stability(adata, cluster_keys={})
 
 
 # parity with the reference implementation
@@ -479,27 +371,6 @@ def test_seed_is_keyed_by_run_and_k_not_by_position():
     long = sweep_auto_k(X, [1, 2, 3, 4, 5, 6], max_runs=3, rng=42)
     for k in short.labels:
         np.testing.assert_array_equal(short.labels[k], long.labels[k])
-
-
-def test_autok_clusterer_is_sklearn_shaped():
-    """`clone` hands back the parameters as given, so the halo has to expand in `fit`."""
-    X = make_blobs()
-    est = AutoKClusterer(n_clusters=(2, 4), random_state=1, store_labels=True)
-
-    assert clone(est).get_params()["n_clusters"] == (2, 4), "clone lost the (min, max) form"
-
-    est.fit(X)
-    assert est.labels_.shape == (len(X),)
-    assert est.best_k_ == est.result_.best_k
-    # what the niche pipeline picks up beyond the one label column
-    assert set(est.niche_columns_) == {f"k{k}" for k in est.result_.labels}
-    assert list(est.niche_uns_) == ["niche_autok"]
-
-
-def test_autok_clusterer_sweeps_a_non_mixture():
-    """Nothing about the sweep is specific to a Gaussian mixture."""
-    est = AutoKClusterer(n_clusters=(2, 4), clusterer=KMeans(n_init=1), random_state=1).fit(make_blobs())
-    assert est.best_k_ in scored(est.result_.table), "the selected K has to be one that was scored"
 
 
 def test_cluster_auto_k_takes_a_clusterer():

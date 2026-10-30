@@ -9,16 +9,14 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Callable, Mapping, Sequence
-from itertools import combinations
-from typing import Any, NamedTuple
+from typing import NamedTuple
 
 import numpy as np
 import pandas as pd
 from fast_array_utils.types import HasArrayNamespace as Array
-from sklearn.base import BaseEstimator, ClusterMixin, clone
+from sklearn.base import clone
 from sklearn.metrics import fowlkes_mallows_score, mean_absolute_percentage_error
 from sklearn.mixture import GaussianMixture
-from spatialdata._logging import logger as logg
 
 from squidpy._utils import RNGLike, SeedLike, legacy_random
 from squidpy.gr._clusterers import KClusterer
@@ -33,7 +31,7 @@ class ClusterAutoKResult(NamedTuple):
     """A sweep result."""
 
     #: Per-K diagnostics indexed by K, with the columns ``stability_mean``, ``stability_std``
-    #: and ``nll``. Every fitted K has a row, but the ``+-1`` halo is never scored, so its
+    #: and ``fit_loss``. Every fitted K has a row, but the ``+-1`` halo is never scored, so its
     #: stability is ``NaN``.
     table: pd.DataFrame
 
@@ -50,7 +48,7 @@ class ClusterAutoKResult(NamedTuple):
     #: Whether the sweep stopped early because the stability curve had settled.
     converged: bool
 
-    #: Labeling of the best fit (lowest ``nll``) per K, for every fitted K.
+    #: Labeling of the best fit (lowest ``fit_loss``) per K, for every fitted K.
     labels: dict[int, np.ndarray]
 
 
@@ -112,49 +110,6 @@ def _score_block(
     return [score_fn(run_a[low], run_b[high]) for low, high in pairs]
 
 
-def cluster_stability(
-    labels: Mapping[int, Sequence[Array]],
-    *,
-    score_fn: Callable[[Array, Array], float] = fowlkes_mallows_score,
-) -> tuple[list[int], np.ndarray]:
-    """Score already-computed labelings by how well each K agrees with its neighbours.
-
-    The scoring step of the sweep on its own, for labelings produced elsewhere: only the
-    labels are compared, so any clusterer will do.
-
-    Parameters
-    ----------
-    labels
-        Mapping of K to that K's labelings, one per run. Every K needs the same number of
-        runs, and at least two, since a run can only be scored against another run.
-    score_fn
-        Similarity of two labelings. Any ``(labels_true, labels_pred) -> float`` works, e.g.
-        :func:`~sklearn.metrics.adjusted_rand_score`.
-
-    Returns
-    -------
-    The interior K values and their stability matrix of shape
-    ``(len(interior), n_runs * (n_runs - 1))``, row ``i`` belonging to ``interior[i]``.
-    """
-    ks = sorted(labels)
-    if len(ks) < 3:
-        raise ValueError(
-            f"stability is only defined on interior K values, so at least 3 K values are needed, got {ks!r}"
-        )
-    run_counts = {len(labels[k]) for k in ks}
-    if len(run_counts) != 1:
-        raise ValueError(f"every K needs the same number of runs, got { ({k: len(labels[k]) for k in ks})!r}")
-    n_runs = run_counts.pop()
-    if n_runs < 2:
-        raise ValueError(f"stability needs at least 2 runs to compare, got {n_runs}")
-
-    pairs = list(zip(ks[:-1], ks[1:], strict=True))
-    runs = [{k: labels[k][r] for k in ks} for r in range(n_runs)]
-    # each unordered pair of runs once, in the same direction as `sweep_auto_k` compares them
-    blocks = [_score_block(runs[b], runs[a], pairs, score_fn) for a, b in combinations(range(n_runs), 2)]
-    return ks[1:-1], mirror_stability(blocks)
-
-
 def _stability_frame(n_clusters: Sequence[int], interior: Sequence[int], stability: np.ndarray) -> pd.DataFrame:
     """Per-K stability diagnostics indexed by K, carrying ``NaN`` on the unscored halo rows."""
     per_k_mean = dict(zip(interior, stability.mean(axis=1), strict=True))
@@ -168,41 +123,9 @@ def _stability_frame(n_clusters: Sequence[int], interior: Sequence[int], stabili
     )
 
 
-def to_uns(result: ClusterAutoKResult) -> dict[str, object]:
-    # don't include labels since they are already in obs
-    return {key: value for key, value in result._asdict().items() if key != "labels"}
-
-
-def label_columns(result: ClusterAutoKResult, key: str, *, all_labels: bool = False) -> dict[str, pd.Categorical]:
-    """The label columns a sweep result contributes.
-
-    The selected K takes the bare *key*, which keeps the primary column name predictable
-    for downstream code; with ``all_labels`` every fitted K follows as ``{key}_k{K}``.
-    """
-    columns = {key: _string_labels(result.labels[result.best_k])}
-    if all_labels:
-        columns |= {f"{key}_k{k}": _string_labels(labeling) for k, labeling in result.labels.items()}
-    return columns
-
-
-def _string_labels(labeling: np.ndarray) -> pd.Categorical:
-    """String categories in numeric order, as ``sc.tl.leiden`` and the niche labels store them."""
-    present = np.unique(labeling)
-    return pd.Categorical(labeling.astype(str), categories=present.astype(str))
-
-
 def check_k_clusterer(clusterer: KClusterer) -> str:
-    """Name of *clusterer*'s number-of-clusters parameter, rejecting what cannot be swept.
-
-    Two things are checked, in the only order that works. The methods first, by
-    ``isinstance`` (``KClusterer`` is runtime-checkable), and
-    ``get_params`` has to exist before it can be called. Then the parameters, which no
-    protocol can state; see ``KClusterer.set_params``. Both run before any fitting,
-    so an unusable clusterer says so immediately rather than after the first fit.
-    """
+    """Name of *clusterer*'s number-of-clusters parameter, rejecting what cannot be swept."""
     if not isinstance(clusterer, KClusterer):
-        # e.g. the biclustering estimators, which label rows and columns separately rather
-        # than assigning one label per observation, and so have no `fit_predict`
         raise ValueError(
             f"{type(clusterer).__name__} is not a clusterer squidpy can re-fit: that needs "
             "'fit_predict' to assign one label per observation, plus 'get_params' and "
@@ -218,8 +141,7 @@ def check_k_clusterer(clusterer: KClusterer) -> str:
     if "random_state" not in params:
         raise ValueError(
             f"{type(clusterer).__name__} takes no 'random_state', so every run of a K returns the "
-            "same labeling and the runs average nothing: the stability rests on a single labeling "
-            "per K. Stability selection needs a clusterer that varies between runs."
+            "same labeling and there is nothing to compare across runs"
         )
     return k_param
 
@@ -228,8 +150,7 @@ def _fit_once(clusterer: KClusterer, k_param: str, X: Array, k: int, random_stat
     """One run: a fresh clone of *clusterer* at ``k``, seeded by ``random_state``."""
     est = clone(clusterer).set_params(**{k_param: k, "random_state": random_state})
     try:
-        # `fit` then `predict` where the estimator has one, since that is what a mixture
-        # does; transductive clusterers only ever expose `fit_predict`.
+        # transductive clusterers only expose `fit_predict`
         labels = est.fit(X).predict(X) if hasattr(est, "predict") else est.fit_predict(X)
     except ValueError as err:  # a failed fit otherwise aborts the whole sweep opaquely
         hint = (
@@ -238,21 +159,20 @@ def _fit_once(clusterer: KClusterer, k_param: str, X: Array, k: int, random_stat
             if "ill-defined empirical covariance" in str(err)
             else ""
         )
-        raise ValueError(f"the fit at K={k} failed: {err}{hint}") from err
-    # labels are in [0, k), and the estimator already rejects k > n_samples, so uint32 cannot
-    # overflow. Every run's labeling is kept for the whole sweep, so the narrower dtype is
-    # what keeps that affordable.
+        raise ValueError(
+            f"the fit at K={k} failed (K-1 and K+1 of every requested K are fitted too): {err}{hint}"
+        ) from err
+    # every run's labeling is kept for the whole sweep, so store them narrow
     labels = np.asarray(labels)
     if labels.min() < 0:  # e.g. -1 for noise, which uint32 would silently wrap around
         raise ValueError(
             f"{type(est).__name__} returned negative labels at K={k}; the sweep needs one cluster per observation"
         )
     labels = labels.astype(np.uint32, copy=False)
-    # only used to pick which run's labeling is kept for this K; `best_k` never sees it.
-    # scikit-learn has no `nll_`, and `score` means different things per estimator, so this
-    # is only ever compared within one K. `NaN` for clusterers without one keeps the first run.
-    nll = -float(est.score(X)) if hasattr(est, "score") else float("nan")
-    return labels, nll
+    # only picks which run's labeling is kept per K: negative log-likelihood for a mixture,
+    # inertia for KMeans, NaN (keep the first run) for clusterers without `score`
+    fit_loss = -float(est.score(X)) if hasattr(est, "score") else float("nan")
+    return labels, fit_loss
 
 
 def sweep_auto_k(
@@ -294,9 +214,10 @@ def sweep_auto_k(
         Stop early once the mean absolute percentage error between the mean stability
         curves of two consecutive runs falls below this value.
     rng
-        Source of randomness; ``None`` draws from OS entropy. One base seed is drawn from it,
-        and each fit is seeded from ``(base, run, K)``, so a fit's seed does not depend on its
-        position in ``n_clusters`` and adding a K leaves the others untouched.
+        Source of randomness; ``None`` draws from OS entropy. Each fit is seeded from
+        ``(base, run, K)``, so adding a K leaves the others' fits untouched. CellCharter
+        instead shares one seed across all K of a run; only cross-run comparisons enter the
+        score, so this does not change the method.
 
     Returns
     -------
@@ -312,8 +233,7 @@ def sweep_auto_k(
     base = legacy_random(np.random.default_rng(rng))
 
     ks = list(n_clusters)
-    # adjacent pairs rather than `k + 1` arithmetic, so non-contiguous K lists work. A pair
-    # across a gap only feeds the rows of unscored K values, which `rows` drops.
+    # adjacent pairs rather than `k + 1` arithmetic, so non-contiguous K lists work
     pairs = list(zip(ks[:-1], ks[1:], strict=True))
     interior = ks[1:-1]
     scored = interior if scored is None else list(scored)
@@ -322,7 +242,7 @@ def sweep_auto_k(
     rows = [interior.index(k) for k in scored]
 
     labels_per_run: list[dict[int, np.ndarray]] = []
-    best_nll: dict[int, float] = {}
+    best_loss: dict[int, float] = {}
     best_labels: dict[int, np.ndarray] = {}
     blocks: list[list[float]] = []
     previous_curve: np.ndarray | None = None
@@ -331,13 +251,11 @@ def sweep_auto_k(
     for run in range(max_runs):
         run_labels: dict[int, np.ndarray] = {}
         for k in ks:
-            # keyed by (run, K) rather than drawn in sequence, so appending a candidate K
-            # does not re-seed every other K's fits
             random_state = int(np.random.SeedSequence([base, run, k]).generate_state(1)[0])
-            labels, nll = _fit_once(clusterer, k_param, X, k, random_state)
+            labels, fit_loss = _fit_once(clusterer, k_param, X, k, random_state)
             run_labels[k] = labels
-            if k not in best_nll or nll < best_nll[k]:
-                best_nll[k], best_labels[k] = nll, labels
+            if k not in best_loss or fit_loss < best_loss[k]:
+                best_loss[k], best_labels[k] = fit_loss, labels
 
         if labels_per_run:
             # this run's K against every stored run's K+1, one direction only, which
@@ -354,7 +272,7 @@ def sweep_auto_k(
 
     stability = mirror_stability(blocks)[rows]
     table = _stability_frame(ks, scored, stability)
-    table.insert(2, "nll", [best_nll[k] for k in ks])
+    table.insert(2, "fit_loss", [best_loss[k] for k in ks])
     return ClusterAutoKResult(
         table=table,
         stability=stability,
@@ -363,79 +281,3 @@ def sweep_auto_k(
         n_runs=len(labels_per_run),
         converged=converged,
     )
-
-
-class AutoKClusterer(ClusterMixin, BaseEstimator):
-    """A clusterer whose number of clusters is chosen by the stability of its labeling.
-
-    Every candidate K is fitted ``max_runs`` times and scored by how well its labeling
-    agrees with the adjacent K's across runs; ``labels_`` is the labeling of the most stable K.
-
-    Parameters
-    ----------
-    n_clusters
-        Numbers of clusters to select from, a ``(min, max)`` range or a sequence; see
-        :func:`~squidpy.gr._autok.expand_n_clusters`.
-    clusterer
-        The ``KClusterer`` fitted at every K. Defaults to a
-        :class:`~sklearn.mixture.GaussianMixture`, which is what CellCharter selects over.
-    max_runs
-        Maximum number of repetitions per K.
-    convergence_tol
-        Stop early once the mean stability curve changes by less than this between
-        consecutive runs.
-    store_labels
-        Also keep the labeling of every fitted K, as ``k{K}`` entries in
-        ``niche_columns_``.
-    uns_key
-        Key of the per-K diagnostics in ``niche_uns_``.
-    random_state
-        Base seed of the sweep. Every fit is seeded from it, its run and its K.
-    """
-
-    def __init__(
-        self,
-        *,
-        n_clusters: tuple[int, int] | Sequence[int],
-        clusterer: KClusterer | None = None,
-        max_runs: int = 10,
-        convergence_tol: float = 1e-2,
-        store_labels: bool = False,
-        uns_key: str = "niche_autok",
-        random_state: int | None = None,
-    ):
-        self.n_clusters = n_clusters
-        self.clusterer = clusterer
-        self.max_runs = max_runs
-        self.convergence_tol = convergence_tol
-        self.store_labels = store_labels
-        self.uns_key = uns_key
-        self.random_state = random_state
-
-    def fit(self, X: Array, y: None = None) -> AutoKClusterer:
-        """Sweep the candidate K values over *X*, leaving the selected labeling in ``labels_``."""
-        # expanded in `fit`, not `__init__`: a scikit-learn estimator hands back the
-        # parameters it was given, so expanding early would make `clone` lose the halo
-        candidates, scored = expand_n_clusters(self.n_clusters)
-        logg.info(
-            f"Selecting the number of clusters over K={candidates} with up to {self.max_runs} runs each "
-            f"({len(candidates) * self.max_runs} fits at most)"
-        )
-        result = sweep_auto_k(
-            X,
-            candidates,
-            scored=scored,
-            clusterer=self.clusterer,
-            max_runs=self.max_runs,
-            convergence_tol=self.convergence_tol,
-            rng=self.random_state,
-        )
-        logg.info(f"Selected K={result.best_k} after {result.n_runs} runs")
-
-        self.result_: ClusterAutoKResult = result
-        self.labels_ = result.labels[result.best_k]
-        self.best_k_ = result.best_k
-        self.niche_uns_: dict[str, Any] = {self.uns_key: to_uns(result)}
-        if self.store_labels:
-            self.niche_columns_: dict[str, Array] = {f"k{k}": labeling for k, labeling in result.labels.items()}
-        return self

@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
-from typing import Any
+from collections.abc import Sequence
 
+import numpy as np
 import pandas as pd
 from anndata import AnnData
 from scipy.sparse import issparse
-from sklearn.metrics import fowlkes_mallows_score
 from sklearn.mixture import GaussianMixture
 from spatialdata import SpatialData
 from spatialdata._logging import logger as logg
@@ -16,12 +15,11 @@ from spatialdata._logging import logger as logg
 from squidpy._docs import d
 from squidpy._utils import RNGLike, SeedLike
 from squidpy._validators import assert_isinstance, assert_key_in_adata
-from squidpy.gr._autok import _stability_frame, expand_n_clusters, label_columns, sweep_auto_k, to_uns
-from squidpy.gr._autok import cluster_stability as _cluster_stability
+from squidpy.gr._autok import expand_n_clusters, sweep_auto_k
 from squidpy.gr._clusterers import KClusterer
 from squidpy.gr._utils import _save_data, extract_adata_if_sdata
 
-__all__ = ["cluster_auto_k", "cluster_stability"]
+__all__ = ["cluster_auto_k"]
 
 
 @d.dedent
@@ -89,13 +87,14 @@ def cluster_auto_k(
     is modified in place and ``None`` is returned. Either way it gains the following keys:
 
         - :attr:`anndata.AnnData.obs` ``['{key_added}']`` - the labeling at the selected K,
-          plus one ``['{key_added}_k{K}']`` per fitted K if ``store_labels``.
+          plus one ``['{key_added}_k{K}']`` per fitted K if ``store_labels``. Categories are
+          ``'0'`` to ``'K-1'``, including any component left empty.
         - :attr:`anndata.AnnData.uns` ``['{key_added}']`` - a dict with the selected
           ``best_k``, the per-K diagnostics ``table``, the full ``stability`` matrix,
           ``n_runs`` and ``converged``.
 
-    See :func:`~squidpy.gr.calculate_niche_cellcharter` to run the same sweep as part of a
-    niche pipeline.
+    To select the number of niches, run this on the embedding
+    :func:`~squidpy.gr.calculate_niche_cellcharter` stores, via ``use_rep``.
 
     Notes
     -----
@@ -142,70 +141,16 @@ def cluster_auto_k(
     )
     logg.info(f"Selected K={result.best_k} after {result.n_runs} runs")
 
-    labels = pd.DataFrame(label_columns(result, key_added, all_labels=store_labels), index=adata.obs_names)
-
-    for column in labels:
-        _save_data(adata, attr="obs", key=column, data=labels[column], prefix=column == key_added)
-    _save_data(adata, attr="uns", key=key_added, data=to_uns(result))
-
-    return adata if copy else None
-
-
-@d.dedent
-def cluster_stability(
-    data: AnnData | SpatialData,
-    *,
-    cluster_keys: Mapping[int, Sequence[str]],
-    score_fn: Callable[[Any, Any], float] = fowlkes_mallows_score,
-    key_added: str = "cluster_stability",
-    copy: bool = False,
-    table_key: str | None = None,
-) -> AnnData | None:
-    """Score existing clusterings by how well each number of clusters agrees with its neighbours.
-
-    Reads labelings already in ``adata.obs``, so any clusterer will do; see
-    :func:`~squidpy.gr.cluster_auto_k`.
-
-    Parameters
-    ----------
-    %(adata)s
-    cluster_keys
-        Mapping of a number of clusters to the ``adata.obs`` columns holding that K's labelings,
-        one column per run. Every K needs the same number of runs and at least two of them, and
-        at least 3 K values, since stability is only defined on interior K.
-    score_fn
-        Similarity of two labelings. Any ``(labels_true, labels_pred) -> float`` works, e.g.
-        :func:`~sklearn.metrics.adjusted_rand_score`.
-    key_added
-        Key in ``adata.uns`` under which the diagnostics are stored.
-    %(copy)s
-    %(table_key)s
-
-    Returns
-    -------
-    If ``copy = True``, returns a copy of ``adata`` with the additions below; otherwise ``adata``
-    is modified in place and ``None`` is returned. Either way it gains the following key:
-
-        - :attr:`anndata.AnnData.uns` ``['{key_added}']`` - a dict with the per-K diagnostics
-          ``table`` (``NaN`` on the two halo rows that are never scored), the full
-          ``stability`` matrix and the most stable ``best_k``, as :func:`cluster_auto_k` stores them.
-    """
-    assert_isinstance(data, (AnnData, SpatialData), name="data")
-    assert_isinstance(copy, bool, name="copy")
-    orig_adata = extract_adata_if_sdata(data, table_key=table_key)
-
-    for columns in cluster_keys.values():
-        for column in columns:
-            assert_key_in_adata(orig_adata, column, attr="obs")
-
-    adata = orig_adata.copy() if copy else orig_adata
-
-    labels = {int(k): [adata.obs[c].to_numpy() for c in columns] for k, columns in cluster_keys.items()}
-    interior, stability = _cluster_stability(labels, score_fn=score_fn)
-    logg.info(f"Scored the stability of K={sorted(labels)} over {len(next(iter(labels.values())))} runs each")
-    df = _stability_frame(sorted(labels), interior, stability)
-
-    best_k = int(df["stability_mean"].idxmax())
-    _save_data(adata, attr="uns", key=key_added, data={"table": df, "stability": stability, "best_k": best_k})
+    columns = {key_added: result.best_k}
+    if store_labels:
+        columns |= {f"{key_added}_k{k}": k for k in result.labels}
+    for column, k in columns.items():
+        # string categories in numeric order, like `sc.tl.leiden`; all K of them, as CellCharter keeps
+        labels = pd.Categorical(result.labels[k].astype(str), categories=np.arange(k).astype(str))
+        _save_data(
+            adata, attr="obs", key=column, data=pd.Series(labels, index=adata.obs_names), prefix=column == key_added
+        )
+    uns = {key: value for key, value in result._asdict().items() if key != "labels"}  # labels are in obs
+    _save_data(adata, attr="uns", key=key_added, data=uns)
 
     return adata if copy else None
