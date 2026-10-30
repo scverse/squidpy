@@ -85,24 +85,20 @@ def test_spatial_autocorr_reproducibility(dummy_adata: AnnData, n_jobs: int, mod
 
 @pytest.mark.parametrize("mode", ["moran", "geary"])
 def test_spatial_autocorr_degenerate_feature_is_nan(mode: str):
-    """A gene whose permutations all score alike has no z-test, and must not poison the FDR column.
-
-    Its variance is exactly zero, so the z-score is undefined. Filling `pval_z_sim` with
-    `np.empty` left those entries at whatever memory held, which reads as a significant
-    p-value, and a NaN handed to `multipletests` spreads over every other gene.
-    """
+    """A gene whose permutations all score alike has a NaN z-test that stays out of the FDR correction;
+    a constant gene has no score and no p-values at all."""
     import scipy.sparse as sps
 
     from squidpy.gr import spatial_neighbors_knn
 
     rng = np.random.default_rng(0)
     n = 400
-    X = np.zeros((n, 3), dtype=np.float32)
+    X = np.zeros((n, 4), dtype=np.float32)
     X[5, 0] = 4.0  # expressed in a single cell: every permutation gives the same score
     X[:, 1] = rng.poisson(2, n)
     X[7, 2] = 1.0
     adata = AnnData(sps.csr_matrix(X))
-    adata.var_names = ["solo", "normal", "solo2"]
+    adata.var_names = ["solo", "normal", "solo2", "zero"]
     adata.obsm["spatial"] = rng.random((n, 2))
     spatial_neighbors_knn(adata, n_neighs=6)
 
@@ -115,18 +111,14 @@ def test_spatial_autocorr_degenerate_feature_is_nan(mode: str):
     # the gene with a defined z-test keeps one, and its correction is unaffected
     assert np.isfinite(df.loc[real, "pval_z_sim"])
     assert np.isfinite(df.loc[real, "pval_z_sim_fdr_bh"])
-    # the permutation p-value is a tally, so it stays defined for every gene
-    assert df["pval_sim"].notna().all()
+    # the permutation p-value is a tally, so it stays defined for every gene with a score
+    assert df.loc[[*degenerate, real], "pval_sim"].notna().all()
+    assert df.loc["zero", ["pval_sim", "pval_sim_fdr_bh"]].isna().all()
 
 
 @pytest.mark.parametrize(("mode", "stat"), [("moran", "I"), ("geary", "C")])
 def test_spatial_autocorr_offset_feature_precision(mode: str, stat: str):
-    """Both statistics ignore a constant shift, so a large offset must not move the score.
-
-    The kernel rebuilds the centred quantities by subtraction, e.g. `g @ x - x_bar * w_sum`,
-    which cancels away roughly `(mean / sd) ** 2` digits. Dense features are centred before
-    they reach it; without that, an offset of 1e6 moved Moran's I by several percent.
-    """
+    """Both statistics ignore a constant shift, so a large offset must not move the score."""
     from squidpy.gr import spatial_neighbors_knn
 
     rng = np.random.default_rng(1)
@@ -139,20 +131,14 @@ def test_spatial_autocorr_offset_feature_precision(mode: str, stat: str):
 
     # `n_perms` routes the observed score through the kernel rather than scanpy
     df = spatial_autocorr(adata, mode=mode, n_perms=1, rng=0, copy=True, show_progress_bar=False)
-    # 1e-8 is the floor for recovering a unit-scale value from one offset by 1e6, not slack:
-    # without the centring the difference was 5e-2
+    # 1e-8 is the floor for recovering a unit-scale value from one offset by 1e6
     np.testing.assert_allclose(df.loc["offset", stat], df.loc["plain", stat], rtol=1e-8)
 
 
 @pytest.mark.parametrize("mode", ["moran", "geary"])
 def test_spatial_autocorr_ties_both_tails(mode: str):
-    """A gene with one non-zero count ties most permutations exactly; ties count in both tails.
-
-    Folding ``sims >= obs`` alone calls a gene at the floor of its null, where every permutation
-    ties or exceeds it, maximally significant.
-    """
+    """A gene with one non-zero count ties most permutations exactly; ties count in both tails."""
     import scipy.sparse as sps
-    from scanpy.metrics import gearys_c, morans_i
     from sklearn.preprocessing import normalize
 
     from squidpy.gr import spatial_neighbors_knn
@@ -166,12 +152,8 @@ def test_spatial_autocorr_ties_both_tails(mode: str):
     spatial_neighbors_knn(adata, n_neighs=6)
     df = spatial_autocorr(adata, mode=mode, n_perms=50, rng=0, copy=True).loc[adata.var_names]
 
-    # the pre-numba algorithm: scanpy on the row-permuted graph, one spawned generator per permutation
-    stat = morans_i if mode == "moran" else gearys_c
     g = normalize(adata.obsp["spatial_connectivities"], norm="l1", axis=1)
-    vals = adata.X.T
-    obs = stat(g, vals)
-    sims = np.stack([stat(g[gen.permutation(300), :], vals) for gen in np.random.default_rng(0).spawn(50)])
+    obs, sims = _reference_sims(g, adata.X.T, mode, 50)
     ties = np.isclose(sims, obs, rtol=1e-9, atol=1e-12)  # scanpy's own arithmetic differs by an ulp
     above, below = ((sims > obs) & ~ties).sum(axis=0), ((sims < obs) & ~ties).sum(axis=0)
     large = np.minimum(above, below) + ties.sum(axis=0)
@@ -187,23 +169,6 @@ def test_spatial_autocorr_perm_blocks(dummy_adata: AnnData, mode: str):
     # 7 permutations' worth of int32 per block: 8 blocks, the last one short
     assert_frame_equal(spatial_autocorr(dummy_adata, working_memory=7 * dummy_adata.n_obs * 4 / 2**20, **kw), expected)
     assert_frame_equal(spatial_autocorr(dummy_adata, working_memory=f"{7 * dummy_adata.n_obs * 4}B", **kw), expected)
-
-
-def test_spatial_autocorr_full_gene_list_reordered(dummy_adata: AnnData):
-    """A full-length but reordered `genes` must not take the identity fast path in `extract_X`.
-
-    `extract_X` skips `adata[:, genes]` when the selection is every gene in `var_names` order.
-    Dropping the order check from that guard leaves a list of the right length taking the fast
-    path, which returns `X` in var order while labelling the rows in the caller's order.
-    """
-    genes = list(dummy_adata.var_names)
-    kw = {"mode": "geary", "n_perms": 20, "rng": 0, "copy": True, "show_progress_bar": False}
-    fwd = spatial_autocorr(dummy_adata, genes=genes, **kw)
-    rev = spatial_autocorr(dummy_adata, genes=genes[::-1], **kw)
-
-    # a gene's statistic cannot depend on the order the caller listed the genes in
-    assert set(fwd.index) == set(rev.index)
-    np.testing.assert_allclose(fwd["C"], rev.loc[fwd.index, "C"], rtol=1e-12)
 
 
 @pytest.mark.parametrize("mode", ["moran", "geary"])
@@ -377,13 +342,7 @@ def test_use_raw(dummy_adata: AnnData):
 
 @pytest.mark.parametrize("mode", ["moran", "geary"])
 def test_score_perms_matches_scanpy_per_permutation(mode: str):
-    """The kernel reuses per-row sums across permutations; pin it to the naive scanpy reference.
-
-    ``_score_perms`` accumulates each row of the graph once and reindexes those sums per
-    permutation. The reference below is the definition it replaced: build ``g[perm, :]`` and hand it
-    to :mod:`scanpy` for every permutation. Agreement has to hold to floating-point reordering only.
-    """
-    from scanpy.metrics import gearys_c, morans_i
+    """Every permutation score equals scanpy's on the row-permuted graph, up to float reordering."""
     from scipy.sparse import csr_matrix
     from sklearn.neighbors import kneighbors_graph
     from sklearn.preprocessing import normalize
@@ -395,14 +354,13 @@ def test_score_perms_matches_scanpy_per_permutation(mode: str):
     vals = rng.random((n_genes, n), dtype=np.float32)
 
     moran = mode == "moran"
-    observed, got = _score_perms(g, vals, mode=mode, n_perms=n_perms, rng=0, n_jobs=1, show_progress_bar=False)
+    observed, got = _score_perms(
+        g, vals, mode=mode, n_perms=n_perms, rng=0, n_jobs=1, working_memory=None, show_progress_bar=False
+    )
+    ref_observed, expected = _reference_sims(g, vals, mode, n_perms)
+    np.testing.assert_allclose(observed, ref_observed, rtol=1e-9)
 
-    func = morans_i if moran else gearys_c
-    expected = np.stack([func(g[gen.permutation(n), :], vals) for gen in np.random.default_rng(0).spawn(n_perms)])
-    np.testing.assert_allclose(observed, func(g, vals), rtol=1e-9)
-
-    # `_score_perms` only keeps reductions of the permutation scores, so the per-permutation
-    # comparison happens one level down, against the kernel that still returns them.
+    # `_score_perms` keeps only reductions of the permutation scores; the kernel returns them all
     gg = g.astype(np.float64, copy=False)
     gt = gg.T.tocsr()
     perms = np.stack([gen.permutation(n).astype(np.int32) for gen in np.random.default_rng(0).spawn(n_perms)])
@@ -419,7 +377,7 @@ def test_score_perms_matches_scanpy_per_permutation(mode: str):
                 gg.data.sum(),
                 perms,
                 moran,
-            )
+            )[1]
             for m in range(n_genes)
         ]
     ).T
@@ -433,32 +391,11 @@ def test_score_perms_matches_scanpy_per_permutation(mode: str):
     np.testing.assert_allclose(got["var"], expected.var(axis=0), rtol=1e-9)
 
 
-@pytest.mark.parametrize("mode", ["moran", "geary"])
-def test_score_perms_thread_invariant(mode: str):
-    """Permutation scores must not depend on `n_jobs`, which sizes the thread pool."""
-    from scipy.sparse import csr_matrix
-    from sklearn.neighbors import kneighbors_graph
-    from sklearn.preprocessing import normalize
+def _reference_sims(g, vals, mode: str, n_perms: int) -> tuple[np.ndarray, np.ndarray]:
+    """scanpy's observed scores, and its scores on ``g[perm, :]`` with one spawned generator per permutation."""
+    from scanpy.metrics import gearys_c, morans_i
 
-    n, n_perms = 300, 8
-    rng = np.random.default_rng(0)
-    g = csr_matrix(kneighbors_graph(rng.random((n, 2)), 5, mode="connectivity"))
-    normalize(g, norm="l1", axis=1, copy=False)
-    vals = rng.random((3, n), dtype=np.float32)
-
-    serial = _score_perms(g, vals, mode=mode, n_perms=n_perms, rng=0, n_jobs=1, show_progress_bar=False)
-    threaded = _score_perms(g, vals, mode=mode, n_perms=n_perms, rng=0, n_jobs=4, show_progress_bar=False)
-    np.testing.assert_array_equal(serial[0], threaded[0])
-    assert serial[1].keys() == threaded[1].keys()
-    for key in serial[1]:
-        np.testing.assert_array_equal(serial[1][key], threaded[1][key], err_msg=key)
-
-
-def test_spatial_autocorr_backend_deprecated(dummy_adata: AnnData):
-    """``backend`` no longer selects a process pool; it warns and is ignored."""
-    with pytest.warns(FutureWarning, match=r"`backend`.*deprecated"):
-        with_backend = spatial_autocorr(
-            dummy_adata, copy=True, n_perms=10, rng=0, backend="loky", show_progress_bar=False
-        )
-    without = spatial_autocorr(dummy_adata, copy=True, n_perms=10, rng=0, show_progress_bar=False)
-    assert_frame_equal(with_backend, without)
+    stat = morans_i if mode == "moran" else gearys_c
+    n = g.shape[0]
+    sims = np.stack([stat(g[gen.permutation(n), :], vals) for gen in np.random.default_rng(0).spawn(n_perms)])
+    return stat(g, vals), sims

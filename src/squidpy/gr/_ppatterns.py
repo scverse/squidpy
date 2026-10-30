@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from functools import partial
 from typing import Any, Literal
 
 import numba.types as nt
@@ -31,7 +32,6 @@ from squidpy._utils import (
     deprecated_randomness_param,
     get_n_numba_threads,
     memory_budget,
-    numba_threads,
     thread_map,
 )
 from squidpy._validators import assert_key_in_adata, assert_positive, normalize_choice
@@ -53,19 +53,10 @@ ip = np.int32
 fp = np.float32
 bl = nt.boolean
 
-# Permutation entries held at once. Permutations are reused across features, so they are
-# materialized rather than redrawn per feature; the cap keeps that buffer off `n_perms`, which
-# users raise for FDR resolution. Each block re-pays one scatter per feature, so the cost is set
-# by the block size this leaves: measured within a few percent up to 10M cells, where the block is
-# still tens of permutations, and ~1.3-1.6x at 100M, where it falls to two. Raise the cap if that
-# scale matters. It changes no result, see `test_spatial_autocorr_perm_blocks`.
-_PERM_BLOCK_SIZE = 2**28
-
-
-def _perm_block_entries(working_memory: float | str | None) -> int:
-    """Permutation entries held at once: ``working_memory`` worth of int32, `_PERM_BLOCK_SIZE` by default."""
-    item = np.dtype(np.int32).itemsize
-    return memory_budget(working_memory, default=_PERM_BLOCK_SIZE * item) // item
+# Default size of the permutation buffer. Permutations are reused across features, so they are
+# materialized rather than redrawn per feature; the cap keeps that buffer independent of `n_perms`.
+# Every block of permutations revisits each feature once, so a larger buffer means fewer passes.
+_PERM_BUFFER_BYTES = 2**30
 
 
 @d.dedent
@@ -125,7 +116,7 @@ def spatial_autocorr(
 
     %(rng_versionchanged)s
 
-    .. versionchanged:: 1.8.4
+    .. versionchanged:: 1.9.0
         Permutations run on a thread pool, and ``n_jobs = None`` now uses all ``NUMBA_NUM_THREADS``
         threads instead of one process. Pass ``n_jobs = 1`` for the old serial default.
 
@@ -199,6 +190,9 @@ def spatial_autocorr(
     _assert_connectivity_key(adata, key=connectivity_key)
 
     def extract_X(adata: AnnData, genes: str | Sequence[str] | None) -> tuple[NDArrayA | spmatrix, Sequence[Any]]:
+        if genes is None and not use_raw and "highly_variable" not in adata.var:
+            # every gene: `adata[:, genes]` would copy X to return the same columns
+            return (adata.X if layer is None else adata.layers[layer]).T, adata.var_names.values
         if genes is None:
             if "highly_variable" in adata.var:
                 genes = adata[:, adata.var["highly_variable"]].var_names.values
@@ -208,10 +202,6 @@ def spatial_autocorr(
             genes = [genes]
 
         if not use_raw:
-            # full var_names in order: `adata[:, genes]` would copy X to hand back the same
-            # columns it was given.
-            if len(genes) == adata.n_vars and np.array_equal(np.asarray(genes), adata.var_names.values):
-                return (adata.X if layer is None else adata.layers[layer]).T, genes
             subset = adata[:, genes]
             return (subset.X if layer is None else subset.layers[layer]).T, genes
         if adata.raw is None:
@@ -267,8 +257,6 @@ def spatial_autocorr(
     start = logg.info(f"Calculating {mode}'s statistic for `{n_perms}` permutations using `{n_jobs}` thread(s)")
     if n_perms is not None:
         assert_positive(n_perms, name="n_perms")
-        # the observed score comes from the same kernel as the permuted ones, so exact ties
-        # in the tally below stay exact
         score, score_perms = _score_perms(
             g,
             vals,
@@ -323,8 +311,11 @@ def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
     w: float,
     perms: NDArrayA,
     moran: bool,
-) -> NDArrayA:
-    """Permutation scores of one feature over the row-permuted graph, one per row of ``perms``.
+) -> tuple[float, NDArrayA]:
+    """Observed score of one feature, and its scores over the row-permuted graph, one per row of ``perms``.
+
+    The observed score is the unpermuted case of the same arithmetic, so a permutation that leaves
+    the score unchanged ties it exactly.
 
     Both statistics sum, over the rows of ``g[perm, :]``, a per-row quantity that depends on the
     permutation only through *which* row is visited, so those quantities are accumulated once per
@@ -338,16 +329,11 @@ def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
     ``xv`` must already be :class:`numpy.float64`, and ``tdat`` the float64 graph weights,
     matching the casts :mod:`scanpy` applies before its own kernels.
 
-    Compiled serial on purpose: `_score_perms` parallelizes across features instead, which measured
-    faster than an in-kernel ``prange`` even with fewer features than workers. ``nogil`` is what
-    lets that pool enter it concurrently, which a ``parallel=True`` kernel cannot survive under
-    numba's default threading layer.
+    Serial and ``nogil``: `_score_perms` runs it on many features at once from a thread pool.
     """
     n_perms, n = perms.shape
     out = np.empty(n_perms, dtype=np.float64)
 
-    # Independence from ``n_jobs`` comes from `_score_perms`: permutation ``p`` is always drawn
-    # from ``rngs[p]``, and each feature is owned by one worker.
     n_nz = nz.shape[0]
     x_bar = 0.0
     for t in range(n_nz):
@@ -356,7 +342,7 @@ def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
 
     # sum_i (x_i - x_bar)^2: Moran's denominator, and Geary's.
     css = 0.0
-    for t in range(n_nz):  # looped rather than ((xv - x_bar) ** 2).sum() to skip the temporary
+    for t in range(n_nz):
         d = xv[t] - x_bar
         css += d * d
     css += (n - n_nz) * x_bar * x_bar  # every zero entry contributes x_bar^2
@@ -381,6 +367,10 @@ def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
         for t in range(n_nz):
             lag_tot += xv[t] * col_sum[nz[t]]
         lag_tot -= x_bar * w
+        inum = 0.0
+        for t in range(n_nz):
+            inum += lag[nz[t]] * xv[t]
+        observed = n / w * (inum - x_bar * lag_tot) / css
         for p in range(n_perms):
             inum = 0.0
             for t in range(n_nz):
@@ -405,6 +395,12 @@ def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
         wx2_tot = 0.0
         for t in range(n_nz):
             wx2_tot += xv[t] * xv[t] * col_sum[nz[t]]
+        total = 0.0
+        for t in range(n_nz):
+            k = nz[t]
+            xi = xv[t]
+            total += xi * xi * w_sum[k] - 2.0 * xi * wx[k]
+        observed = (n - 1) * (total + wx2_tot) / denom
         for p in range(n_perms):
             total = 0.0
             for t in range(n_nz):
@@ -412,7 +408,7 @@ def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
                 xi = xv[t]
                 total += xi * xi * w_sum[k] - 2.0 * xi * wx[k]
             out[p] = (n - 1) * (total + wx2_tot) / denom
-    return out
+    return observed, out
 
 
 def _chunks(n: int, workers: int) -> list[range]:
@@ -429,7 +425,7 @@ def _score_perms(
     n_perms: int,
     rng: SeedLike | RNGLike | None,
     n_jobs: int,
-    working_memory: float | str | None = None,
+    working_memory: float | str | None,
     show_progress_bar: bool,
 ) -> tuple[NDArrayA, dict[str, Any]]:
     """Observed scores ``(n_features,)`` and the permutation accumulators `_p_value_calc` needs.
@@ -443,21 +439,20 @@ def _score_perms(
     g = g.astype(np.float64, copy=False)
     w = g.data.sum()
     rngs = np.random.default_rng(rng).spawn(n_perms)
-    # Blocks of at most `_perm_block_entries()` entries; every feature is revisited once per block, so
-    # the per-block scatter is re-paid. More than one block only once n_perms * n_cells exceeds it.
-    block = int(np.clip(_perm_block_entries(working_memory) // max(n_cells, 1), 1, n_perms))
+    budget = memory_budget(working_memory, default=_PERM_BUFFER_BYTES)
+    block = int(np.clip(budget // (4 * max(n_cells, 1)), 1, n_perms))  # int32 permutations
     buffer = np.empty((block, n_cells), dtype=np.int32)
-    identity = np.arange(n_cells, dtype=np.int32)[None]
     all_cells = np.arange(n_cells, dtype=np.int32)  # `nz` for a dense feature
-    w_sum = np.asarray(g.sum(axis=1)).ravel()  # feature-independent: compute once, not per call
-    col_sum = np.asarray(g.sum(axis=0)).ravel()  # ditto; turns the O(n) totals into O(nnz)
+    w_sum = np.asarray(g.sum(axis=1)).ravel()
+    col_sum = np.asarray(g.sum(axis=0)).ravel()
 
     moran = mode == "moran"
     sparse_vals = issparse(vals)
     if sparse_vals:
-        # ``vals`` arrives as ``X.T``, i.e. CSC, whose row slicing is O(nnz) rather than O(nnz_row);
-        # one conversion here makes the per-feature extraction below ~180x cheaper.
+        # ``vals`` arrives as ``X.T``, i.e. CSC, whose row slicing is O(nnz) rather than O(nnz_row).
+        # Canonical, so that every cell appears once in a feature's non-zeros.
         vals = vals.tocsr()
+        vals.sum_duplicates()
     n_features = vals.shape[0]
     # The kernel walks g by column, so it needs the transpose. One O(nnz) pass, and it removes
     # the per-feature dense vector the row-wise form needed.
@@ -479,12 +474,10 @@ def _score_perms(
     s1 = np.zeros(n_features, dtype=np.float64)
     s2 = np.zeros(n_features, dtype=np.float64)
     n_blocks = -(-n_perms // block)
-    # Features are independent and the kernel is nogil, so the parallelism is here rather than
-    # inside the kernel. That held even with fewer features than workers, where an in-kernel
-    # `prange` over permutations still measured slower.
+    # features are independent and the kernel is nogil, so they run in a thread pool
     pool_workers = max(1, min(n_jobs, n_features))
 
-    def run_feature(m: int, perms: NDArrayA, first: bool) -> None:
+    def run_feature(m: int, perms: NDArrayA) -> None:
         if sparse_vals:
             # `vals` is CSR, so this feature's non-zero cells and values are already contiguous.
             # The kernel reads them directly and never densifies the feature.
@@ -495,47 +488,39 @@ def _score_perms(
             nz = all_cells
             # both statistics are invariant to a shift, and centring here keeps the kernel's
             # `g @ x - x_bar * w_sum` from cancelling on a feature whose mean dwarfs its spread.
-            # A sparse feature cannot reach that ratio, so it pays nothing for this.
+            # Sparse features are not centred, which would fill in their zeros: stored sparse, a
+            # feature is assumed to be mostly zeros, whose mean is not large next to its spread.
             xv = np.asarray(vals[m], dtype=np.float64)
             xv = xv - xv.mean()
         if len(nz) == 0 or (xv.min() == xv.max() and (len(nz) == n_cells or xv[0] == 0.0)):
             return  # constant feature: scanpy drops it and reports `nan`
-        args = (tptr, tind, tdat, w_sum, col_sum, nz, xv, w)
-        if first:
-            score[m] = _autocorr_perms(*args, identity, moran)[0]
-        sims = _autocorr_perms(*args, perms, moran)
+        score[m], sims = _autocorr_perms(tptr, tind, tdat, w_sum, col_sum, nz, xv, w, perms, moran)
         count_ge[m] += int((sims >= score[m]).sum())
         count_le[m] += int((sims <= score[m]).sum())
         shifted = sims - score[m]
         s1[m] += shifted.sum()
         s2[m] += (shifted * shifted).sum()
 
-    with (
-        numba_threads(1),  # the kernel is serial; the pool below owns the parallelism
-        tqdm(total=n_blocks * n_features, unit="feature", disable=not show_progress_bar) as pbar,
-    ):
+    def fill(chunk: range, perms: NDArrayA, lo: int) -> None:
+        for i in chunk:
+            perms[i] = rngs[lo + i].permutation(n_cells)
+
+    # Each worker takes a contiguous run of features rather than one at a time; a single feature is
+    # short enough that per-item dispatch would cost about as much as the work. Each `m` belongs to
+    # one worker, so the writes in `run_feature` never collide.
+    def run_chunk(chunk: range, perms: NDArrayA) -> int:
+        for m in chunk:
+            run_feature(m, perms)
+        return len(chunk)
+
+    with tqdm(total=n_blocks * n_features, unit="feature", disable=not show_progress_bar) as pbar:
         for lo in range(0, n_perms, block):
             perms = buffer[: min(block, n_perms - lo)]
-            first = lo == 0
-
-            def fill(chunk: range, perms: NDArrayA = perms, lo: int = lo) -> None:
-                for i in chunk:
-                    perms[i] = rngs[lo + i].permutation(n_cells)
-
-            # Drained before the feature map below starts, so no worker reads `perms` while
-            # another is still filling it.
-            thread_map(fill, _chunks(len(perms), pool_workers), n_jobs=pool_workers)
-
-            # Each worker takes a contiguous run of features rather than one at a time; a single
-            # feature is short enough that per-item dispatch cost about as much as the work. Each
-            # `m` belongs to one worker, so the writes in `run_feature` never collide. The defaults
-            # bind this block's values rather than the loop's last ones.
-            def run_chunk(chunk: range, perms: NDArrayA = perms, first: bool = first) -> int:
-                for m in chunk:
-                    run_feature(m, perms, first)
-                return len(chunk)
-
-            for done in thread_map(run_chunk, _chunks(n_features, pool_workers), n_jobs=pool_workers):
+            # drained before the feature map starts, so no worker reads `perms` while it is filled
+            thread_map(partial(fill, perms=perms, lo=lo), _chunks(len(perms), n_jobs), n_jobs=n_jobs)
+            for done in thread_map(
+                partial(run_chunk, perms=perms), _chunks(n_features, pool_workers), n_jobs=pool_workers
+            ):
                 pbar.update(done)
     # Constant features never ran, so they keep scanpy's `nan` rather than a zero mean/variance.
     ran = ~np.isnan(score)
@@ -751,8 +736,8 @@ def _p_value_calc(
     n_perms = sims["n_perms"]
     # two-sided: the smaller tail, ties counted in both
     large_perm = np.minimum(sims["count_ge"], sims["count_le"])
-    # get p-value based on permutation
-    p_sim: NDArrayA = (large_perm + 1) / (n_perms + 1)
+    # a constant feature has no score, so no permutation p-value either
+    p_sim: NDArrayA = np.where(np.isnan(score), np.nan, (large_perm + 1) / (n_perms + 1))
 
     # get p-value based on standard normal approximation from permutations
     e_score_sim = sims["mean"]
