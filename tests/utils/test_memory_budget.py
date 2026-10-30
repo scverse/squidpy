@@ -19,14 +19,14 @@ from squidpy._utils import memory_budget
     ],
 )
 def test_memory_budget_parses(working_memory, expected):
-    assert memory_budget(working_memory, default=1) == expected
+    assert memory_budget(working_memory) == expected
 
 
 @pytest.mark.parametrize("working_memory", ["16 gigs", "GB", "-1GB", "0B", 0, -5])
 def test_memory_budget_rejects(working_memory):
     with pytest.raises(ValueError, match="working_memory"):
-        memory_budget(working_memory, default=1)
+        memory_budget(working_memory)
 
 
 def test_memory_budget_default():
-    assert memory_budget(None, default=123) == 123
+    assert memory_budget(None) == 2**30

@@ -332,14 +332,18 @@ _MEM_UNITS = {
 }  # fmt: skip
 
 
-def memory_budget(working_memory: float | str | None, *, default: int) -> int:
+# `working_memory` when not given: 1 GiB, as scikit-learn's default `working_memory`
+_DEFAULT_WORKING_MEMORY = 2**30
+
+
+def memory_budget(working_memory: float | str | None) -> int:
     """Bytes a function may use for its working buffers.
 
     ``working_memory`` as given: a number of MiB (as scikit-learn's ``working_memory``), or a string
-    with a unit such as ``"16GB"`` or ``"512MiB"``. If `None`, ``default``.
+    with a unit such as ``"16GB"`` or ``"512MiB"``. If `None`, 1 GiB.
     """
     if working_memory is None:
-        return default
+        return _DEFAULT_WORKING_MEMORY
     if isinstance(working_memory, str):
         m = re.fullmatch(r"\s*(\d+(?:\.\d*)?|\.\d+)\s*([kmgt]i?b|b)?\s*", working_memory.lower())
         if m is None:

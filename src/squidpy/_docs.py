@@ -163,8 +163,8 @@ working_memory
     Memory for the function's temporary working buffers, as in scikit-learn: a number of MiB, or a
     string such as ``"16GB"``, ``"512MiB"`` or ``"1.5TB"`` (``KB``/``MB``/``GB``/``TB`` are powers of
     1000, ``KiB``/``MiB``/``GiB``/``TiB`` powers of 1024). Larger buffers let more work be done per pass.
-    If `None`, the function's own default. Which buffers it bounds is given below; it is in addition
-    to the input data, which is already in memory."""
+    If `None`, 1 GiB. Which buffers it bounds is given below; it is in addition to the input data,
+    which is already in memory."""
 _show_progress_bar = """\
 show_progress_bar
     Whether to show the progress bar or not."""
