@@ -19,7 +19,6 @@ from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import normalize
 from spatialdata import SpatialData
 from statsmodels.stats.multitest import multipletests
-from tqdm.auto import tqdm
 
 from squidpy._compat import old_positionals
 from squidpy._constants._pkg_constants import Key
@@ -91,7 +90,7 @@ def spatial_autocorr(
     use_raw: bool = False,
     copy: bool = False,
     n_jobs: int | None = None,
-    working_memory: float | str | None = None,
+    working_memory: int | str | None = None,
     show_progress_bar: bool = True,
     table_key: str | None = None,
 ) -> pd.DataFrame | None:
@@ -420,7 +419,7 @@ def _score_perms(
     n_perms: int,
     rng: SeedLike | RNGLike | None,
     n_jobs: int,
-    working_memory: float | str | None,
+    working_memory: int | str | None,
     show_progress_bar: bool,
 ) -> tuple[NDArrayA, dict[str, Any]]:
     """Observed scores ``(n_features,)`` and the permutation accumulators `_p_value_calc` needs.
@@ -469,7 +468,6 @@ def _score_perms(
     # makes the variance exactly 0 when every permutation scores alike (see `_p_value_calc`).
     s1 = np.zeros(n_features, dtype=np.float64)
     s2 = np.zeros(n_features, dtype=np.float64)
-    n_blocks = -(-n_perms // block)
     # features are independent and the kernel is nogil, so they run in a thread pool
     pool_workers = max(1, min(n_jobs, n_features))
 
@@ -504,20 +502,21 @@ def _score_perms(
     # Each worker takes a contiguous run of features rather than one at a time; a single feature is
     # short enough that per-item dispatch would cost about as much as the work. Each `m` belongs to
     # one worker, so the writes in `run_feature` never collide.
-    def run_chunk(chunk: range, perms: NDArrayA) -> int:
+    def run_chunk(chunk: range, perms: NDArrayA) -> None:
         for m in chunk:
             run_feature(m, perms)
-        return len(chunk)
 
-    with tqdm(total=n_blocks * n_features, unit="feature", disable=not show_progress_bar) as pbar:
-        for lo in range(0, n_perms, block):
-            perms = buffer[: min(block, n_perms - lo)]
-            # drained before the feature map starts, so no worker reads `perms` while it is filled
-            thread_map(partial(fill, perms=perms, lo=lo), _chunks(len(perms), n_jobs), n_jobs=n_jobs)
-            for done in thread_map(
-                partial(run_chunk, perms=perms), _chunks(n_features, pool_workers), n_jobs=pool_workers
-            ):
-                pbar.update(done)
+    for lo in range(0, n_perms, block):
+        perms = buffer[: min(block, n_perms - lo)]
+        # drained before the feature map starts, so no worker reads `perms` while it is filled
+        thread_map(partial(fill, perms=perms, lo=lo), _chunks(len(perms), n_jobs), n_jobs=n_jobs)
+        thread_map(
+            partial(run_chunk, perms=perms),
+            _chunks(n_features, pool_workers),
+            n_jobs=pool_workers,
+            show_progress_bar=show_progress_bar,
+            unit="feature chunk",
+        )
     # Constant features never ran, so they keep scanpy's `nan` rather than a zero mean/variance.
     ran = ~np.isnan(score)
     mean_shift = np.where(ran, s1 / n_perms, np.nan)

@@ -160,9 +160,9 @@ n_jobs
 {_n_jobs_thread_rules}"""
 _working_memory = """\
 working_memory
-    Memory for the function's temporary working buffers, as in scikit-learn: a number of MiB, or a
-    string such as ``"16GB"``, ``"512MiB"`` or ``"1.5TB"`` (``KB``/``MB``/``GB``/``TB`` are powers of
-    1000, ``KiB``/``MiB``/``GiB``/``TiB`` powers of 1024). Larger buffers let more work be done per pass.
+    Memory for the function's temporary working buffers: a number of bytes, or a string such as
+    ``"16GB"`` or ``"512MB"`` (powers of 1024, ``"GB"`` and ``"GiB"`` alike). Larger buffers let more
+    work be done per pass.
     If `None`, 1 GiB. Which buffers it bounds is given below; it is in addition to the input data,
     which is already in memory."""
 _show_progress_bar = """\

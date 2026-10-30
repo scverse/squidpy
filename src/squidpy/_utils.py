@@ -5,7 +5,6 @@ from __future__ import annotations
 import functools
 import inspect
 import os
-import re
 import warnings
 from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
 from contextlib import contextmanager
@@ -19,6 +18,7 @@ import joblib as jl
 import numba
 import numpy as np
 import xarray as xr
+from humanfriendly import InvalidSize, parse_size
 from scanpy import logging as logg
 from spatialdata.models import Image2DModel, Labels2DModel
 
@@ -326,36 +326,24 @@ def thread_map(
     return _run(None)
 
 
-_MEM_UNITS = {
-    "b": 1, "kb": 10**3, "mb": 10**6, "gb": 10**9, "tb": 10**12,
-    "kib": 2**10, "mib": 2**20, "gib": 2**30, "tib": 2**40,
-}  # fmt: skip
-
-
-# `working_memory` when not given: 1 GiB, as scikit-learn's default `working_memory`
+# `working_memory` when not given
 _DEFAULT_WORKING_MEMORY = 2**30
 
 
-def memory_budget(working_memory: float | str | None) -> int:
-    """Bytes a function may use for its working buffers.
-
-    ``working_memory`` as given: a number of MiB (as scikit-learn's ``working_memory``), or a string
-    with a unit such as ``"16GB"`` or ``"512MiB"``. If `None`, 1 GiB.
-    """
+def memory_budget(working_memory: int | str | None) -> int:
+    """Bytes a function may use for its working buffers: ``working_memory`` as a number of bytes or a
+    size such as ``"16GB"`` or ``"512MiB"`` (powers of 1024), 1 GiB if `None`."""
     if working_memory is None:
         return _DEFAULT_WORKING_MEMORY
-    if isinstance(working_memory, str):
-        m = re.fullmatch(r"\s*(\d+(?:\.\d*)?|\.\d+)\s*([kmgt]i?b|b)?\s*", working_memory.lower())
-        if m is None:
-            raise ValueError(
-                f"Expected `working_memory` like '16GB', '512MiB' or a number of MiB, found `{working_memory!r}`."
-            )
-        n = float(m[1]) * _MEM_UNITS[m[2] or "mib"]
-    else:
-        n = working_memory * _MEM_UNITS["mib"]
+    try:
+        n = working_memory if isinstance(working_memory, int) else parse_size(working_memory, binary=True)
+    except InvalidSize as e:
+        raise ValueError(
+            f"Expected `working_memory` like '16GB', '512MiB' or a number of bytes, found `{working_memory!r}`."
+        ) from e
     if n <= 0:
         raise ValueError(f"Expected a positive `working_memory`, found `{working_memory!r}`.")
-    return int(n)
+    return n
 
 
 def get_n_numba_threads(n_threads: int | None) -> int:

@@ -52,6 +52,7 @@ dependencies = [
   "docrep>=0.3.1",
   "fast-array-utils>=1.5",              # `types.HasArrayNamespace`
   "fsspec>=2021.11",
+  "humanfriendly>=10",
   "imagecodecs>=2025.8.2,<2026",
   "legacy-api-wrap>=1.5",               # keyword-only args keep accepting old positional calls (#1288)
   "matplotlib>=3.3",
