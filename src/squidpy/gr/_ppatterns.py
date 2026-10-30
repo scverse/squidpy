@@ -56,7 +56,7 @@ bl = nt.boolean
 # Default size of the permutation buffer. Permutations are reused across features, so they are
 # materialized rather than redrawn per feature; the cap keeps that buffer independent of `n_perms`.
 # Every block of permutations revisits each feature once, so a larger buffer means fewer passes.
-_PERM_BUFFER_BYTES = 2**30
+_DEFAULT_WORKING_MEMORY = 2**30
 
 
 @d.dedent
@@ -439,7 +439,7 @@ def _score_perms(
     g = g.astype(np.float64, copy=False)
     w = g.data.sum()
     rngs = np.random.default_rng(rng).spawn(n_perms)
-    budget = memory_budget(working_memory, default=_PERM_BUFFER_BYTES)
+    budget = memory_budget(working_memory, default=_DEFAULT_WORKING_MEMORY)
     block = int(np.clip(budget // (4 * max(n_cells, 1)), 1, n_perms))  # int32 permutations
     buffer = np.empty((block, n_cells), dtype=np.int32)
     all_cells = np.arange(n_cells, dtype=np.int32)  # `nz` for a dense feature
