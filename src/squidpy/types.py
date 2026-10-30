@@ -1,4 +1,4 @@
-"""Parameter and result types."""
+"""Parameter, protocol and result types."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from typing import Annotated, TypedDict
 from squidpy._params import Default
 from squidpy._utils import RNGLike, SeedLike
 from squidpy.gr._build import SpatialNeighborsResult
+from squidpy.gr._clusterers import Clusterer, KClusterer
 from squidpy.gr._nhood import NhoodEnrichmentResult
 
 __all__ = [
@@ -16,6 +17,9 @@ __all__ = [
     "ReinhardParams",
     "MacenkoParams",
     "VahadaneParams",
+    # Protocols
+    "Clusterer",
+    "KClusterer",
     # Results
     "NhoodEnrichmentResult",
     "SpatialNeighborsResult",

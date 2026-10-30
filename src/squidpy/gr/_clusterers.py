@@ -33,6 +33,31 @@ class Clusterer(Protocol):
         ...
 
 
+@runtime_checkable
+class KClusterer(Clusterer, Protocol):
+    """A :class:`~squidpy.types.Clusterer` whose number of clusters squidpy also sets, per fit.
+
+    It takes ``random_state`` plus *one* of two number-of-clusters parameters:
+    :class:`~sklearn.mixture.GaussianMixture` calls it ``n_components``,
+    :class:`~sklearn.cluster.KMeans` calls it ``n_clusters``. Parameters are not methods, so
+    ``isinstance`` cannot see this and squidpy checks it before fitting. An optional
+    ``score(X)``, higher for a better fit, picks which run's labeling the auto-K sweep keeps
+    per K; without one, the first run's is kept. Every fit is on a fresh
+    :func:`~sklearn.base.clone`, so the estimator passed in is never mutated.
+    """
+
+
+# `n_clusters` first: SpectralClustering takes both, and there `n_components` is the width of
+# the spectral embedding, not the number of clusters
+_K_PARAMS = ("n_clusters", "n_components")
+
+
+def k_param(clusterer: Clusterer) -> str | None:
+    """Name of *clusterer*'s number-of-clusters parameter, ``None`` if it takes none."""
+    params = clusterer.get_params()
+    return next((name for name in _K_PARAMS if name in params), None)
+
+
 class LeidenClusterer(ClusterMixin, BaseEstimator):
     """Leiden partition of an embedding, at one resolution.
 

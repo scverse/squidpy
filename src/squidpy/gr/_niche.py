@@ -27,7 +27,7 @@ from squidpy._utils import (
     legacy_random,
 )
 from squidpy._validators import assert_isinstance, assert_key_in_adata, normalize_choice
-from squidpy.gr._clusterers import Clusterer, LeidenClusterer
+from squidpy.gr._clusterers import Clusterer, LeidenClusterer, k_param
 from squidpy.gr._nhood import (
     _aggregate_over,
     _assert_hop_request,
@@ -616,7 +616,8 @@ def calculate_niche_cellcharter(
     aggregation: str = "mean",
     rng: SeedLike | RNGLike | None = None,
     spatial_connectivities_key: str = "spatial_connectivities",
-    n_clusters: int = 10,
+    n_clusters: int | None = 10,
+    clusterer: Clusterer | None = None,
     n_pca_components: int | None = None,
     n_jobs: int | None = None,
     use_rep: str | None = None,
@@ -653,8 +654,9 @@ def calculate_niche_cellcharter(
        graph, from direct neighbors through ``distance`` graph hops, according to
        ``aggregation``.
     3. Concatenates the observation's own representation with every ring's aggregate.
-    4. Fits a Gaussian mixture model with ``n_clusters`` mixture components.
-    5. Uses the GMM component assignments as niche labels.
+    4. Fits a Gaussian mixture model with ``n_clusters`` mixture components, or
+       ``clusterer`` when given.
+    5. Uses the cluster assignments as niche labels.
 
     Consequently, each niche corresponds to a probabilistic cluster in a
     feature space that encodes both an observation's features and its broader
@@ -678,11 +680,21 @@ def calculate_niche_cellcharter(
         average local expression program. ``"variance"`` emphasizes local
         heterogeneity in the feature representation.
     %(rng)s
-        Seeds the Gaussian mixture clustering step.
+        Seeds the clustering step.
     %(niche_spatial_conn_key)s
     n_clusters
-        Number of Gaussian mixture components, and therefore the number of niche
-        labels produced per library or dataset.
+        Number of clusters, and therefore the number of niche labels produced per library
+        or dataset; it overrides a given ``clusterer``'s own K. Pass ``None`` for a
+        ``clusterer`` that takes no number of clusters. To select it by stability as
+        CellCharter's ``ClusterAutoK`` does, run :func:`~squidpy.gr.cluster_auto_k` with
+        ``use_rep=embedding_key_added`` on the result.
+    clusterer
+        The :class:`~squidpy.types.Clusterer` to fit, e.g. a
+        :class:`~sklearn.mixture.GaussianMixture` with a different ``covariance_type`` or
+        ``reg_covar``, or :class:`~sklearn.cluster.KMeans`. It is cloned; its ``random_state``
+        is set from ``rng`` and its number of clusters from ``n_clusters``, which for a
+        :class:`~sklearn.mixture.BayesianGaussianMixture` is an upper bound. Defaults to
+        ``GaussianMixture()``, CellCharter's model.
     n_pca_components
         Number of principal components of ``adata.X`` aggregated over the hop rings. ``None``
         uses 10, the latent width scVI defaults to, or one fewer than the smallest dimension of
@@ -726,8 +738,21 @@ def calculate_niche_cellcharter(
         n_jobs=n_jobs,
     )
 
-    # `GaussianMixture` is a `Clusterer` as it stands, so this flavor needs no wrapper
-    clusterers = {key_added: GaussianMixture(n_components=n_clusters)}
+    # `GaussianMixture`'s default 'kmeans' init is CellCharter's
+    model = GaussianMixture() if clusterer is None else clone(clusterer)
+    k_name = k_param(model)
+    fit: Clusterer
+    if k_name is None:
+        if n_clusters is not None:
+            raise TypeError(
+                f"{type(model).__name__} takes neither 'n_components' nor 'n_clusters'; pass n_clusters=None"
+            )
+        fit = model
+    elif n_clusters is None:
+        raise TypeError(f"{type(model).__name__} takes a number of clusters, so 'n_clusters' cannot be None")
+    else:  # overrides a given clusterer's own K, whose sklearn default is often 1
+        fit = model.set_params(**{k_name: int(n_clusters)})
+    clusterers = {key_added: fit}
 
     return calculate_niche_custom(
         data,

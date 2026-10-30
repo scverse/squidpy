@@ -13,3 +13,13 @@ The flavors of calculating niches.
     gr.calculate_niche_cellcharter
     gr.calculate_niche_spatialleiden
 ```
+
+## Selecting the number of niches
+
+```{eval-rst}
+.. currentmodule:: squidpy
+.. autosummary::
+    :toctree: ../../api
+
+    gr.cluster_auto_k
+```

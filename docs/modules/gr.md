@@ -16,6 +16,7 @@ gr/spatial_neighbors
 
     gr.mask_graph
     gr.nhood_enrichment
+    gr.nhood_entropy
     gr.co_occurrence
     gr.centrality_scores
     gr.interaction_matrix

@@ -14,6 +14,7 @@ from scanpy.pp import neighbors
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import dijkstra
 from scipy.spatial import cKDTree
+from sklearn.mixture import GaussianMixture
 from spatialdata import SpatialData
 from spatialdata.models import TableModel
 
@@ -1070,3 +1071,72 @@ def test_key_added_defaults_reproduce_the_derived_names():
     adata = _tiny(n=60)
     calculate_niche_utag(adata, resolutions=1.0, n_neighbors=8, rng=0)
     assert "utag_niche_res=1.0" in adata.obs.columns
+
+
+# the clusterer of the cellcharter flavor
+
+
+@pytest.mark.parametrize(
+    ("clusterer", "n_clusters", "expected"),
+    [
+        (GaussianMixture(covariance_type="diag"), 3, 3),
+        ("kmeans", 3, 3),
+        ("kmeans", 10, 10),  # the default, which overrides the clusterer's own K of 4
+    ],
+)
+def test_niche_cellcharter_sets_k(dummy_adata2: AnnData, clusterer, n_clusters, expected):
+    from sklearn.cluster import KMeans
+
+    clusterer = KMeans(n_clusters=4, n_init=1) if clusterer == "kmeans" else clusterer
+    before = clusterer.get_params()
+    adata = dummy_adata2 if expected < 10 else _tiny(n=60)
+    kwargs = {} if n_clusters == 10 else {"n_clusters": n_clusters}
+    calculate_niche_cellcharter(adata, distance=2, rng=0, clusterer=clusterer, **kwargs)
+    assert adata.obs["cellcharter_niche"].nunique() == expected
+    assert clusterer.get_params() == before, "the clusterer passed in is cloned, not set"
+
+
+def test_niche_cellcharter_seeds_a_given_clusterer_from_rng():
+    from sklearn.cluster import KMeans
+
+    kwargs = {"distance": 2, "rng": 0, "n_clusters": 3, "clusterer": KMeans(n_init=1), "copy": True}
+    first = calculate_niche_cellcharter(_tiny(n=60), **kwargs)
+    second = calculate_niche_cellcharter(_tiny(n=60), **kwargs)
+    pd.testing.assert_series_equal(first.obs["cellcharter_niche"], second.obs["cellcharter_niche"])
+    assert first.obs["cellcharter_niche"].nunique() == 3
+
+
+def test_niche_cellcharter_takes_a_clusterer_without_k(dummy_adata2: AnnData):
+    from sklearn.cluster import AffinityPropagation
+
+    dummy_adata2.X = csr_matrix(dummy_adata2.X)
+    calculate_niche_cellcharter(
+        dummy_adata2, distance=2, rng=0, n_clusters=None, clusterer=AffinityPropagation(random_state=0)
+    )
+    expected = AffinityPropagation(random_state=0).fit_predict(dummy_adata2.obsm["niche_embedding"])
+    assert dummy_adata2.obs["cellcharter_niche"].nunique() == len(np.unique(expected))
+
+
+@pytest.mark.parametrize(
+    ("clusterer", "n_clusters", "match"),
+    [
+        ("object", 3, r"clone"),
+        ("affinity", 10, r"takes neither 'n_components' nor 'n_clusters'; pass n_clusters=None"),
+        ("kmeans", None, r"'n_clusters' cannot be None"),
+    ],
+)
+def test_niche_cellcharter_rejects_unusable_clusterers(dummy_adata2: AnnData, clusterer, n_clusters, match):
+    from sklearn.cluster import AffinityPropagation, KMeans
+
+    clusterer = {"object": object, "affinity": AffinityPropagation, "kmeans": KMeans}[clusterer]()
+    with pytest.raises(TypeError, match=match):
+        calculate_niche_cellcharter(dummy_adata2, distance=2, n_clusters=n_clusters, clusterer=clusterer)
+
+
+def test_niche_cellcharter_embedding_feeds_cluster_auto_k():
+    from squidpy.gr import cluster_auto_k
+
+    adata = _tiny(n=80)
+    calculate_niche_cellcharter(adata, distance=2, rng=0)
+    cluster_auto_k(adata, use_rep="niche_embedding", n_clusters=(2, 3), max_runs=2, rng=0, key_added="niche_k")
+    assert len(adata.obs["niche_k"].cat.categories) == adata.uns["niche_k"]["best_k"]

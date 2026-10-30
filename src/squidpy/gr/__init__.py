@@ -13,12 +13,15 @@ from squidpy.gr._build import (
     spatial_neighbors_knn,
     spatial_neighbors_radius,
 )
+from squidpy.gr._cluster_auto_k import cluster_auto_k
+from squidpy.gr._clusterers import Clusterer, KClusterer
 from squidpy.gr._ligrec import ligrec
 from squidpy.gr._nhood import (
     NhoodEnrichmentResult,
     centrality_scores,
     interaction_matrix,
     nhood_enrichment,
+    nhood_entropy,
 )
 from squidpy.gr._niche import (
     calculate_niche,
@@ -49,10 +52,14 @@ __all__ = [
     "calculate_niche_utag",
     "calculate_niche_cellcharter",
     "calculate_niche_spatialleiden",
+    "cluster_auto_k",
+    "Clusterer",
+    "KClusterer",
     "ligrec",
     "centrality_scores",
     "interaction_matrix",
     "nhood_enrichment",
+    "nhood_entropy",
     "co_occurrence",
     "spatial_autocorr",
     "ripley",
