@@ -23,16 +23,3 @@ The flavors of calculating niches.
 
     gr.cluster_auto_k
 ```
-
-## Clusterers
-
-The interfaces a ``clusterer`` argument has to satisfy.
-
-```{eval-rst}
-.. currentmodule:: squidpy
-.. autosummary::
-    :toctree: ../../api
-
-    gr.Clusterer
-    gr.KClusterer
-```

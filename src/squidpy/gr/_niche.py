@@ -691,7 +691,7 @@ def calculate_niche_cellcharter(
         :func:`~squidpy.gr.cluster_auto_k` with ``use_rep=embedding_key_added`` on the
         result. Must stay ``None`` for a ``clusterer`` that takes no number of clusters.
     clusterer
-        The :class:`~squidpy.gr.Clusterer` to fit, e.g. a
+        The :class:`~squidpy.types.Clusterer` to fit, e.g. a
         :class:`~sklearn.mixture.GaussianMixture` with a different ``covariance_type`` or
         ``reg_covar``, or :class:`~sklearn.cluster.KMeans`. It is cloned and its
         ``random_state`` is set from ``rng`` and its number of clusters from ``n_clusters``,

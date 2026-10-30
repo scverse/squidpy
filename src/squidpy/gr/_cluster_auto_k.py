@@ -66,7 +66,7 @@ def cluster_auto_k(
         of consecutive runs falls below this value.
     clusterer
         Fitted at every candidate K instead of the default mixture. Any
-        :class:`~squidpy.gr.KClusterer` will do (scikit-learn's
+        :class:`~squidpy.types.KClusterer` will do (scikit-learn's
         :class:`~sklearn.cluster.KMeans`, cuML's, or your own) as long as it takes a
         number of clusters and a ``random_state``, both of which this sets per fit. It is
         cloned for every fit, so the one passed in is never touched.
