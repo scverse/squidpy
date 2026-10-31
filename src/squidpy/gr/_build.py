@@ -150,6 +150,7 @@ def spatial_neighbors(
     adata: AnnData | SpatialData,
     *,
     spatial_key: str = Key.obsm.spatial,
+    coordinate_source: Literal["elements", "table"] = "elements",
     elements_to_coordinate_systems: dict[str, str] | None = None,
     table_key: str | None = None,
     library_key: str | None = None,
@@ -182,15 +183,7 @@ def spatial_neighbors(
     ----------
     %(adata)s
     %(spatial_key)s
-        If `adata` is a :class:`spatialdata.SpatialData`, the coordinates of the centroids will be stored in the
-        `adata` with this key.
-    elements_to_coordinate_systems
-        A dictionary mapping element names of the SpatialData object to coordinate systems.
-        The elements can be either Shapes or Labels. For compatibility, the spatialdata table must annotate
-        all regions keys. Must not be `None` if `adata` is a :class:`spatialdata.SpatialData`.
-    table_key
-        Key in :attr:`spatialdata.SpatialData.tables` where the spatialdata table is stored. Must not be `None` if
-        `adata` is a :class:`spatialdata.SpatialData`.
+    %(sdata_params)s
     %(library_key)s
     coord_type
         Type of coordinate system. Valid options are:
@@ -307,6 +300,8 @@ def spatial_neighbors(
         - :attr:`anndata.AnnData.obsp` ``['{key_added}_connectivities']`` - the spatial connectivities.
         - :attr:`anndata.AnnData.obsp` ``['{key_added}_distances']`` - the spatial distances.
         - :attr:`anndata.AnnData.uns`  ``['{key_added}']`` - :class:`dict` containing parameters.
+
+    %(spatial_neighbors_copy_notes)s
     """
     warnings.warn(
         "Calling `spatial_neighbors` is deprecated and will be removed in squidpy "
@@ -319,6 +314,7 @@ def spatial_neighbors(
     adata, library_key = _prepare_spatial_neighbors_input(
         adata,
         spatial_key=spatial_key,
+        coordinate_source=coordinate_source,
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
@@ -353,9 +349,12 @@ def _resolve_data(
     elements_to_coordinate_systems: dict[str, str] | None,
     table_key: str | None = None,
     spatial_key: str = Key.obsm.spatial,
+    coordinate_source: Literal["elements", "table"] = "elements",
     library_key: str | None = None,
     copy: bool = False,
 ) -> tuple[AnnData, str | None]:
+    if coordinate_source not in ("elements", "table"):
+        raise ValueError(f"Invalid `coordinate_source` {coordinate_source!r}. Expected 'elements' or 'table'.")
     if not isinstance(data, SpatialData):
         return data, library_key
 
@@ -385,27 +384,40 @@ def _resolve_data(
         elem_instances.append(element_instances)
 
     element_instances = pd.concat(elem_instances)
-    if (not np.all(element_instances.values == table.obs[instance_key].values)) or (
-        not np.all(ordered_regions_in_table == regions)
+    if not np.array_equal(element_instances.values, table.obs[instance_key].values) or not np.array_equal(
+        ordered_regions_in_table, regions
     ):
         raise ValueError(
             "The spatialdata table must annotate all elements keys. Some elements are missing or not ordered correctly, please check the `elements_to_coordinate_systems` dictionary."
         )
-    centroids = []
-    for region_ in ordered_regions_in_table:
-        cs = elements_to_coordinate_systems[region_]
-        centroid = get_centroids(data[region_], coordinate_system=cs)[["x", "y"]].compute()
+    if coordinate_source == "table":
+        coords = table.obsm[spatial_key]
+        if not isinstance(coords, np.ndarray) or coords.dtype.kind not in "iuf":
+            raise TypeError(f"`table.obsm[{spatial_key!r}]` must be a real numeric NumPy array.")
+        if coords.shape != (table.n_obs, 2):
+            raise ValueError(f"`table.obsm[{spatial_key!r}]` must have shape ({table.n_obs}, 2), found {coords.shape}.")
+        if not np.isfinite(coords).all():
+            raise ValueError(f"`table.obsm[{spatial_key!r}]` must contain only finite coordinates.")
+        if copy:
+            coords = coords.copy()
+    else:
+        centroids = []
+        for region_ in ordered_regions_in_table:
+            cs = elements_to_coordinate_systems[region_]
+            centroid = get_centroids(data[region_], coordinate_system=cs)[["x", "y"]].compute()
 
-        # TODO: remove this after https://github.com/scverse/spatialdata/issues/614
-        if remove_centroids[region_]:
-            centroid = centroid[1:].copy()
-        centroids.append(centroid)
+            # TODO: remove this after https://github.com/scverse/spatialdata/issues/614
+            if remove_centroids[region_]:
+                centroid = centroid[1:].copy()
+            centroids.append(centroid)
+        coords = np.concatenate(centroids)
 
     if copy:
         # Graph construction only needs observations, coordinates and the uns keys
         # used by legacy graph dispatch. Do not copy or load expression matrices.
         table = AnnData(obs=table.obs.copy(), uns=table.uns.copy())
-    table.obsm[spatial_key] = np.concatenate(centroids)
+    if copy or coordinate_source == "elements":
+        table.obsm[spatial_key] = coords
     return table, region_key
 
 
@@ -416,6 +428,7 @@ def spatial_neighbors_from_builder(
     *,
     builder: GraphBuilder[Any, Any],
     spatial_key: str = Key.obsm.spatial,
+    coordinate_source: Literal["elements", "table"] = "elements",
     elements_to_coordinate_systems: dict[str, str] | None = None,
     table_key: str | None = None,
     library_key: str | None = None,
@@ -471,6 +484,7 @@ def spatial_neighbors_from_builder(
     adata, library_key = _prepare_spatial_neighbors_input(
         data,
         spatial_key=spatial_key,
+        coordinate_source=coordinate_source,
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
@@ -491,6 +505,7 @@ def _prepare_spatial_neighbors_input(
     data: AnnData | SpatialData,
     *,
     spatial_key: str,
+    coordinate_source: Literal["elements", "table"] = "elements",
     elements_to_coordinate_systems: dict[str, str] | None,
     table_key: str | None,
     library_key: str | None,
@@ -500,6 +515,7 @@ def _prepare_spatial_neighbors_input(
     adata, library_key = _resolve_data(
         data,
         spatial_key=spatial_key,
+        coordinate_source=coordinate_source,
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
@@ -514,6 +530,7 @@ def spatial_neighbors_knn(
     data: AnnData | SpatialData,
     *,
     spatial_key: str = Key.obsm.spatial,
+    coordinate_source: Literal["elements", "table"] = "elements",
     elements_to_coordinate_systems: dict[str, str] | None = None,
     table_key: str | None = None,
     library_key: str | None = None,
@@ -562,6 +579,7 @@ def spatial_neighbors_knn(
     adata, library_key = _prepare_spatial_neighbors_input(
         data,
         spatial_key=spatial_key,
+        coordinate_source=coordinate_source,
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
@@ -584,6 +602,7 @@ def spatial_neighbors_radius(
     *,
     radius: float | tuple[float, float],
     spatial_key: str = Key.obsm.spatial,
+    coordinate_source: Literal["elements", "table"] = "elements",
     elements_to_coordinate_systems: dict[str, str] | None = None,
     table_key: str | None = None,
     library_key: str | None = None,
@@ -620,6 +639,20 @@ def spatial_neighbors_radius(
     -------
     %(spatial_neighbors_returns)s
 
+    Examples
+    --------
+    Reuse coordinates stored in a SpatialData table. The coordinates must already
+    be in the desired coordinate system and use the same units as ``radius``.
+
+    >>> sq.gr.spatial_neighbors_radius(
+    ...     sdata,
+    ...     table_key="table",
+    ...     elements_to_coordinate_systems={"cells": "global"},
+    ...     spatial_key="precomputed_spatial",
+    ...     coordinate_source="table",
+    ...     radius=40,
+    ... )
+
     See Also
     --------
     spatial_neighbors_from_builder : Use :class:`~squidpy.gr.neighbors.RadiusBuilder` directly for advanced customization.
@@ -634,6 +667,7 @@ def spatial_neighbors_radius(
     adata, library_key = _prepare_spatial_neighbors_input(
         data,
         spatial_key=spatial_key,
+        coordinate_source=coordinate_source,
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
@@ -655,6 +689,7 @@ def spatial_neighbors_delaunay(
     data: AnnData | SpatialData,
     *,
     spatial_key: str = Key.obsm.spatial,
+    coordinate_source: Literal["elements", "table"] = "elements",
     elements_to_coordinate_systems: dict[str, str] | None = None,
     table_key: str | None = None,
     library_key: str | None = None,
@@ -710,6 +745,7 @@ def spatial_neighbors_delaunay(
     adata, library_key = _prepare_spatial_neighbors_input(
         data,
         spatial_key=spatial_key,
+        coordinate_source=coordinate_source,
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
@@ -731,6 +767,7 @@ def spatial_neighbors_grid(
     data: AnnData | SpatialData,
     *,
     spatial_key: str = Key.obsm.spatial,
+    coordinate_source: Literal["elements", "table"] = "elements",
     elements_to_coordinate_systems: dict[str, str] | None = None,
     table_key: str | None = None,
     library_key: str | None = None,
@@ -799,6 +836,7 @@ def spatial_neighbors_grid(
     adata, library_key = _prepare_spatial_neighbors_input(
         data,
         spatial_key=spatial_key,
+        coordinate_source=coordinate_source,
         elements_to_coordinate_systems=elements_to_coordinate_systems,
         table_key=table_key,
         library_key=library_key,
