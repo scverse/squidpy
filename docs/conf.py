@@ -5,10 +5,9 @@ from datetime import datetime
 from functools import cache
 from importlib.metadata import metadata
 
-from sphinx.application import Sphinx
-
 from scverse_doc.config import DEFAULTS
 from scverse_doc.registry import intersphinx
+from sphinx.application import Sphinx
 
 info = metadata("squidpy")
 project = info["Name"]
