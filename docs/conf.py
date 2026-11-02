@@ -141,7 +141,8 @@ linkcheck_ignore = [
 html_static_path = ["_static"]
 html_logo = "_static/img/squidpy_horizontal.png"
 html_theme_options = {
-    "secondary_accent": True,
+    # The logo yellow, as in scverse/scverse.github.io#380; switch to `True` once scverse-doc's registry has it.
+    "secondary_accent": "oklch(0.876 0.169 91.5)",
     # the default of 3 drops the methods of the fit classes and the gr.neighbors classes from the nav
     "navigation_depth": 5,
 }
