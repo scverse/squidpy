@@ -229,7 +229,6 @@ jobs:
           use_oidc: true
           fail_ci_if_error: true
 
-
   # Check that all tests defined above pass. This makes it easy to set a single "required" test in branch
   # protection instead of having to update it frequently. See https://github.com/re-actors/alls-green#why.
   check:
