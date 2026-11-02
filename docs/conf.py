@@ -69,6 +69,8 @@ suppress_warnings = ["download.not_readable", "git.too_shallow"]
 # no nav entry per documented object: a function page would list itself under its own nav entry
 toc_object_entries = False
 autodoc_typehints = "signature"
+# jax is an optional extra; mock it so the fit classes' annotations render without it
+autodoc_mock_imports = ["jax"]
 # show each parameter's default next to its type, as scanpy does
 typehints_defaults = "braces"
 # a closed vocabulary this long is unreadable spelled out, and `qc_image` spells it
@@ -119,6 +121,11 @@ nitpick_ignore = [
     # public name of the above since sphinx-autodoc-typehints 3.14, still linked as a class; numpy documents it as data
     # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/1104
     ("py:class", "numpy.typing.NDArray"),
+    # fast-array-utils doesn't document its array protocol
+    ("py:class", "fast_array_utils.types.HasArrayNamespace"),
+    # optional dep mocked at build time (see autodoc_mock_imports), so no resolvable target
+    ("py:class", "jax.Array"),
+    ("py:class", "JaxArray"),
     ("py:class", "np.number"),
     ("py:class", "csr_matrix"),
     # SpatialNeighborsResult's own PEP 695 type parameter, which has no doc target on the squidpy.types page

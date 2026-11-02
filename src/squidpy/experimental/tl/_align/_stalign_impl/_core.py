@@ -1,0 +1,548 @@
+"""Core JAX implementation for experimental STalign point registration."""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from functools import partial
+from typing import Any, Literal
+
+import jax
+import jax.numpy as jnp
+import jax.scipy as jsp
+import numpy as np
+
+from squidpy.experimental.im._rasterize_points import axis as stable_axis
+
+__all__ = ["interp", "jax_dtype", "lddmm", "transform_grid_row_col", "transform_points_row_col"]
+
+#: One coordinate vector per spatial axis; the solver reads its rank off ``len(axes)``.
+Axes = Sequence[jax.Array]
+
+#: Iteration at which the mixture-weight E step switches on (STalign.py:1233).
+MIXTURE_E_STEP_START = 50
+
+
+def jax_dtype() -> jnp.dtype:
+    """Resolve the active JAX float dtype at call time, not import time."""
+    return jnp.float64 if jax.config.x64_enabled else jnp.float32
+
+
+def _to_affine(linear: jax.Array, translation: jax.Array) -> jax.Array:
+    ndim = linear.shape[0]
+    dtype = linear.dtype
+    return jnp.concatenate(
+        (
+            jnp.concatenate((linear, translation[:, None]), axis=1),
+            jnp.concatenate((jnp.zeros((1, ndim), dtype=dtype), jnp.ones((1, 1), dtype=dtype)), axis=1),
+        ),
+        axis=0,
+    )
+
+
+def interp(
+    x: Axes,
+    image: jax.Array,
+    phii: jax.Array,
+) -> jax.Array:
+    """Linearly interpolate a channels-first image on physical coordinates, at any rank."""
+    ndim = len(x)
+    if phii.shape[0] != ndim:
+        raise ValueError(
+            f"Expected interpolation coordinates to have leading axis of size {ndim}, found `{phii.shape}`."
+        )
+    channelled = image if image.ndim == ndim + 1 else image[None]
+    idx = jnp.stack([((phii[axis] - x[axis][0]) / (x[axis][1] - x[axis][0])).reshape(-1) for axis in range(ndim)])
+
+    def _sample(channel: jax.Array) -> jax.Array:
+        return jsp.ndimage.map_coordinates(channel, idx, order=1, mode="nearest").reshape(phii.shape[1:])
+
+    return jax.vmap(_sample)(channelled)
+
+
+def transform_points_row_col(
+    xv: Axes,
+    velocity: jax.Array,
+    affine: jax.Array,
+    points: np.ndarray | jax.Array,
+    *,
+    direction: Literal["forward", "backward"] = "forward",
+) -> jax.Array:
+    pts = jnp.asarray(points)
+    ndim = pts.shape[-1]
+    n_steps = velocity.shape[0]
+    time_steps = range(n_steps)
+    flow_sign = 1.0
+    if direction == "backward":
+        affine = jnp.linalg.inv(affine)
+        pts = pts @ affine[:ndim, :ndim].T + affine[:ndim, -1]
+        flow_sign = -1.0
+        time_steps = reversed(time_steps)
+
+    for t in time_steps:
+        disp = interp(
+            xv,
+            jnp.moveaxis(flow_sign * velocity[t], -1, 0),
+            pts.T[:, :, None],
+        )[:, :, 0].T
+        pts = pts + disp / n_steps
+
+    if direction == "forward":
+        pts = pts @ affine[:ndim, :ndim].T + affine[:ndim, -1]
+
+    return pts
+
+
+def transform_grid_row_col(
+    axes: Axes,
+    xv: Axes,
+    velocity: jax.Array,
+    affine: jax.Array,
+    *,
+    direction: Literal["forward", "backward"] = "forward",
+) -> jax.Array:
+    """Map the dense grid spanned by ``axes``, returned as ``(len(axes), *grid_shape)``."""
+    ndim = len(axes)
+    grid = jnp.stack(jnp.meshgrid(*axes, indexing="ij"))
+    points = jnp.moveaxis(grid, 0, -1).reshape((-1, ndim))
+    transformed = transform_points_row_col(xv, velocity, affine, points, direction=direction)
+    return jnp.moveaxis(transformed.reshape((*grid.shape[1:], ndim)), -1, 0)
+
+
+def _contrast_transform(source_image: jax.Array, target_image: jax.Array, weights: jax.Array) -> jax.Array:
+    """Weighted ridge fit mapping source intensities onto target intensities."""
+    flat_source = source_image.reshape(source_image.shape[0], -1)
+    flat_target = target_image.reshape(target_image.shape[0], -1)
+    flat_weights = weights.reshape(-1)
+
+    design = jnp.concatenate((jnp.ones((1, flat_source.shape[1]), dtype=source_image.dtype), flat_source), axis=0)
+    weighted_design = design * flat_weights[None, :]
+    design_cov = weighted_design @ design.T
+    target_cov = weighted_design @ flat_target.T
+    regularized = design_cov + 0.1 * jnp.eye(design_cov.shape[0], dtype=design_cov.dtype)
+    coefficients = jax.lax.stop_gradient(jnp.linalg.solve(regularized, target_cov))
+    return (coefficients.T @ design).reshape(target_image.shape)
+
+
+def _build_velocity_grid(x_source: Axes, *, a: float, expand: float) -> tuple[jax.Array, ...]:
+    minimum = np.array([axis[0] for axis in x_source], dtype=float)
+    maximum = np.array([axis[-1] for axis in x_source], dtype=float)
+    center = (minimum + maximum) / 2.0
+    half_width = (maximum - minimum) * expand / 2.0
+    step = a * 0.5
+    dtype = jax_dtype()
+    grid = tuple(
+        jnp.asarray(stable_axis(mid - half, mid + half, step), dtype=dtype)
+        for mid, half in zip(center, half_width, strict=True)
+    )
+    if any(axis.shape[0] < 2 for axis in grid):
+        raise ValueError(
+            f"The velocity grid has fewer than two samples along an axis: `a={a}` is too large for an "
+            f"image spanning {(maximum - minimum).tolist()} (times `expand={expand}`). Lower `a`, or raise `expand`."
+        )
+    return grid
+
+
+def _build_regularizer(
+    xv: Axes,
+    *,
+    a: float,
+    p: float,
+) -> tuple[jax.Array, jax.Array, float | jax.Array]:
+    dv = jnp.array([axis[1] - axis[0] for axis in xv])
+    shape = tuple(axis.shape[0] for axis in xv)
+    frequencies = [
+        jnp.arange(size, dtype=axis.dtype) / (size * step) for size, axis, step in zip(shape, xv, dv, strict=True)
+    ]
+    frequency_grid = jnp.stack(jnp.meshgrid(*frequencies, indexing="ij"), axis=-1)
+    ll = (1.0 + 2.0 * a**2 * jnp.sum((1.0 - jnp.cos(2.0 * np.pi * frequency_grid * dv)) / (dv**2), axis=-1)) ** (
+        2.0 * p
+    )
+    kernel = 1.0 / ll
+    dv_prod = jnp.prod(dv)
+    return kernel, ll, dv_prod
+
+
+def _update_mixture_weights(
+    transformed_source: jax.Array,
+    target_image: jax.Array,
+    match_weights: jax.Array,
+    artifact_weights: jax.Array,
+    background_weights: jax.Array,
+    *,
+    sigmaM: float,
+    sigmaA: float,
+    sigmaB: float,
+    estimate_muA: bool,
+    estimate_muB: bool,
+    muA: jax.Array,
+    muB: jax.Array,
+    iteration: int,
+) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]:
+    spatial_axes = tuple(range(1, target_image.ndim))
+    if estimate_muA:
+        muA = jnp.sum(artifact_weights * target_image, axis=spatial_axes) / jnp.maximum(
+            jnp.sum(artifact_weights), 1e-12
+        )
+    if estimate_muB:
+        muB = jnp.sum(background_weights * target_image, axis=spatial_axes) / jnp.maximum(
+            jnp.sum(background_weights), 1e-12
+        )
+
+    def _channelwise(mean: jax.Array) -> jax.Array:
+        """``(c,)`` means broadcast against a ``(c, *spatial)`` image."""
+        return mean.reshape((-1, *([1] * len(spatial_axes))))
+
+    def _e_step() -> tuple[jax.Array, jax.Array, jax.Array]:
+        weights = jnp.stack((match_weights, artifact_weights, background_weights))
+        mixing = jnp.sum(weights, axis=tuple(range(1, weights.ndim)))
+        mixing = mixing + jnp.max(mixing) * 1e-6
+        mixing = mixing / jnp.sum(mixing)
+
+        n_channels = target_image.shape[0]
+        norm_match = (2.0 * np.pi * sigmaM**2) ** (n_channels / 2.0)
+        norm_artifact = (2.0 * np.pi * sigmaA**2) ** (n_channels / 2.0)
+        norm_background = (2.0 * np.pi * sigmaB**2) ** (n_channels / 2.0)
+
+        match = mixing[0] * jnp.exp(-jnp.sum((transformed_source - target_image) ** 2, axis=0) / (2.0 * sigmaM**2))
+        match = match / norm_match
+        artifact = mixing[1] * jnp.exp(-jnp.sum((_channelwise(muA) - target_image) ** 2, axis=0) / (2.0 * sigmaA**2))
+        artifact = artifact / norm_artifact
+        background = mixing[2] * jnp.exp(-jnp.sum((_channelwise(muB) - target_image) ** 2, axis=0) / (2.0 * sigmaB**2))
+        background = background / norm_background
+
+        total = match + artifact + background
+        total = total + jnp.max(total) * 1e-6
+        return match / total, artifact / total, background / total
+
+    # before the E step the weights keep their initial values; muA/muB still update every 5th iteration
+    match_weights, artifact_weights, background_weights = jax.lax.cond(
+        iteration >= MIXTURE_E_STEP_START,
+        _e_step,
+        lambda: (match_weights, artifact_weights, background_weights),
+    )
+    return match_weights, artifact_weights, background_weights, muA, muB
+
+
+def _velocity_axes(velocity: jax.Array) -> tuple[int, ...]:
+    """The spatial axes of a ``(nt, *grid, ndim)`` velocity field."""
+    return tuple(range(1, velocity.ndim - 1))
+
+
+def _lddmm_loss(
+    linear: jax.Array,
+    translation: jax.Array,
+    velocity: jax.Array,
+    *,
+    x_source: Axes,
+    source_image: jax.Array,
+    x_target: Axes,
+    target_image: jax.Array,
+    xv: Axes,
+    match_weights: jax.Array,
+    ll: jax.Array,
+    dv_prod: float | jax.Array,
+    points_source: jax.Array,
+    points_target: jax.Array,
+    sigmaM: float,
+    sigmaR: float,
+    sigmaP: float | None,
+) -> tuple[jax.Array, tuple[jax.Array, jax.Array]]:
+    affine = _to_affine(linear, translation)
+    source_grid = transform_grid_row_col(x_target, xv, velocity, affine, direction="backward")
+    warped_source = interp(x_source, source_image, source_grid)
+    contrast_source = _contrast_transform(warped_source, target_image, match_weights)
+
+    match_energy = jnp.sum((contrast_source - target_image) ** 2 * match_weights) / (2.0 * sigmaM**2)
+    spatial = _velocity_axes(velocity)
+    fft_velocity = jnp.fft.fftn(velocity, axes=spatial)
+    # Sum over time and the vector component, leaving one term per velocity-grid cell.
+    reg_energy = jnp.sum(jnp.sum(jnp.abs(fft_velocity) ** 2, axis=(0, velocity.ndim - 1)) * ll) * dv_prod / 2.0
+    # one division per axis: `x / (n * m)` differs from upstream in the last bit
+    for axis in spatial:
+        reg_energy = reg_energy / velocity.shape[axis]
+    reg_energy = reg_energy / sigmaR**2
+
+    if points_source.shape[0] == 0:
+        point_energy = jnp.array(0.0, dtype=source_image.dtype)
+    else:
+        transformed_points = transform_points_row_col(xv, velocity, affine, points_source, direction="forward")
+        point_energy = jnp.sum((transformed_points - points_target) ** 2) / (2.0 * sigmaP**2)
+
+    total = match_energy + reg_energy + point_energy
+    return total, (contrast_source, reg_energy)
+
+
+# static only where Python needs the value; the tuning scalars stay traced
+@partial(jax.jit, static_argnames=("niter", "tol", "estimate_muA", "estimate_muB"))
+def _lddmm_run(
+    linear,
+    *,
+    translation,
+    velocity,
+    match_weights,
+    artifact_weights,
+    background_weights,
+    muA,
+    muB,
+    x_source,
+    source_image,
+    x_target,
+    target_image,
+    xv,
+    kernel,
+    ll,
+    dv_prod,
+    source_landmarks,
+    target_landmarks,
+    niter,
+    diffeo_start,
+    steps_before,
+    steps_after,
+    epV,
+    sigmaM,
+    sigmaA,
+    sigmaB,
+    sigmaR,
+    sigmaP,
+    tol,
+    patience,
+    estimate_muA,
+    estimate_muB,
+):
+    """The gradient descent, as one compiled loop."""
+    loss_and_grad = jax.value_and_grad(_lddmm_loss, argnums=(0, 1, 2), has_aux=True)
+
+    dtype = jax_dtype()
+    # one slot even for niter=0, so the carry has a fixed shape
+    energies = jnp.full((max(niter, 1),), jnp.nan, dtype=dtype)
+    initial = (
+        jnp.asarray(0),
+        linear,
+        translation,
+        velocity,
+        match_weights,
+        artifact_weights,
+        background_weights,
+        muA,
+        muB,
+        energies,
+    )
+
+    def _step(carry: tuple[Any, ...]) -> tuple[Any, ...]:
+        iteration, linear, translation, velocity, wm, wa, wb, muA, muB, energies = carry
+
+        (energy, aux), (grad_linear, grad_translation, grad_velocity) = loss_and_grad(
+            linear,
+            translation,
+            velocity,
+            x_source=x_source,
+            source_image=source_image,
+            x_target=x_target,
+            target_image=target_image,
+            xv=xv,
+            match_weights=wm,
+            ll=ll,
+            dv_prod=dv_prod,
+            points_source=source_landmarks,
+            points_target=target_landmarks,
+            sigmaM=sigmaM,
+            sigmaR=sigmaR,
+            sigmaP=sigmaP,
+        )
+        contrast_source, *_ = aux
+
+        diffeo = iteration >= diffeo_start
+        step_linear = jnp.where(diffeo, steps_after[0], steps_before[0])
+        step_translation = jnp.where(diffeo, steps_after[1], steps_before[1])
+        linear = linear - step_linear * grad_linear
+        translation = translation - step_translation * grad_translation
+
+        grad_velocity = jnp.fft.ifftn(
+            jnp.fft.fftn(grad_velocity, axes=_velocity_axes(velocity)) * kernel[None, ..., None],
+            axes=_velocity_axes(velocity),
+        ).real
+        velocity = jnp.where(diffeo, velocity - epV * grad_velocity, velocity)
+
+        wm, wa, wb, muA, muB = jax.lax.cond(
+            iteration % 5 == 0,
+            lambda: _update_mixture_weights(
+                contrast_source,
+                target_image,
+                wm,
+                wa,
+                wb,
+                sigmaM=sigmaM,
+                sigmaA=sigmaA,
+                sigmaB=sigmaB,
+                estimate_muA=estimate_muA,
+                estimate_muB=estimate_muB,
+                muA=muA,
+                muB=muB,
+                iteration=iteration,
+            ),
+            lambda: (wm, wa, wb, muA, muB),
+        )
+        return (
+            iteration + 1,
+            linear,
+            translation,
+            velocity,
+            wm,
+            wa,
+            wb,
+            muA,
+            muB,
+            energies.at[iteration].set(energy),
+        )
+
+    def _keep_going(carry: tuple[Any, ...]) -> jax.Array:
+        iteration, energies = carry[0], carry[-1]
+        if tol is None:
+            return iteration < niter
+        # compare against `patience` iterations ago: the weights move only every 5th iteration
+        recent = energies[jnp.maximum(iteration - 1, 0)]
+        older = energies[jnp.maximum(iteration - 1 - patience, 0)]
+        improving = (older - recent) > tol * jnp.abs(older)
+        # keep the window after the E step switches on, where the objective jumps
+        warming_up = iteration < jnp.maximum(MIXTURE_E_STEP_START, diffeo_start) + 2 + patience
+        return (iteration < niter) & (warming_up | improving)
+
+    return jax.lax.while_loop(_keep_going, _step, initial)
+
+
+def lddmm(
+    xI: Sequence[np.ndarray | jax.Array],
+    I: np.ndarray | jax.Array,
+    xJ: Sequence[np.ndarray | jax.Array],
+    J: np.ndarray | jax.Array,
+    *,
+    L: np.ndarray | jax.Array,
+    T: np.ndarray | jax.Array,
+    points_source: np.ndarray | jax.Array | None = None,
+    points_target: np.ndarray | jax.Array | None = None,
+    a: float,
+    p: float,
+    expand: float,
+    nt: int,
+    niter: int,
+    diffeo_start: int,
+    epL: float,
+    epT: float,
+    epV: float,
+    sigmaM: float,
+    sigmaB: float,
+    sigmaA: float,
+    sigmaR: float,
+    sigmaP: float | None = None,
+    muA: np.ndarray | jax.Array | None,
+    muB: np.ndarray | jax.Array | None,
+    tol: float | None,
+    patience: int,
+) -> dict[str, Any]:
+    """Fit an LDDMM registration of ``I`` onto ``J`` by gradient descent."""
+    x_source = tuple(jnp.asarray(axis) for axis in xI)
+    x_target = tuple(jnp.asarray(axis) for axis in xJ)
+    ndim = len(x_source)
+    if len(x_target) != ndim:
+        raise ValueError(f"Expected `xI` and `xJ` to have the same number of axes, found {ndim} and {len(x_target)}.")
+    source_image = jnp.asarray(I, dtype=jax_dtype())
+    target_image = jnp.asarray(J, dtype=jax_dtype())
+    linear = jnp.asarray(L, dtype=jax_dtype())
+    translation = jnp.asarray(T, dtype=jax_dtype())
+
+    if points_source is None:
+        source_landmarks = jnp.zeros((0, ndim), dtype=jax_dtype())
+        target_landmarks = jnp.zeros((0, ndim), dtype=jax_dtype())
+    else:
+        if sigmaP is None:
+            raise ValueError("Expected `sigmaP` alongside `points_source` / `points_target`.")
+        source_landmarks = jnp.asarray(points_source, dtype=jax_dtype())
+        target_landmarks = jnp.asarray(points_target, dtype=jax_dtype())
+
+    xv = _build_velocity_grid(x_source, a=a, expand=expand)
+    velocity = jnp.zeros((nt, *(axis.shape[0] for axis in xv), ndim), dtype=jax_dtype())
+    kernel, ll, dv_prod = _build_regularizer(xv, a=a, p=p)
+
+    match_weights = jnp.full(target_image.shape[1:], 0.5, dtype=target_image.dtype)
+    background_weights = jnp.full(target_image.shape[1:], 0.4, dtype=target_image.dtype)
+    artifact_weights = jnp.full(target_image.shape[1:], 0.1, dtype=target_image.dtype)
+    n_channels = target_image.shape[0]
+
+    def mixture_mean(value: np.ndarray | jax.Array | None, *, name: str, default: jax.Array) -> jax.Array:
+        if value is None:
+            return default
+        mean = jnp.asarray(value, dtype=target_image.dtype)
+        if mean.shape != (n_channels,):
+            raise ValueError(f"Expected `{name}` to have shape ({n_channels},), found {mean.shape}.")
+        return mean
+
+    spatial_axes = tuple(range(1, target_image.ndim))
+    artifact_mean = mixture_mean(muA, name="muA", default=jnp.mean(target_image, axis=spatial_axes))
+    background_mean = mixture_mean(muB, name="muB", default=jnp.zeros(n_channels, dtype=target_image.dtype))
+    estimate_muA = muA is None
+    estimate_muB = muB is None
+
+    # precomputed so the diffeo-phase steps are bit-identical to upstream's `epL / 10.0`
+    final = _lddmm_run(
+        linear,
+        translation=translation,
+        velocity=velocity,
+        match_weights=match_weights,
+        artifact_weights=artifact_weights,
+        background_weights=background_weights,
+        muA=artifact_mean,
+        muB=background_mean,
+        x_source=x_source,
+        source_image=source_image,
+        x_target=x_target,
+        target_image=target_image,
+        xv=xv,
+        kernel=kernel,
+        ll=ll,
+        dv_prod=dv_prod,
+        source_landmarks=source_landmarks,
+        target_landmarks=target_landmarks,
+        niter=niter,
+        diffeo_start=diffeo_start,
+        steps_before=(epL, epT),
+        steps_after=(epL / 10.0, epT / 10.0),
+        epV=epV,
+        sigmaM=sigmaM,
+        sigmaA=sigmaA,
+        sigmaB=sigmaB,
+        sigmaR=sigmaR,
+        sigmaP=sigmaP,
+        tol=tol,
+        patience=patience,
+        estimate_muA=estimate_muA,
+        estimate_muB=estimate_muB,
+    )
+    (
+        completed,
+        linear,
+        translation,
+        velocity,
+        match_weights,
+        artifact_weights,
+        background_weights,
+        muA,
+        muB,
+        energies,
+    ) = final
+
+    affine = _to_affine(linear, translation)
+    if not (jnp.all(jnp.isfinite(affine)) and jnp.all(jnp.isfinite(velocity))):
+        raise FloatingPointError(
+            f"The fit diverged: non-finite parameters after {int(completed)} iterations. "
+            f"Lower the step sizes `epL`, `epT` or `epV`."
+        )
+    return {
+        "affine": affine,
+        "velocity": velocity,
+        "velocity_grid": xv,
+        "match_weights": match_weights,
+        "background_weights": background_weights,
+        "artifact_weights": artifact_weights,
+        "energies": energies[:niter],
+        "n_iter": int(completed),
+    }

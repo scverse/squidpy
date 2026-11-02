@@ -7,6 +7,8 @@
     :toctree: ../../api
 
     im.calculate_image_features
+    im.rasterize_points
+    im.sample_volume
     im.make_tiles
     im.make_tiles_from_spots
     im.qc_image
