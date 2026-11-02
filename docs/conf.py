@@ -5,50 +5,31 @@ from datetime import datetime
 from functools import cache
 from importlib.metadata import metadata
 
+from scverse_doc.config import DEFAULTS
+from scverse_doc.registry import intersphinx
 from sphinx.application import Sphinx
 
-# -- Project information -----------------------------------------------------
 info = metadata("squidpy")
-project_name = info["Name"]
+project = info["Name"]
 author = info["Author"]
 copyright = f"{datetime.now():%Y}, {author}"
 version = info["Version"]
 urls = dict(pu.split(", ") for pu in info.get_all("Project-URL"))
-repository_url = urls["Source"]
-
-# The full version, including alpha/beta/rc tags
+source_repository = urls["Source"]
 release = info["Version"]
 
-needs_sphinx = "4.0"
-
-# -- General configuration ---------------------------------------------------
 extensions = [
-    "sphinx.ext.autodoc",
-    "sphinx.ext.napoleon",
+    "scverse_doc",
     "sphinx.ext.viewcode",
     "sphinx_autodoc_typehints",
-    "scanpydoc",
-    "sphinx.ext.intersphinx",
-    "sphinx.ext.autosummary",
-    "sphinx.ext.mathjax",
     "sphinxcontrib.bibtex",
-    "sphinx_copybutton",
-    "sphinx_design",
     "sphinx_tabs.tabs",
-    "myst_nb",
     "nbsphinx",
     "scverse_misc.sphinx_ext",
     "IPython.sphinxext.ipython_console_highlighting",
 ]
-intersphinx_mapping = dict(  # noqa: C408
-    python=("https://docs.python.org/3", None),
-    numpy=("https://numpy.org/doc/stable", None),
+intersphinx_mapping = intersphinx() | dict(  # noqa: C408
     statsmodels=("https://www.statsmodels.org/stable", None),
-    scipy=("https://docs.scipy.org/doc/scipy", None),
-    pandas=("https://pandas.pydata.org/pandas-docs/stable", None),
-    anndata=("https://anndata.readthedocs.io/en/stable", None),
-    scanpy=("https://scanpy.readthedocs.io/en/stable", None),
-    matplotlib=("https://matplotlib.org/stable", None),
     cycler=("https://matplotlib.org/cycler", None),
     seaborn=("https://seaborn.pydata.org", None),
     joblib=("https://joblib.readthedocs.io/en/latest", None),
@@ -60,32 +41,23 @@ intersphinx_mapping = dict(  # noqa: C408
     xarray=("https://docs.xarray.dev/en/stable", None),
     omnipath=("https://omnipath.readthedocs.io/en/latest", None),
     napari=("https://napari.org", None),
-    spatialdata=("https://spatialdata.scverse.org/en/latest", None),
     shapely=("https://shapely.readthedocs.io/en/stable", None),
 )
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
-source_suffix = {".rst": "restructuredtext", ".ipynb": "myst-nb"}
 master_doc = "index"
 
-# myst
-nb_execution_mode = "off"
-myst_enable_extensions = [
-    "colon_fence",
-    "dollarmath",
-    "amsmath",
-]
 myst_heading_anchors = 2
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = [
+    *DEFAULTS.exclude_patterns,
     "notebooks/README.rst",
     "notebooks/CONTRIBUTING.rst",
     "release/changelog/*",
-    "**.ipynb_checkpoints",
     "build",
 ]
 suppress_warnings = ["download.not_readable", "git.too_shallow"]
@@ -96,8 +68,6 @@ suppress_warnings = ["download.not_readable", "git.too_shallow"]
 # a list of builtin themes.
 # no nav entry per documented object: a function page would list itself under its own nav entry
 toc_object_entries = False
-autosummary_generate = True
-autodoc_member_order = "groupwise"
 autodoc_typehints = "signature"
 # show each parameter's default next to its type, as scanpy does
 typehints_defaults = "braces"
@@ -105,13 +75,9 @@ typehints_defaults = "braces"
 # twice, once bare and once inside a list; the alias name is the useful thing
 autodoc_type_aliases = {"QCMetric": "QCMetric"}
 autodoc_docstring_signature = True
-napoleon_google_docstring = False
-napoleon_numpy_docstring = True
-napoleon_include_init_with_doc = False
 napoleon_use_rtype = False
 # fold the return type into the Returns section rather than giving it its own
 typehints_use_rtype = False
-napoleon_use_param = True
 todo_include_todos = False
 
 # bibliography
@@ -140,7 +106,6 @@ spelling_filters = [
 ]
 
 # Link checking
-nitpicky = True  # this is linkcheck for Sphinx.
 nitpick_ignore = [
     ("py:func", "numba.prange"),  # no reference for this function
     ("py:class", "matplotlib_scalebar.ScaleBar"),  # this project has no sphinx docs
@@ -173,15 +138,12 @@ linkcheck_ignore = [
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_theme = "scanpydoc"
 html_static_path = ["_static"]
 html_logo = "_static/img/squidpy_horizontal.png"
 html_theme_options = {
-    "repository_url": "https://github.com/scverse/squidpy",
-    "repository_branch": "main",
-    "use_repository_button": True,
-    # the default of 4 drops the methods of the fit classes and the gr.neighbors classes from the nav
-    "max_navbar_depth": 5,
+    "secondary_accent": True,
+    # the default of 3 drops the methods of the fit classes and the gr.neighbors classes from the nav
+    "navigation_depth": 5,
 }
 html_show_sphinx = False
 
