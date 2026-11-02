@@ -1,8 +1,8 @@
 # Neighbors `neighbors`
 
 See the {doc}`extensibility guide </extensibility>` for how to implement a custom graph
-builder. ``GraphMatrixT`` is the type variable those interfaces are generic over; it is
-documented here rather than beside the ``gr`` functions, where a bare type variable read as
+builder. `GraphMatrixT` is the type variable those interfaces are generic over; it is
+documented here rather than beside the `gr` functions, where a bare type variable read as
 public API.
 
 ```{eval-rst}
