@@ -141,6 +141,7 @@ linkcheck_ignore = [
 html_static_path = ["_static"]
 html_logo = "_static/img/squidpy_horizontal.png"
 html_theme_options = {
+    "secondary_accent": True,
     # the default of 3 drops the methods of the fit classes and the gr.neighbors classes from the nav
     "navigation_depth": 5,
 }

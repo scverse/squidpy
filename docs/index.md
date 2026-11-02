@@ -30,11 +30,6 @@ If you are new to SpatialData, we invite you to take a look at the [spatialdata 
 [napari-spatialdata tutorial]: https://spatialdata.scverse.org/projects/napari/en/latest/notebooks/spatialdata.html
 [spatialdata tutorials]: https://spatialdata.scverse.org/en/latest/tutorials/notebooks/notebooks.html
 
-Squidpy is part of the scverse® project ([website](https://scverse.org/), [governance](https://scverse.org/about/roles/)) and is fiscally sponsored by [NumFOCUS](https://numfocus.org/).
-Please consider making a tax-deductible [donation](https://numfocus.org/donate-to-scverse/) to help the project pay for developer time, professional services, travel, workshops, and a variety of other needs.
-
-[![NumFOCUS](https://raw.githubusercontent.com/numfocus/templates/master/images/numfocus-logo.png)](https://numfocus.org/project/scverse)
-
 ## Manuscript
 
 Please see our manuscript [Palla, Spitzer et al. (2022)](https://doi.org/10.1038/s41592-021-01358-2) in **Nature Methods** to learn more.
@@ -54,6 +49,14 @@ Please see our manuscript [Palla, Spitzer et al. (2022)](https://doi.org/10.1038
 ## Contributing to Squidpy
 
 We are happy about any contributions! Before you start, check out our [contributing guide](https://github.com/scverse/squidpy/blob/main/CONTRIBUTING.rst).
+
+## NumFOCUS
+
+Squidpy is part of the scverse® project ([website](https://scverse.org/), [governance](https://scverse.org/about/roles/)) and is fiscally sponsored by [NumFOCUS](https://numfocus.org/).
+Please consider making a tax-deductible [donation](https://numfocus.org/donate-to-scverse/) to help the project pay for developer time, professional services, travel, workshops, and a variety of other needs.
+
+[![NumFOCUS](https://raw.githubusercontent.com/numfocus/templates/master/images/numfocus-logo.png)](https://numfocus.org/project/scverse)
+
 ```{toctree}
 :caption: Getting started
 :hidden: true
