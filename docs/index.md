@@ -54,26 +54,44 @@ Please see our manuscript [Palla, Spitzer et al. (2022)](https://doi.org/10.1038
 ## Contributing to Squidpy
 
 We are happy about any contributions! Before you start, check out our [contributing guide](https://github.com/scverse/squidpy/blob/main/CONTRIBUTING.rst).
-```{eval-rst}
-.. toctree::
-    :caption: General
-    :maxdepth: 2
-    :hidden:
+```{toctree}
+:caption: Getting started
+:hidden: true
+:maxdepth: 2
 
-    installation
-    api
-    classes
-    extensibility
-    release_notes
-    references
-    contributing
+installation
+quickstart
+```
 
-.. toctree::
-    :caption: Gallery
-    :maxdepth: 2
-    :hidden:
+```{toctree}
+:caption: Guides
+:hidden: true
+:maxdepth: 2
 
-    notebooks/tutorials/index
-    notebooks/examples/index
-    notebooks/deprecated_features/index
+notebooks/tutorials/index
+notebooks/examples/index
+notebooks/deprecated_features/index
+```
+
+```{toctree}
+:caption: Reference
+:hidden: true
+:maxdepth: 2
+
+api
+classes
+extensibility
+```
+
+```{toctree}
+:caption: Project
+:hidden: true
+:maxdepth: 2
+
+release_notes
+contributing
+citation
+references
+GitHub <https://github.com/scverse/squidpy>
+Discourse <https://discourse.scverse.org/c/help/squidpy/39>
 ```
