@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from functools import partial
 from typing import Any, Literal
 
@@ -392,6 +393,17 @@ def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
     return observed, out
 
 
+@dataclass(frozen=True)
+class _PermStats:
+    """Per-feature reductions of the permuted scores, all `_p_value_calc` needs."""
+
+    n_perms: int
+    count_ge: NDArrayA  # permutations scoring >= the observed score
+    count_le: NDArrayA  # permutations scoring <= the observed score
+    mean: NDArrayA
+    var: NDArrayA
+
+
 def _score_perms(
     g: spmatrix,
     vals: NDArrayA | spmatrix,
@@ -402,8 +414,8 @@ def _score_perms(
     n_jobs: int,
     working_memory: int | str | None,
     show_progress_bar: bool,
-) -> tuple[NDArrayA, dict[str, Any]]:
-    """Observed scores ``(n_features,)`` and the permutation accumulators `_p_value_calc` needs."""
+) -> tuple[NDArrayA, _PermStats]:
+    """Observed scores ``(n_features,)`` and the permutation reductions `_p_value_calc` needs."""
     n_cells = g.shape[0]
     # Match the casts scanpy applies to its own inputs, so the kernel sees the same numbers.
     g = g.astype(np.float64, copy=False)
@@ -494,13 +506,13 @@ def _score_perms(
     # Constant features never ran, so they keep scanpy's `nan` rather than a zero mean/variance.
     ran = ~np.isnan(score)
     mean_shift = np.where(ran, s1 / n_perms, np.nan)
-    return score, {
-        "n_perms": n_perms,
-        "count_ge": count_ge,
-        "count_le": count_le,
-        "mean": score + mean_shift,
-        "var": np.where(ran, s2 / n_perms - mean_shift**2, np.nan),
-    }
+    return score, _PermStats(
+        n_perms=n_perms,
+        count_ge=count_ge,
+        count_le=count_le,
+        mean=score + mean_shift,
+        var=np.where(ran, s2 / n_perms - mean_shift**2, np.nan),
+    )
 
 
 @njit(parallel=True, fastmath=True, cache=True)
@@ -668,7 +680,7 @@ def _find_min_max(spatial: NDArrayA) -> tuple[float, float]:
 
 def _p_value_calc(
     score: NDArrayA,
-    sims: dict[str, Any] | None,
+    sims: _PermStats | None,
     weights: spmatrix | NDArrayA,
     params: dict[str, Any],
 ) -> dict[str, Any]:
@@ -680,8 +692,7 @@ def _p_value_calc(
     score
         (n_features,).
     sims
-        Permutation accumulators from `_score_perms`: ``n_perms`` and, per feature, the
-        ``count_ge``/``count_le`` tallies plus the ``mean``/``var`` of the permuted scores.
+        Permutation reductions from `_score_perms`.
     weights
         The spatial connectivity graph, used for the analytic (normality) p-value.
     params
@@ -702,15 +713,15 @@ def _p_value_calc(
     if sims is None:
         return results
 
-    n_perms = sims["n_perms"]
+    n_perms = sims.n_perms
     # two-sided: the smaller tail, ties counted in both
-    large_perm = np.minimum(sims["count_ge"], sims["count_le"])
+    large_perm = np.minimum(sims.count_ge, sims.count_le)
     # a constant feature has no score, so no permutation p-value either
     p_sim: NDArrayA = np.where(np.isnan(score), np.nan, (large_perm + 1) / (n_perms + 1))
 
     # get p-value based on standard normal approximation from permutations
-    e_score_sim = sims["mean"]
-    var_sim = sims["var"]
+    e_score_sim = sims.mean
+    var_sim = sims.var
     se_score_sim = np.sqrt(var_sim)
     z_sim = (score - e_score_sim) / se_score_sim
     # NaN where a feature's permutations are all identical, so `var_sim` is exactly 0; the masks

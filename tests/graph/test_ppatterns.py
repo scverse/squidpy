@@ -16,7 +16,7 @@ GEARY_C = "gearyC"
 
 
 @pytest.mark.parametrize("mode", ["moran", "geary"])
-def test_spatial_autocorr_seq_par(dummy_adata: AnnData, mode: str):
+def test_spatial_autocorr_seq_par(dummy_adata: AnnData, mode: str, subtests: pytest.Subtests):
     """Check whether spatial autocorr results are the same for seq. and parallel computation."""
     spatial_autocorr(dummy_adata, mode=mode)
     dummy_adata.var["highly_variable"] = np.random.choice([True, False], size=dummy_adata.var_names.shape)
@@ -47,7 +47,8 @@ def test_spatial_autocorr_seq_par(dummy_adata: AnnData, mode: str):
     # depend on how the features were split across workers
     df_parallel = df_parallel.loc[df.index]  # align in case the stat-based sort ties differently
     for col in ("pval_sim", "pval_z_sim", "var_sim"):
-        np.testing.assert_allclose(df[col].values, df_parallel[col].values, atol=1e-12)
+        with subtests.test(col=col):
+            np.testing.assert_allclose(df[col].values, df_parallel[col].values, atol=1e-12)
 
 
 @pytest.mark.parametrize("mode", ["moran", "geary"])
@@ -350,10 +351,10 @@ def test_score_perms_matches_scanpy_per_permutation(mode: str):
     np.testing.assert_allclose(sims, expected, rtol=1e-9)
 
     # and the accumulators must be those same scores, reduced
-    assert got["n_perms"] == n_perms
-    np.testing.assert_array_equal(got["count_ge"], (sims >= observed).sum(axis=0))
-    np.testing.assert_allclose(got["mean"], expected.mean(axis=0), rtol=1e-9)
-    np.testing.assert_allclose(got["var"], expected.var(axis=0), rtol=1e-9)
+    assert got.n_perms == n_perms
+    np.testing.assert_array_equal(got.count_ge, (sims >= observed).sum(axis=0))
+    np.testing.assert_allclose(got.mean, expected.mean(axis=0), rtol=1e-9)
+    np.testing.assert_allclose(got.var, expected.var(axis=0), rtol=1e-9)
 
 
 def _reference_sims(g, vals, mode: str, n_perms: int) -> tuple[np.ndarray, np.ndarray]:

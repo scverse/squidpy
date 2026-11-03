@@ -110,7 +110,7 @@ test = [
   # 2026-06-12) shifts scatter/alpha rendering past the RMS tolerance. Cap for tests only
   # (the runtime dependency stays open) until the baselines are regenerated against 3.11.
   "matplotlib<3.11",
-  "pytest>=7",
+  "pytest>=9",  # the built-in `subtests` fixture
   # Just for VS Code
   "pytest-cov>=4",
   "pytest-mock>=3.5",
