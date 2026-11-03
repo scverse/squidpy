@@ -7,7 +7,7 @@ from typing import Annotated, TypedDict
 from squidpy._params import Default
 from squidpy._utils import RNGLike, SeedLike
 from squidpy.gr._build import SpatialNeighborsResult
-from squidpy.gr._clusterers import Clusterer, KClusterer
+from squidpy.gr._clusterers import Clusterer
 from squidpy.gr._nhood import NhoodEnrichmentResult
 
 __all__ = [
@@ -19,7 +19,6 @@ __all__ = [
     "VahadaneParams",
     # Protocols
     "Clusterer",
-    "KClusterer",
     # Results
     "NhoodEnrichmentResult",
     "SpatialNeighborsResult",

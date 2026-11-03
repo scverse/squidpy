@@ -29,7 +29,6 @@ What a ``clusterer`` argument has to implement.
     :toctree: ../api
 
     types.Clusterer
-    types.KClusterer
 ```
 
 ## Results
