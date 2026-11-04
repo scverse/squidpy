@@ -1,4 +1,5 @@
 # Graph `gr`
+
 ```{eval-rst}
 .. module:: squidpy.gr
 ```

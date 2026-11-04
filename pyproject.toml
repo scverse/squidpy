@@ -21,7 +21,7 @@ maintainers = [
 authors = [
   { name = "scverse" },
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Environment :: Console",
@@ -31,7 +31,6 @@ classifiers = [
   "Operating System :: MacOS :: MacOS X",
   "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
   "Topic :: Scientific/Engineering :: Bio-Informatics",
@@ -148,7 +147,7 @@ build.targets.wheel.packages = [ "src/squidpy" ]
 [tool.pixi]
 workspace.channels = [ "conda-forge" ]
 workspace.platforms = [ "linux-64", "osx-arm64" ]
-dependencies.python = ">=3.12"
+dependencies.python = ">=3.13"
 pypi-dependencies.squidpy = { path = ".", editable = true }
 tasks.format = "ruff format ."
 tasks.kernel-install = 'python -m ipykernel install --user --name pixi-dev --display-name "squidpy (dev)"'
@@ -157,12 +156,12 @@ tasks.lint = "ruff check ."
 tasks.pre-commit = "pre-commit run"
 tasks.pre-commit-install = "pre-commit install"
 tasks.test = "pytest -v --color=yes --tb=short --durations=10"
-feature.py312.dependencies.python = "3.12.*"
+feature.py313.dependencies.python = "3.13.*"
 feature.py314.dependencies.python = "3.14.*"
 environments.default = { features = [ "py314" ], solve-group = "py314" }
-environments.dev-py312 = { features = [ "dev", "test", "py312" ], solve-group = "py312" }
+environments.dev-py313 = { features = [ "dev", "test", "py313" ], solve-group = "py313" }
 environments.dev-py314 = { features = [ "dev", "test", "py314" ], solve-group = "py314" }
-environments.docs-py312 = { features = [ "docs", "py312" ], solve-group = "py312" }
+environments.docs-py313 = { features = [ "docs", "py313" ], solve-group = "py313" }
 environments.docs-py314 = { features = [ "docs", "py314" ], solve-group = "py314" }
 environments.test-py314 = { features = [ "test", "py314" ], solve-group = "py314" }
 
@@ -274,6 +273,9 @@ lint.flake8-tidy-imports.ban-relative-imports = "all"
 lint.isort.required-imports = [ "from __future__ import annotations" ]
 lint.preview = true
 # "squidpy/*.py" = [ "RST303" ]
+
+[tool.pyproject-fmt]
+max_supported_python = "3.14"
 
 [tool.pytest]
 addopts = [

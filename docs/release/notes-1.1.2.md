@@ -8,5 +8,5 @@
 
 ## Miscellaneous
 
-- Update CI and fix ``_genesymols`` context manager.
+- Update CI and fix `_genesymols` context manager.
   [#412](https://github.com/scverse/squidpy/pull/412)
