@@ -1,4 +1,5 @@
 # Datasets `datasets`
+
 ```{eval-rst}
 .. module:: squidpy.datasets
 .. currentmodule:: squidpy

@@ -1,4 +1,5 @@
 # Image `im`
+
 ```{eval-rst}
 .. module:: squidpy.im
 .. currentmodule:: squidpy
