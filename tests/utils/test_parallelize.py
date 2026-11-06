@@ -63,6 +63,50 @@ def func(request) -> Callable:
     }[request.param]
 
 
+@pytest.fixture
+def numba_thread_count():
+    if numba.config.NUMBA_NUM_THREADS < 2:
+        pytest.skip("Restoring a thread count greater than one requires at least two Numba threads")
+
+    previous = numba.get_num_threads()
+    numba.set_num_threads(2)
+    try:
+        yield 2
+    finally:
+        numba.set_num_threads(previous)
+
+
+@pytest.mark.parametrize("backend", ["loky", "threading"])
+@pytest.mark.parametrize("n_jobs", [None, 1])
+def test_parallelize_restores_numba_threads(numba_thread_count, backend, n_jobs):
+    def callback(chunk, offset, *, queue):
+        assert numba.get_num_threads() == 1
+        return [value + offset for value in chunk]
+
+    result = parallelize(callback, [1, 2], n_jobs=n_jobs, backend=backend, show_progress_bar=False)(10)
+
+    assert result == [[11, 12]]
+    assert numba.get_num_threads() == numba_thread_count
+
+
+@pytest.mark.parametrize("backend", ["loky", "threading"])
+@pytest.mark.parametrize("n_jobs", [None, 1])
+def test_parallelize_restores_numba_threads_on_error(numba_thread_count, backend, n_jobs):
+    error = ValueError("Callback failed")
+
+    def callback(chunk, *, queue):
+        assert numba.get_num_threads() == 1
+        raise error
+
+    run = parallelize(callback, [1], n_jobs=n_jobs, backend=backend, show_progress_bar=False)
+
+    with pytest.raises(ValueError, match="Callback failed") as exc_info:
+        run()
+
+    assert exc_info.value is error
+    assert numba.get_num_threads() == numba_thread_count
+
+
 # Timeouts are also useful because some processes don't return in
 # in case of failure.
 
