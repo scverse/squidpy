@@ -165,8 +165,9 @@ def sliding_window(
             else:
                 col_name = f"{sliding_window_key}_{lib_key}window_{idx}"
                 sliding_window_df.loc[obs_indices, col_name] = True
-                # Avoid chained assignment for pandas CoW compatibility
-                sliding_window_df[col_name] = sliding_window_df[col_name].fillna(False)
+                # Avoid chained assignment for pandas CoW compatibility; the .loc enlargement above made an
+                # object column of True/NaN, which fillna leaves as object
+                sliding_window_df[col_name] = sliding_window_df[col_name].fillna(False).astype(bool)
 
     if overlap == 0:
         # create categorical variable for ordered windows
