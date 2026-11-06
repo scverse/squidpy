@@ -14,7 +14,7 @@
 
 ## Miscellaneous
 
-- The Squidpy `interactive` module has been removed. Please use the ``napari-spatialdata`` plugin instead. You can find it [here](https://spatialdata.scverse.org/projects/napari/en/latest/index.html)  [@giovp](https://github.com/giovp)
+- The Squidpy `interactive` module has been removed. Please use the `napari-spatialdata` plugin instead. You can find it [here](https://spatialdata.scverse.org/projects/napari/en/latest/index.html) [@giovp](https://github.com/giovp)
   [#877](https://github.com/scverse/squidpy/pull/877)
 - Drop support for Python 3.9 [@giovp](https://github.com/giovp)
   [#881](https://github.com/scverse/squidpy/pull/881)

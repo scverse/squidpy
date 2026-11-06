@@ -1,4 +1,5 @@
 # Plotting `pl`
+
 ```{eval-rst}
 .. module:: squidpy.pl
 .. currentmodule:: squidpy
