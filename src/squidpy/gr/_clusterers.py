@@ -28,16 +28,50 @@ class Clusterer(Protocol):
         """The constructor parameters, as :func:`~sklearn.base.clone` reads them."""
         ...
 
-    def set_params(self, *, random_state: int) -> Self:
-        """Seed the next fit; returns the estimator."""
+    def set_params(self, **params: Any) -> Self:
+        """Set constructor parameters, ``random_state`` among them; returns the estimator."""
         ...
 
 
-class LeidenClusterer(ClusterMixin, BaseEstimator):
-    """Leiden partition of an embedding, at one resolution.
+# `n_clusters` first: SpectralClustering takes both, and there `n_components` is the width of
+# the spectral embedding, not the number of clusters
+_K_PARAMS = ("n_clusters", "n_components")
 
-    ``X`` is the embedding and the neighborhood graph is built here, from *n_neighbors*.
-    One resolution per clusterer, so a sweep is a mapping of them.
+
+def k_param(clusterer: Clusterer) -> str | None:
+    """Name of *clusterer*'s number-of-clusters parameter, ``None`` if it takes none."""
+    params = clusterer.get_params()
+    return next((name for name in _K_PARAMS if name in params), None)
+
+
+class LeidenClusterer(ClusterMixin, BaseEstimator):
+    """Leiden partition of an embedding, at one resolution, as a scikit-learn clusterer.
+
+    ``X`` is the embedding, and the neighborhood graph is built from it on every fit, from
+    *n_neighbors*, without dimensionality reduction. Pass it as the ``clusterer`` of
+    :func:`~squidpy.gr.calculate_niche_cellcharter` (with ``n_clusters=None``), or to select a
+    resolution with :func:`~squidpy.gr.cluster_auto_k`::
+
+        sq.gr.cluster_auto_k(
+            adata,
+            use_rep="niche_embedding",
+            clusterer=sq.gr.LeidenClusterer(),
+            param="resolution",
+            values=[0.2, 0.4, 0.6, 0.8, 1.0],
+        )
+
+    Parameters
+    ----------
+    n_neighbors
+        Neighbors per observation in the graph partitioned.
+    resolution
+        Leiden resolution; higher gives more clusters.
+    flavor
+        Backend of :func:`scanpy.tl.leiden`.
+    n_iterations
+        Leiden iterations; ``-1`` runs until the partition stops changing.
+    random_state
+        Seed of the partition.
     """
 
     def __init__(

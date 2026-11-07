@@ -14,6 +14,8 @@ from scanpy.pp import neighbors
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import dijkstra
 from scipy.spatial import cKDTree
+from sklearn.cluster import AffinityPropagation, AgglomerativeClustering, KMeans
+from sklearn.mixture import GaussianMixture
 from spatialdata import SpatialData
 from spatialdata.models import TableModel
 
@@ -240,7 +242,7 @@ def test_calculate_niche_deprecation_is_a_future_warning(dummy_adata2: AnnData):
 def test_cellcharter_rejects_a_distance_below_one(dummy_adata2: AnnData, distance: int):
     spatial_neighbors_knn(dummy_adata2, n_neighs=3)
     with pytest.raises(ValueError, match=r"'distance' must be >= 1"):
-        calculate_niche_cellcharter(dummy_adata2, distance=distance, n_clusters=2, rng=0)
+        calculate_niche_cellcharter(dummy_adata2, distance=distance, clusterer=GaussianMixture(n_components=2), rng=0)
 
 
 def test_neighborhood_profile_counts_each_neighbor_once(dummy_adata2: AnnData):
@@ -482,7 +484,9 @@ def test_nhood_aggregate_sums_cancelling_weights():
 def test_niche_rejects_an_unusable_embedding_key(key):
     "`obsm[None]` is accepted by AnnData and only fails later, at write_h5ad."
     with pytest.raises(ValueError, match=r"'embedding_key_added' must be a non-empty string"):
-        calculate_niche_cellcharter(_tiny(), distance=2, n_clusters=2, rng=0, embedding_key_added=key)
+        calculate_niche_cellcharter(
+            _tiny(), distance=2, clusterer=GaussianMixture(n_components=2), rng=0, embedding_key_added=key
+        )
 
 
 def test_weighted_graph_warning_points_at_the_caller():
@@ -490,7 +494,7 @@ def test_weighted_graph_warning_points_at_the_caller():
     adata = _tiny()
     spatial_neighbors_knn(adata, n_neighs=4, transform="spectral")
     with pytest.warns(UserWarning, match="non-binary") as caught:
-        calculate_niche_cellcharter(adata, distance=2, n_clusters=2, rng=0)
+        calculate_niche_cellcharter(adata, distance=2, clusterer=GaussianMixture(n_components=2), rng=0)
     assert caught[0].filename == __file__, f"attributed to {caught[0].filename}"
 
 
@@ -521,7 +525,7 @@ def test_non_boolean_mask_raises():
     [
         ("neighborhood", {"groups": "ct", "resolutions": 1.0}),
         ("utag", {"resolutions": 1.0}),
-        ("cellcharter", {"distance": 1, "n_clusters": 2}),
+        ("cellcharter", {"distance": 1, "clusterer": GaussianMixture(n_components=2)}),
         ("spatialleiden", {"resolutions": 1.0, "latent_connectivities_key": "spatial_connectivities"}),
     ],
 )
@@ -569,7 +573,7 @@ def test_integer_features_keep_their_ring_means():
     adata.obsm["spatial"] = rng.random((60, 2)) * 10
     spatial_neighbors_knn(adata, n_neighs=5)
 
-    calculate_niche_cellcharter(adata, use_rep="X", distance=1, n_clusters=2, rng=0)
+    calculate_niche_cellcharter(adata, use_rep="X", distance=1, clusterer=GaussianMixture(n_components=2), rng=0)
     ring = np.asarray(adata.obsm["niche_embedding"][:, 4:8], dtype=np.float64)
     expected = to_dense(
         _aggregate_over(
@@ -652,7 +656,7 @@ def test_neighborhood_takes_no_use_rep():
 
 def test_cellcharter_use_rep_x_skips_the_pca():
     adata = _tiny(n=60)
-    calculate_niche_cellcharter(adata, n_clusters=3, distance=1, rng=0, use_rep="X")
+    calculate_niche_cellcharter(adata, clusterer=GaussianMixture(n_components=3), distance=1, rng=0, use_rep="X")
     assert adata.obsm["niche_embedding"].shape == (60, 6 * 2), "X itself, then one ring of it"
 
 
@@ -667,7 +671,7 @@ def test_use_rep_is_aggregated_over_the_hop_rings():
 
     labels = []
     for a in (adata, scrambled):
-        calculate_niche_cellcharter(a, use_rep="emb", n_clusters=3, distance=2, rng=0)
+        calculate_niche_cellcharter(a, use_rep="emb", clusterer=GaussianMixture(n_components=3), distance=2, rng=0)
         labels.append(np.asarray(a.obs["cellcharter_niche"].astype(str)))
     assert not (labels[0] == labels[1]).all(), "the spatial graph did not affect the result"
 
@@ -675,13 +679,13 @@ def test_use_rep_is_aggregated_over_the_hop_rings():
 def test_use_rep_narrower_than_n_clusters_is_accepted():
     "A k-cluster GMM is well posed in any dimensionality; the old guard required k columns."
     adata = _tiny(embedding_cols=2)
-    calculate_niche_cellcharter(adata, use_rep="emb", n_clusters=5, distance=1, rng=0)
+    calculate_niche_cellcharter(adata, use_rep="emb", clusterer=GaussianMixture(n_components=5), distance=1, rng=0)
     assert adata.obs["cellcharter_niche"].nunique() <= 5
 
 
 def test_n_pca_components_sizes_the_pca():
     adata = _tiny(n=60)
-    calculate_niche_cellcharter(adata, n_clusters=3, n_pca_components=4, distance=1, rng=0)
+    calculate_niche_cellcharter(adata, clusterer=GaussianMixture(n_components=3), n_pca_components=4, distance=1, rng=0)
     assert adata.obsm["niche_embedding"].shape[1] == 4 * 2
 
 
@@ -793,7 +797,7 @@ def test_integer_features_aggregate(sparse):
     ring = _aggregate_over(adata.obsp["spatial_connectivities"].astype(bool), adata.X, "mean")
     assert np.issubdtype(to_dense(ring).dtype, np.floating), "a mean of counts is not a count"
     # and the whole flavor still runs, which it did not when the quotient went back into an int
-    calculate_niche_cellcharter(adata, use_rep="X", distance=1, n_clusters=2, rng=0)
+    calculate_niche_cellcharter(adata, use_rep="X", distance=1, clusterer=GaussianMixture(n_components=2), rng=0)
 
 
 def test_an_isolated_observation_aggregates_to_zero():
@@ -830,7 +834,9 @@ def test_aggregate_over_variance_matches_the_definition():
 def test_cellcharter_concatenates_hop_zero_with_every_ring(distance: int):
     "The embedding is the PCA of X plus one block per ring; dropping hop 0 must be visible."
     adata = _tiny(n=60)
-    calculate_niche_cellcharter(adata, distance=distance, n_clusters=2, n_pca_components=3, rng=0)
+    calculate_niche_cellcharter(
+        adata, distance=distance, clusterer=GaussianMixture(n_components=2), n_pca_components=3, rng=0
+    )
 
     embedding = adata.obsm["niche_embedding"]
     assert embedding.shape[1] == (distance + 1) * 3
@@ -843,8 +849,12 @@ def test_cellcharter_reduces_before_aggregating():
     "PCA of X is the fallback for `use_rep`, so passing that PCA as `use_rep` must change nothing."
     adata = _tiny(n=60)
     adata.obsm["X_pca"] = sc.pp.pca(adata.X, n_comps=3)
-    fallback = calculate_niche_cellcharter(adata, distance=2, n_clusters=3, n_pca_components=3, rng=0, copy=True)
-    given = calculate_niche_cellcharter(adata, distance=2, n_clusters=3, use_rep="X_pca", rng=0, copy=True)
+    fallback = calculate_niche_cellcharter(
+        adata, distance=2, clusterer=GaussianMixture(n_components=3), n_pca_components=3, rng=0, copy=True
+    )
+    given = calculate_niche_cellcharter(
+        adata, distance=2, clusterer=GaussianMixture(n_components=3), use_rep="X_pca", rng=0, copy=True
+    )
     np.testing.assert_allclose(fallback.obsm["niche_embedding"], given.obsm["niche_embedding"], rtol=1e-5)
     fallback_niches = fallback.obs["cellcharter_niche"].astype(str).to_numpy()
     np.testing.assert_array_equal(fallback_niches, given.obs["cellcharter_niche"].astype(str).to_numpy())
@@ -853,7 +863,7 @@ def test_cellcharter_reduces_before_aggregating():
 def test_cellcharter_pca_fallback_handles_a_single_feature():
     "The PCA width is clamped to what X can give, down to a one-marker panel."
     adata = _tiny(n=40)[:, :1].copy()
-    calculate_niche_cellcharter(adata, distance=1, n_clusters=2, rng=0)
+    calculate_niche_cellcharter(adata, distance=1, clusterer=GaussianMixture(n_components=2), rng=0)
     assert adata.obsm["niche_embedding"].shape == (40, 2)
 
 
@@ -867,7 +877,7 @@ def test_cellcharter_pca_respects_highly_variable():
     "`sc.pp.pca(adata)` masks by `highly_variable`; the fallback must not silently use every gene."
     adata = _tiny(n=60)
     adata.var["highly_variable"] = [True, True, True, False, False, False]
-    calculate_niche_cellcharter(adata, distance=1, n_clusters=2, n_pca_components=2, rng=0)
+    calculate_niche_cellcharter(adata, distance=1, clusterer=GaussianMixture(n_components=2), n_pca_components=2, rng=0)
     np.testing.assert_allclose(adata.obsm["niche_embedding"][:, :2], sc.pp.pca(adata.X[:, :3], n_comps=2), rtol=1e-5)
 
 
@@ -885,7 +895,7 @@ def test_cellcharter_niches_follow_neighborhoods_not_cell_identity():
     adata.obsm["emb"] = np.column_stack([is_a, ~is_a]).astype(float) + rng.normal(0, 0.05, (x.size, 2))
     spatial_neighbors_knn(adata, n_neighs=4)
 
-    calculate_niche_cellcharter(adata, use_rep="emb", distance=1, n_clusters=4, rng=0)
+    calculate_niche_cellcharter(adata, use_rep="emb", distance=1, clusterer=GaussianMixture(n_components=4), rng=0)
     labels = adata.obs["cellcharter_niche"].to_numpy()
     # away from the region and block borders every neighborhood is pure, so the niches are too
     interior = (
@@ -908,7 +918,7 @@ def test_cellcharter_accepts_sparse_and_dense_x(sparse: bool):
     adata.obsm["spatial"] = rng.random((50, 2)) * 10
     spatial_neighbors_knn(adata, n_neighs=4)
 
-    calculate_niche_cellcharter(adata, distance=2, n_clusters=3, rng=0)
+    calculate_niche_cellcharter(adata, distance=2, clusterer=GaussianMixture(n_components=3), rng=0)
     assert "cellcharter_niche" in adata.obs
     assert str(adata.obs["cellcharter_niche"].dtype) == "category"
 
@@ -956,7 +966,10 @@ def test_the_new_entry_points_validate_resolutions_too(dummy_adata2: AnnData):
     [
         pytest.param(calculate_niche_utag, {"resolutions": 1.0, "n_neighbors": 8}, "utag_niche_res=1.0", id="utag"),
         pytest.param(
-            calculate_niche_cellcharter, {"n_clusters": 3, "distance": 2}, "cellcharter_niche", id="cellcharter"
+            calculate_niche_cellcharter,
+            {"clusterer": GaussianMixture(n_components=3), "distance": 2},
+            "cellcharter_niche",
+            id="cellcharter",
         ),
     ],
 )
@@ -1047,7 +1060,12 @@ def test_the_umbrella_refuses_a_mask_for_spatialleiden():
             id="neighborhood",
         ),
         pytest.param(calculate_niche_utag, {"resolutions": 1.0, "n_neighbors": 8}, ["mine_res=1.0"], id="utag"),
-        pytest.param(calculate_niche_cellcharter, {"n_clusters": 3, "distance": 2}, ["mine"], id="cellcharter"),
+        pytest.param(
+            calculate_niche_cellcharter,
+            {"clusterer": GaussianMixture(n_components=3), "distance": 2},
+            ["mine"],
+            id="cellcharter",
+        ),
     ],
 )
 def test_key_added_names_the_columns(fn, kwargs, expected):
@@ -1070,3 +1088,68 @@ def test_key_added_defaults_reproduce_the_derived_names():
     adata = _tiny(n=60)
     calculate_niche_utag(adata, resolutions=1.0, n_neighbors=8, rng=0)
     assert "utag_niche_res=1.0" in adata.obs.columns
+
+
+# the clusterer of the cellcharter flavor
+
+
+def test_niche_cellcharter_fits_the_clusterer_as_configured(dummy_adata2: AnnData):
+    clusterer = KMeans(n_clusters=4, n_init=1)
+    before = clusterer.get_params()
+    calculate_niche_cellcharter(dummy_adata2, distance=2, rng=0, clusterer=clusterer)
+    assert dummy_adata2.obs["cellcharter_niche"].nunique() == 4
+    assert clusterer.get_params() == before, "the clusterer passed in is cloned, not set"
+
+
+def test_niche_cellcharter_n_clusters_is_deprecated(dummy_adata2: AnnData):
+    with pytest.warns(FutureWarning, match=r"'n_clusters' is deprecated"):
+        old = calculate_niche_cellcharter(dummy_adata2, distance=2, rng=0, n_clusters=3, copy=True)
+    new = calculate_niche_cellcharter(
+        dummy_adata2, distance=2, rng=0, clusterer=GaussianMixture(n_components=3), copy=True
+    )
+    pd.testing.assert_series_equal(old.obs["cellcharter_niche"], new.obs["cellcharter_niche"])
+    with pytest.raises(TypeError, match=r"set the number of clusters on 'clusterer'"):
+        calculate_niche_cellcharter(dummy_adata2, distance=2, n_clusters=3, clusterer=KMeans())
+
+
+def test_niche_cellcharter_seeds_a_given_clusterer_from_rng():
+    seeds = []
+
+    class _Recording(KMeans):  # a local class still clones, by type
+        def fit_predict(self, X, y=None, sample_weight=None):
+            seeds.append(self.random_state)
+            return super().fit_predict(X)
+
+    for rng in (0, 0, 1):
+        calculate_niche_cellcharter(_tiny(n=60), distance=2, clusterer=_Recording(n_clusters=3, n_init=1), rng=rng)
+    assert None not in seeds
+    assert seeds[0] == seeds[1] != seeds[2], "the same rng gives the same seed, another rng another"
+
+
+def test_niche_cellcharter_takes_a_clusterer_without_k(dummy_adata2: AnnData):
+    calculate_niche_cellcharter(dummy_adata2, distance=2, rng=0, clusterer=AffinityPropagation(random_state=0))
+    expected = AffinityPropagation(random_state=0).fit_predict(dummy_adata2.obsm["niche_embedding"])
+    assert dummy_adata2.obs["cellcharter_niche"].nunique() == len(np.unique(expected))
+
+
+@pytest.mark.parametrize(
+    ("clusterer", "match"),
+    [
+        (object(), r"must implement fit_predict, get_params and set_params"),
+        (AgglomerativeClustering(), r"has no 'random_state'"),
+    ],
+)
+def test_niche_cellcharter_rejects_unusable_clusterers(dummy_adata2: AnnData, clusterer, match):
+    with pytest.raises(TypeError, match=match):
+        calculate_niche_cellcharter(dummy_adata2, distance=2, clusterer=clusterer)
+
+
+def test_niche_cellcharter_embedding_feeds_cluster_auto_k():
+    from squidpy.gr import cluster_auto_k
+
+    adata = _tiny(n=80)
+    calculate_niche_cellcharter(adata, distance=2, rng=0)
+    cluster_auto_k(
+        adata, use_rep="niche_embedding", param="n_components", values=(2, 3), max_runs=2, rng=0, key_added="niche_k"
+    )
+    assert len(adata.obs["niche_k"].cat.categories) == adata.uns["niche_k"]["best"]
