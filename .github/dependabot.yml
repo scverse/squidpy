@@ -4,6 +4,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    commit-message:
+      prefix: test
     cooldown:
       default-days: 7
     groups:
@@ -13,6 +15,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    commit-message:
+      prefix: ci
     cooldown:
       default-days: 7
     groups:
