@@ -150,7 +150,10 @@ html_theme_options = {
 }
 html_show_sphinx = False
 
-extlinks = {"pr": ("https://github.com/scverse/squidpy/pull/%s", "#%s")}
+extlinks = {
+    "pr": ("https://github.com/scverse/squidpy/pull/%s", "#%s"),
+    "user": ("https://github.com/%s", "@%s"),
+}
 
 
 # Each params key carries its default in the `Annotated` metadata of its
