@@ -243,7 +243,7 @@ This means that local testing via hatch and remote testing on CI tests against t
 
 ## Publishing a release
 
-Run `hatch run towncrier:build X.Y.Z` to generate a new release notes file, and commit it.
+Run `hatch run towncrier:build X.Y.Z` to generate a PR that creates a new release notes file. Wait for the PR to be auto-merged.
 
 ### Updating the version number
 

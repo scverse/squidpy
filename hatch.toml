@@ -10,7 +10,7 @@ scripts.clean = "git clean -fdX -- {args:docs}"
 
 [envs.towncrier]
 scripts.create = "towncrier create {args}"
-scripts.build = "towncrier build --version={args} --yes"
+scripts.build = "python3 .scripts/ci/towncrier_automation.py {args}"
 scripts.clean = "git restore --source=HEAD --staged --worktree -- docs/release-notes"
 
 [envs.data]
