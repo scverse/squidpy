@@ -14,8 +14,3 @@ div.cell_output table.dataframe {
     font-family: var(--pst-font-family-monospace);
     font-size: 0.9em;
 }
-
-/* changelog author credits */
-.smaller {
-    font-size: 0.8em;
-}

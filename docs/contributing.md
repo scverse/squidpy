@@ -241,30 +241,9 @@ The CI job is defined in `.github/workflows/test.yaml`,
 however the single point of truth for CI jobs is the Hatch test matrix defined in `pyproject.toml`.
 This means that local testing via hatch and remote testing on CI tests against the same python versions and uses the same environments.
 
-## Changelog
-
-The {ref}`changelog` is built with [towncrier][] from one fragment per pull request in `docs/changelog/`,
-like in scanpy. PR titles follow [conventional commits][] (`fix: …`, `feat(gr): …`, `feat!: …` for breaking changes),
-and the fragment is named `<PR number>.<type>.md` after the title's type:
-`breaking`, `feat`, `fix`, `perf`, `docs`, `chore` or `revert`.
-
-```bash
-hatch run towncrier:create 1234.fix.md --content "Fix {func}\`squidpy.gr.spatial_neighbors\` for ... {smaller}\`Your Name\`"
-```
-
-CI checks that the fragment exists. PRs of type `style`, `refactor`, `test`, `build`, `docs` or `ci` need none;
-for anything else users would not notice, check the “Release notes not necessary because:” box in the PR template and give a reason.
-
-[conventional commits]: https://www.conventionalcommits.org/
-[towncrier]: https://towncrier.readthedocs.io/
-
 ## Publishing a release
 
-Collect the fragments into `docs/changelog/X.Y.Z.md` and commit the result:
-
-```bash
-hatch run towncrier:build X.Y.Z
-```
+Run `hatch run towncrier:build X.Y.Z` to generate a new release notes file, and commit it.
 
 ### Updating the version number
 
@@ -291,6 +270,10 @@ This will automatically create a git tag and trigger a Github workflow that crea
 ## Writing documentation
 
 Please write documentation for new or changed features and use-cases.
+
+For any user-visible changes, please make sure a note has been added to the release notes using `hatch run towncrier:create` (see towncrier’s {doc}`towncrier:tutorial`).
+When asked for “Issue number (`+` if none)”, enter the _PR number_ instead.
+
 This project uses [sphinx][] with the following features:
 
 - The [myst][] extension allows to write documentation in markdown/Markedly Structured Text

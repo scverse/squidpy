@@ -101,6 +101,7 @@ dev = [
   "notebook",
   "pre-commit>=3",
   "ruff",
+  "towncrier",     # release note management
 ]
 test = [
   "coverage[toml]>=7",
@@ -127,6 +128,7 @@ docs = [
   "sphinx>=5.3",
   "sphinx-autodoc-annotation",
   "sphinx-autodoc-typehints>=1.10.3",
+  "sphinx-issues>=5.0.1",
   "sphinx-tabs",
   "sphinxcontrib-bibtex>=2.3",
   "sphinxcontrib-spelling>=7.6.2",
@@ -322,14 +324,19 @@ report.sort = "Miss"
 
 [tool.towncrier]
 name = "squidpy"
+package = "squidpy"
+package_dir = "src"
 directory = "docs/changelog"
 filename = "docs/changelog/{version}.md"
 title_format = "(v{version})=\n### {version} {{small}}`{project_date}`"
 issue_format = "{{pr}}`{issue}`"
 single_file = false
-fragment.breaking.name = "Breaking changes"
+fragment.breaking.name = "Breaking changes"  # add `!` to commit type (e.g. “feature!:”)
 fragment.chore.name = "Miscellaneous changes"
 fragment.docs.name = "Documentation"
+# Valid fragments should be a subset of conventional commit types (except for `breaking`):
+# https://github.com/commitizen/conventional-commit-types/blob/master/index.json
+# style, refactor, test, build, ci: should not go into changelog
 fragment.feat.name = "Features"
 fragment.fix.name = "Bug fixes"
 fragment.perf.name = "Performance"

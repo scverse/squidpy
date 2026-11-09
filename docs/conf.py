@@ -21,13 +21,13 @@ release = info["Version"]
 
 extensions = [
     "scverse_doc",
-    "sphinx.ext.extlinks",
     "sphinx.ext.viewcode",
     "sphinx_autodoc_typehints",
     "sphinxcontrib.bibtex",
     "sphinx_tabs.tabs",
     "nbsphinx",
     "scverse_misc.sphinx_ext",
+    "sphinx_issues",
     "IPython.sphinxext.ipython_console_highlighting",
 ]
 intersphinx_mapping = intersphinx() | dict(  # noqa: C408
@@ -44,6 +44,7 @@ intersphinx_mapping = intersphinx() | dict(  # noqa: C408
     omnipath=("https://omnipath.readthedocs.io/en/latest", None),
     napari=("https://napari.org", None),
     shapely=("https://shapely.readthedocs.io/en/stable", None),
+    towncrier=("https://towncrier.readthedocs.io/en/stable/", None),
 )
 
 # Add any paths that contain templates here, relative to this directory.
@@ -59,7 +60,7 @@ exclude_patterns = [
     *DEFAULTS.exclude_patterns,
     "notebooks/README.rst",
     "notebooks/CONTRIBUTING.rst",
-    # version files are pulled in by `changelog/index.md`, fragments are not rendered
+    # exclude all 0.x.y.md files, but not index.md
     "changelog/[!i]*.md",
     "build",
 ]
@@ -150,10 +151,8 @@ html_theme_options = {
 }
 html_show_sphinx = False
 
-extlinks = {
-    "pr": ("https://github.com/scverse/squidpy/pull/%s", "#%s"),
-    "user": ("https://github.com/%s", "@%s"),
-}
+# link config
+issues_github_path = "scverse/squidpy"
 
 
 # Each params key carries its default in the `Annotated` metadata of its
@@ -203,6 +202,5 @@ def setup(app: Sphinx) -> None:
     app.connect("autodoc-process-docstring", _append_default)
     app.add_css_file("css/custom.css")
     app.add_css_file("css/dataframe.css")  # had to add this manually
-    # used by the changelog, as in scanpy
     app.add_generic_role("small", partial(nodes.inline, classes=["small"]))
     app.add_generic_role("smaller", partial(nodes.inline, classes=["smaller"]))
