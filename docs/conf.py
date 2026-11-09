@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 from datetime import datetime
-from functools import cache
+from functools import cache, partial
 from importlib.metadata import metadata
 
+from docutils import nodes
 from scverse_doc.config import DEFAULTS
 from scverse_doc.registry import intersphinx
 from sphinx.application import Sphinx
@@ -20,6 +21,7 @@ release = info["Version"]
 
 extensions = [
     "scverse_doc",
+    "sphinx.ext.extlinks",
     "sphinx.ext.viewcode",
     "sphinx_autodoc_typehints",
     "sphinxcontrib.bibtex",
@@ -57,7 +59,8 @@ exclude_patterns = [
     *DEFAULTS.exclude_patterns,
     "notebooks/README.rst",
     "notebooks/CONTRIBUTING.rst",
-    "release/changelog/*",
+    # version files are pulled in by `changelog/index.md`, fragments are not rendered
+    "changelog/[!i]*.md",
     "build",
 ]
 suppress_warnings = ["download.not_readable", "git.too_shallow"]
@@ -147,6 +150,8 @@ html_theme_options = {
 }
 html_show_sphinx = False
 
+extlinks = {"pr": ("https://github.com/scverse/squidpy/pull/%s", "#%s")}
+
 
 # Each params key carries its default in the `Annotated` metadata of its
 # declaration (`squidpy._params.Default`). Read it from there: one source of truth,
@@ -195,3 +200,6 @@ def setup(app: Sphinx) -> None:
     app.connect("autodoc-process-docstring", _append_default)
     app.add_css_file("css/custom.css")
     app.add_css_file("css/dataframe.css")  # had to add this manually
+    # used by the changelog, as in scanpy
+    app.add_generic_role("small", partial(nodes.inline, classes=["small"]))
+    app.add_generic_role("smaller", partial(nodes.inline, classes=["smaller"]))

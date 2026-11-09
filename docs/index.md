@@ -73,7 +73,6 @@ quickstart
 
 notebooks/tutorials/index
 notebooks/examples/index
-notebooks/deprecated_features/index
 ```
 
 ```{toctree}
@@ -91,7 +90,8 @@ extensibility
 :hidden: true
 :maxdepth: 2
 
-release_notes
+changelog/index
+notebooks/deprecated_features/index
 contributing
 citation
 references

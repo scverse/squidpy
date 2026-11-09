@@ -64,7 +64,6 @@ dependencies = [
   "pandas>=2.1",
   "pillow>=8",
   "pooch>=1.6",
-  "pynndescent<0.7",                    # 0.7 returns csr_array, scanpy<=1.12.5 neighbors calls .getnnz on it
   "pyyaml>=6",
   "scanpy>=1.9.3",
   "scikit-image>=0.26",
@@ -320,6 +319,21 @@ report.exclude_lines = [
 report.skip_empty = true
 report.show_missing = true
 report.sort = "Miss"
+
+[tool.towncrier]
+name = "squidpy"
+directory = "docs/changelog"
+filename = "docs/changelog/{version}.md"
+title_format = "(v{version})=\n### {version} {{small}}`{project_date}`"
+issue_format = "{{pr}}`{issue}`"
+single_file = false
+fragment.breaking.name = "Breaking changes"
+fragment.chore.name = "Miscellaneous changes"
+fragment.docs.name = "Documentation"
+fragment.feat.name = "Features"
+fragment.fix.name = "Bug fixes"
+fragment.perf.name = "Performance"
+fragment.revert.name = "Revert"
 
 [tool.cruft]
 skip = [

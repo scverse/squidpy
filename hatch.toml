@@ -8,6 +8,11 @@ scripts.build = "sphinx-build -M html docs docs/_build -W {args}"
 scripts.open = "python3 -m webbrowser -t docs/_build/html/index.html"
 scripts.clean = "git clean -fdX -- {args:docs}"
 
+[envs.towncrier]
+dependencies = ["towncrier"]
+scripts.create = "towncrier create {args}"
+scripts.build = "towncrier build --yes --version {args}"
+
 [envs.data]
 scripts.download = "python ./.scripts/ci/download_data.py {args}"
 

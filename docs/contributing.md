@@ -241,7 +241,27 @@ The CI job is defined in `.github/workflows/test.yaml`,
 however the single point of truth for CI jobs is the Hatch test matrix defined in `pyproject.toml`.
 This means that local testing via hatch and remote testing on CI tests against the same python versions and uses the same environments.
 
+## Changelog
+
+The [changelog](changelog) is built with [towncrier][] from one fragment per pull request in `docs/changelog/`,
+like in scanpy. Name it `<PR number>.<type>.md`, where `<type>` is one of
+`breaking`, `feat`, `fix`, `perf`, `docs`, `chore` or `revert`:
+
+```bash
+hatch run towncrier:create 1234.fix.md --content "Fix {func}\`squidpy.gr.spatial_neighbors\` for ... {smaller}\`Your Name\`"
+```
+
+Pull requests that users would not notice (tests, CI, refactors) need no fragment.
+
+[towncrier]: https://towncrier.readthedocs.io/
+
 ## Publishing a release
+
+Collect the fragments into `docs/changelog/X.Y.Z.md` and commit the result:
+
+```bash
+hatch run towncrier:build X.Y.Z
+```
 
 ### Updating the version number
 
