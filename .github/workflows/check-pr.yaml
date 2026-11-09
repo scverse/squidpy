@@ -54,7 +54,7 @@ jobs:
         id: changes
         with:
           filters: | # this is intentionally a string
-            relnotes: 'docs/changelog/${{ github.event.pull_request.number }}.${{ (contains(github.event.pull_request.title, '!') && 'breaking') || needs.check-milestone.outputs.type }}.md'
+            relnotes: 'docs/release-notes/${{ github.event.pull_request.number }}.${{ (contains(github.event.pull_request.title, '!') && 'breaking') || needs.check-milestone.outputs.type }}.md'
       - name: Check if a relevant release fragment is added
         uses: flying-sheep/check@e10bb11109d1434ab16729bd988d78d65d47e163 # v1.0.5
         with:

@@ -90,7 +90,7 @@ extensibility
 :hidden: true
 :maxdepth: 2
 
-changelog/index
+release-notes/index
 notebooks/deprecated_features/index
 contributing
 citation

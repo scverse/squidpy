@@ -326,8 +326,8 @@ report.sort = "Miss"
 name = "squidpy"
 package = "squidpy"
 package_dir = "src"
-directory = "docs/changelog"
-filename = "docs/changelog/{version}.md"
+directory = "docs/release-notes"
+filename = "docs/release-notes/{version}.md"
 title_format = "(v{version})=\n### {version} {{small}}`{project_date}`"
 issue_format = "{{pr}}`{issue}`"
 single_file = false
@@ -348,7 +348,7 @@ skip = [
   "src/**/__init__.py",
   "src/**/basic.py",
   "docs/api.md",
-  "docs/changelog.md",
+  "docs/release-notes.md",
   "docs/references.bib",
   "docs/references.md",
   "docs/notebooks/example.ipynb",

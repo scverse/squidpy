@@ -1,6 +1,0 @@
-(changelog)=
-
-# Changelog
-
-```{release-notes} .
-```

@@ -61,7 +61,7 @@ exclude_patterns = [
     "notebooks/README.rst",
     "notebooks/CONTRIBUTING.rst",
     # exclude all 0.x.y.md files, but not index.md
-    "changelog/[!i]*.md",
+    "release-notes/[!i]*.md",
     "build",
 ]
 suppress_warnings = ["download.not_readable", "git.too_shallow"]

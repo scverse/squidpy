@@ -11,7 +11,7 @@ scripts.clean = "git clean -fdX -- {args:docs}"
 [envs.towncrier]
 scripts.create = "towncrier create {args}"
 scripts.build = "towncrier build --version={args} --yes"
-scripts.clean = "git restore --source=HEAD --staged --worktree -- docs/changelog"
+scripts.clean = "git restore --source=HEAD --staged --worktree -- docs/release-notes"
 
 [envs.data]
 scripts.download = "python ./.scripts/ci/download_data.py {args}"
