@@ -40,6 +40,22 @@ For interactive visualization with napari, please use [napari-spatialdata](https
 The original napari plugin from Squidpy has been deprecated and replaced by napari-spatialdata, which offers
 improved functionality and support for the SpatialData ecosystem.
 
+## Agent skill
+
+Squidpy bundles an agent skill with guidance for spatial graphs, SpatialData alignment,
+image features, and related workflows. Choose where to install it:
+
+```console
+squidpy-install-skills --agent codex
+squidpy-install-skills --agent claude
+```
+
+The installer also accepts `--agent agents`, `--agent claude-science`, or an exact
+destination with `--dest`. Use `--check` to compare an installation with the bundled
+copy, `--force` to refresh it, or `--print-path` to locate the bundle without installing.
+The current instructions target **Squidpy 1.8.4**. See the
+[installation guide](https://squidpy.readthedocs.io/en/latest/installation.html#agent-skill).
+
 ## Key capabilities
 
 - Build and analyze spatial neighbor graphs directly from Visium, Slide-seq, Xenium, and other spatial omics assays.
