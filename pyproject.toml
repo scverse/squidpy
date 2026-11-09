@@ -348,7 +348,7 @@ skip = [
   "src/**/__init__.py",
   "src/**/basic.py",
   "docs/api.md",
-  "docs/release-notes.md",
+  "docs/changelog.md",
   "docs/references.bib",
   "docs/references.md",
   "docs/notebooks/example.ipynb",
