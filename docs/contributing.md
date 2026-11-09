@@ -243,16 +243,19 @@ This means that local testing via hatch and remote testing on CI tests against t
 
 ## Changelog
 
-The [changelog](changelog) is built with [towncrier][] from one fragment per pull request in `docs/changelog/`,
-like in scanpy. Name it `<PR number>.<type>.md`, where `<type>` is one of
-`breaking`, `feat`, `fix`, `perf`, `docs`, `chore` or `revert`:
+The {ref}`changelog` is built with [towncrier][] from one fragment per pull request in `docs/changelog/`,
+like in scanpy. PR titles follow [conventional commits][] (`fix: …`, `feat(gr): …`, `feat!: …` for breaking changes),
+and the fragment is named `<PR number>.<type>.md` after the title's type:
+`breaking`, `feat`, `fix`, `perf`, `docs`, `chore` or `revert`.
 
 ```bash
 hatch run towncrier:create 1234.fix.md --content "Fix {func}\`squidpy.gr.spatial_neighbors\` for ... {smaller}\`Your Name\`"
 ```
 
-Pull requests that users would not notice (tests, CI, refactors) need no fragment.
+CI checks that the fragment exists. PRs of type `style`, `refactor`, `test`, `build`, `docs` or `ci` need none;
+for anything else users would not notice, check the “Release notes not necessary because:” box in the PR template and give a reason.
 
+[conventional commits]: https://www.conventionalcommits.org/
 [towncrier]: https://towncrier.readthedocs.io/
 
 ## Publishing a release
