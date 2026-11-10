@@ -7,7 +7,61 @@ from anndata import AnnData
 from squidpy.tl import var_by_distance
 
 
+@pytest.fixture()
+def adata_custom_spatial() -> AnnData:
+    adata = AnnData(np.ones((4, 1)))
+    adata.obs_names = ["cell_3", "cell_1", "cell_4", "cell_2"]
+    adata.obs["cluster"] = ["anchor", "other", "other", "other"]
+    adata.obs["sample"] = "sample_1"
+    adata.obsm["custom_spatial"] = np.array([[10.0, 10.0], [13.0, 14.0], [16.0, 18.0], [10.0, 30.0]])
+    return adata
+
+
 class TestVarDist:
+    def test_custom_spatial_key_without_default(self, adata_custom_spatial: AnnData):
+        df = var_by_distance(
+            adata_custom_spatial,
+            groups="anchor",
+            cluster_key="cluster",
+            spatial_key="custom_spatial",
+            copy=True,
+        )
+
+        np.testing.assert_allclose(df["anchor_raw"], [0.0, 5.0, 10.0, 20.0])
+        assert df.index.equals(adata_custom_spatial.obs_names)
+
+    @pytest.mark.parametrize("groups", ["anchor", [[10.0, 10.0]]])
+    def test_custom_spatial_key_overrides_default(self, adata_custom_spatial: AnnData, groups):
+        # Different anchor positions catch reading either observations or anchors from the default key.
+        adata_custom_spatial.obsm["spatial"] = np.array([[0.0, 0.0], [0.0, 1.0], [0.0, 2.0], [0.0, 3.0]])
+        df = var_by_distance(
+            adata_custom_spatial,
+            groups=groups,
+            cluster_key="cluster" if isinstance(groups, str) else None,
+            library_key="sample",
+            spatial_key="custom_spatial",
+            copy=True,
+        )
+
+        column = "anchor_raw" if isinstance(groups, str) else "custom_anchor_raw"
+        np.testing.assert_allclose(df[column], [0.0, 5.0, 10.0, 20.0])
+        assert df.index.equals(adata_custom_spatial.obs_names)
+
+    def test_custom_spatial_key_nan_alignment(self, adata_custom_spatial: AnnData):
+        adata_custom_spatial.obsm["spatial"] = np.array([[0.0, 0.0], [0.0, 1.0], [0.0, 2.0], [0.0, 3.0]])
+        adata_custom_spatial.obsm["custom_spatial"][1] = np.nan
+        df = var_by_distance(
+            adata_custom_spatial,
+            groups="anchor",
+            cluster_key="cluster",
+            spatial_key="custom_spatial",
+            copy=True,
+        )
+
+        np.testing.assert_allclose(df["anchor_raw"], [0.0, np.nan, 10.0, 20.0])
+        assert df.index.equals(adata_custom_spatial.obs_names)
+        assert np.isnan(df.loc["cell_1", "anchor"])
+
     @pytest.mark.parametrize("groups", ["Endothelial", ["Endothelial", "Epithelial", "Fibroblast"]])
     @pytest.mark.parametrize("cluster_key", ["Cluster"])
     @pytest.mark.parametrize("covariates", ["category", ["category", "cell_size"], None])

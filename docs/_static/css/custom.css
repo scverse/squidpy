@@ -3,17 +3,6 @@ div.cell_output table.dataframe {
     font-size: 0.8em;
 }
 
-/* the theme's primary colour (links, linked types, API names, the current page's bar in the nav) in the
-   logo's purple; a lighter shade in dark mode so it keeps its contrast */
-html[data-theme="light"] {
-    --pst-color-primary: #5b64b1;
-    --pst-color-inline-code-links: #5b64b1;
-}
-html[data-theme="dark"] {
-    --pst-color-primary: #949df0;
-    --pst-color-inline-code-links: #949df0;
-}
-
 /* a wider left nav, so the longer function names fit on one line */
 .bd-sidebar-primary {
     flex-basis: 24%;
