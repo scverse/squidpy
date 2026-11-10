@@ -13,6 +13,7 @@ from squidpy.gr import (
     centrality_scores,
     interaction_matrix,
     nhood_enrichment,
+    nhood_entropy,
     spatial_neighbors_grid,
 )
 
@@ -506,3 +507,42 @@ def test_min_cell_count_excludes_clusters(adata: AnnData, handle_nan: str):
     subset.obs[_CK] = subset.obs[_CK].cat.remove_unused_categories()
     expected = nhood_enrichment(subset, cluster_key=_CK, n_perms=20, rng=0, copy=True)
     np.testing.assert_array_equal(got.counts[np.ix_(kept, kept)], expected.counts)
+
+
+class TestNhoodEntropy:
+    @staticmethod
+    def _grid(labels: list[str]) -> AnnData:
+        side = int(round(len(labels) ** 0.5))
+        assert side * side == len(labels)
+        coords = np.array([(x, y) for y in range(side) for x in range(side)], dtype=float)
+        adata = AnnData(np.zeros((len(labels), 2), dtype=np.float32), obsm={"spatial": coords})
+        adata.obs["ct"] = pd.Categorical(labels)
+        spatial_neighbors_grid(adata, n_neighs=8)
+        return adata
+
+    def test_homogeneous_neighborhood_scores_zero(self):
+        adata = self._grid(["a"] * 36)
+        np.testing.assert_allclose(nhood_entropy(adata, cluster_key="ct", copy=True), 0.0)
+
+    def test_stripes_score_their_mixture(self):
+        # vertical stripes: an interior cell sees 2 of its own type and 6 of the other
+        stripes = nhood_entropy(self._grid(["a", "b"] * 18), cluster_key="ct", copy=True).to_numpy().reshape(6, 6)
+        h = -0.25 * np.log(0.25) - 0.75 * np.log(0.75)
+        np.testing.assert_allclose(stripes[1:-1, 1:-1], h)
+
+    def test_isolated_observation_is_nan(self):
+        adata = self._grid(["a", "b"] * 18)
+        conn = adata.obsp["spatial_connectivities"].tolil()
+        conn[0, :] = 0
+        adata.obsp["spatial_connectivities"] = conn.tocsr()
+
+        ent = nhood_entropy(adata, cluster_key="ct", copy=True)
+        assert np.isnan(ent.iloc[0])
+        assert not ent.iloc[1:].isna().any()
+
+    def test_writes_to_obs(self):
+        adata = self._grid(["a", "b"] * 18)
+        expected = nhood_entropy(adata, cluster_key="ct", copy=True)
+        assert "ct_nhood_entropy" not in adata.obs, "copy=True leaves adata alone"
+        assert nhood_entropy(adata, cluster_key="ct") is None
+        np.testing.assert_allclose(adata.obs["ct_nhood_entropy"], expected)
