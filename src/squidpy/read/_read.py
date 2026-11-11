@@ -258,22 +258,28 @@ def nanostring(
     for subdir in ["CellComposite", "CellLabels"]:
         if os.path.exists(path / subdir) and os.path.isdir(path / subdir):
             kind = "hires" if subdir == "CellComposite" else "segmentation"
+            skipped = []
             for fname in os.listdir(path / subdir):
                 if fname.endswith(file_extensions):
                     fov = str(int(pat.findall(fname)[0]))
                     try:
                         adata.uns[Key.uns.spatial][fov]["images"][kind] = _load_image(path / subdir / fname)
                     except KeyError:
-                        logg.warning(f"FOV `{str(fov)}` does not exist in {subdir} folder, skipping it.")
-                        continue
+                        skipped.append(fov)
+            if skipped:
+                logg.warning(
+                    f"Skipped {len(skipped)} image(s) in {subdir} of FOVs not in the data: {sorted(skipped, key=int)}"
+                )
 
     if fov_file is not None:
         fov_positions = pd.read_csv(path / fov_file, header=0, index_col=fov_key)
+        skipped = []
         for fov, row in fov_positions.iterrows():
             try:
                 adata.uns[Key.uns.spatial][str(fov)]["metadata"] = row.to_dict()
             except KeyError:
-                logg.warning(f"FOV `{str(fov)}` does not exist, skipping it.")
-                continue
+                skipped.append(str(fov))
+        if skipped:
+            logg.warning(f"Skipped positions of {len(skipped)} FOV(s) not in the data: {skipped}")
 
     return adata
