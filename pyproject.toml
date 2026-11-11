@@ -21,7 +21,7 @@ maintainers = [
 authors = [
   { name = "scverse" },
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Environment :: Console",
@@ -31,9 +31,9 @@ classifiers = [
   "Operating System :: MacOS :: MacOS X",
   "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
   "Topic :: Scientific/Engineering :: Bio-Informatics",
   "Topic :: Scientific/Engineering :: Visualization",
   "Typing :: Typed",
@@ -64,9 +64,8 @@ dependencies = [
   "pandas>=2.1",
   "pillow>=8",
   "pooch>=1.6",
-  "pynndescent<0.7",                    # 0.7 returns csr_array, scanpy<=1.12.5 neighbors calls .getnnz on it
   "pyyaml>=6",
-  "scanpy>=1.9.3",
+  "scanpy>=1.12.5",                     # 1.12.5 supports pynndescent 0.7
   "scikit-image>=0.26",
   # due to https://github.com/scikit-image/scikit-image/issues/6850 breaks rescale ufunc
   "scikit-learn>=0.24",
@@ -122,19 +121,12 @@ docs = [
   "docutils<0.22",                    # Pin to avoid sphinx-tabs KeyError with backrefs
   "ipython",
   "ipywidgets>=8",
-  "myst-nb>=0.17.1",
   "nbsphinx>=0.8.1",
-  "scanpydoc[theme,typehints]>=0.17",
+  "scverse-doc[full]>=0.4",
   "scverse-misc[sphinx]>=0.1.2,<0.2",
   "sphinx>=5.3",
   "sphinx-autodoc-annotation",
   "sphinx-autodoc-typehints>=1.10.3",
-  # 1.3 renders a second sidebar toggle and wires up the hidden one, so the nav cannot be opened
-  # (executablebooks/sphinx-book-theme#935). Lifting this means renaming --pst-color-inline-code-links
-  # to --pst-color-link-higher-contrast in custom.css.
-  "sphinx-book-theme<1.3",
-  "sphinx-copybutton>=0.5",
-  "sphinx-design",
   "sphinx-tabs",
   "sphinxcontrib-bibtex>=2.3",
   "sphinxcontrib-spelling>=7.6.2",
@@ -155,7 +147,7 @@ build.targets.wheel.packages = [ "src/squidpy" ]
 [tool.pixi]
 workspace.channels = [ "conda-forge" ]
 workspace.platforms = [ "linux-64", "osx-arm64" ]
-dependencies.python = ">=3.12"
+dependencies.python = ">=3.13"
 pypi-dependencies.squidpy = { path = ".", editable = true }
 tasks.format = "ruff format ."
 tasks.kernel-install = 'python -m ipykernel install --user --name pixi-dev --display-name "squidpy (dev)"'
@@ -164,12 +156,12 @@ tasks.lint = "ruff check ."
 tasks.pre-commit = "pre-commit run"
 tasks.pre-commit-install = "pre-commit install"
 tasks.test = "pytest -v --color=yes --tb=short --durations=10"
-feature.py312.dependencies.python = "3.12.*"
+feature.py313.dependencies.python = "3.13.*"
 feature.py314.dependencies.python = "3.14.*"
 environments.default = { features = [ "py314" ], solve-group = "py314" }
-environments.dev-py312 = { features = [ "dev", "test", "py312" ], solve-group = "py312" }
+environments.dev-py313 = { features = [ "dev", "test", "py313" ], solve-group = "py313" }
 environments.dev-py314 = { features = [ "dev", "test", "py314" ], solve-group = "py314" }
-environments.docs-py312 = { features = [ "docs", "py312" ], solve-group = "py312" }
+environments.docs-py313 = { features = [ "docs", "py313" ], solve-group = "py313" }
 environments.docs-py314 = { features = [ "docs", "py314" ], solve-group = "py314" }
 environments.test-py314 = { features = [ "test", "py314" ], solve-group = "py314" }
 
