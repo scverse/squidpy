@@ -19,7 +19,7 @@ features = [
 ]
 extra-dependencies = ["diff-cover"]
 matrix = [
-  { deps = ["stable"], python = ["3.12", "3.13", "3.14"] },
+  { deps = ["stable"], python = ["3.13", "3.14"] },
   { deps = ["pre"], python = ["3.14"] },
 ]
 overrides.matrix.deps.env-vars = [

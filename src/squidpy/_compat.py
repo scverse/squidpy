@@ -66,18 +66,11 @@ try:
 except ImportError:
     from scanpy.plotting._tools.scatterplots import _add_categorical_legend as add_categorical_legend
     from scanpy.plotting._tools.scatterplots import _panel_grid as panel_grid
-    from scanpy.plotting._utils import add_colors_for_categorical_sample_annotation
+    from scanpy.plotting._utils import (
+        add_colors_for_categorical_sample_annotation,
+        set_default_colors_for_categorical_obs,
+    )
     from scanpy.plotting.palettes import default_102 as default_palette
-
-    # See https://github.com/scverse/squidpy/issues/1061 for more details.
-    # Scanpy 0.11.x-0.12.x renamed set_default_colors_for_categorical_obs to _set_default_colors_for_categorical_obs
-    # and then changed it back. Try underscore version first, fall back to non-underscore.
-    try:
-        from scanpy.plotting._utils import (
-            _set_default_colors_for_categorical_obs as set_default_colors_for_categorical_obs,
-        )
-    except ImportError:
-        from scanpy.plotting._utils import set_default_colors_for_categorical_obs
 
 
 # Scanpy 1.13 also moved these two plotting defaults off ``Settings``, where they were the

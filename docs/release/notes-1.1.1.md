@@ -2,8 +2,8 @@
 
 ## Features
 
-- Allow defining cylindrical shells in {func}`squidpy.gr.spatial_neighbors` by using the ``radius`` argument.
-  Also rename ``n_neigh``, ``n_neigh_grid`` arguments to ``n_neighs``.
+- Allow defining cylindrical shells in {func}`squidpy.gr.spatial_neighbors` by using the `radius` argument.
+  Also rename `n_neigh`, `n_neigh_grid` arguments to `n_neighs`.
   [#393](https://github.com/scverse/squidpy/pull/393)
 
 - Allow specifying gene symbols from :attr:`anndata.AnnData.var` in {func}`squidpy.gr.ligrec`.
@@ -21,11 +21,11 @@
 - Increase performance of Delaunay graph creation in {func}`squidpy.gr.spatial_neighbors`.
   [#381](https://github.com/scverse/squidpy/pull/381)
 
-- Update ``mypy`` type-checking and use PEP 604 for type annotations.
+- Update `mypy` type-checking and use PEP 604 for type annotations.
   [#396](https://github.com/scverse/squidpy/pull/396)
 
 
 ## Documentation
 
-- Enable ``towncrier`` for release notes generation.
+- Enable `towncrier` for release notes generation.
   [#397](https://github.com/scverse/squidpy/pull/397)

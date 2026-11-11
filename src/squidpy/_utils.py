@@ -253,7 +253,7 @@ def legacy_random(rng: np.random.Generator) -> int:
 
 
 @contextmanager
-def numba_threads(n_jobs: int | None) -> Generator[None, None, None]:
+def numba_threads(n_jobs: int | None) -> Generator[None]:
     """Temporarily cap numba's thread pool to ``n_jobs``, restoring the previous value on exit.
 
     ``n_jobs`` is clamped to ``[1, NUMBA_NUM_THREADS]``; ``None`` leaves the current setting untouched.
@@ -381,7 +381,7 @@ def get_n_processes(n_cores: int | None) -> int:
 
 
 @contextmanager
-def verbosity(level: int) -> Generator[None, None, None]:
+def verbosity(level: int) -> Generator[None]:
     """
     Temporarily set the verbosity level of :doc:`scanpy <scanpy:index>`.
 
