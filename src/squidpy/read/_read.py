@@ -10,9 +10,9 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from scipy.sparse import csr_matrix
-from spatialdata._logging import logger as logg
 
 from squidpy._constants._pkg_constants import Key
+from squidpy._logging import logg
 from squidpy.read._utils import PathLike, _load_image, _read_counts
 
 __all__ = ["visium", "vizgen", "nanostring"]

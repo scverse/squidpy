@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from typing import Any, Literal
 
 import dask.array as da
@@ -8,10 +9,11 @@ import numpy as np
 import xarray as xr
 from shapely import box
 from spatialdata import SpatialData
-from spatialdata._logging import logger
 from spatialdata.models import Labels2DModel, ShapesModel
 from spatialdata.transformations import get_transformation, set_transformation
 
+from squidpy._compat import SKIP_OWN_FRAMES
+from squidpy._logging import logg
 from squidpy._utils import _yx_from_shape
 from squidpy._validators import normalize_choice
 
@@ -145,10 +147,12 @@ def get_element_data(
 
             chosen = min(available, key=_idx) if prefer == "finest" else max(available, key=_idx)
         elif scale not in available:
-            logger.warning(f"Scale {scale!r} not found. Available: {available}")
+            warnings.warn(
+                f"Scale {scale!r} not found. Available: {available}", UserWarning, skip_file_prefixes=SKIP_OWN_FRAMES
+            )
             # Try scale0 as fallback, otherwise use first available
             chosen = "scale0" if "scale0" in available else available[0]
-            logger.info(f"Using scale {chosen!r}")
+            logg.debug(f"Using scale {chosen!r}")
         else:
             chosen = scale
 
@@ -200,21 +204,21 @@ def flatten_channels(
 
     # If user explicitly specifies multichannel, always use mean
     if channel_format == "multichannel":
-        logger.info(f"Converting {n_channels}-channel image to greyscale using mean across all channels")
+        logg.debug(f"Converting {n_channels}-channel image to greyscale using mean across all channels")
         return img.mean(dim="c")
 
     # Handle explicit RGB specification
     if channel_format == "rgb":
         if n_channels != 3:
             raise ValueError(f"Cannot treat {n_channels}-channel image as RGB (requires exactly 3 channels)")
-        logger.info("Converting RGB image to greyscale using luminance formula")
+        logg.debug("Converting RGB image to greyscale using luminance formula")
         weights = xr.DataArray([0.299, 0.587, 0.114], dims=["c"], coords={"c": img.coords["c"]})
         return (img * weights).sum(dim="c")
 
     elif channel_format == "rgba":
         if n_channels != 4:
             raise ValueError(f"Cannot treat {n_channels}-channel image as RGBA (requires exactly 4 channels)")
-        logger.info("Converting RGBA image to greyscale using luminance formula (ignoring alpha)")
+        logg.debug("Converting RGBA image to greyscale using luminance formula (ignoring alpha)")
         weights = xr.DataArray([0.299, 0.587, 0.114, 0.0], dims=["c"], coords={"c": img.coords["c"]})
         return (img * weights).sum(dim="c")
 
@@ -310,7 +314,7 @@ def resolve_tissue_mask(
         from squidpy.experimental.im._detect_tissue import detect_tissue
 
         detect_tissue(sdata=sdata, image_key=image_key, scale=scale, inplace=True, new_labels_key=mask_key)
-        logger.info(f"Saved tissue mask as 'sdata.labels[\"{mask_key}\"]'")
+        logg.info(f"Saved tissue mask as 'sdata.labels[\"{mask_key}\"]'")
     return mask_key
 
 
@@ -357,4 +361,4 @@ def save_tile_grid_to_shapes(
     if copy_transforms_from_key is not None:
         transformations = get_transformation(sdata.images[copy_transforms_from_key], get_all=True)
         set_transformation(sdata.shapes[shapes_key], transformations, set_all=True)
-    logger.info(f"- Saved tile grid as 'sdata.shapes[\"{shapes_key}\"]'")
+    logg.debug(f"- Saved tile grid as 'sdata.shapes[\"{shapes_key}\"]'")

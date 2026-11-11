@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import inspect
-import logging
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -614,13 +614,14 @@ def test_niche_labels_are_strings_on_every_flavor(flavor, min_niche_size):
 
 
 @pytest.mark.parametrize("flavor", ["neighborhood", "utag", "cellcharter", "spatialleiden"])
-def test_min_niche_size_is_not_reported_unused(flavor, caplog):
+def test_min_niche_size_is_not_reported_unused(flavor):
     "Every flavor applies it, so no flavor should call it unused."
     adata = _tiny(n=60)
     neighbors(adata, n_neighbors=8, use_rep="X")
-    with caplog.at_level(logging.WARNING):
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         calculate_niche(adata, flavor=flavor, groups="ct", n_neighbors=8, resolutions=1.0, min_niche_size=3, rng=0)
-    assert "min_niche_size" not in caplog.text
+    assert not any("min_niche_size" in str(w.message) for w in caught)
 
 
 def test_utag_use_rep_replaces_the_pca_it_would_fit():

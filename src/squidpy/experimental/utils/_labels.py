@@ -6,6 +6,7 @@ without notice.
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Iterable, Iterator
 from typing import Any
 
@@ -13,7 +14,8 @@ import numpy as np
 import spatialdata as sd
 import xarray as xr
 from skimage.measure import regionprops
-from spatialdata._logging import logger as logg
+
+from squidpy._compat import SKIP_OWN_FRAMES
 
 
 def iter_chunked_regionprops(
@@ -69,5 +71,9 @@ def resolve_labels_array(sdata: sd.SpatialData, *, labels_key: str, scale: str |
             raise ValueError(f"Labels `{labels_key}` is multi-scale; pass `scale` (e.g. 'scale0').")
         return node[scale].ds["image"]
     if scale is not None:
-        logg.warning(f"`scale={scale!r}` ignored: labels at `{labels_key}` are single-scale.")
+        warnings.warn(
+            f"`scale={scale!r}` ignored: labels at `{labels_key}` are single-scale.",
+            UserWarning,
+            skip_file_prefixes=SKIP_OWN_FRAMES,
+        )
     return node

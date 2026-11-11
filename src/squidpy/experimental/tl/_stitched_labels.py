@@ -20,10 +20,10 @@ import spatialdata as sd
 import xarray as xr
 from scipy.ndimage import binary_closing
 from skimage.morphology import disk as morph_disk
-from spatialdata._logging import logger as logg
 from spatialdata.models import Labels2DModel, TableModel
 from spatialdata.transformations import get_transformation
 
+from squidpy._logging import logg
 from squidpy._validators import normalize_choice
 from squidpy.experimental.utils._labels import resolve_labels_array
 

@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from numba import njit
-from scanpy import logging as logg
 from scipy.sparse import csc_matrix, csr_matrix, issparse, isspmatrix_csr, spmatrix
 from sklearn.metrics import pairwise_distances
 from spatialdata import SpatialData
@@ -15,6 +14,7 @@ from spatialdata import SpatialData
 from squidpy._compat import old_positionals
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
+from squidpy._logging import logg
 from squidpy._utils import NDArrayA, deprecated_params, get_n_numba_threads, thread_map
 from squidpy._validators import assert_non_empty_sequence
 from squidpy.gr._utils import (
@@ -142,7 +142,7 @@ def sepal(
 
     # get counts
     vals, genes = _extract_expression(adata, genes=genes, use_raw=use_raw, layer=layer)
-    start = logg.info(f"Calculating sepal score for `{len(genes)}` genes using `{n_jobs}` thread(s)")
+    start = logg.debug(f"Calculating sepal score for `{len(genes)}` genes using `{n_jobs}` thread(s)")
 
     use_hex = max_neighs == 6
 
@@ -170,7 +170,7 @@ def sepal(
     sepal_score = sepal_score.sort_values(by=key_added, ascending=False)
 
     if copy:
-        logg.info("Finish", time=start)
+        logg.info("Computed sepal scores", time=start)
         return sepal_score
 
     _save_data(adata, attr="uns", key=key_added, data=sepal_score, time=start)

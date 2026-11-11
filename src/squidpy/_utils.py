@@ -18,7 +18,6 @@ import joblib as jl
 import numba
 import numpy as np
 import xarray as xr
-from scanpy import logging as logg
 from spatialdata.models import Image2DModel, Labels2DModel
 
 from squidpy._compat import SKIP_OWN_FRAMES
@@ -337,7 +336,11 @@ def get_n_numba_threads(n_threads: int | None) -> int:
     if n_threads < -1 or n_threads == 0:
         raise ValueError(f"Number of threads must be `-1` or a positive integer, got `{n_threads}`.")
     if n_threads > max_threads:
-        logg.warning(f"Requested `n_jobs={n_threads}`, but numba allows at most `{max_threads}` thread(s).")
+        warnings.warn(
+            f"Requested `n_jobs={n_threads}`, but numba allows at most `{max_threads}` thread(s).",
+            UserWarning,
+            skip_file_prefixes=SKIP_OWN_FRAMES,
+        )
         return max_threads
 
     return n_threads
@@ -353,7 +356,11 @@ def get_n_processes(n_cores: int | None) -> int:
     if n_cores < -1 or n_cores == 0:
         raise ValueError(f"Number of cores must be `-1` or a positive integer, got `{n_cores}`.")
     if n_cores > max_cores:
-        logg.warning(f"Requested `n_jobs={n_cores}`, but only `{max_cores}` core(s) are available.")
+        warnings.warn(
+            f"Requested `n_jobs={n_cores}`, but only `{max_cores}` core(s) are available.",
+            UserWarning,
+            skip_file_prefixes=SKIP_OWN_FRAMES,
+        )
         return max_cores
 
     return n_cores

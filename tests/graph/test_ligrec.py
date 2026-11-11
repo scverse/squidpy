@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import sys
+import logging
 from collections.abc import Mapping, Sequence
 from itertools import product
 from typing import TYPE_CHECKING
@@ -11,8 +11,8 @@ import pytest
 import scanpy as sc
 from anndata import AnnData
 from pandas.testing import assert_frame_equal
-from scanpy import settings as s
 from scipy.sparse import csc_matrix
+from scverse_misc.logging import config as log_config
 
 from squidpy._constants._pkg_constants import Key
 from squidpy.gr import ligrec
@@ -387,9 +387,8 @@ class TestValidBehavior:
             np.where(np.isnan(r["pvalues"])), np.where(np.isnan(ligrec_pvalues_reference["pvalues"]))
         )
 
-    def test_logging(self, adata: AnnData, interactions: Interactions_t, capsys):
-        s.logfile = sys.stderr
-        s.verbosity = 4
+    def test_logging(self, adata: AnnData, interactions: Interactions_t, squidpy_logs):
+        log_config.verbosity = "debug"
 
         ligrec(
             adata,
@@ -403,15 +402,17 @@ class TestValidBehavior:
             n_jobs=2,
         )
 
-        err = capsys.readouterr().err
-
-        assert "DEBUG: Removing duplicate interactions" in err
-        assert "DEBUG: Removing duplicate genes in the data" in err
-        assert "DEBUG: Creating all gene combinations within complexes" in err
-        assert "DEBUG: Removing interactions with no genes in the data" in err
-        assert "DEBUG: Removing genes not in any interaction" in err
-        assert "Running `5` permutations on `25` interactions and `25` cluster combinations using `2` thread(s)" in err
-        assert "Adding `adata.uns['ligrec_test']`" in err
+        logged = {(r.levelno, r.getMessage()) for r in squidpy_logs}
+        for step in (
+            "Removing duplicate interactions",
+            "Removing duplicate genes in the data",
+            "Creating all gene combinations within complexes",
+            "Removing interactions with no genes in the data",
+            "Removing genes not in any interaction",
+            "Running `5` permutations on `25` interactions and `25` cluster combinations using `2` thread(s)",
+        ):
+            assert (logging.DEBUG, step) in logged
+        assert (logging.INFO, "Added `adata.uns['ligrec_test']`") in logged
 
     def test_non_uniqueness(self, adata: AnnData, interactions: Interactions_t):
         # add complexes

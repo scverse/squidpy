@@ -37,9 +37,9 @@ import xarray as xr
 from numba import njit
 from skimage.measure import find_contours, regionprops
 from sklearn.neighbors import BallTree
-from spatialdata._logging import logger as logg
 from spatialdata.models import TableModel
 
+from squidpy._logging import logg
 from squidpy._validators import assert_non_negative, assert_positive
 from squidpy.experimental.im._tiling import (
     _run_tiled,
@@ -364,7 +364,7 @@ def _compute_centroids_for_labels(
 ) -> dict:
     """Compute cell centroids using the most efficient strategy available."""
     if isinstance(sdata.labels[labels_key], xr.DataTree):
-        logg.info("Computing centroids from coarse scale.")
+        logg.debug("Computing centroids from coarse scale.")
         return compute_cell_info_multiscale(sdata.labels[labels_key], target_scale=scale or "scale0")
 
     n_pixels = labels_da.sizes.get("y", 1) * labels_da.sizes.get("x", 1)
@@ -374,7 +374,7 @@ def _compute_centroids_for_labels(
             lbl_np = lbl_np.squeeze()
         return compute_cell_info(lbl_np)
 
-    logg.info("Computing centroids in tiled mode (large single-scale labels).")
+    logg.debug("Computing centroids in tiled mode (large single-scale labels).")
     return compute_cell_info_tiled(labels_da)
 
 
@@ -536,7 +536,7 @@ def calculate_tiling_qc(
     W = int(labels_da.sizes.get("x", labels_da.shape[-1]))
 
     specs = build_tile_specs((H, W), cell_info, tile_size=tile_size, overlap_margin=overlap_margin)
-    logg.info(
+    logg.debug(
         f"Tiling QC: {len(specs)} tiles ({tile_size}x{tile_size}, margin={overlap_margin}, downsample={downsample}x)."
     )
 

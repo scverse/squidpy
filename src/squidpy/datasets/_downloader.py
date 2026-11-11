@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING, Any
 
 from scanpy import settings
 from scverse_misc.datasets import fetch, register_loader
-from spatialdata._logging import logger as logg
 
+from squidpy._logging import logg
 from squidpy.datasets._registry import get_base_url, get_registry
 
 if TYPE_CHECKING:

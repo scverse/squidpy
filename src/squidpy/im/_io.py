@@ -9,10 +9,10 @@ import numpy as np
 import xarray as xr
 from dask import delayed
 from PIL import Image
-from scanpy import logging as logg
 from skimage.io import imread
 from tifffile import TiffFile
 
+from squidpy._logging import logg
 from squidpy._utils import NDArrayA
 from squidpy._validators import options_of
 
@@ -234,7 +234,7 @@ def _lazy_load_image(
             Image.MAX_IMAGE_PIXELS = None
             return np.reshape(imread(fname, plugin="pil"), shape)
         except Image.UnidentifiedImageError as e:  # should not happen
-            logg.error(str(e))
+            logg.warning(str(e))
             return np.reshape(imread(fname), shape)
         finally:
             Image.MAX_IMAGE_PIXELS = old_max_pixels
