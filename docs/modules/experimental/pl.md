@@ -4,8 +4,8 @@
 .. module:: squidpy.experimental.pl
 .. currentmodule:: squidpy.experimental
 .. autosummary::
-    :toctree: ../../api
+   :toctree: ../../api
 
-    pl.tiling_qc
-    pl.qc_image
+   pl.tiling_qc
+   pl.qc_image
 ```

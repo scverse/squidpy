@@ -12,7 +12,6 @@ the [scientific Python tutorials][], or the [scanpy developer guide][].
 [scanpy developer guide]: https://scanpy.readthedocs.io/en/latest/dev/index.html
 
 :::{tip} The _hatch_ project manager
-
 We highly recommend to familiarize yourself with [`hatch`][hatch].
 Hatch is a Python project manager that
 
@@ -23,19 +22,17 @@ Hatch is a Python project manager that
 
 While the project is setup with `hatch` in mind,
 it is still possible to use different tools to manage dependencies, such as `uv` or `pip`.
-
 :::
 
 [hatch]: https://hatch.pypa.io/latest/
 
 ## Installing dev dependencies
 
-In addition to the packages needed to _use_ this package,
+In addition to the packages needed to *use* this package,
 you need additional python packages to {ref}`writing-tests` and {ref}`docs-building`.
 
 :::::{tabs}
 ::::{group-tab} Hatch
-
 On the command line, you typically interact with hatch through its command line interface (CLI).
 Running one of the following commands will automatically resolve the environments for testing and
 building the documentation in the background:
@@ -91,11 +88,9 @@ In case you are using VScode, now open the command palette (Ctrl+Shift+P) and se
 Choose `Enter Interpreter Path` and paste the path to the virtual environment from above.
 
 In this future, this may become easier through a hatch vscode extension.
-
 ::::
 
 ::::{group-tab} uv
-
 A popular choice for managing virtual environments is [uv][].
 The main disadvantage compared to hatch is that it supports only a single environment per project at a time,
 which requires you to mix the dependencies for running tests and building docs.
@@ -110,11 +105,9 @@ uv sync --all-extras
 ```
 
 The `.venv` directory is typically automatically discovered by IDEs such as VS Code.
-
 ::::
 
 ::::{group-tab} Pip
-
 Pip is nowadays mostly superseded by environment manager such as [hatch][].
 However, for the sake of completeness, and since it’s ubiquitously available,
 we describe how you can manage environments manually using `pip`:
@@ -126,7 +119,6 @@ pip install -e ".[dev,test,doc]"
 ```
 
 The `.venv` directory is typically automatically discovered by IDEs such as VS Code.
-
 ::::
 :::::
 
@@ -159,7 +151,7 @@ git pull --rebase
 to integrate the changes into yours.
 While the [pre-commit.ci][] is useful, we strongly encourage installing and running pre-commit locally first to understand its usage.
 
-Finally, most editors have an _autoformat on save_ feature.
+Finally, most editors have an *autoformat on save* feature.
 Consider enabling this option for [ruff][ruff-editors] and [biome][biome-editors].
 
 [pre-commit]: https://pre-commit.com/
@@ -196,30 +188,24 @@ Alternatively, you can run all tests from the command line by executing
 
 :::::{tabs}
 ::::{group-tab} Hatch
-
 ```bash
 hatch test  # test with the highest supported Python version
 # or
 hatch test --all  # test with all supported Python versions
 ```
-
 ::::
 
 ::::{group-tab} uv
-
 ```bash
 uv run pytest
 ```
-
 ::::
 
 ::::{group-tab} Pip
-
 ```bash
 source .venv/bin/activate
 pytest
 ```
-
 ::::
 :::::
 
@@ -256,7 +242,7 @@ Please adhere to [Semantic Versioning][semver], in brief
 >
 > Additional labels for pre-release and build metadata are available as extensions to the MAJOR.MINOR.PATCH format.
 
-Once you are done, commit and push your changes and navigate to the "Releases" page of this project on GitHub.
+Once you are done, commit and push your changes and navigate to the “Releases” page of this project on GitHub.
 Specify `vX.X.X` as a tag name and create a release.
 For more information, see [managing GitHub releases][].
 This will automatically create a git tag and trigger a Github workflow that creates a release on [PyPI][].
@@ -309,32 +295,26 @@ please check out [this feature request][issue-render-notebooks] in the `cookiecu
 
 :::::{tabs}
 ::::{group-tab} Hatch
-
 ```bash
 hatch run docs:build
 hatch run docs:open
 ```
-
 ::::
 
 ::::{group-tab} uv
-
 ```bash
 cd docs
 uv run sphinx-build -M html . _build -W
 (xdg-)open _build/html/index.html
 ```
-
 ::::
 
 ::::{group-tab} Pip
-
 ```bash
 source .venv/bin/activate
 cd docs
 sphinx-build -M html . _build -W
 (xdg-)open _build/html/index.html
 ```
-
 ::::
 :::::
