@@ -4,10 +4,10 @@
 .. module:: squidpy.im
 .. currentmodule:: squidpy
 .. autosummary::
-    :toctree: ../api
+   :toctree: ../api
 
-    im.process
-    im.segment
-    im.calculate_image_features
-    im.SegmentationModel
+   im.process
+   im.segment
+   im.calculate_image_features
+   im.SegmentationModel
 ```

@@ -18,12 +18,11 @@ The `squidpy.gr.neighbors` module exposes two builder base classes:
 
 ### What to override
 
-| Base class                                  | Method / property                                         | Required | Purpose                                                                                                                                 |
-| ------------------------------------------- | --------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| {class}`~squidpy.gr.neighbors.GraphBuilder` | {meth}`~squidpy.gr.neighbors.GraphBuilder.build_graph`    | yes      | Construct and return `(adj, dst)` using the coordinate and matrix types of your custom backend.                                         |
-| {class}`~squidpy.gr.neighbors.GraphBuilder` | {meth}`~squidpy.gr.neighbors.GraphBuilder.postprocessors` | no       | Return post-build processing steps for `(adj, dst)`. You can either override this or pass `postprocessors=...` to `super().__init__()`. |
-| {class}`~squidpy.gr.neighbors.GraphBuilder` | {meth}`~squidpy.gr.neighbors.GraphBuilder.combine`        | no       | Combine per-library results when using `library_key`. If you do not need `library_key` support, leaving this unimplemented is fine.     |
-
+  | Base class                                  | Method / property                                         | Required | Purpose                                                                                                                                 |
+  | ------------------------------------------- | --------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+  | {class}`~squidpy.gr.neighbors.GraphBuilder` | {meth}`~squidpy.gr.neighbors.GraphBuilder.build_graph`    | yes      | Construct and return `(adj, dst)` using the coordinate and matrix types of your custom backend.                                         |
+  | {class}`~squidpy.gr.neighbors.GraphBuilder` | {meth}`~squidpy.gr.neighbors.GraphBuilder.postprocessors` | no       | Return post-build processing steps for `(adj, dst)`. You can either override this or pass `postprocessors=...` to `super().__init__()`. |
+  | {class}`~squidpy.gr.neighbors.GraphBuilder` | {meth}`~squidpy.gr.neighbors.GraphBuilder.combine`        | no       | Combine per-library results when using `library_key`. If you do not need `library_key` support, leaving this unimplemented is fine.     |
 
 The generic builder only defines the pipeline. The CSR-specialized builder adds
 multi-library `library_key` combination and
@@ -52,7 +51,7 @@ with matching sparsity structure:
 
 ### Example: approximate kNN search with pynndescent
 
-The built-in {class}`~squidpy.gr.neighbors.KNNBuilder` uses scikit-learn's
+The built-in {class}`~squidpy.gr.neighbors.KNNBuilder` uses scikit-learn’s
 `NearestNeighbors`. The [pynndescent](https://github.com/lmcinnes/pynndescent)
 library provides an approximate nearest-neighbor search backend that is often
 faster on larger datasets. The example below swaps the backend while keeping

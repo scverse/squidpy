@@ -17,5 +17,5 @@ sq.pl.spatial_scatter(adata, color="celltype_mapped_refined", shape=None)
 sq.pl.nhood_enrichment(adata, cluster_key="celltype_mapped_refined")
 ```
 
-The genes ranked by Moran's I end up in `adata.uns["moranI"]`.
+The genes ranked by Moran’s I end up in `adata.uns["moranI"]`.
 The {doc}`notebooks/tutorials/index` apply these steps to other technologies, and {doc}`api` lists every function.

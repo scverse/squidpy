@@ -7,12 +7,12 @@
   [@giovp](https://github.com/giovp)
   [#437](https://github.com/scverse/squidpy/pull/437)
 
-- Add {func}`squidpy.datasets.visium` to download _10x Genomics_ datasets.
+- Add {func}`squidpy.datasets.visium` to download *10x Genomics* datasets.
   [@dineshpalli](https://github.com/dineshpalli)
   [#449](https://github.com/scverse/squidpy/pull/449)
 
 - Add {func}`squidpy.read.visium`, {func}`squidpy.read.vizgen` and {func}`squidpy.read.nanostring` to
-  read _Visium_, _Vizgen_ and _Nanostring_ files, respectively.
+  read *Visium*, *Vizgen* and *Nanostring* files, respectively.
   [@dineshpalli](https://github.com/dineshpalli)
   [#468](https://github.com/scverse/squidpy/pull/468)
 
@@ -22,7 +22,7 @@
   [@jo-mueller](https://github.com/jo-mueller)
   [#493](https://github.com/scverse/squidpy/pull/493)
 
-- Add option to load remote _Zarr_ store in {class}`squidpy.im.ImageContainer`.
+- Add option to load remote *Zarr* store in {class}`squidpy.im.ImageContainer`.
   [@ilan-gold](https://github.com/ilan-gold)
   [#500](https://github.com/scverse/squidpy/pull/500)
 
@@ -34,7 +34,6 @@
   multiple slides.
   [@giovp](https://github.com/giovp)
   [#516](https://github.com/scverse/squidpy/pull/516)
-
 
 ## Bugfixes
 
@@ -62,7 +61,6 @@
   [@michalk8](https://github.com/michalk8)
   [#510](https://github.com/scverse/squidpy/pull/510)
 
-
 ## Miscellaneous
 
 - Change imports in the topmost `__init__.py` for correct IDE module resolution.
@@ -76,7 +74,6 @@
 - Fix missing authors in release notes.
   [@giovp](https://github.com/giovp)
   [#520](https://github.com/scverse/squidpy/pull/520)
-
 
 ## Documentation
 

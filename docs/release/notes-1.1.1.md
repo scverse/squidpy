@@ -9,12 +9,10 @@
 - Allow specifying gene symbols from :attr:`anndata.AnnData.var` in {func}`squidpy.gr.ligrec`.
   [#395](https://github.com/scverse/squidpy/pull/395)
 
-
 ## Bugfixes
 
 - Fix sometimes incorrectly transposing dimensions when reading TIFF files.
   [#390](https://github.com/scverse/squidpy/pull/390)
-
 
 ## Miscellaneous
 
@@ -23,7 +21,6 @@
 
 - Update `mypy` type-checking and use PEP 604 for type annotations.
   [#396](https://github.com/scverse/squidpy/pull/396)
-
 
 ## Documentation
 

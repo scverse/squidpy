@@ -12,7 +12,6 @@ the [scientific Python tutorials][], or the [scanpy developer guide][].
 [scanpy developer guide]: https://scanpy.readthedocs.io/en/latest/dev/index.html
 
 :::{tip} The _hatch_ project manager
-
 We highly recommend to familiarize yourself with [`hatch`][hatch].
 Hatch is a Python project manager that
 
@@ -23,16 +22,16 @@ Hatch is a Python project manager that
 
 While the project is setup with `hatch` in mind,
 it is still possible to use different tools to manage dependencies, such as `uv` or `pip`.
-
 :::
 
 [hatch]: https://hatch.pypa.io/latest/
 
 ## Installing dev dependencies
 
-In addition to the packages needed to _use_ this package,
+In addition to the packages needed to *use* this package,
 you need additional python packages to {ref}`writing-tests` and {ref}`docs-building`.
 
+<!-- panache-ignore-format-start -->
 :::::{tabs}
 ::::{group-tab} Hatch
 
@@ -129,6 +128,7 @@ The `.venv` directory is typically automatically discovered by IDEs such as VS C
 
 ::::
 :::::
+<!-- panache-ignore-format-end -->
 
 [hatch environments]: https://hatch.pypa.io/latest/tutorials/environment/basic-usage/
 [uv]: https://docs.astral.sh/uv/
@@ -159,7 +159,7 @@ git pull --rebase
 to integrate the changes into yours.
 While the [pre-commit.ci][] is useful, we strongly encourage installing and running pre-commit locally first to understand its usage.
 
-Finally, most editors have an _autoformat on save_ feature.
+Finally, most editors have an *autoformat on save* feature.
 Consider enabling this option for [ruff][ruff-editors] and [biome][biome-editors].
 
 [pre-commit]: https://pre-commit.com/
@@ -194,6 +194,7 @@ hatch env find hatch-test  # list all possible test environment paths
 
 Alternatively, you can run all tests from the command line by executing
 
+<!-- panache-ignore-format-start -->
 :::::{tabs}
 ::::{group-tab} Hatch
 
@@ -222,6 +223,7 @@ pytest
 
 ::::
 :::::
+<!-- panache-ignore-format-end -->
 
 in the root of the repository.
 
@@ -256,7 +258,7 @@ Please adhere to [Semantic Versioning][semver], in brief
 >
 > Additional labels for pre-release and build metadata are available as extensions to the MAJOR.MINOR.PATCH format.
 
-Once you are done, commit and push your changes and navigate to the "Releases" page of this project on GitHub.
+Once you are done, commit and push your changes and navigate to the “Releases” page of this project on GitHub.
 Specify `vX.X.X` as a tag name and create a release.
 For more information, see [managing GitHub releases][].
 This will automatically create a git tag and trigger a Github workflow that creates a release on [PyPI][].
@@ -307,6 +309,7 @@ please check out [this feature request][issue-render-notebooks] in the `cookiecu
 
 ### Building the docs locally
 
+<!-- panache-ignore-format-start -->
 :::::{tabs}
 ::::{group-tab} Hatch
 
@@ -338,3 +341,4 @@ sphinx-build -M html . _build -W
 
 ::::
 :::::
+<!-- panache-ignore-format-end -->

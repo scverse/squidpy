@@ -34,7 +34,7 @@ If you are new to SpatialData, we invite you to take a look at the [spatialdata 
 
 Please see our manuscript [Palla, Spitzer et al. (2022)](https://doi.org/10.1038/s41592-021-01358-2) in **Nature Methods** to learn more.
 
-## Squidpy's key applications
+## Squidpy’s key applications
 
 - Build and analyze the neighborhood graph from spatial coordinates
 - Compute spatial statistics for cell-types and genes
