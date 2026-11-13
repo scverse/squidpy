@@ -85,6 +85,7 @@ class TestSlidingWindow:
                 assert (
                     f"{sliding_window_key}_window_{i}" in df.columns
                 )  # correct number of columns; multiple sliding windows
+                assert df[f"{sliding_window_key}_window_{i}"].dtype == bool
 
     def test_sliding_window_invalid_window_size(
         self,
