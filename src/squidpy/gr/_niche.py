@@ -17,9 +17,10 @@ from pandas.api.types import is_bool_dtype
 from sklearn.base import clone
 from sklearn.mixture import GaussianMixture
 from spatialdata import SpatialData, sanitize_table
-from spatialdata._logging import logger as logg
 
+from squidpy._compat import SKIP_OWN_FRAMES
 from squidpy._docs import d
+from squidpy._logging import logg
 from squidpy._utils import (
     RNGLike,
     SeedLike,
@@ -710,9 +711,7 @@ def calculate_niche_cellcharter(
     """
 
     if use_rep is None:
-        logg.warning(
-            "CellCharter recommends to use a dimensionality reduced embedding of the data, e.g. a scVI embedding. Since 'use_rep' is not provided, PCA will be used as proxy - performance may be suboptimal."
-        )
+        logg.info("No `use_rep` given, so clustering a PCA of `adata.X`; CellCharter recommends e.g. a scVI embedding")
     elif n_pca_components is not None:
         raise ValueError("'n_pca_components' sizes the PCA, which 'use_rep' replaces; pass one or the other")
 
@@ -1111,8 +1110,10 @@ def _check_unnecessary_args(flavor: str, param_dict: dict[str, Any], param_specs
             unnecessary_args.append(param_name)
 
     if unnecessary_args:
-        logg.warning(
+        warnings.warn(
             f"Parameters {', '.join([f'{arg}' for arg in unnecessary_args])} are not used for flavor '{flavor}'.",
+            UserWarning,
+            skip_file_prefixes=SKIP_OWN_FRAMES,
         )
 
 
@@ -1335,7 +1336,7 @@ def _fit_clusterers(
     rngs = rng.spawn(len(clusterers))
     for (column, clusterer), rng in zip(clusterers.items(), rngs, strict=True):
         if column in adata.obs.columns:
-            logg.info(f"Overwriting existing column '{column}'")
+            logg.warning(f"Overwriting existing column '{column}'")
         # a fresh clone per fit, so the estimator handed in is never mutated
         fit = clone(clusterer).set_params(random_state=legacy_random(rng))
         if keep is None:

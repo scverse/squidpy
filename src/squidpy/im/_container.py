@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import warnings
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from copy import copy, deepcopy
 from functools import partial
@@ -18,13 +19,13 @@ import xarray as xr
 from anndata import AnnData
 from dask import delayed
 from matplotlib.colors import ListedColormap
-from scanpy import logging as logg
 from skimage.transform import rescale
 from skimage.util import img_as_float
 
-from squidpy._compat import default_palette
+from squidpy._compat import SKIP_OWN_FRAMES, default_palette
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
+from squidpy._logging import logg
 from squidpy._utils import NDArrayA, singledispatchmethod
 from squidpy._validators import (
     assert_in_range,
@@ -291,7 +292,10 @@ class ImageContainer(FeatureMixin):
 
             if TYPE_CHECKING:
                 assert isinstance(res, xr.DataArray)
-            logg.info(f"{'Overwriting' if layer in self else 'Adding'} image layer `{layer}`")
+            if layer in self:
+                logg.warning(f"Overwriting image layer `{layer}`")
+            else:
+                logg.debug(f"Adding image layer `{layer}`")
             try:
                 self.data[layer] = res
             except ValueError as e:
@@ -996,7 +1000,11 @@ class ImageContainer(FeatureMixin):
 
         n_channels = arr.shape[-1]
         if n_channels not in (1, 3, 4) and not channelwise:
-            logg.warning(f"Unable to plot image with `{n_channels}`. Setting `channelwise=True`")
+            warnings.warn(
+                f"Unable to plot image with `{n_channels}` channels. Setting `channelwise=True`",
+                UserWarning,
+                skip_file_prefixes=SKIP_OWN_FRAMES,
+            )
             channelwise = True
 
         if transpose is None:

@@ -29,7 +29,6 @@ from pandas.core.dtypes.common import (
     is_object_dtype,
     is_string_dtype,
 )
-from scanpy import logging as logg
 from scanpy import settings
 from scipy.cluster import hierarchy as sch
 from scipy.sparse import issparse, spmatrix
@@ -39,6 +38,7 @@ from skimage.color import rgb2gray
 from squidpy._compat import old_positionals
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
+from squidpy._logging import logg
 from squidpy._utils import NDArrayA
 from squidpy._validators import assert_in_range, assert_key_in_adata
 from squidpy.gr._utils import _assert_categorical_obs

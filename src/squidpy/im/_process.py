@@ -6,12 +6,12 @@ from typing import Any, Literal
 
 import dask.array as da
 from dask_image.ndfilters import gaussian_filter as dask_gf
-from scanpy import logging as logg
 from scipy.ndimage import gaussian_filter as scipy_gf
 
 from squidpy._compat import old_positionals
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
+from squidpy._logging import logg
 from squidpy._utils import NDArrayA
 from squidpy._validators import normalize_choice
 from squidpy.im._container import ImageContainer
@@ -121,7 +121,7 @@ def process(
     if library_id is not None:
         callback = dict.fromkeys(img._get_library_ids(library_id), callback)  # type: ignore[assignment]
 
-    start = logg.info(f"Processing image using `{method}` method")
+    start = logg.debug(f"Processing image using `{method}` method")
     res: ImageContainer = img.apply(
         callback,
         layer=layer,
@@ -138,7 +138,7 @@ def process(
         channel_dim = f"{channel_dim}_{modifier}"
 
     res._data = res.data.rename({res[layer].dims[-1]: channel_dim})
-    logg.info("Finish", time=start)
+    logg.info("Processed image", time=start)
 
     if copy:
         return res.rename(layer, layer_new)

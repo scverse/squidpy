@@ -5,7 +5,6 @@ from __future__ import annotations
 import numba
 import pytest  # type: ignore[import]
 
-from squidpy import _utils
 from squidpy._utils import _cpu_count, get_n_numba_threads, get_n_processes, thread_map
 
 MAX_THREADS = numba.config.NUMBA_NUM_THREADS
@@ -35,13 +34,9 @@ def test_zero_and_below_minus_one_raise(resolve, n_jobs: int):
     ("resolve", "maximum"),
     [(get_n_processes, MAX_CORES), (get_n_numba_threads, MAX_THREADS)],
 )
-def test_too_many_warns_and_falls_back(resolve, maximum: int, monkeypatch):
-    messages: list[str] = []
-    monkeypatch.setattr(_utils.logg, "warning", messages.append)
-
-    assert resolve(maximum + 1) == maximum
-    assert len(messages) == 1
-    assert f"n_jobs={maximum + 1}" in messages[0]
+def test_too_many_warns_and_falls_back(resolve, maximum: int):
+    with pytest.warns(UserWarning, match=rf"n_jobs={maximum + 1}"):
+        assert resolve(maximum + 1) == maximum
 
 
 @pytest.mark.parametrize("n_jobs", [1, 2])

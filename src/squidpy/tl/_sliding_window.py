@@ -5,11 +5,11 @@ from itertools import product
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from scanpy import logging as logg
 from spatialdata import SpatialData
 
 from squidpy._compat import old_positionals
 from squidpy._docs import d
+from squidpy._logging import logg
 from squidpy.gr._utils import _save_data, extract_adata_if_sdata
 
 __all__ = ["sliding_window"]
