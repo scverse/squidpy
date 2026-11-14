@@ -134,6 +134,7 @@ dmypy.json
 
 # data
 data
+!src/squidpy/_skills/data/
 
 # Vim .swp
 *.swp

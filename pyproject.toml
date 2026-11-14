@@ -90,6 +90,7 @@ urls."Bug Tracker" = "https://github.com/scverse/squidpy/issues"
 urls.Documentation = "https://squidpy.readthedocs.io"
 urls.Home-page = "https://github.com/scverse/squidpy"
 urls.Source = "https://github.com/scverse/squidpy"
+scripts.squidpy-install-skills = "squidpy._skills.install:main"
 
 [dependency-groups]
 dev = [

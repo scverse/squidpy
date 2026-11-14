@@ -1,11 +1,16 @@
-"""Tests for squidpy._validators."""
+"""Validation tests, including bundled agent skill installation."""
 
 from __future__ import annotations
 
+import json
+import re
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+import yaml
 
+from squidpy._skills import install as skill_install
 from squidpy._validators import (
     assert_in_range,
     assert_isinstance,
@@ -212,3 +217,149 @@ class TestAssertIsinstanceEdgeCases:
     def test_none_type(self):
         with pytest.raises(TypeError, match="str"):
             assert_isinstance(None, str, name="x")
+
+
+class TestSkillInstallation:
+    @pytest.fixture
+    def skill_home(self, tmp_path, monkeypatch):
+        directory = tmp_path / "home"
+        directory.mkdir()
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: directory))
+        monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+        return directory
+
+    def test_bundle_and_links(self):
+        source = skill_install._source_dir()
+        text = (source / "SKILL.md").read_text()
+        metadata = yaml.safe_load(text.split("---", 2)[1])
+        assert metadata["name"] == "squidpy" and metadata["description"]
+        references = list((source / "references").glob("*.md"))
+        assert references
+        for path in [source / "SKILL.md", *references]:
+            for target in re.findall(r"\[[^\]]+\]\(([^)]+)\)", path.read_text()):
+                if "://" not in target and not target.startswith("#"):
+                    resolved = (path.parent / target.split("#", 1)[0]).resolve()
+                    assert resolved.is_relative_to(source.resolve()) and resolved.is_file()
+
+    def test_install_check_and_refresh(self, tmp_path):
+        destination = tmp_path / "squidpy"
+        command = ["--dest", str(destination)]
+        assert skill_install.main([*command, "--check"]) == 1
+        assert not destination.exists()
+        assert skill_install.main(command) == 0
+        source = skill_install._source_dir()
+        expected = {path.relative_to(source): path.read_bytes() for path in source.rglob("*") if path.is_file()}
+        assert {
+            path.relative_to(destination): path.read_bytes() for path in destination.rglob("*") if path.is_file()
+        } == (expected)
+        assert skill_install.main([*command, "--check"]) == 0
+        marker = destination / "SKILL.md"
+        modified = b"locally edited instructions\n"
+        marker.write_bytes(modified)
+        stale = destination / "references" / "stale.md"
+        stale.write_text("old reference")
+        assert skill_install.main([*command, "--check"]) == 1
+        assert marker.read_bytes() == modified
+        assert skill_install.main(command) == 1
+        assert marker.read_bytes() == modified and stale.exists()
+        assert skill_install.main([*command, "--force"]) == 0
+        assert not stale.exists()
+        assert skill_install.main([*command, "--check"]) == 0
+
+    def test_identical_install_is_unchanged(self, tmp_path, capsys):
+        command = ["--dest", str(tmp_path / "squidpy")]
+        assert skill_install.main(command) == 0
+        marker = tmp_path / "squidpy" / "SKILL.md"
+        modified = marker.stat().st_mtime_ns
+        assert skill_install.main(command) == 0
+        assert marker.stat().st_mtime_ns == modified
+        assert "already up to date" in capsys.readouterr().out
+
+    def test_failed_refresh_preserves_existing_files(self, tmp_path, monkeypatch):
+        destination = tmp_path / "squidpy"
+        command = ["--dest", str(destination)]
+        assert skill_install.main(command) == 0
+        marker = destination / "SKILL.md"
+        marker.write_text("local instructions")
+
+        def fail_copy(*args, **kwargs):
+            raise OSError("copy failed")
+
+        monkeypatch.setattr(skill_install.shutil, "copytree", fail_copy)
+        assert skill_install.main([*command, "--force"]) == 1
+        assert marker.read_text() == "local instructions"
+
+    def test_force_replaces_existing_file(self, tmp_path):
+        destination = tmp_path / "squidpy"
+        destination.write_text("old file")
+        command = ["--dest", str(destination)]
+        assert skill_install.main(command) == 1
+        assert destination.read_text() == "old file"
+        assert skill_install.main([*command, "--force"]) == 0
+        assert skill_install.main([*command, "--check"]) == 0
+
+    @pytest.mark.parametrize(("agent", "config"), [("codex", ".agents"), ("agents", ".agents"), ("claude", ".claude")])
+    def test_agent_installation(self, skill_home, agent, config):
+        assert skill_install.main(["--agent", agent]) == 0
+        assert (skill_home / config / "skills" / "squidpy" / "SKILL.md").is_file()
+
+    def test_custom_claude_configuration(self, skill_home, tmp_path, monkeypatch):
+        configuration = tmp_path / "claude-config"
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(configuration))
+        assert skill_install.main(["--agent", "claude"]) == 0
+        assert (configuration / "skills" / "squidpy" / "SKILL.md").is_file()
+        assert not (skill_home / ".claude").exists()
+
+    def test_destination_overrides_agent(self, skill_home, tmp_path):
+        destination = tmp_path / "project-skill"
+        assert skill_install.main(["--agent", "claude-science", "--dest", str(destination)]) == 0
+        assert (destination / "SKILL.md").is_file()
+        assert not (skill_home / ".claude-science").exists()
+
+    @pytest.mark.parametrize("organization", ["org-1234", None, "not-json", "../escape", "..\\escape", "..", []])
+    def test_claude_science_organization(self, skill_home, organization):
+        root = skill_home / ".claude-science"
+        root.mkdir()
+        if organization is not None:
+            contents = "invalid json" if organization == "not-json" else json.dumps({"org_uuid": organization})
+            (root / "active-org.json").write_text(contents)
+        result = skill_install.main(["--agent", "claude-science"])
+        assert result == (0 if organization == "org-1234" else 1)
+        if result == 0:
+            assert (root / "orgs" / "org-1234" / "skills" / "squidpy" / "SKILL.md").is_file()
+        else:
+            assert not (root / "orgs").exists()
+
+    def test_explicit_target_required(self, capsys):
+        assert skill_install.main([]) == 1
+        assert "--agent or --dest" in capsys.readouterr().err
+
+    def test_print_path_does_not_install(self, skill_home, capsys):
+        assert skill_install.main(["--print-path"]) == 0
+        assert Path(capsys.readouterr().out.strip()) == skill_install._source_dir()
+        assert not list(skill_home.iterdir())
+
+    def test_missing_bundle(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr(skill_install.resources, "files", lambda _: tmp_path)
+        assert skill_install.main(["--print-path"]) == 1
+        assert "missing" in capsys.readouterr().err
+
+    def test_force_preserves_symlink_target(self, tmp_path):
+        original = tmp_path / "original"
+        original.mkdir()
+        marker = original / "keep.txt"
+        marker.write_text("preserve this file")
+        destination = tmp_path / "squidpy"
+        destination.symlink_to(original, target_is_directory=True)
+        assert skill_install.main(["--dest", str(destination), "--force"]) == 1
+        assert destination.is_symlink() and marker.read_text() == "preserve this file"
+
+    def test_destination_must_not_contain_bundle(self, tmp_path, monkeypatch):
+        destination = tmp_path / "installation"
+        source = destination / "data"
+        source.mkdir(parents=True)
+        marker = source / "SKILL.md"
+        marker.write_text("bundled instructions")
+        monkeypatch.setattr(skill_install, "_source_dir", lambda: source)
+        assert skill_install.main(["--dest", str(destination), "--force"]) == 1
+        assert marker.read_text() == "bundled instructions"
