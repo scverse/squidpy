@@ -189,7 +189,7 @@ def sweep_auto_k(
         Defaults to every value but the first and the last.
     clusterer
         Cloned per fit, with *param* and ``random_state`` set,
-        so its own are ignored. Defaults to :func:`~squidpy.gr._clusterers.default_mixture`.
+        so its own are ignored. Defaults to :class:`~sklearn.mixture.GaussianMixture` with ``reg_covar=1e-4``.
 
         Of scikit-learn's own clusterers, that includes
         :class:`~sklearn.mixture.GaussianMixture`,
