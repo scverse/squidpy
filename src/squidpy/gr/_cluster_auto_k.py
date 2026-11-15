@@ -58,32 +58,28 @@ def cluster_auto_k(
         :attr:`~anndata.AnnData.X`.
     values
         The values of *param* to select from. For the number of clusters, as in CellCharter: a
-        ``(min, max)`` tuple for every K in that range, or a sequence of K values, which need
-        not be consecutive; each K is scored by its agreement with K-1 and K+1, so those are
-        fitted too, and K < 2 cannot be scored and is dropped with a warning. For any other
-        parameter, at least 3 values, each scored by its agreement with its neighbours once
-        sorted, so the smallest and the largest are fitted but not scored.
+        ``(min, max)`` range or a list of K, each scored against K-1 and K+1 (fitted too); K < 2
+        is dropped with a warning. For another parameter, at least 3 values, each scored against
+        its sorted neighbours.
     param
         The parameter of *clusterer* to select, such as ``'resolution'``. Defaults to its number
         of clusters: ``'n_components'`` for the default :class:`~sklearn.mixture.GaussianMixture`,
         ``'n_clusters'`` for :class:`~sklearn.cluster.KMeans`.
     max_runs
-        Maximum number of repetitions per candidate K. Must be at least 2, since a single
-        run leaves stability undefined.
+        Maximum repetitions per value, at least 2. A run with a failed fit is skipped with a
+        warning.
     convergence_tol
         Stop early once the mean absolute percentage error between the mean stability curves
         of consecutive runs falls below this value.
     clusterer
-        Fitted at every candidate instead of the default mixture, as a template: it is cloned
-        for every fit, with *param* and ``random_state`` set, so the one passed in is never
-        touched and its own values of those are ignored. Any :class:`~squidpy.types.Clusterer`
-        taking *param* and a ``random_state`` will do: scikit-learn's, cuML's, or your own.
+        A :class:`~squidpy.types.Clusterer` taking *param* and ``random_state``, cloned with both
+        set for every fit. Defaults to :class:`~sklearn.mixture.GaussianMixture` with
+        ``reg_covar=1e-4``.
     %(rng)s
         Seeds every individual fit.
     store_labels
         Also keep the labeling of every fitted value, the selected one included, as
-        ``{key_added}_{param}={value}``, e.g. ``cluster_auto_k_n_components=5``. The sweep fits
-        them all anyway, so this is how a runner-up is inspected without refitting.
+        ``{key_added}_{param}={value}``, e.g. ``cluster_auto_k_n_components=5``.
     key_added
         Name of the labeling added to ``adata.obs``, and of the diagnostics added to
         ``adata.uns``.
@@ -103,16 +99,10 @@ def cluster_auto_k(
           ``stability`` values as a DataFrame indexed by the scored values, ``n_runs`` and
           ``converged``.
 
-    To select the number of niches, run this on the embedding
-    :func:`~squidpy.gr.calculate_niche_cellcharter` stores, via ``use_rep``. With a
-    ``cluster_mask`` there, pass the same subset here as a copy, ``adata[mask].copy()``,
-    since results written to a view are not written back to the parent ``adata``.
-
     Notes
     -----
-    The sweep costs up to ``max_runs x len(values)`` fits, and keeps the labelings of all
-    previous runs in memory, since every run is compared against all of them.
-    :class:`~squidpy.gr.LeidenClusterer` rebuilds the neighbourhood graph on every fit.
+    After a niche call with ``cluster_mask``, pass ``adata[mask].copy()`` here: results written
+    to a view are lost.
     """
     assert_isinstance(data, (AnnData, SpatialData), name="data")
     assert_isinstance(copy, bool, name="copy")
@@ -160,21 +150,20 @@ def cluster_auto_k(
     )
     logg.info(f"Selected {param}={result.best} after {result.n_runs} runs")
 
-    # copied only now, so a request the sweep rejects never pays for it
     adata = orig_adata.copy() if copy else orig_adata
     columns = {key_added: result.best}
     if store_labels:
         columns |= {f"{key_added}_{param}={v}": v for v in result.labels}
     for column, v in columns.items():
         codes = result.labels[v]
-        # string categories in numeric order, like `sc.tl.leiden`; all K of them, as CellCharter keeps
+        # all K categories, as CellCharter
         n_categories = v if is_k else codes.max() + 1
         labels = pd.Categorical(codes.astype(str), categories=np.arange(n_categories).astype(str))
         _save_data(
             adata, attr="obs", key=column, data=pd.Series(labels, index=adata.obs_names), prefix=column == key_added
         )
     uns = {key: value for key, value in result._asdict().items() if key != "labels"}  # labels are in obs
-    # one column per run comparison; string names, as h5ad stores them
+    # h5ad needs string column names
     uns["stability"] = pd.DataFrame(result.stability, index=pd.Index(scored, name=param)).rename(columns=str)
     _save_data(adata, attr="uns", key=key_added, data=uns)
 

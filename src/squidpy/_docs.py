@@ -260,6 +260,11 @@ _niche_common_params = f"""\
 {_niche_embedding_key_added}
 {_niche_min_niche_size}
 {_copy}"""
+_niche_clusterer = """\
+clusterer
+    A :class:`~squidpy.types.Clusterer` fitted instead of Leiden, writing ``key_added`` as is;
+    ``n_neighbors``, ``flavor`` and ``n_iterations`` then go unused. Cloned and seeded from
+    ``rng``. Pass this or ``resolutions``."""
 _niche_leiden_params = f"""\
 flavor
     Leiden backend passed to :func:`scanpy.tl.leiden`. Defaults to ``'igraph'``
@@ -528,6 +533,7 @@ d = DocstringProcessor(
     niche_min_niche_size=_niche_min_niche_size,
     niche_common_params=_niche_common_params,
     niche_leiden_params=_niche_leiden_params,
+    niche_clusterer=_niche_clusterer,
     sdata_params=_sdata_params,
     graph_common_params=_graph_common_params,
     n_jobs_libraries=_n_jobs_libraries,

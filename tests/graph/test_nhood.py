@@ -543,6 +543,6 @@ class TestNhoodEntropy:
     def test_writes_to_obs(self):
         adata = self._grid(["a", "b"] * 18)
         expected = nhood_entropy(adata, cluster_key="ct", copy=True)
-        assert "ct_nhood_entropy" not in adata.obs, "copy=True leaves adata alone"
+        assert "ct_nhood_entropy" not in adata.obs
         assert nhood_entropy(adata, cluster_key="ct") is None
         np.testing.assert_allclose(adata.obs["ct_nhood_entropy"], expected)

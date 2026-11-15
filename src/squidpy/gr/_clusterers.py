@@ -34,16 +34,14 @@ class Clusterer(Protocol):
         ...
 
 
-# `n_clusters` first: SpectralClustering takes both, and there `n_components` is the width of
-# the spectral embedding, not the number of clusters
+# n_clusters first: SpectralClustering's n_components is its embedding width
 _K_PARAMS = ("n_clusters", "n_components")
 
 
 def default_mixture(n_components: int = 10) -> GaussianMixture:
-    """CellCharter's model, with ``reg_covar=1e-4``.
+    """CellCharter's GMM (its 'kmeans' init) with ``reg_covar=1e-4``.
 
-    At scikit-learn's ``1e-6``, a component on a few near-identical points of a float32 embedding
-    keeps a singular covariance, and the fit fails or not depending on the seed.
+    At ``1e-6``, near-identical float32 points give a singular, seed-dependent fit.
     """
     return GaussianMixture(n_components=n_components, reg_covar=1e-4)
 
@@ -59,7 +57,7 @@ class LeidenClusterer(ClusterMixin, BaseEstimator):
 
     ``X`` is the embedding, and the neighborhood graph is built from it on every fit, from
     *n_neighbors*, without dimensionality reduction. Pass it as the ``clusterer`` of
-    :func:`~squidpy.gr.calculate_niche_cellcharter` (with ``n_clusters=None``), or to select a
+    :func:`~squidpy.gr.calculate_niche_cellcharter`, or to select a
     resolution with :func:`~squidpy.gr.cluster_auto_k`::
 
         sq.gr.cluster_auto_k(

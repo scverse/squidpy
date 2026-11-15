@@ -774,11 +774,6 @@ def nhood_entropy(
 
         - :attr:`anndata.AnnData.obs` ``['{cluster_key}_nhood_entropy']`` - the per-observation entropy, in nats;
           ``NaN`` for an observation without labelled neighbors.
-
-    Notes
-    -----
-    The neighborhood is whatever ``connectivity_key`` holds; keep it fixed when sweeping a
-    clustering parameter.
     """
     adata = extract_adata_if_sdata(adata, table_key=table_key)
     connectivity_key = Key.obsp.spatial_conn(connectivity_key)
@@ -789,8 +784,7 @@ def nhood_entropy(
     profile = to_dense(
         nhood_aggregate(adata, groups=cluster_key, connectivity_key=connectivity_key, aggregation="mean")
     )
-    # an observation without labelled neighbors has no composition: 0/0 in `entropy`, kept as
-    # NaN so it is left out of a mean instead of counting as a homogeneous neighborhood
+    # no labelled neighbors: 0/0 -> NaN, which a mean skips
     with np.errstate(invalid="ignore"):
         ent = pd.Series(entropy(np.asarray(profile), axis=1), index=adata.obs_names)
 

@@ -21,9 +21,6 @@ def make_blobs(n_per_blob: int = 30, n_features: int = 5, seed: int = 0) -> np.n
     return np.vstack([rng.normal(centre, 1.0, (n_per_blob, n_features)) for centre in (0.0, 8.0, -8.0)])
 
 
-# resolving the requested K values
-
-
 @pytest.mark.parametrize(
     ("n_clusters", "fit", "scored"),
     [
@@ -57,9 +54,6 @@ def test_expand_n_clusters_warns_on_k_below_two():
         expand_n_clusters([0, 1])
 
 
-# which clusterers can be swept
-
-
 @pytest.mark.parametrize(
     ("clusterer", "expected"),
     [
@@ -76,9 +70,9 @@ def test_k_param_finds_the_number_of_clusters(clusterer, expected):
 @pytest.mark.parametrize(
     ("clusterer", "match"),
     [
-        (object(), r"is not a clusterer squidpy can re-fit"),
-        (AffinityPropagation(), r"takes no 'n_clusters'"),
-        (AgglomerativeClustering(), r"takes no 'random_state'"),
+        (object(), r"must implement fit_predict, get_params and set_params"),
+        (AffinityPropagation(), r"has no 'n_clusters' to sweep"),
+        (AgglomerativeClustering(), r"has no 'random_state'"),
     ],
 )
 def test_check_sweep_clusterer_rejects_what_cannot_be_swept(clusterer, match):
@@ -92,9 +86,6 @@ def test_default_mixture_fits_a_collapsed_component():
     X = np.vstack([rng.normal(size=(500, 50)) * 10, np.repeat(rng.normal(size=(1, 50)) * 50, 10, axis=0)])
     for seed in range(3):
         default_mixture().set_params(random_state=seed).fit(X.astype(np.float32))
-
-
-# the sweep
 
 
 @pytest.mark.parametrize(
@@ -121,7 +112,7 @@ def test_sweep_convergence():
 
 
 def _failing(fails):
-    """A KMeans whose fits raise where *fails* (of the fit's index) holds, as a collapsed mixture does."""
+    """KMeans that raises at the fit indices where *fails* holds."""
     calls = itertools.count()
 
     def relabel(labels):
@@ -161,7 +152,7 @@ def test_sweep_needs_two_runs_that_fit_every_value(n_good):
             rng=0,
             param="n_clusters",
         )
-    assert str(excinfo.value.__cause__) == "collapsed", "the last fit's error is kept"
+    assert str(excinfo.value.__cause__) == "collapsed"
 
 
 def _relabeled(relabel):
@@ -185,9 +176,7 @@ def test_sweep_rejects_labels_outside_range(relabel):
 
 
 def test_sweep_pins_its_stability_curve():
-    # guards mirror_stability/_score_block/the seeding/the init against silent drift, and with
-    # it reproducibility from the rng. these are the values this rng produces, not the ground
-    # truth: with the kmeans init, these three blobs select K=4 for 17 of rngs 0-19 at max_runs=5.
+    # pins this rng's output, not ground truth (K=4 for 17 of rngs 0-19)
     result = sweep_auto_k(make_blobs(), list(range(1, 7)), max_runs=5, rng=0, param="n_components")
     assert result.best == 4
     np.testing.assert_allclose(
@@ -203,9 +192,6 @@ def test_seed_is_keyed_by_run_and_k_not_by_position():
     long = sweep_auto_k(X, [1, 2, 3, 4, 5, 6], max_runs=2, rng=42, param="n_components")
     for k in short.labels:
         np.testing.assert_array_equal(short.labels[k], long.labels[k])
-
-
-# parity with the reference implementation
 
 
 def _cc_expand(n_clusters: tuple[int, int] | list[int]) -> list[int]:
@@ -249,11 +235,7 @@ def test_best_k_matches_cellcharter():
     assert int(ours) == _cc_best_k(_cc_mirror(flat, ks), ks)
 
 
-# the public entry point
-
-
 def _auto_k(data, **kwargs):
-    """`cluster_auto_k` on dense blobs with a small, fixed sweep; *kwargs* override."""
     defaults = {"use_rep": "X", "values": (2, 4), "max_runs": 2, "rng": 0}
     return cluster_auto_k(data, **defaults | kwargs)
 
@@ -270,7 +252,7 @@ def test_cluster_auto_k_stores_labels_and_diagnostics(tmp_path):
     # the +-1 halo is fitted, so it has a fit_loss, but is never scored
     assert table["stability_mean"].notna().tolist() == [False, True, True, True, False]
     assert table["fit_loss"].notna().all()
-    assert list(diagnostics["stability"].index) == [2, 3, 4], "rows are the scored K"
+    assert list(diagnostics["stability"].index) == [2, 3, 4]
     assert list(adata.obs.columns) == ["sweep"]
     categories = list(adata.obs["sweep"].cat.categories)
     assert categories == [str(i) for i in range(diagnostics["best"])], "string labels in numeric order, like leiden"
@@ -296,7 +278,7 @@ def test_cluster_auto_k_scores_every_listed_k():
 def test_cluster_auto_k_copy_with_every_fitted_k():
     adata = AnnData(make_blobs())
     out = _auto_k(adata, values=(2, 3), store_labels=True, copy=True)
-    assert adata.obs.columns.empty and not adata.uns, "copy=True leaves adata alone"
+    assert adata.obs.columns.empty and not adata.uns
 
     fitted = list(out.uns["cluster_auto_k"]["table"].index)
     assert list(out.obs.columns) == ["cluster_auto_k", *(f"cluster_auto_k_n_components={k}" for k in fitted)]
@@ -348,7 +330,7 @@ def test_cluster_auto_k_keeps_empty_components_as_categories():
     adata = AnnData(make_blobs())
     _auto_k(adata, values=[3], clusterer=_relabeled(lambda labels: np.minimum(labels, 1)))
     assert adata.uns["cluster_auto_k"]["best"] == 3
-    assert list(adata.obs["cluster_auto_k"].cat.categories) == ["0", "1", "2"], "as CellCharter, every K is a category"
+    assert list(adata.obs["cluster_auto_k"].cat.categories) == ["0", "1", "2"]
     assert set(adata.obs["cluster_auto_k"]) == {"0", "1"}
 
 
@@ -360,7 +342,7 @@ def test_cluster_auto_k_takes_a_clusterer_without_mutating_it():
     _auto_k(adata, clusterer=clusterer)
 
     assert len(adata.obs["cluster_auto_k"].cat.categories) == adata.uns["cluster_auto_k"]["best"]
-    assert clusterer.get_params() == before, "every fit is on a clone"
+    assert clusterer.get_params() == before
 
 
 def test_cluster_auto_k_selects_a_leiden_resolution():
@@ -385,4 +367,4 @@ def test_cluster_auto_k_selects_a_leiden_resolution():
     assert list(adata.obs.columns) == ["cluster_auto_k", *(f"cluster_auto_k_resolution={v}" for v in (0.1, 0.5, 1.0))]
     codes = adata.obs["cluster_auto_k"].cat.codes
     assert list(adata.obs["cluster_auto_k"].cat.categories) == [str(i) for i in range(codes.max() + 1)]
-    assert clusterer.get_params() == before, "every fit is on a clone"
+    assert clusterer.get_params() == before

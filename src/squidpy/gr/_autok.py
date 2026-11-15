@@ -2,8 +2,6 @@
 
 Reimplements CellCharter's ``ClusterAutoK`` (https://github.com/CSOgroup/cellcharter), and applies
 the same score to a grid of any one parameter, such as a Leiden resolution.
-
-Anything needing :class:`~anndata.AnnData` belongs in :mod:`squidpy.gr._cluster_auto_k`.
 """
 
 from __future__ import annotations
@@ -25,9 +23,8 @@ from squidpy.gr._clusterers import Clusterer, default_mixture, k_param
 class ClusterAutoKResult(NamedTuple):
     """A sweep result."""
 
-    #: Per-value diagnostics indexed by the swept parameter, with the columns ``stability_mean``,
-    #: ``stability_std`` and ``fit_loss``. Every fitted value has a row, but the outer neighbours
-    #: (the ``+-1`` halo of a K sweep) are never scored, so their stability is ``NaN``.
+    #: Per-value ``stability_mean``, ``stability_std`` and ``fit_loss``; unscored values (the
+    #: ``+-1`` halo of a K sweep) have ``NaN`` stability.
     table: pd.DataFrame
 
     #: Raw similarity values, of shape ``(n_scored, n_comparisons)``. Row ``i`` belongs to
@@ -50,10 +47,8 @@ class ClusterAutoKResult(NamedTuple):
 def expand_n_clusters(n_clusters: tuple[int, int] | Sequence[int]) -> tuple[list[int], list[int]]:
     """Resolve the requested K values into the K values to fit and the K values to score.
 
-    As CellCharter's ``ClusterAutoK`` does: a ``(min, max)`` tuple means every K in that
-    range, any other sequence the listed K values. Each requested K is scored by its
-    agreement with K-1 and K+1, so those are fitted too. K < 2 cannot be scored and is
-    dropped with a warning.
+    As CellCharter: a ``(min, max)`` tuple is that range, else the listed K. Each K needs K-1 and
+    K+1 fitted. K < 2 is dropped with a warning.
 
     Returns
     -------
@@ -80,11 +75,8 @@ def expand_n_clusters(n_clusters: tuple[int, int] | Sequence[int]) -> tuple[list
 def mirror_stability(blocks: Sequence[Sequence[float]]) -> np.ndarray:
     """Fold one-directional similarities into a per-K stability matrix.
 
-    Each block holds the similarities of one pair of runs, scored over adjacent K pairs:
-    entry ``i`` compares K ``ks[i]`` of one run against ``ks[i + 1]`` of the other. That
-    comparison is one-directional, so a given K is only ever compared *upwards*. Mirroring
-    repairs the asymmetry by giving each interior K both the ``(K, K+1)`` and the
-    ``(K-1, K)`` comparisons.
+    Each block, one pair of runs, compares each K against K+1. Mirroring also gives each
+    interior K its ``(K-1, K)`` comparison.
 
     Returns
     -------
@@ -128,19 +120,12 @@ def _stability_frame(
 def check_sweep_clusterer(clusterer: Clusterer, param: str) -> None:
     """Reject a *clusterer* that cannot be re-fitted at every value of *param*."""
     if not isinstance(clusterer, Clusterer):
-        raise TypeError(
-            f"{type(clusterer).__name__} is not a clusterer squidpy can re-fit: that needs "
-            "'fit_predict' to assign one label per observation, plus 'get_params' and "
-            "'set_params' to be re-fitted with a new parameter value and seed"
-        )
+        raise TypeError(f"{type(clusterer).__name__} must implement fit_predict, get_params and set_params")
     params = clusterer.get_params()
     if param not in params:
-        raise TypeError(f"{type(clusterer).__name__} takes no {param!r}, so it cannot be swept")
+        raise TypeError(f"{type(clusterer).__name__} has no {param!r} to sweep")
     if "random_state" not in params:
-        raise TypeError(
-            f"{type(clusterer).__name__} takes no 'random_state', so every run of a value returns the "
-            "same labeling and there is nothing to compare across runs"
-        )
+        raise TypeError(f"{type(clusterer).__name__} has no 'random_state', so its runs would not differ")
 
 
 def _fit_once(
@@ -148,15 +133,13 @@ def _fit_once(
 ) -> tuple[np.ndarray, float]:
     """One run: a fresh clone of *clusterer* at ``name=value``, seeded by ``random_state``."""
     est = clone(clusterer).set_params(**{name: value, "random_state": random_state})
-    # every run's labeling is kept for the whole sweep, so store them narrow
     labels = np.asarray(est.fit_predict(X))
     # e.g. -1 for noise, labels counted from 1, or strings
     allowed = f"0..{value - 1}" if is_k else "0 or above"
     if not np.issubdtype(labels.dtype, np.integer) or labels.min() < 0 or (is_k and labels.max() >= value):
         raise TypeError(f"{type(est).__name__} returned labels that are not integers in {allowed} at {name}={value}")
-    labels = labels.astype(np.uint32, copy=False)
-    # only picks which run's labeling is kept per K: negative log-likelihood for a mixture,
-    # inertia for KMeans, NaN (keep the first run) for clusterers without `score`
+    labels = labels.astype(np.uint32, copy=False)  # every run is kept: store narrow
+    # picks the kept labeling per value; NaN (no `score`) keeps the first run
     fit_loss = -float(est.score(X)) if hasattr(est, "score") else float("nan")
     return labels, fit_loss
 
@@ -188,28 +171,17 @@ def sweep_auto_k(
         The values to score, each of which needs a neighbour on both sides in *values*.
         Defaults to every value but the first and the last.
     clusterer
-        Cloned per fit, with *param* and ``random_state`` set,
-        so its own are ignored. Defaults to :class:`~sklearn.mixture.GaussianMixture` with ``reg_covar=1e-4``.
-
-        Of scikit-learn's own clusterers, that includes
-        :class:`~sklearn.mixture.GaussianMixture`,
-        :class:`~sklearn.cluster.KMeans`, :class:`~sklearn.cluster.MiniBatchKMeans`,
-        :class:`~sklearn.cluster.BisectingKMeans` and
-        :class:`~sklearn.cluster.SpectralClustering`; anything else matching the contract
-        works too, scikit-learn or not.
+        Cloned per fit with *param* and ``random_state`` set. Defaults to
+        :class:`~sklearn.mixture.GaussianMixture` with ``reg_covar=1e-4``.
     max_runs
-        Maximum number of repetitions per K. Must be at least 2: a single run leaves
-        stability undefined, since there is nothing to compare against. A run with a failed
-        fit is skipped with a warning, and at least 2 runs must fit every value.
+        Maximum repetitions per value, at least 2. A run with a failed fit is skipped.
     convergence_tol
         Stop early once the mean absolute percentage error between the mean stability
         curves of two consecutive runs falls below this value.
     rng
-        Source of randomness; ``None`` draws from OS entropy. Each fit of a K is seeded from
-        ``(base, run, K)``, so adding a K leaves the others' fits untouched. CellCharter
-        instead shares one seed across all K of a run; only cross-run comparisons enter the
-        score, so this does not change the method. Any other parameter is seeded by its
-        position in *values* instead, since its values need not be integers.
+        Source of randomness; ``None`` draws from OS entropy. Each fit is seeded from
+        ``(base, run, K)``, so adding a K leaves the others untouched; any other parameter by
+        its position in *values*.
 
     Returns
     -------
@@ -259,8 +231,7 @@ def sweep_auto_k(
             continue
 
         if labels_per_run:
-            # this run's K against every stored run's K+1, one direction only, which
-            # `mirror_stability` then folds into a symmetric per-K score
+            # one direction; mirror_stability symmetrizes
             blocks.extend(_score_block(run_labels, stored, pairs, fowlkes_mallows_score) for stored in labels_per_run)
             curve = mirror_stability(blocks)[rows].mean(axis=1)
             if previous_curve is not None and mean_absolute_percentage_error(previous_curve, curve) < convergence_tol:

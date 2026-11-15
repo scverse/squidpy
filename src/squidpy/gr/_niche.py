@@ -341,7 +341,8 @@ def calculate_niche_neighborhood(
     data: AnnData | SpatialData,
     *,
     groups: str,
-    resolutions: float | list[float],
+    resolutions: float | list[float] | None = None,
+    clusterer: Clusterer | None = None,
     n_neighbors: int = 15,
     spatial_connectivities_key: str = "spatial_connectivities",
     scale: bool = True,
@@ -366,7 +367,7 @@ def calculate_niche_neighborhood(
     This method represents every observation by a **neighborhood composition
     profile**: a vector describing the cell-type labels observed in its local
     spatial neighborhood. Observations with similar surrounding cell-type
-    compositions are then grouped into niches using Leiden clustering.
+    compositions are then grouped into niches by Leiden clustering, or by ``clusterer``.
 
     A spatial connectivity graph must already be available in
     ``adata.obsp[spatial_connectivities_key]``. The graph defines which
@@ -384,8 +385,8 @@ def calculate_niche_neighborhood(
        neighborhood profile.
     5. Optionally z-scores the resulting profile across observations (scale
        argument).
-    6. Constructs a k-nearest-neighbor graph from the profile embedding and
-       applies Leiden clustering at each requested resolution.
+    6. Clusters the profiles: Leiden on their k-nearest-neighbor graph at each
+       requested resolution, or ``clusterer``.
 
     Thus, a niche is defined by a recurring **local cellular composition**,
     rather than by the expression profile of an individual observation. For
@@ -405,6 +406,7 @@ def calculate_niche_neighborhood(
         one niche annotation. Supplying multiple values performs Leiden
         clustering separately for each resolution and adds one niche column per
         resolution to ``adata.obs``.
+    %(niche_clusterer)s
     n_neighbors
         Number of nearest neighbors used to construct the k-nearest-neighbor
         graph on the neighborhood composition embedding before Leiden
@@ -463,9 +465,10 @@ def calculate_niche_neighborhood(
         n_hop_weights=n_hop_weights,
     )
 
-    clusterers = _leiden_clusterers(
+    clusterers = _niche_clusterers(
         base_colname=key_added,
         resolutions=resolutions,
+        clusterer=clusterer,
         n_neighbors=n_neighbors,
         flavor=flavor,
         n_iterations=n_iterations,
@@ -488,7 +491,8 @@ def calculate_niche_neighborhood(
 def calculate_niche_utag(
     data: AnnData | SpatialData,
     *,
-    resolutions: float | list[float],
+    resolutions: float | list[float] | None = None,
+    clusterer: Clusterer | None = None,
     n_neighbors: int = 15,
     use_layer: str | None = None,
     spatial_connectivities_key: str = "spatial_connectivities",
@@ -509,7 +513,7 @@ def calculate_niche_utag(
     https://github.com/ElementoLab/utag/blob/main/utag/segmentation.py
 
     This method computes a spatially aggregated feature representation for each
-    observation and clusters that representation with Leiden. The resulting
+    observation and clusters that representation with Leiden or ``clusterer``. The resulting
     niches group observations that occur in similar local molecular
     environments.
 
@@ -527,8 +531,8 @@ def calculate_niche_utag(
        matrix in which each observation reflects information from its local
        spatial neighborhood.
     3. Reduces that matrix with PCA; the scores are the niche embedding.
-    4. Constructs a k-nearest-neighbor graph in that embedding space.
-    5. Applies Leiden clustering at each requested resolution.
+    4. Clusters the embedding: Leiden on its k-nearest-neighbor graph at each
+       requested resolution, or ``clusterer``.
 
     If the input contains gene expression values, the embedding describes
     local expression programs rather than merely the categorical composition
@@ -548,6 +552,7 @@ def calculate_niche_utag(
         one niche annotation. Supplying multiple values runs Leiden clustering
         independently at each resolution and adds one niche column per
         resolution to ``adata.obs``.
+    %(niche_clusterer)s
     n_neighbors
         Number of nearest neighbors used to construct the k-nearest-neighbor
         graph on the spatially aggregated embedding before Leiden clustering.
@@ -586,9 +591,10 @@ def calculate_niche_utag(
         use_rep=use_rep,
     )
 
-    clusterers = _leiden_clusterers(
+    clusterers = _niche_clusterers(
         base_colname=key_added,
         resolutions=resolutions,
+        clusterer=clusterer,
         n_neighbors=n_neighbors,
         flavor=flavor,
         n_iterations=n_iterations,
@@ -687,21 +693,14 @@ def calculate_niche_cellcharter(
            Set the number of clusters on ``clusterer`` instead, e.g.
            ``clusterer=GaussianMixture(n_components=4)``.
     clusterer
-        The :class:`~squidpy.types.Clusterer` to fit, configured as it should run, e.g. a
-        :class:`~sklearn.mixture.GaussianMixture` with a different ``n_components``,
-        ``covariance_type`` or ``reg_covar``, or :class:`~sklearn.cluster.KMeans`. Its number
-        of clusters is the number of niche labels produced per library or dataset. It is
-        cloned, with only its ``random_state`` set, from ``rng``. Defaults to
-        ``GaussianMixture(n_components=10, reg_covar=1e-4)``, CellCharter's model with more
-        regularization, so a component on a few near-identical cells does not fail the fit. To
-        select the number of clusters by stability as CellCharter's ``ClusterAutoK`` does, run
-        :func:`~squidpy.gr.cluster_auto_k` with ``use_rep=embedding_key_added`` on the result.
+        The :class:`~squidpy.types.Clusterer` to fit; its number of clusters is the number of
+        niches. Cloned and seeded from ``rng``. Defaults to
+        ``GaussianMixture(n_components=10, reg_covar=1e-4)``. To select the number of clusters,
+        run :func:`~squidpy.gr.cluster_auto_k` on ``obsm[embedding_key_added]``.
     n_pca_components
         Number of principal components of ``adata.X`` aggregated over the hop rings. ``None``
         uses 10, the latent width scVI defaults to, or one fewer than the smallest dimension of
-        ``adata.X`` when that is narrower. Named for the PCA because
-        :class:`~sklearn.mixture.GaussianMixture` spells its cluster count ``n_components``
-        too. Rejected together with ``use_rep``, which supplies an
+        ``adata.X`` when that is narrower. Rejected together with ``use_rep``, which supplies an
         already reduced embedding and so skips the PCA.
     %(n_jobs_threads)s
     use_rep
@@ -749,7 +748,6 @@ def calculate_niche_cellcharter(
             stacklevel=2,
         )
     if clusterer is None:
-        # `GaussianMixture`'s default 'kmeans' init is CellCharter's
         clusterer = default_mixture(10 if n_clusters is None else int(n_clusters))
     clusterers = {key_added: clusterer}
 
@@ -1316,15 +1314,20 @@ def _resolution_values(resolutions: Any, *, pairs_ok: bool) -> list[Any]:
     return values
 
 
-def _leiden_clusterers(
+def _niche_clusterers(
     *,
     base_colname: str,
-    resolutions: float | Sequence[float],
+    resolutions: float | Sequence[float] | None,
+    clusterer: Clusterer | None,
     n_neighbors: int,
     flavor: Literal["igraph", "leidenalg"],
     n_iterations: int,
 ) -> dict[str, Clusterer]:
-    """One Leiden clusterer per requested resolution, keyed by the column it labels."""
+    """*clusterer*, or one Leiden clusterer per resolution, keyed by the column it labels."""
+    if (clusterer is None) == (resolutions is None):
+        raise TypeError("pass either 'resolutions' or 'clusterer'")
+    if clusterer is not None:
+        return {base_colname: clusterer}
     values = _resolution_values(resolutions, pairs_ok=False)
     return {
         f"{base_colname}_res={res}": LeidenClusterer(

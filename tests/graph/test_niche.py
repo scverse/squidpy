@@ -1090,15 +1090,12 @@ def test_key_added_defaults_reproduce_the_derived_names():
     assert "utag_niche_res=1.0" in adata.obs.columns
 
 
-# the clusterer of the cellcharter flavor
-
-
 def test_niche_cellcharter_fits_the_clusterer_as_configured(dummy_adata2: AnnData):
     clusterer = KMeans(n_clusters=4, n_init=1)
     before = clusterer.get_params()
     calculate_niche_cellcharter(dummy_adata2, distance=2, rng=0, clusterer=clusterer)
     assert dummy_adata2.obs["cellcharter_niche"].nunique() == 4
-    assert clusterer.get_params() == before, "the clusterer passed in is cloned, not set"
+    assert clusterer.get_params() == before
 
 
 def test_niche_cellcharter_n_clusters_is_deprecated(dummy_adata2: AnnData):
@@ -1115,7 +1112,7 @@ def test_niche_cellcharter_n_clusters_is_deprecated(dummy_adata2: AnnData):
 def test_niche_cellcharter_seeds_a_given_clusterer_from_rng():
     seeds = []
 
-    class _Recording(KMeans):  # a local class still clones, by type
+    class _Recording(KMeans):
         def fit_predict(self, X, y=None, sample_weight=None):
             seeds.append(self.random_state)
             return super().fit_predict(X)
@@ -1123,7 +1120,7 @@ def test_niche_cellcharter_seeds_a_given_clusterer_from_rng():
     for rng in (0, 0, 1):
         calculate_niche_cellcharter(_tiny(n=60), distance=2, clusterer=_Recording(n_clusters=3, n_init=1), rng=rng)
     assert None not in seeds
-    assert seeds[0] == seeds[1] != seeds[2], "the same rng gives the same seed, another rng another"
+    assert seeds[0] == seeds[1] != seeds[2]
 
 
 def test_niche_cellcharter_takes_a_clusterer_without_k(dummy_adata2: AnnData):
@@ -1142,6 +1139,28 @@ def test_niche_cellcharter_takes_a_clusterer_without_k(dummy_adata2: AnnData):
 def test_niche_cellcharter_rejects_unusable_clusterers(dummy_adata2: AnnData, clusterer, match):
     with pytest.raises(TypeError, match=match):
         calculate_niche_cellcharter(dummy_adata2, distance=2, clusterer=clusterer)
+
+
+_LEIDEN_FLAVORS = [
+    pytest.param(calculate_niche_neighborhood, {"groups": "ct"}, id="neighborhood"),
+    pytest.param(calculate_niche_utag, {}, id="utag"),
+]
+
+
+@pytest.mark.parametrize(("fn", "kwargs"), _LEIDEN_FLAVORS)
+def test_leiden_flavors_fit_a_clusterer_instead(fn, kwargs):
+    adata = _tiny(n=60)
+    fn(adata, rng=0, clusterer=KMeans(n_clusters=3, n_init=1), key_added="mine", **kwargs)
+    assert adata.obs["mine"].nunique() == 3
+
+
+@pytest.mark.parametrize(("fn", "kwargs"), _LEIDEN_FLAVORS)
+@pytest.mark.parametrize(
+    "extra", [{"resolutions": 1.0, "clusterer": KMeans(n_clusters=3)}, {}], ids=["both", "neither"]
+)
+def test_leiden_flavors_take_resolutions_or_a_clusterer(fn, kwargs, extra):
+    with pytest.raises(TypeError, match=r"either 'resolutions' or 'clusterer'"):
+        fn(_tiny(n=60), rng=0, **kwargs, **extra)
 
 
 def test_niche_cellcharter_embedding_feeds_cluster_auto_k():
