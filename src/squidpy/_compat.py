@@ -2,13 +2,23 @@ from __future__ import annotations
 
 import os
 from functools import partial
-from importlib.metadata import version
 from typing import TYPE_CHECKING
 
 import legacy_api_wrap
+from anndata._core.views import ArrayView
+from anndata._core.views import SparseCSCMatrixView as SparseCSCView
+from anndata._core.views import SparseCSRMatrixView as SparseCSRView
+from anndata.acc import A
 from legacy_api_wrap import legacy_api
-from packaging.version import Version
 from scanpy.get import obs_df
+from scanpy.plotting.legacy import mpl_settings as _mpl_settings
+from scanpy.plotting.legacy._tools.scatterplots import _add_categorical_legend as add_categorical_legend
+from scanpy.plotting.legacy._tools.scatterplots import _panel_grid as panel_grid
+from scanpy.plotting.legacy._utils import (
+    add_colors_for_categorical_sample_annotation,
+    set_default_colors_for_categorical_obs,
+)
+from scanpy.plotting.legacy.palettes import default_102 as default_palette
 
 if TYPE_CHECKING:
     import numpy as np
@@ -52,48 +62,14 @@ SKIP_OWN_FRAMES = (
 #: shim outside ``deprecated_params`` / ``deprecated_randomness_param`` so they see old names.
 old_positionals = partial(legacy_api, category=_PositionalArgumentWarning, skip_file_prefixes=SKIP_OWN_FRAMES)
 
-# Scanpy 1.13 moved the pre-v2 plotting internals under ``scanpy.plotting.legacy``.
-# ``scanpy.plotting.__getattr__`` forwards attribute access there, but submodule
-# imports such as ``scanpy.plotting.palettes`` are not covered by it.
-try:
-    from scanpy.plotting.legacy._tools.scatterplots import _add_categorical_legend as add_categorical_legend
-    from scanpy.plotting.legacy._tools.scatterplots import _panel_grid as panel_grid
-    from scanpy.plotting.legacy._utils import (
-        add_colors_for_categorical_sample_annotation,
-        set_default_colors_for_categorical_obs,
-    )
-    from scanpy.plotting.legacy.palettes import default_102 as default_palette
-except ImportError:
-    from scanpy.plotting._tools.scatterplots import _add_categorical_legend as add_categorical_legend
-    from scanpy.plotting._tools.scatterplots import _panel_grid as panel_grid
-    from scanpy.plotting._utils import (
-        add_colors_for_categorical_sample_annotation,
-        set_default_colors_for_categorical_obs,
-    )
-    from scanpy.plotting.palettes import default_102 as default_palette
+
+# ``scanpy.set_figure_params`` rebinds these module globals, so read them at call time.
+def default_frameon() -> bool:
+    return _mpl_settings.FRAMEON
 
 
-# Scanpy 1.13 also moved these two plotting defaults off ``Settings``, where they were the
-# private ``_frameon`` / ``_vector_friendly`` class attributes, and onto module-level
-# globals in ``scanpy.plotting.legacy.mpl_settings``. ``scanpy.set_figure_params`` rebinds
-# them in either layout, so they must be read at call time rather than imported once.
-try:
-    from scanpy.plotting.legacy import mpl_settings as _mpl_settings
-
-    def default_frameon() -> bool:
-        return _mpl_settings.FRAMEON
-
-    def vector_friendly() -> bool:
-        return _mpl_settings.VECTOR_FRIENDLY
-
-except ImportError:
-    from scanpy import settings as _sc_settings
-
-    def default_frameon() -> bool:
-        return _sc_settings._frameon
-
-    def vector_friendly() -> bool:
-        return _sc_settings._vector_friendly
+def vector_friendly() -> bool:
+    return _mpl_settings.VECTOR_FRIENDLY
 
 
 def get_vector(adata: AnnData, key: str, *, layer: str | None = None, use_raw: bool | None = None) -> np.ndarray:
@@ -108,13 +84,4 @@ def get_vector(adata: AnnData, key: str, *, layer: str | None = None, use_raw: b
     """
     if use_raw and key not in adata.obs:
         return obs_df(adata, keys=[key], use_raw=True)[key].values
-    return obs_df(adata, keys=[key], layer=layer)[key].values
-
-
-CAN_USE_SPARSE_ARRAY = Version(version("anndata")) >= Version("0.11.0rc1")
-if CAN_USE_SPARSE_ARRAY:
-    from anndata._core.views import ArrayView
-    from anndata._core.views import SparseCSCMatrixView as SparseCSCView
-    from anndata._core.views import SparseCSRMatrixView as SparseCSRView
-else:
-    from anndata._core.views import ArrayView, SparseCSCView, SparseCSRView
+    return obs_df(adata, keys=[key], use=None if layer is None else A.layers[layer])[key].values
