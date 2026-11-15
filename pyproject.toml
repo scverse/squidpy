@@ -52,6 +52,7 @@ dependencies = [
   "docrep>=0.3.1",
   "fast-array-utils>=1.5",              # `types.HasArrayNamespace`
   "fsspec>=2021.11",
+  "humanfriendly>=10",
   "imagecodecs>=2025.8.2,<2026",
   "legacy-api-wrap>=1.5",               # keyword-only args keep accepting old positional calls (#1288)
   "matplotlib>=3.3",
@@ -108,7 +109,7 @@ test = [
   # 2026-06-12) shifts scatter/alpha rendering past the RMS tolerance. Cap for tests only
   # (the runtime dependency stays open) until the baselines are regenerated against 3.11.
   "matplotlib<3.11",
-  "pytest>=7",
+  "pytest>=9",            # the built-in `subtests` fixture
   # Just for VS Code
   "pytest-cov>=4",
   "pytest-mock>=3.5",

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
+from functools import partial
 from typing import Any, Literal
 
 import numba.types as nt
@@ -10,10 +12,11 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from numba import njit, prange
+from numba_progress import ProgressBar
 from scanpy import logging as logg
 from scanpy.metrics import gearys_c, morans_i
 from scipy import stats
-from scipy.sparse import spmatrix
+from scipy.sparse import issparse, spmatrix
 from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import normalize
 from spatialdata import SpatialData
@@ -26,12 +29,11 @@ from squidpy._utils import (
     NDArrayA,
     RNGLike,
     SeedLike,
-    Signal,
-    SigQueue,
     deprecated_params,
     deprecated_randomness_param,
-    get_n_processes,
-    parallelize,
+    get_n_numba_threads,
+    memory_budget,
+    thread_map,
 )
 from squidpy._validators import assert_key_in_adata, assert_positive, normalize_choice
 from squidpy.gr._utils import (
@@ -73,6 +75,7 @@ bl = nt.boolean
     "show_progress_bar",
 )
 @deprecated_randomness_param
+@deprecated_params({"backend": "1.10.0"})
 def spatial_autocorr(
     adata: AnnData | SpatialData,
     *,
@@ -89,7 +92,7 @@ def spatial_autocorr(
     use_raw: bool = False,
     copy: bool = False,
     n_jobs: int | None = None,
-    backend: str = "loky",
+    working_memory: int | str | None = None,
     show_progress_bar: bool = True,
     table_key: str | None = None,
 ) -> pd.DataFrame | None:
@@ -108,6 +111,15 @@ def spatial_autocorr(
     %(seed_versionchanged)s
 
     %(rng_versionchanged)s
+
+    .. versionchanged:: 1.8.5
+        Permutations run on a thread pool, and ``n_jobs = None`` now uses all ``NUMBA_NUM_THREADS``
+        threads instead of one process. Pass ``n_jobs = 1`` for the old serial default.
+        Permutations now shuffle the values over the graph (``P W P^T``), the randomization null of
+        :cite:`pysal`. Since 1.1.0 only the rows of the graph were shuffled, which gave about half the
+        null variance for unstructured features and too much for strongly autocorrelated ones, so
+        ``'var_sim'``, ``'pval_sim'`` and ``'pval_z_sim'`` differ from earlier versions. The scores
+        and ``'pval_norm'`` are unaffected.
 
     Parameters
     ----------
@@ -148,7 +160,12 @@ def spatial_autocorr(
         Which attribute of :class:`~anndata.AnnData` to access. See ``genes`` parameter for more information.
     %(rng)s
     %(copy)s
-    %(parallelize)s
+    %(n_jobs_threads)s
+    %(working_memory)s
+        Here: the permutation buffer, ``n_perms`` x ``n_cells`` int32, 1 GiB by default (less if the
+        whole ``n_perms`` x ``n_cells`` fits). Every feature is revisited once per block of
+        permutations that fits, so on very large data more memory means fewer passes.
+    %(show_progress_bar)s
 
     Returns
     -------
@@ -174,6 +191,9 @@ def spatial_autocorr(
     _assert_connectivity_key(adata, key=connectivity_key)
 
     def extract_X(adata: AnnData, genes: str | Sequence[str] | None) -> tuple[NDArrayA | spmatrix, Sequence[Any]]:
+        if genes is None and not use_raw and "highly_variable" not in adata.var:
+            # every gene: `adata[:, genes]` would copy X to return the same columns
+            return (adata.X if layer is None else adata.layers[layer]).T, adata.var_names.values
         if genes is None:
             if "highly_variable" in adata.var:
                 genes = adata[:, adata.var["highly_variable"]].var_names.values
@@ -230,31 +250,29 @@ def spatial_autocorr(
     else:
         raise NotImplementedError(f"Mode `{mode}` is not yet implemented.")
 
-    g = adata.obsp[connectivity_key].copy()
+    g = adata.obsp[connectivity_key].tocsr(copy=True)
     if transformation:  # row-normalize
         normalize(g, norm="l1", axis=1, copy=False)
 
-    score = params["func"](g, vals)  # type: ignore
-
-    n_jobs = get_n_processes(n_jobs)
-    start = logg.info(f"Calculating {mode}'s statistic for `{n_perms}` permutations using `{n_jobs}` core(s)")
+    n_jobs = get_n_numba_threads(n_jobs)
+    start = logg.info(f"Calculating {mode}'s statistic for `{n_perms}` permutations using `{n_jobs}` thread(s)")
     if n_perms is not None:
         assert_positive(n_perms, name="n_perms")
-        perms = list(np.arange(n_perms))
-        rngs = np.random.default_rng(rng).spawn(n_perms)
-
-        score_perms = parallelize(
-            _score_helper,
-            collection=perms,
-            extractor=np.concatenate,
+        score, score_perms = _score_perms(
+            g,
+            vals,
+            mode=mode,
+            n_perms=n_perms,
+            rng=rng,
             n_jobs=n_jobs,
-            backend=backend,
+            working_memory=working_memory,
             show_progress_bar=show_progress_bar,
-        )(mode=mode, g=g, vals=vals, rngs=rngs)
+        )
     else:
-        score_perms = None
+        score, score_perms = params["func"](g, vals), None  # type: ignore
 
-    with np.errstate(divide="ignore"):
+    # a degenerate feature has `var_sim == 0`, so its z score is an invalid 0/0, not a divide
+    with np.errstate(divide="ignore", invalid="ignore"):
         pval_results = _p_value_calc(score, score_perms, g, params)
 
     data_dict: dict[str, Any] = {str(params["stat"]): score, **pval_results}
@@ -262,8 +280,14 @@ def spatial_autocorr(
 
     if corr_method is not None:
         for pv in filter(lambda x: "pval" in x, df.columns):
-            _, pvals_adj, _, _ = multipletests(df[pv].values, alpha=0.05, method=corr_method)
-            df[f"{pv}_{corr_method}"] = pvals_adj
+            pvals = df[pv].to_numpy(dtype=np.float64)
+            # a degenerate feature has no p-value to correct, and `multipletests` would spread its
+            # NaN over every other gene, so correct the defined ones among themselves
+            defined = np.isfinite(pvals)
+            adj = np.full(pvals.shape, np.nan)
+            if defined.any():
+                _, adj[defined], _, _ = multipletests(pvals[defined], alpha=0.05, method=corr_method)
+            df[f"{pv}_{corr_method}"] = adj
 
     df.sort_values(by=params["stat"], ascending=params["ascending"], inplace=True)
 
@@ -276,30 +300,219 @@ def spatial_autocorr(
     _save_data(adata, attr="uns", key=mode_str + stat_str, data=df, time=start)
 
 
-def _score_helper(
-    perms: Sequence[int],
-    mode: Literal["moran", "geary"],
+@njit(nogil=True, cache=True)
+def _pair_terms(  # noqa: PLR0917, numba requires positional arguments
+    tptr: NDArrayA,
+    tind: NDArrayA,
+    tdat: NDArrayA,
+    deg: NDArrayA,
+    pos: NDArrayA,
+    xv: NDArrayA,
+    y: NDArrayA,
+) -> tuple[float, float, float]:
+    """``sum_ij w_ij x_i x_j``, ``sum_i x_i deg_i`` and ``sum_i x_i^2 deg_i`` for ``x[pos] = xv``, zero elsewhere.
+
+    ``deg`` is row sum + column sum of the graph. ``y`` is an all-zero scratch of ``n_cells``, returned all-zero.
+    ``pos`` is sorted in place: walking the graph in memory order halves the time on dense features.
+    """
+    n_nz = pos.shape[0]
+    for t in range(n_nz):
+        y[pos[t]] = xv[t]
+    pos.sort()
+    q = l1 = l2 = 0.0
+    for t in range(n_nz):
+        j = pos[t]
+        acc = 0.0
+        for e in range(tptr[j], tptr[j + 1]):  # column j of g: sum_i w_ij x_i
+            acc += tdat[e] * y[tind[e]]
+        xj = y[j]
+        q += xj * acc
+        l1 += xj * deg[j]
+        l2 += xj * xj * deg[j]
+    for t in range(n_nz):
+        y[pos[t]] = 0.0
+    return q, l1, l2
+
+
+@njit(parallel=False, nogil=True, cache=True)
+def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
+    tptr: NDArrayA,
+    tind: NDArrayA,
+    tdat: NDArrayA,
+    deg: NDArrayA,
+    nz: NDArrayA,
+    xv: NDArrayA,
+    w: float,
+    perms: NDArrayA,
+    moran: bool,
+) -> tuple[float, NDArrayA]:
+    """Observed score of one feature and its score under each permutation in ``perms``.
+
+    A permutation moves the value of cell ``nz[t]`` to cell ``perm[nz[t]]``: the values are shuffled
+    over a fixed graph, i.e. ``P W P^T``, the randomization null of :cite:`pysal`. Shuffling only the
+    rows of ``W`` gives a null whose variance scales with the spatial lag's, half the right one for an
+    unstructured feature. Each permutation costs ``O(sum of the in-degrees of the non-zero cells)``.
+
+    ``nz``: the feature's non-zero cells (``arange(n)`` if dense); ``xv``: their values as float64;
+    ``tdat``: float64 weights of the transposed graph; ``deg``: row sum + column sum of the graph.
+    """
+    n_perms, n = perms.shape
+    out = np.empty(n_perms, dtype=np.float64)
+    y = np.zeros(n, dtype=np.float64)
+
+    n_nz = nz.shape[0]
+    x_bar = 0.0
+    for t in range(n_nz):
+        x_bar += xv[t]
+    x_bar /= n
+
+    # sum_i (x_i - x_bar)^2: Moran's denominator, and Geary's. Permutation-invariant.
+    css = 0.0
+    for t in range(n_nz):
+        d = xv[t] - x_bar
+        css += d * d
+    css += (n - n_nz) * x_bar * x_bar  # every zero entry contributes x_bar^2
+
+    # Moran: sum_ij w_ij (x_i - x_bar)(x_j - x_bar) = q - x_bar * l1 + x_bar^2 * W, so
+    #   I = n / W * (q - x_bar * l1 + x_bar^2 * W) / css.
+    # Geary: sum_ij w_ij (x_i - x_j)^2 = l2 - 2 q, so C = (n - 1) * (l2 - 2 q) / (2 W css).
+    # Only the non-zero cells enter q, l1 and l2, wherever the permutation puts them.
+    pos = np.empty(n_nz, dtype=perms.dtype)
+    observed = 0.0
+    for p in range(-1, n_perms):  # p = -1: the observed score, from the same arithmetic
+        for t in range(n_nz):
+            pos[t] = nz[t] if p < 0 else perms[p, nz[t]]
+        q, l1, l2 = _pair_terms(tptr, tind, tdat, deg, pos, xv, y)
+        if moran:
+            s = n / w * (q - x_bar * l1 + x_bar * x_bar * w) / css
+        else:
+            s = (n - 1) * (l2 - 2.0 * q) / (2.0 * w * css)
+        if p < 0:
+            observed = s
+        else:
+            out[p] = s
+    return observed, out
+
+
+@dataclass(frozen=True)
+class _PermStats:
+    """Per-feature reductions of the permuted scores, all `_p_value_calc` needs."""
+
+    n_perms: int
+    count_ge: NDArrayA  # permutations scoring >= the observed score
+    count_le: NDArrayA  # permutations scoring <= the observed score
+    mean: NDArrayA
+    var: NDArrayA
+
+
+def _score_perms(
     g: spmatrix,
-    vals: NDArrayA,
-    rngs: Sequence[np.random.Generator],
+    vals: NDArrayA | spmatrix,
     *,
-    queue: SigQueue | None = None,
-) -> pd.DataFrame:
-    score_perms = np.empty((len(perms), vals.shape[0]))
-    func = morans_i if mode == "moran" else gearys_c
+    mode: Literal["moran", "geary"],
+    n_perms: int,
+    rng: SeedLike | RNGLike | None,
+    n_jobs: int,
+    working_memory: int | str | None,
+    show_progress_bar: bool,
+) -> tuple[NDArrayA, _PermStats]:
+    """Observed scores ``(n_features,)`` and the permutation reductions `_p_value_calc` needs."""
+    n_cells = g.shape[0]
+    # Match the casts scanpy applies to its own inputs, so the kernel sees the same numbers.
+    g = g.astype(np.float64, copy=False)
+    w = g.data.sum()
+    rngs = np.random.default_rng(rng).spawn(n_perms)
+    # Permutations are reused across features, so they are materialized rather than redrawn per
+    # feature, in blocks that fit `working_memory`; each block revisits every feature once.
+    block = int(np.clip(memory_budget(working_memory) // (4 * max(n_cells, 1)), 1, n_perms))  # int32
+    buffer = np.empty((block, n_cells), dtype=np.int32)
+    all_cells = np.arange(n_cells, dtype=np.int32)  # `nz` for a dense feature
+    deg = np.asarray(g.sum(axis=1)).ravel() + np.asarray(g.sum(axis=0)).ravel()
 
-    for i, p in enumerate(perms):
-        rng = rngs[p]
-        idx_shuffle = rng.permutation(g.shape[0])
-        score_perms[i, :] = func(g[idx_shuffle, :], vals)
+    moran = mode == "moran"
+    sparse_vals = issparse(vals)
+    if sparse_vals:
+        # ``vals`` arrives as ``X.T``, i.e. CSC, whose row slicing is O(nnz) rather than O(nnz_row).
+        # Canonical, so that every cell appears once in a feature's non-zeros.
+        vals = vals.tocsr()
+        vals.sum_duplicates()
+    n_features = vals.shape[0]
+    # The kernel walks g by column, so it needs the transpose. One O(nnz) pass, and it removes
+    # the per-feature dense vector the row-wise form needed.
+    gt = g.T.tocsr()
+    tptr, tind, tdat = gt.indptr, gt.indices, gt.data
+    # Constant features have a zero denominator; scanpy drops them and reports `nan`, so seed with it.
+    score = np.full(n_features, np.nan, dtype=np.float64)
+    # integer tallies of `sims >= score` and `sims <= score`, so exact. Both, because the observed
+    # score comes out of the same kernel as the permuted ones, so ties are bit-exact: a sparse gene
+    # whose non-zero cells touch no other non-zero cell sits at the floor of its null, tied by most
+    # permutations, and one tally folded two-sided would call every such gene maximally significant.
+    count_ge = np.zeros(n_features, dtype=np.int64)
+    count_le = np.zeros(n_features, dtype=np.int64)
+    # Mean and variance accumulate as sums of `sims - score`. Both are plain sums, so blocks merge
+    # with `+=` and no Welford state is carried. `s1/n` is the observed score's distance from the
+    # permutation mean, so `s2/n - (s1/n)**2` loses about eps*z**2: ~1e-13 at z=27, against ~1e-16
+    # for a two-pass variance. Worth it for the simpler merge, but it is a real difference, and it
+    # makes the variance exactly 0 when every permutation scores alike (see `_p_value_calc`).
+    s1 = np.zeros(n_features, dtype=np.float64)
+    s2 = np.zeros(n_features, dtype=np.float64)
+    # features are independent and the kernel is nogil, so they run in a thread pool
+    pool_workers = max(1, min(n_jobs, n_features))
 
-        if queue is not None:
-            queue.put(Signal.UPDATE)
+    def run_feature(m: int, perms: NDArrayA) -> None:
+        if sparse_vals:
+            # `vals` is CSR, so this feature's non-zero cells and values are already contiguous.
+            # The kernel reads them directly and never densifies the feature.
+            lo_m, hi_m = vals.indptr[m], vals.indptr[m + 1]
+            nz = vals.indices[lo_m:hi_m].astype(np.int32, copy=False)
+            xv = np.ascontiguousarray(vals.data[lo_m:hi_m], dtype=np.float64)
+        else:
+            nz = all_cells
+            # both statistics are invariant to a shift, and centring here keeps the kernel's
+            # `q - x_bar * l1 + x_bar^2 * W` from cancelling on a feature whose mean dwarfs its spread.
+            # Sparse features are not centred, which would fill in their zeros: stored sparse, a
+            # feature is assumed to be mostly zeros, whose mean is not large next to its spread.
+            xv = np.asarray(vals[m], dtype=np.float64)
+            xv = xv - xv.mean()
+        if len(nz) == 0 or (xv.min() == xv.max() and (len(nz) == n_cells or xv[0] == 0.0)):
+            return  # constant feature: scanpy drops it and reports `nan`
+        score[m], sims = _autocorr_perms(tptr, tind, tdat, deg, nz, xv, w, perms, moran)
+        count_ge[m] += int((sims >= score[m]).sum())
+        count_le[m] += int((sims <= score[m]).sum())
+        shifted = sims - score[m]
+        s1[m] += shifted.sum()
+        s2[m] += (shifted * shifted).sum()
 
-    if queue is not None:
-        queue.put(Signal.FINISH)
+    def fill(i: int, perms: NDArrayA, lo: int) -> None:
+        perms[i] = rngs[lo + i].permutation(n_cells)
 
-    return score_perms
+    # one tick per permuted score (a feature under one permutation), however the permutations are blocked
+    with ProgressBar(total=n_features * n_perms, unit="score", unit_scale=True, disable=not show_progress_bar) as pbar:
+
+        def step(chunk: range, perms: NDArrayA) -> None:
+            for m in chunk:
+                run_feature(m, perms)
+            pbar.update(len(chunk) * len(perms))  # atomic, so the workers can share the bar
+
+        # runs of features, ~4 per worker: one sparse feature is too little work to dispatch alone
+        size = -(-n_features // (4 * pool_workers))
+        chunks = [range(s, min(s + size, n_features)) for s in range(0, n_features, size)]
+        for lo in range(0, n_perms, block):
+            perms = buffer[: min(block, n_perms - lo)]
+            # drained before the feature map starts, so no worker reads `perms` while it is filled
+            thread_map(partial(fill, perms=perms, lo=lo), range(len(perms)), n_jobs=n_jobs)
+            # each feature belongs to one worker, so the writes in `run_feature` never collide
+            thread_map(partial(step, perms=perms), chunks, n_jobs=pool_workers)
+    # Constant features never ran, so they keep scanpy's `nan` rather than a zero mean/variance.
+    ran = ~np.isnan(score)
+    mean_shift = np.where(ran, s1 / n_perms, np.nan)
+    return score, _PermStats(
+        n_perms=n_perms,
+        count_ge=count_ge,
+        count_le=count_le,
+        mean=score + mean_shift,
+        var=np.where(ran, s2 / n_perms - mean_shift**2, np.nan),
+    )
 
 
 @njit(parallel=True, fastmath=True, cache=True)
@@ -467,7 +680,7 @@ def _find_min_max(spatial: NDArrayA) -> tuple[float, float]:
 
 def _p_value_calc(
     score: NDArrayA,
-    sims: NDArrayA | None,
+    sims: _PermStats | None,
     weights: spmatrix | NDArrayA,
     params: dict[str, Any],
 ) -> dict[str, Any]:
@@ -479,7 +692,9 @@ def _p_value_calc(
     score
         (n_features,).
     sims
-        (n_simulations, n_features).
+        Permutation reductions from `_score_perms`.
+    weights
+        The spatial connectivity graph, used for the analytic (normality) p-value.
     params
         Object to store relevant function parameters.
 
@@ -498,23 +713,23 @@ def _p_value_calc(
     if sims is None:
         return results
 
-    n_perms = sims.shape[0]
-    large_perm = (sims >= score).sum(axis=0)
-    # subtract total perm for negative values
-    large_perm[(n_perms - large_perm) < large_perm] = n_perms - large_perm[(n_perms - large_perm) < large_perm]
-    # get p-value based on permutation
-    p_sim: NDArrayA = (large_perm + 1) / (n_perms + 1)
+    n_perms = sims.n_perms
+    # two-sided: the smaller tail, ties counted in both
+    large_perm = np.minimum(sims.count_ge, sims.count_le)
+    # a constant feature has no score, so no permutation p-value either
+    p_sim: NDArrayA = np.where(np.isnan(score), np.nan, (large_perm + 1) / (n_perms + 1))
 
     # get p-value based on standard normal approximation from permutations
-    e_score_sim = sims.sum(axis=0) / n_perms
-    se_score_sim = sims.std(axis=0)
+    e_score_sim = sims.mean
+    var_sim = sims.var
+    se_score_sim = np.sqrt(var_sim)
     z_sim = (score - e_score_sim) / se_score_sim
-    p_z_sim = np.empty(z_sim.shape)
+    # NaN where a feature's permutations are all identical, so `var_sim` is exactly 0; the masks
+    # below skip those and `np.empty` would leave them uninitialized.
+    p_z_sim = np.full(z_sim.shape, np.nan)
 
     p_z_sim[z_sim > 0] = 1 - stats.norm.cdf(z_sim[z_sim > 0])
     p_z_sim[z_sim <= 0] = stats.norm.cdf(z_sim[z_sim <= 0])
-
-    var_sim = np.var(sims, axis=0)
 
     results["pval_z_sim"] = p_z_sim
     results["pval_sim"] = p_sim
@@ -553,7 +768,7 @@ def _analytic_pval(score: NDArrayA, g: spmatrix | NDArrayA, params: dict[str, An
     seScore_norm = Vscore_norm ** (1 / 2.0)
 
     z_norm = (score - params["expected"]) / seScore_norm
-    p_norm = np.empty(score.shape)
+    p_norm = np.full(score.shape, np.nan)  # constant features have a NaN score and match neither mask
     p_norm[z_norm > 0] = 1 - stats.norm.cdf(z_norm[z_norm > 0])
     p_norm[z_norm <= 0] = stats.norm.cdf(z_norm[z_norm <= 0])
 

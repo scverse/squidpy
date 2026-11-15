@@ -18,6 +18,7 @@ import joblib as jl
 import numba
 import numpy as np
 import xarray as xr
+from humanfriendly import InvalidSize, parse_size
 from scanpy import logging as logg
 from spatialdata.models import Image2DModel, Labels2DModel
 
@@ -323,6 +324,26 @@ def thread_map(
             return _run(pbar)
 
     return _run(None)
+
+
+# `working_memory` when not given
+_DEFAULT_WORKING_MEMORY = 2**30
+
+
+def memory_budget(working_memory: int | str | None) -> int:
+    """Bytes a function may use for its working buffers: ``working_memory`` as a number of bytes or a
+    size such as ``"16GB"`` or ``"512MiB"`` (powers of 1024), 1 GiB if `None`."""
+    if working_memory is None:
+        return _DEFAULT_WORKING_MEMORY
+    try:
+        n = working_memory if isinstance(working_memory, int) else parse_size(working_memory, binary=True)
+    except InvalidSize as e:
+        raise ValueError(
+            f"Expected `working_memory` like '16GB', '512MiB' or a number of bytes, found `{working_memory!r}`."
+        ) from e
+    if n <= 0:
+        raise ValueError(f"Expected a positive `working_memory`, found `{working_memory!r}`.")
+    return n
 
 
 def get_n_numba_threads(n_threads: int | None) -> int:
