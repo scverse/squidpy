@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import itertools
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -11,7 +13,7 @@ from sklearn.mixture import GaussianMixture
 
 from squidpy.gr import LeidenClusterer, cluster_auto_k
 from squidpy.gr._autok import check_sweep_clusterer, expand_n_clusters, mirror_stability, sweep_auto_k
-from squidpy.gr._clusterers import k_param
+from squidpy.gr._clusterers import default_mixture, k_param
 
 
 def make_blobs(n_per_blob: int = 30, n_features: int = 5, seed: int = 0) -> np.ndarray:
@@ -84,6 +86,14 @@ def test_check_sweep_clusterer_rejects_what_cannot_be_swept(clusterer, match):
         check_sweep_clusterer(clusterer, "n_clusters")
 
 
+def test_default_mixture_fits_a_collapsed_component():
+    """10 identical float32 points far from the rest: at scikit-learn's reg_covar=1e-6 every seed fails."""
+    rng = np.random.default_rng(0)
+    X = np.vstack([rng.normal(size=(500, 50)) * 10, np.repeat(rng.normal(size=(1, 50)) * 50, 10, axis=0)])
+    for seed in range(3):
+        default_mixture().set_params(random_state=seed).fit(X.astype(np.float32))
+
+
 # the sweep
 
 
@@ -110,11 +120,48 @@ def test_sweep_convergence():
     assert exhausted.n_runs == 3
 
 
-def test_sweep_notes_the_k_of_a_failed_fit():
-    with pytest.raises(ValueError) as excinfo:
-        # fewer samples than components
-        sweep_auto_k(np.zeros((2, 2)), [2, 3, 4], max_runs=2, rng=0, param="n_components")
-    assert any(note.startswith("while fitting n_components=") for note in excinfo.value.__notes__)
+def _failing(fails):
+    """A KMeans whose fits raise where *fails* (of the fit's index) holds, as a collapsed mixture does."""
+    calls = itertools.count()
+
+    def relabel(labels):
+        if fails(next(calls)):
+            raise ValueError("collapsed")
+        return labels
+
+    return _relabeled(relabel)
+
+
+def test_sweep_skips_a_run_with_a_failed_fit():
+    with pytest.warns(UserWarning, match=r"skipping run 0: the fit at n_clusters=2 failed: collapsed"):
+        result = sweep_auto_k(
+            make_blobs(),
+            [1, 2, 3],
+            max_runs=3,
+            convergence_tol=0.0,
+            clusterer=_failing(lambda n: n == 1),
+            rng=0,
+            param="n_clusters",
+        )
+    assert result.n_runs == 2
+
+
+@pytest.mark.parametrize("n_good", [0, 1])
+def test_sweep_needs_two_runs_that_fit_every_value(n_good):
+    # n_good runs of 3 fits, then every fit fails
+    with (
+        pytest.warns(UserWarning, match=r"collapsed"),
+        pytest.raises(ValueError, match=rf"only {n_good} of 3 runs") as excinfo,
+    ):
+        sweep_auto_k(
+            make_blobs(),
+            [1, 2, 3],
+            max_runs=3,
+            clusterer=_failing(lambda n: n >= 3 * n_good),
+            rng=0,
+            param="n_clusters",
+        )
+    assert str(excinfo.value.__cause__) == "collapsed", "the last fit's error is kept"
 
 
 def _relabeled(relabel):
@@ -133,7 +180,7 @@ def _relabeled(relabel):
     ids=["noise", "one-based", "strings"],
 )
 def test_sweep_rejects_labels_outside_range(relabel):
-    with pytest.raises(ValueError, match=r"returned labels that are not integers in 0\.\.\d+"):
+    with pytest.raises(TypeError, match=r"returned labels that are not integers in 0\.\.\d+"):
         sweep_auto_k(make_blobs(), [1, 2, 3], max_runs=2, clusterer=_relabeled(relabel), rng=0, param="n_clusters")
 
 
@@ -207,7 +254,7 @@ def test_best_k_matches_cellcharter():
 
 def _auto_k(data, **kwargs):
     """`cluster_auto_k` on dense blobs with a small, fixed sweep; *kwargs* override."""
-    defaults = {"use_rep": "X", "param": "n_components", "values": (2, 4), "max_runs": 2, "rng": 0}
+    defaults = {"use_rep": "X", "values": (2, 4), "max_runs": 2, "rng": 0}
     return cluster_auto_k(data, **defaults | kwargs)
 
 
@@ -287,6 +334,11 @@ def test_cluster_auto_k_rejects_bad_input(adata, use_rep, error, match):
         _auto_k(adata, use_rep=use_rep)
 
 
+def test_cluster_auto_k_needs_param_without_a_number_of_clusters():
+    with pytest.raises(TypeError, match=r"pass 'param'"):
+        _auto_k(AnnData(make_blobs()), clusterer=LeidenClusterer())
+
+
 def test_cluster_auto_k_needs_three_values_of_another_parameter():
     with pytest.raises(ValueError, match=r"at least 3 distinct values"):
         _auto_k(AnnData(make_blobs()), clusterer=LeidenClusterer(), param="resolution", values=[0.5, 1.0, 0.5])
@@ -294,7 +346,7 @@ def test_cluster_auto_k_needs_three_values_of_another_parameter():
 
 def test_cluster_auto_k_keeps_empty_components_as_categories():
     adata = AnnData(make_blobs())
-    _auto_k(adata, param="n_clusters", values=[3], clusterer=_relabeled(lambda labels: np.minimum(labels, 1)))
+    _auto_k(adata, values=[3], clusterer=_relabeled(lambda labels: np.minimum(labels, 1)))
     assert adata.uns["cluster_auto_k"]["best"] == 3
     assert list(adata.obs["cluster_auto_k"].cat.categories) == ["0", "1", "2"], "as CellCharter, every K is a category"
     assert set(adata.obs["cluster_auto_k"]) == {"0", "1"}
@@ -305,7 +357,7 @@ def test_cluster_auto_k_takes_a_clusterer_without_mutating_it():
     clusterer = KMeans(n_init=1)
     before = clusterer.get_params()
     adata = AnnData(csr_matrix(make_blobs()))
-    _auto_k(adata, param="n_clusters", clusterer=clusterer)
+    _auto_k(adata, clusterer=clusterer)
 
     assert len(adata.obs["cluster_auto_k"].cat.categories) == adata.uns["cluster_auto_k"]["best"]
     assert clusterer.get_params() == before, "every fit is on a clone"

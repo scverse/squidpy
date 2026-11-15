@@ -7,7 +7,6 @@ from collections.abc import Sequence
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from sklearn.mixture import GaussianMixture
 from spatialdata import SpatialData
 from spatialdata._logging import logger as logg
 
@@ -15,7 +14,7 @@ from squidpy._docs import d
 from squidpy._utils import RNGLike, SeedLike
 from squidpy._validators import assert_isinstance, assert_key_in_adata
 from squidpy.gr._autok import expand_n_clusters, sweep_auto_k
-from squidpy.gr._clusterers import Clusterer, k_param
+from squidpy.gr._clusterers import Clusterer, default_mixture, k_param
 from squidpy.gr._utils import _save_data, extract_adata_if_sdata
 
 __all__ = ["cluster_auto_k"]
@@ -26,8 +25,8 @@ def cluster_auto_k(
     data: AnnData | SpatialData,
     *,
     use_rep: str,
-    param: str,
     values: tuple[int, int] | Sequence[float],
+    param: str | None = None,
     max_runs: int = 10,
     convergence_tol: float = 1e-2,
     clusterer: Clusterer | None = None,
@@ -45,7 +44,7 @@ def cluster_auto_k(
 
     For K, this reimplements the K selection of CellCharter's ``ClusterAutoK``::
 
-        sq.gr.cluster_auto_k(adata, use_rep="niche_embedding", param="n_components", values=(2, 10))
+        sq.gr.cluster_auto_k(adata, use_rep="niche_embedding", values=(2, 10))
 
     The same score selects any other parameter of *clusterer*, such as the resolution of
     :class:`~squidpy.gr.LeidenClusterer`.
@@ -57,10 +56,6 @@ def cluster_auto_k(
         Key in :attr:`anndata.AnnData.obsm` holding the representation to cluster, such as the
         embedding :func:`~squidpy.gr.calculate_niche_cellcharter` stores, or ``'X'`` for
         :attr:`~anndata.AnnData.X`.
-    param
-        The parameter of *clusterer* to select: its number of clusters, ``'n_components'`` for
-        the default :class:`~sklearn.mixture.GaussianMixture` and ``'n_clusters'`` for
-        :class:`~sklearn.cluster.KMeans`, or any other, such as ``'resolution'``.
     values
         The values of *param* to select from. For the number of clusters, as in CellCharter: a
         ``(min, max)`` tuple for every K in that range, or a sequence of K values, which need
@@ -68,6 +63,10 @@ def cluster_auto_k(
         fitted too, and K < 2 cannot be scored and is dropped with a warning. For any other
         parameter, at least 3 values, each scored by its agreement with its neighbours once
         sorted, so the smallest and the largest are fitted but not scored.
+    param
+        The parameter of *clusterer* to select, such as ``'resolution'``. Defaults to its number
+        of clusters: ``'n_components'`` for the default :class:`~sklearn.mixture.GaussianMixture`,
+        ``'n_clusters'`` for :class:`~sklearn.cluster.KMeans`.
     max_runs
         Maximum number of repetitions per candidate K. Must be at least 2, since a single
         run leaves stability undefined.
@@ -131,8 +130,12 @@ def cluster_auto_k(
         raise ValueError("'adata.X' is None. Pass a representation in 'adata.obsm' via 'use_rep'.")
 
     if clusterer is None:
-        clusterer = GaussianMixture()
-    is_k = param == k_param(clusterer)
+        clusterer = default_mixture()
+    k = k_param(clusterer)
+    param = k if param is None else param
+    if param is None:
+        raise TypeError(f"{type(clusterer).__name__} has no number of clusters to select; pass 'param'")
+    is_k = param == k
     if is_k:
         candidates, scored = expand_n_clusters(values)
     elif len(set(values)) < 3:

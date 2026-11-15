@@ -17,10 +17,9 @@ import pandas as pd
 from fast_array_utils.types import HasArrayNamespace as Array
 from sklearn.base import clone
 from sklearn.metrics import fowlkes_mallows_score, mean_absolute_percentage_error
-from sklearn.mixture import GaussianMixture
 
 from squidpy._utils import RNGLike, SeedLike, legacy_random
-from squidpy.gr._clusterers import Clusterer, k_param
+from squidpy.gr._clusterers import Clusterer, default_mixture, k_param
 
 
 class ClusterAutoKResult(NamedTuple):
@@ -149,17 +148,12 @@ def _fit_once(
 ) -> tuple[np.ndarray, float]:
     """One run: a fresh clone of *clusterer* at ``name=value``, seeded by ``random_state``."""
     est = clone(clusterer).set_params(**{name: value, "random_state": random_state})
-    try:
-        labels = est.fit_predict(X)
-    except ValueError as err:
-        err.add_note(f"while fitting {name}={value}")
-        raise
     # every run's labeling is kept for the whole sweep, so store them narrow
-    labels = np.asarray(labels)
+    labels = np.asarray(est.fit_predict(X))
     # e.g. -1 for noise, labels counted from 1, or strings
     allowed = f"0..{value - 1}" if is_k else "0 or above"
     if not np.issubdtype(labels.dtype, np.integer) or labels.min() < 0 or (is_k and labels.max() >= value):
-        raise ValueError(f"{type(est).__name__} returned labels that are not integers in {allowed} at {name}={value}")
+        raise TypeError(f"{type(est).__name__} returned labels that are not integers in {allowed} at {name}={value}")
     labels = labels.astype(np.uint32, copy=False)
     # only picks which run's labeling is kept per K: negative log-likelihood for a mixture,
     # inertia for KMeans, NaN (keep the first run) for clusterers without `score`
@@ -195,7 +189,7 @@ def sweep_auto_k(
         Defaults to every value but the first and the last.
     clusterer
         Cloned per fit, with *param* and ``random_state`` set,
-        so its own are ignored. Defaults to :class:`~sklearn.mixture.GaussianMixture`.
+        so its own are ignored. Defaults to :func:`~squidpy.gr._clusterers.default_mixture`.
 
         Of scikit-learn's own clusterers, that includes
         :class:`~sklearn.mixture.GaussianMixture`,
@@ -205,7 +199,8 @@ def sweep_auto_k(
         works too, scikit-learn or not.
     max_runs
         Maximum number of repetitions per K. Must be at least 2: a single run leaves
-        stability undefined, since there is nothing to compare against.
+        stability undefined, since there is nothing to compare against. A run with a failed
+        fit is skipped with a warning, and at least 2 runs must fit every value.
     convergence_tol
         Stop early once the mean absolute percentage error between the mean stability
         curves of two consecutive runs falls below this value.
@@ -224,7 +219,7 @@ def sweep_auto_k(
         raise ValueError(f"stability needs at least 2 runs to compare, got max_runs={max_runs}")
 
     if clusterer is None:
-        clusterer = GaussianMixture()
+        clusterer = default_mixture()
     check_sweep_clusterer(clusterer, param)
     is_k = param == k_param(clusterer)
 
@@ -245,15 +240,23 @@ def sweep_auto_k(
     blocks: list[list[float]] = []
     previous_curve: np.ndarray | None = None
     converged = False
+    error: ValueError | None = None
 
     for run in range(max_runs):
         run_labels: dict[float, np.ndarray] = {}
         for i, k in enumerate(ks):
             random_state = int(np.random.SeedSequence([base, run, k if is_k else i]).generate_state(1)[0])
-            labels, fit_loss = _fit_once(clusterer, param, X, k, random_state, is_k=is_k)
+            try:
+                labels, fit_loss = _fit_once(clusterer, param, X, k, random_state, is_k=is_k)
+            except ValueError as err:  # e.g. a mixture component that collapsed at this seed
+                warnings.warn(f"skipping run {run}: the fit at {param}={k} failed: {err}", UserWarning, stacklevel=3)
+                error = err
+                break
             run_labels[k] = labels
             if k not in best_loss or fit_loss < best_loss[k]:
                 best_loss[k], best_labels[k] = fit_loss, labels
+        if len(run_labels) < len(ks):
+            continue
 
         if labels_per_run:
             # this run's K against every stored run's K+1, one direction only, which
@@ -268,6 +271,9 @@ def sweep_auto_k(
 
         labels_per_run.append(run_labels)
 
+    if len(labels_per_run) < 2:
+        msg = f"only {len(labels_per_run)} of {max_runs} runs fitted every value, and stability needs 2"
+        raise ValueError(msg) from error
     stability = mirror_stability(blocks)[rows]
     table = _stability_frame(ks, scored, stability, best_loss, param)
     return ClusterAutoKResult(

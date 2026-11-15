@@ -15,7 +15,6 @@ from fast_array_utils.types import HasArrayNamespace as Array
 from numpy.typing import NDArray
 from pandas.api.types import is_bool_dtype
 from sklearn.base import clone
-from sklearn.mixture import GaussianMixture
 from spatialdata import SpatialData, sanitize_table
 from spatialdata._logging import logger as logg
 
@@ -27,7 +26,7 @@ from squidpy._utils import (
     legacy_random,
 )
 from squidpy._validators import assert_isinstance, assert_key_in_adata, normalize_choice
-from squidpy.gr._clusterers import Clusterer, LeidenClusterer
+from squidpy.gr._clusterers import Clusterer, LeidenClusterer, default_mixture
 from squidpy.gr._nhood import (
     _aggregate_over,
     _assert_hop_request,
@@ -283,7 +282,7 @@ def calculate_niche(  # noqa: PLR0917, deprecated and removed in v1.9.0
                 aggregation=aggregation,
                 rng=rng,
                 spatial_connectivities_key=spatial_connectivities_key,
-                clusterer=GaussianMixture(n_components=n_components),
+                clusterer=default_mixture(n_components),
                 use_rep=use_rep,
                 embedding_key_added="niche_embedding",
                 cluster_mask=mask,
@@ -693,8 +692,9 @@ def calculate_niche_cellcharter(
         ``covariance_type`` or ``reg_covar``, or :class:`~sklearn.cluster.KMeans`. Its number
         of clusters is the number of niche labels produced per library or dataset. It is
         cloned, with only its ``random_state`` set, from ``rng``. Defaults to
-        ``GaussianMixture(n_components=10)``, CellCharter's model. To select the number of
-        clusters by stability as CellCharter's ``ClusterAutoK`` does, run
+        ``GaussianMixture(n_components=10, reg_covar=1e-4)``, CellCharter's model with more
+        regularization, so a component on a few near-identical cells does not fail the fit. To
+        select the number of clusters by stability as CellCharter's ``ClusterAutoK`` does, run
         :func:`~squidpy.gr.cluster_auto_k` with ``use_rep=embedding_key_added`` on the result.
     n_pca_components
         Number of principal components of ``adata.X`` aggregated over the hop rings. ``None``
@@ -744,13 +744,13 @@ def calculate_niche_cellcharter(
             raise TypeError("'n_clusters' is deprecated; set the number of clusters on 'clusterer' instead")
         warnings.warn(
             "'n_clusters' is deprecated and will be removed in squidpy v1.10.0; pass "
-            f"clusterer=GaussianMixture(n_components={n_clusters}) instead",
+            f"clusterer=GaussianMixture(n_components={n_clusters}, reg_covar=1e-4) instead",
             FutureWarning,
             stacklevel=2,
         )
     if clusterer is None:
         # `GaussianMixture`'s default 'kmeans' init is CellCharter's
-        clusterer = GaussianMixture(n_components=10 if n_clusters is None else int(n_clusters))
+        clusterer = default_mixture(10 if n_clusters is None else int(n_clusters))
     clusterers = {key_added: clusterer}
 
     return calculate_niche_custom(

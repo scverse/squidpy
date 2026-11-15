@@ -7,6 +7,7 @@ import pandas as pd
 import scanpy as sc
 from fast_array_utils.types import HasArrayNamespace as Array
 from sklearn.base import BaseEstimator, ClusterMixin
+from sklearn.mixture import GaussianMixture
 
 from squidpy._validators import normalize_choice
 
@@ -36,6 +37,15 @@ class Clusterer(Protocol):
 # `n_clusters` first: SpectralClustering takes both, and there `n_components` is the width of
 # the spectral embedding, not the number of clusters
 _K_PARAMS = ("n_clusters", "n_components")
+
+
+def default_mixture(n_components: int = 10) -> GaussianMixture:
+    """CellCharter's model, with ``reg_covar=1e-4``.
+
+    At scikit-learn's ``1e-6``, a component on a few near-identical points of a float32 embedding
+    keeps a singular covariance, and the fit fails or not depending on the seed.
+    """
+    return GaussianMixture(n_components=n_components, reg_covar=1e-4)
 
 
 def k_param(clusterer: Clusterer) -> str | None:
