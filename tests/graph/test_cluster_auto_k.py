@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import itertools
+from unittest import mock
 
 import numpy as np
 import pandas as pd
 import pytest
+import scanpy as sc
 from anndata import AnnData, read_h5ad
 from pandas.testing import assert_frame_equal
 from scipy.sparse import csr_matrix
@@ -368,3 +370,9 @@ def test_cluster_auto_k_selects_a_leiden_resolution():
     codes = adata.obs["cluster_auto_k"].cat.codes
     assert list(adata.obs["cluster_auto_k"].cat.categories) == [str(i) for i in range(codes.max() + 1)]
     assert clusterer.get_params() == before
+
+
+def test_leiden_clusterer_seeds_its_graph():
+    with mock.patch.object(sc.pp, "neighbors", wraps=sc.pp.neighbors) as neighbors:
+        LeidenClusterer(random_state=7).fit(make_blobs())
+    assert neighbors.call_args.kwargs["random_state"] == 7

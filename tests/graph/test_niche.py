@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+from unittest import mock
 
 import numpy as np
 import pandas as pd
@@ -29,7 +30,7 @@ from squidpy.gr import (
     spatial_neighbors_knn,
 )
 from squidpy.gr._nhood import _aggregate_over, nhood_aggregate
-from squidpy.gr._niche import _fit_clusterers, compute_hop_adjacency_matrices
+from squidpy.gr._niche import compute_hop_adjacency_matrices
 
 # Many tests here exercise the deprecated umbrella, which keeps working until v1.9.0;
 # `test_calculate_niche_deprecation_is_a_future_warning` checks the deprecation itself.
@@ -498,18 +499,25 @@ def test_weighted_graph_warning_points_at_the_caller():
     assert caught[0].filename == __file__, f"attributed to {caught[0].filename}"
 
 
-def test_clusterer_without_a_random_state_is_rejected():
-    "A deterministic estimator satisfies the protocol and then rejects the seed the pipeline sets."
-    from sklearn.cluster import DBSCAN
+def test_clusterer_without_a_random_state_is_fitted_unseeded(dummy_adata2: AnnData):
+    calculate_niche_cellcharter(dummy_adata2, distance=2, clusterer=AgglomerativeClustering(n_clusters=3))
+    assert dummy_adata2.obs["cellcharter_niche"].nunique() == 3
 
-    adata = _tiny()
-    with pytest.raises(TypeError, match=r"no 'random_state'"):
-        _fit_clusterers(
-            adata,
-            embedding=np.asarray(to_dense(adata.X)),
-            clusterers={"c": DBSCAN(eps=3.0)},
-            rng=np.random.default_rng(0),
-        )
+
+@pytest.mark.parametrize(
+    ("fn", "kwargs"),
+    [
+        pytest.param(calculate_niche_utag, {"resolutions": 1.0}, id="utag"),
+        pytest.param(calculate_niche_cellcharter, {"distance": 2}, id="cellcharter"),
+        pytest.param(calculate_niche_cellcharter, {"distance": 2, "n_pca_components": 3}, id="cellcharter-n_pca"),
+    ],
+)
+def test_pca_is_seeded_from_rng(fn, kwargs):
+    with mock.patch.object(sc.pp, "pca", wraps=sc.pp.pca) as pca:
+        for rng in (0, 0, 1):
+            fn(_tiny(n=60), rng=rng, **kwargs)
+    seeds = [c.kwargs["random_state"] for c in pca.call_args_list]
+    assert seeds[0] == seeds[1] != seeds[2]
 
 
 def test_non_boolean_mask_raises():
@@ -842,7 +850,7 @@ def test_cellcharter_concatenates_hop_zero_with_every_ring(distance: int):
     assert embedding.shape[1] == (distance + 1) * 3
     # the concatenation is `distance + 1` times as wide as the features, so it keeps their dtype
     assert embedding.dtype == np.float32
-    np.testing.assert_allclose(embedding[:, :3], sc.pp.pca(adata.X, n_comps=3), rtol=1e-5)
+    np.testing.assert_allclose(embedding[:, :3], sc.pp.pca(adata.X, n_comps=3), atol=1e-5)
 
 
 def test_cellcharter_reduces_before_aggregating():
@@ -855,7 +863,7 @@ def test_cellcharter_reduces_before_aggregating():
     given = calculate_niche_cellcharter(
         adata, distance=2, clusterer=GaussianMixture(n_components=3), use_rep="X_pca", rng=0, copy=True
     )
-    np.testing.assert_allclose(fallback.obsm["niche_embedding"], given.obsm["niche_embedding"], rtol=1e-5)
+    np.testing.assert_allclose(fallback.obsm["niche_embedding"], given.obsm["niche_embedding"], atol=1e-5)
     fallback_niches = fallback.obs["cellcharter_niche"].astype(str).to_numpy()
     np.testing.assert_array_equal(fallback_niches, given.obs["cellcharter_niche"].astype(str).to_numpy())
 
@@ -878,7 +886,7 @@ def test_cellcharter_pca_respects_highly_variable():
     adata = _tiny(n=60)
     adata.var["highly_variable"] = [True, True, True, False, False, False]
     calculate_niche_cellcharter(adata, distance=1, clusterer=GaussianMixture(n_components=2), n_pca_components=2, rng=0)
-    np.testing.assert_allclose(adata.obsm["niche_embedding"][:, :2], sc.pp.pca(adata.X[:, :3], n_comps=2), rtol=1e-5)
+    np.testing.assert_allclose(adata.obsm["niche_embedding"][:, :2], sc.pp.pca(adata.X[:, :3], n_comps=2), atol=1e-5)
 
 
 def test_cellcharter_niches_follow_neighborhoods_not_cell_identity():
@@ -1129,16 +1137,9 @@ def test_niche_cellcharter_takes_a_clusterer_without_k(dummy_adata2: AnnData):
     assert dummy_adata2.obs["cellcharter_niche"].nunique() == len(np.unique(expected))
 
 
-@pytest.mark.parametrize(
-    ("clusterer", "match"),
-    [
-        (object(), r"must implement fit_predict, get_params and set_params"),
-        (AgglomerativeClustering(), r"has no 'random_state'"),
-    ],
-)
-def test_niche_cellcharter_rejects_unusable_clusterers(dummy_adata2: AnnData, clusterer, match):
-    with pytest.raises(TypeError, match=match):
-        calculate_niche_cellcharter(dummy_adata2, distance=2, clusterer=clusterer)
+def test_niche_cellcharter_rejects_a_non_clusterer(dummy_adata2: AnnData):
+    with pytest.raises(TypeError, match=r"must implement fit_predict, get_params and set_params"):
+        calculate_niche_cellcharter(dummy_adata2, distance=2, clusterer=object())
 
 
 _LEIDEN_FLAVORS = [

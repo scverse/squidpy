@@ -16,9 +16,9 @@ from squidpy._validators import normalize_choice
 class Clusterer(Protocol):
     """Assigns one cluster label per observation, and can be re-fitted with a new seed.
 
-    ``get_params``/``set_params`` are part of it because the niche pipeline seeds every fit
-    through ``set_params`` on a fresh :func:`~sklearn.base.clone`, so the estimator handed in
-    is never mutated, and cloning needs nothing beyond those two.
+    ``get_params``/``set_params`` are part of it because every fit is a fresh
+    :func:`~sklearn.base.clone`, seeded through ``set_params``, so the estimator handed in is
+    never mutated.
     """
 
     def fit_predict(self, X: Array) -> Array:
@@ -30,7 +30,7 @@ class Clusterer(Protocol):
         ...
 
     def set_params(self, **params: Any) -> Self:
-        """Set constructor parameters, ``random_state`` among them; returns the estimator."""
+        """Set constructor parameters; returns the estimator."""
         ...
 
 
@@ -79,7 +79,7 @@ class LeidenClusterer(ClusterMixin, BaseEstimator):
     n_iterations
         Leiden iterations; ``-1`` runs until the partition stops changing.
     random_state
-        Seed of the partition.
+        Seed of the graph and of the partition.
     """
 
     def __init__(
@@ -101,7 +101,7 @@ class LeidenClusterer(ClusterMixin, BaseEstimator):
         """Partition *X*, leaving the labels in ``labels_``."""
         shell = ad.AnnData(X=X, obs=pd.DataFrame(index=[str(i) for i in range(X.shape[0])]))
         # no dimensionality reduction, matching the original implementation
-        sc.pp.neighbors(shell, n_neighbors=self.n_neighbors, use_rep="X")
+        sc.pp.neighbors(shell, n_neighbors=self.n_neighbors, use_rep="X", random_state=self.random_state)
 
         # Default to the igraph backend so niche labels are reproducible across versions;
         # leidenalg is deprecated in scanpy and unstable on small graphs. See

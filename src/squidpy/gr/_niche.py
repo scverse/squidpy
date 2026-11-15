@@ -583,12 +583,13 @@ def calculate_niche_utag(
     and returns ``None``.
 
     """
-
+    rng = np.random.default_rng(rng)
     embedder = partial(
         _utag_embedding,
         spatial_connectivities_key=spatial_connectivities_key,
         use_layer=use_layer,
         use_rep=use_rep,
+        random_state=legacy_random(rng),
     )
 
     clusterers = _niche_clusterers(
@@ -684,7 +685,7 @@ def calculate_niche_cellcharter(
         average local expression program. ``"variance"`` emphasizes local
         heterogeneity in the feature representation.
     %(rng)s
-        Seeds the clustering step.
+        Seeds the PCA and the clustering.
     %(niche_spatial_conn_key)s
     n_clusters
         Number of components of the default mixture.
@@ -694,7 +695,7 @@ def calculate_niche_cellcharter(
            ``clusterer=GaussianMixture(n_components=4)``.
     clusterer
         The :class:`~squidpy.types.Clusterer` to fit; its number of clusters is the number of
-        niches. Cloned and seeded from ``rng``. Defaults to
+        niches. Cloned, and seeded from ``rng`` if it has a ``random_state``. Defaults to
         ``GaussianMixture(n_components=10, reg_covar=1e-4)``. To select the number of clusters,
         run :func:`~squidpy.gr.cluster_auto_k` on ``obsm[embedding_key_added]``.
     n_pca_components
@@ -728,6 +729,7 @@ def calculate_niche_cellcharter(
     elif n_pca_components is not None:
         raise ValueError("'n_pca_components' sizes the PCA, which 'use_rep' replaces; pass one or the other")
 
+    rng = np.random.default_rng(rng)
     embedder = partial(
         _nhop_pca_embedding,
         distance=distance,
@@ -736,6 +738,7 @@ def calculate_niche_cellcharter(
         use_rep=use_rep,
         n_pca_components=n_pca_components,
         n_jobs=n_jobs,
+        random_state=legacy_random(rng),
     )
 
     if n_clusters is not None:
@@ -1200,14 +1203,19 @@ def _nhood_profile_embedding(
 
 
 def _utag_embedding(
-    adata: AnnData, *, spatial_connectivities_key: str, use_layer: str | None, use_rep: str | None
+    adata: AnnData,
+    *,
+    spatial_connectivities_key: str,
+    use_layer: str | None,
+    use_rep: str | None,
+    random_state: int,
 ) -> Array:
     """Each observation inherits the mean features of its immediate neighbors."""
     aggregated = nhood_aggregate(
         adata, layer=use_layer, use_rep=use_rep, connectivity_key=spatial_connectivities_key, hops=(1,)
     )
     # already reduced, and on one basis across libraries. This PCA would refit it per library.
-    return to_dense(aggregated) if use_rep is not None else sc.pp.pca(aggregated)
+    return to_dense(aggregated) if use_rep is not None else sc.pp.pca(aggregated, random_state=random_state)
 
 
 def _nhop_pca_embedding(
@@ -1219,6 +1227,7 @@ def _nhop_pca_embedding(
     use_rep: str | None = None,
     n_pca_components: int | None = None,
     n_jobs: int | None = None,
+    random_state: int,
 ) -> Array:
     """Reduced features and their ring aggregates, concatenated as in CellCharter."""
     aggregation = normalize_choice(aggregation, ("mean", "variance"), name="aggregation")
@@ -1242,7 +1251,7 @@ def _nhop_pca_embedding(
     # CellCharter aggregates an already reduced representation, so PCA comes first: the rings then
     # aggregate a narrow dense matrix instead of `distance + 1` copies of every gene
     if use_rep is None:
-        features = _pca_features(adata, n_pca_components=n_pca_components)
+        features = _pca_features(adata, n_pca_components=n_pca_components, random_state=random_state)
     elif use_rep == "X":  # the spelling `scanpy.pp.neighbors` takes
         features = to_dense(adata.X)
     else:
@@ -1263,7 +1272,7 @@ def _nhop_pca_embedding(
     return embedding
 
 
-def _pca_features(adata: AnnData, *, n_pca_components: int | None) -> Array:
+def _pca_features(adata: AnnData, *, n_pca_components: int | None, random_state: int) -> Array:
     """The PCA that stands in for a reduced representation when ``use_rep`` is not given."""
     # scanpy's `pca(adata)` masks by `highly_variable` but also writes to `adata`; mask here instead
     if "highly_variable" in adata.var:
@@ -1276,14 +1285,14 @@ def _pca_features(adata: AnnData, *, n_pca_components: int | None) -> Array:
         return to_dense(X)
     if n_pca_components is None:
         # 10 matches scVI's default latent width, the input CellCharter is designed around
-        return sc.pp.pca(X, n_comps=min(10, ceiling - 1))
-    if not 1 <= n_pca_components < ceiling:
+        n_pca_components = min(10, ceiling - 1)
+    elif not 1 <= n_pca_components < ceiling:
         raise ValueError(
             f"'n_pca_components' must be between 1 and {ceiling - 1}, the features PCA runs on "
             f"({'highly variable ' if 'highly_variable' in adata.var else ''}genes and observations), "
             f"got {n_pca_components}"
         )
-    return sc.pp.pca(X, n_comps=n_pca_components)
+    return sc.pp.pca(X, n_comps=n_pca_components, random_state=random_state)
 
 
 def _resolution_values(resolutions: Any, *, pairs_ok: bool) -> list[Any]:
@@ -1352,19 +1361,18 @@ def _fit_clusterers(
     without having taken part in it.
     """
     for column, clusterer in clusterers.items():
-        # `isinstance` sees method presence only, so check the one parameter the pipeline sets:
-        # a deterministic estimator such as DBSCAN satisfies the protocol and then rejects it
         if not isinstance(clusterer, Clusterer):
             raise TypeError(f"clusterer for '{column}' must implement fit_predict, get_params and set_params")
-        if "random_state" not in clusterer.get_params():
-            raise TypeError(f"clusterer for '{column}' has no 'random_state', so the pipeline cannot seed its fits")
     # one rng per clusterer, so a resolution sweep is seeded independently of its length
     rngs = rng.spawn(len(clusterers))
     for (column, clusterer), rng in zip(clusterers.items(), rngs, strict=True):
         if column in adata.obs.columns:
             logg.info(f"Overwriting existing column '{column}'")
         # a fresh clone per fit, so the estimator handed in is never mutated
-        fit = clone(clusterer).set_params(random_state=legacy_random(rng))
+        fit = clone(clusterer)
+        # TODO: pass `rng` once scikit-learn estimators take a numpy Generator
+        if "random_state" in fit.get_params():
+            fit.set_params(random_state=legacy_random(rng))
         if keep is None:
             labels = np.asarray(fit.fit_predict(embedding)).astype(str)
         else:

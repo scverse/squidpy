@@ -263,8 +263,8 @@ _niche_common_params = f"""\
 _niche_clusterer = """\
 clusterer
     A :class:`~squidpy.types.Clusterer` fitted instead of Leiden, writing ``key_added`` as is;
-    ``n_neighbors``, ``flavor`` and ``n_iterations`` then go unused. Cloned and seeded from
-    ``rng``. Pass this or ``resolutions``."""
+    ``n_neighbors``, ``flavor`` and ``n_iterations`` then go unused. Cloned, and seeded from
+    ``rng`` if it has a ``random_state``. Pass this or ``resolutions``."""
 _niche_leiden_params = f"""\
 flavor
     Leiden backend passed to :func:`scanpy.tl.leiden`. Defaults to ``'igraph'``
@@ -272,7 +272,7 @@ flavor
 n_iterations
     Number of Leiden iterations. ``-1`` iterates until convergence.
 {_rng}
-    Every resolution is clustered with an independent rng derived from it."""
+    Seeds the clustering, each resolution independently, and UTAG's PCA."""
 
 # static plotting docs
 _plotting_kwargs_static = """\
