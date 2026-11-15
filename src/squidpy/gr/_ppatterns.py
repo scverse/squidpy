@@ -115,6 +115,11 @@ def spatial_autocorr(
     .. versionchanged:: 1.8.5
         Permutations run on a thread pool, and ``n_jobs = None`` now uses all ``NUMBA_NUM_THREADS``
         threads instead of one process. Pass ``n_jobs = 1`` for the old serial default.
+        Permutations now shuffle the values over the graph (``P W P^T``), the randomization null of
+        :cite:`pysal`. Since 1.1.0 only the rows of the graph were shuffled, which gave about half the
+        null variance for unstructured features and too much for strongly autocorrelated ones, so
+        ``'var_sim'``, ``'pval_sim'`` and ``'pval_z_sim'`` differ from earlier versions. The scores
+        and ``'pval_norm'`` are unaffected.
 
     Parameters
     ----------
@@ -295,13 +300,44 @@ def spatial_autocorr(
     _save_data(adata, attr="uns", key=mode_str + stat_str, data=df, time=start)
 
 
+@njit(nogil=True, cache=True)
+def _pair_terms(  # noqa: PLR0917, numba requires positional arguments
+    tptr: NDArrayA,
+    tind: NDArrayA,
+    tdat: NDArrayA,
+    deg: NDArrayA,
+    pos: NDArrayA,
+    xv: NDArrayA,
+    y: NDArrayA,
+) -> tuple[float, float, float]:
+    """``sum_ij w_ij x_i x_j``, ``sum_i x_i deg_i`` and ``sum_i x_i^2 deg_i`` for ``x[pos] = xv``, zero elsewhere.
+
+    ``deg`` is row sum + column sum of the graph. ``y`` is an all-zero scratch of ``n_cells``, returned all-zero.
+    """
+    n_nz = pos.shape[0]
+    for t in range(n_nz):
+        y[pos[t]] = xv[t]
+    q = l1 = l2 = 0.0
+    for t in range(n_nz):
+        j = pos[t]
+        acc = 0.0
+        for e in range(tptr[j], tptr[j + 1]):  # column j of g: sum_i w_ij x_i
+            acc += tdat[e] * y[tind[e]]
+        xj = xv[t]
+        q += xj * acc
+        l1 += xj * deg[j]
+        l2 += xj * xj * deg[j]
+    for t in range(n_nz):
+        y[pos[t]] = 0.0
+    return q, l1, l2
+
+
 @njit(parallel=False, nogil=True, cache=True)
 def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
     tptr: NDArrayA,
     tind: NDArrayA,
     tdat: NDArrayA,
-    w_sum: NDArrayA,
-    col_sum: NDArrayA,
+    deg: NDArrayA,
     nz: NDArrayA,
     xv: NDArrayA,
     w: float,
@@ -310,11 +346,17 @@ def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
 ) -> tuple[float, NDArrayA]:
     """Observed score of one feature and its score under each permutation in ``perms``.
 
+    A permutation moves the value of cell ``nz[t]`` to cell ``perm[nz[t]]``: the values are shuffled
+    over a fixed graph, i.e. ``P W P^T``, the randomization null of :cite:`pysal`. Shuffling only the
+    rows of ``W`` gives a null whose variance scales with the spatial lag's, half the right one for an
+    unstructured feature. Each permutation costs ``O(sum of the in-degrees of the non-zero cells)``.
+
     ``nz``: the feature's non-zero cells (``arange(n)`` if dense); ``xv``: their values as float64;
-    ``tdat``: float64 weights of the transposed graph.
+    ``tdat``: float64 weights of the transposed graph; ``deg``: row sum + column sum of the graph.
     """
     n_perms, n = perms.shape
     out = np.empty(n_perms, dtype=np.float64)
+    y = np.zeros(n, dtype=np.float64)
 
     n_nz = nz.shape[0]
     x_bar = 0.0
@@ -322,74 +364,31 @@ def _autocorr_perms(  # noqa: PLR0917, numba requires positional arguments
         x_bar += xv[t]
     x_bar /= n
 
-    # sum_i (x_i - x_bar)^2: Moran's denominator, and Geary's.
+    # sum_i (x_i - x_bar)^2: Moran's denominator, and Geary's. Permutation-invariant.
     css = 0.0
     for t in range(n_nz):
         d = xv[t] - x_bar
         css += d * d
     css += (n - n_nz) * x_bar * x_bar  # every zero entry contributes x_bar^2
 
-    if moran:
-        # I = n / W * sum_ij w_ij z_i z_j / sum_i z_i^2. The inner row sum is the spatial lag,
-        # which the permutation only reindexes.
-        lag = np.zeros(n, dtype=np.float64)
-        # lag = g @ z = (g @ x) - x_bar * rowsum(g). Only columns where x != 0 contribute, so
-        # this scatters over the feature's non-zeros rather than sweeping the whole graph.
+    # Moran: sum_ij w_ij (x_i - x_bar)(x_j - x_bar) = q - x_bar * l1 + x_bar^2 * W, so
+    #   I = n / W * (q - x_bar * l1 + x_bar^2 * W) / css.
+    # Geary: sum_ij w_ij (x_i - x_j)^2 = l2 - 2 q, so C = (n - 1) * (l2 - 2 q) / (2 W css).
+    # Only the non-zero cells enter q, l1 and l2, wherever the permutation puts them.
+    pos = np.empty(n_nz, dtype=perms.dtype)
+    observed = 0.0
+    for p in range(-1, n_perms):  # p = -1: the observed score, from the same arithmetic
         for t in range(n_nz):
-            j = nz[t]
-            xj = xv[t]
-            for e in range(tptr[j], tptr[j + 1]):
-                lag[tind[e]] += tdat[e] * xj
-        for k in range(n):
-            lag[k] -= x_bar * w_sum[k]
-        # sum_i lag[perm[i]] * z[i] = sum_{x[i]!=0} lag[perm[i]] * x[i] - x_bar * sum_k lag[k].
-        # The second term is permutation-invariant, so it is hoisted out of the loop.
-        # sum_k lag[k] = sum_j x[j] * colsum(g)[j] - x_bar * W: O(nnz), not O(n_cells).
-        lag_tot = 0.0
-        for t in range(n_nz):
-            lag_tot += xv[t] * col_sum[nz[t]]
-        lag_tot -= x_bar * w
-        inum = 0.0
-        for t in range(n_nz):
-            inum += lag[nz[t]] * xv[t]
-        observed = n / w * (inum - x_bar * lag_tot) / css
-        for p in range(n_perms):
-            inum = 0.0
-            for t in range(n_nz):
-                inum += lag[perms[p, nz[t]]] * xv[t]
-            out[p] = n / w * (inum - x_bar * lag_tot) / css
-    else:
-        # C = (n - 1) * sum_ij w_ij (x_i - x_j)^2 / (2 W sum_i (x_i - x_bar)^2). Expanding the
-        # square splits each row into (sum w, sum w x_j, sum w x_j^2), all permutation-independent.
-        wx = np.zeros(n, dtype=np.float64)
-        wx2 = np.zeros(n, dtype=np.float64)
-        for t in range(n_nz):
-            j = nz[t]
-            xj = xv[t]
-            xj2 = xj * xj
-            for e in range(tptr[j], tptr[j + 1]):
-                k = tind[e]
-                weight = tdat[e]
-                wx[k] += weight * xj
-                wx2[k] += weight * xj2
-        denom = 2.0 * w * css
-        # sum_i wx2[perm[i]] is permutation-invariant; the other two terms vanish where x[i] == 0.
-        wx2_tot = 0.0
-        for t in range(n_nz):
-            wx2_tot += xv[t] * xv[t] * col_sum[nz[t]]
-        total = 0.0
-        for t in range(n_nz):
-            k = nz[t]
-            xi = xv[t]
-            total += xi * xi * w_sum[k] - 2.0 * xi * wx[k]
-        observed = (n - 1) * (total + wx2_tot) / denom
-        for p in range(n_perms):
-            total = 0.0
-            for t in range(n_nz):
-                k = perms[p, nz[t]]
-                xi = xv[t]
-                total += xi * xi * w_sum[k] - 2.0 * xi * wx[k]
-            out[p] = (n - 1) * (total + wx2_tot) / denom
+            pos[t] = nz[t] if p < 0 else perms[p, nz[t]]
+        q, l1, l2 = _pair_terms(tptr, tind, tdat, deg, pos, xv, y)
+        if moran:
+            s = n / w * (q - x_bar * l1 + x_bar * x_bar * w) / css
+        else:
+            s = (n - 1) * (l2 - 2.0 * q) / (2.0 * w * css)
+        if p < 0:
+            observed = s
+        else:
+            out[p] = s
     return observed, out
 
 
@@ -426,8 +425,7 @@ def _score_perms(
     block = int(np.clip(memory_budget(working_memory) // (4 * max(n_cells, 1)), 1, n_perms))  # int32
     buffer = np.empty((block, n_cells), dtype=np.int32)
     all_cells = np.arange(n_cells, dtype=np.int32)  # `nz` for a dense feature
-    w_sum = np.asarray(g.sum(axis=1)).ravel()
-    col_sum = np.asarray(g.sum(axis=0)).ravel()
+    deg = np.asarray(g.sum(axis=1)).ravel() + np.asarray(g.sum(axis=0)).ravel()
 
     moran = mode == "moran"
     sparse_vals = issparse(vals)
@@ -469,14 +467,14 @@ def _score_perms(
         else:
             nz = all_cells
             # both statistics are invariant to a shift, and centring here keeps the kernel's
-            # `g @ x - x_bar * w_sum` from cancelling on a feature whose mean dwarfs its spread.
+            # `q - x_bar * l1 + x_bar^2 * W` from cancelling on a feature whose mean dwarfs its spread.
             # Sparse features are not centred, which would fill in their zeros: stored sparse, a
             # feature is assumed to be mostly zeros, whose mean is not large next to its spread.
             xv = np.asarray(vals[m], dtype=np.float64)
             xv = xv - xv.mean()
         if len(nz) == 0 or (xv.min() == xv.max() and (len(nz) == n_cells or xv[0] == 0.0)):
             return  # constant feature: scanpy drops it and reports `nan`
-        score[m], sims = _autocorr_perms(tptr, tind, tdat, w_sum, col_sum, nz, xv, w, perms, moran)
+        score[m], sims = _autocorr_perms(tptr, tind, tdat, deg, nz, xv, w, perms, moran)
         count_ge[m] += int((sims >= score[m]).sum())
         count_le[m] += int((sims <= score[m]).sum())
         shifted = sims - score[m]

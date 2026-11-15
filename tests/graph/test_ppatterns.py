@@ -89,18 +89,15 @@ def test_spatial_autocorr_degenerate_feature_is_nan(mode: str):
     a constant gene has no score and no p-values at all."""
     import scipy.sparse as sps
 
-    from squidpy.gr import spatial_neighbors_knn
-
     rng = np.random.default_rng(0)
     n = 400
     X = np.zeros((n, 4), dtype=np.float32)
-    X[5, 0] = 4.0  # expressed in a single cell: every permutation gives the same score
+    X[5, 0] = 4.0  # in a single cell of a regular graph: every permutation gives the same score
     X[:, 1] = rng.poisson(2, n)
     X[7, 2] = 1.0
     adata = AnnData(sps.csr_matrix(X))
     adata.var_names = ["solo", "normal", "solo2", "zero"]
-    adata.obsm["spatial"] = rng.random((n, 2))
-    spatial_neighbors_knn(adata, n_neighs=6)
+    adata.obsp[Key.obsp.spatial_conn()] = _ring_graph(n)
 
     df = spatial_autocorr(adata, mode=mode, n_perms=13, rng=3, copy=True, show_progress_bar=False)
     degenerate, real = ["solo", "solo2"], "normal"
@@ -141,15 +138,13 @@ def test_spatial_autocorr_ties_both_tails(mode: str):
     import scipy.sparse as sps
     from sklearn.preprocessing import normalize
 
-    from squidpy.gr import spatial_neighbors_knn
-
     rng = np.random.default_rng(0)
     X = np.zeros((300, 2), dtype=np.float32)
     X[0, 0] = 5
     X[:, 1] = rng.poisson(2, 300)
     adata = AnnData(sps.csr_matrix(X))
-    adata.obsm["spatial"] = rng.random((300, 2))
-    spatial_neighbors_knn(adata, n_neighs=6)
+    # regular, so the lone count scores the same wherever a permutation puts it
+    adata.obsp[Key.obsp.spatial_conn()] = _ring_graph(300)
     df = spatial_autocorr(adata, mode=mode, n_perms=50, rng=0, copy=True).loc[adata.var_names]
 
     g = normalize(adata.obsp["spatial_connectivities"], norm="l1", axis=1)
@@ -308,7 +303,7 @@ def test_use_raw(dummy_adata: AnnData):
 
 @pytest.mark.parametrize("mode", ["moran", "geary"])
 def test_score_perms_matches_scanpy_per_permutation(mode: str):
-    """Every permutation score equals scanpy's on the row-permuted graph, up to float reordering."""
+    """Every permutation score equals scanpy's on the permuted graph ``P W P^T``, up to float reordering."""
     from scipy.sparse import csr_matrix
     from sklearn.neighbors import kneighbors_graph
     from sklearn.preprocessing import normalize
@@ -336,8 +331,7 @@ def test_score_perms_matches_scanpy_per_permutation(mode: str):
                 gt.indptr,
                 gt.indices,
                 gt.data,
-                np.asarray(gg.sum(axis=1)).ravel(),
-                np.asarray(gg.sum(axis=0)).ravel(),
+                np.asarray(gg.sum(axis=1)).ravel() + np.asarray(gg.sum(axis=0)).ravel(),
                 np.arange(n, dtype=np.int32),
                 np.ascontiguousarray(vals[m], np.float64),
                 gg.data.sum(),
@@ -358,10 +352,42 @@ def test_score_perms_matches_scanpy_per_permutation(mode: str):
 
 
 def _reference_sims(g, vals, mode: str, n_perms: int) -> tuple[np.ndarray, np.ndarray]:
-    """scanpy's observed scores, and its scores on ``g[perm, :]`` with one spawned generator per permutation."""
+    """scanpy's observed scores, and its scores on ``g[perm][:, perm]`` with one spawned generator per permutation.
+
+    Permuting rows and columns together is permuting the values, the randomization null.
+    """
     from scanpy.metrics import gearys_c, morans_i
 
     stat = morans_i if mode == "moran" else gearys_c
     n = g.shape[0]
-    sims = np.stack([stat(g[gen.permutation(n), :], vals) for gen in np.random.default_rng(0).spawn(n_perms)])
+    perms = [gen.permutation(n) for gen in np.random.default_rng(0).spawn(n_perms)]
+    sims = np.stack([stat(g[perm][:, perm], vals) for perm in perms])
     return stat(g, vals), sims
+
+
+def _ring_graph(n: int):
+    """Each cell linked to its two ring neighbours: every cell has the same in- and out-degree."""
+    import scipy.sparse as sps
+
+    i = np.arange(n)
+    rows, cols = np.r_[i, i], np.r_[(i + 1) % n, (i - 1) % n]
+    return sps.csr_matrix((np.ones(2 * n), (rows, cols)), shape=(n, n))
+
+
+@pytest.mark.parametrize("mode", ["moran", "geary"])
+def test_spatial_autocorr_null_variance(mode: str):
+    """On unstructured genes the permutation variance matches the analytic one.
+
+    Shuffling only the rows of the graph gave about half of it (median ratio ~0.5).
+    """
+    from squidpy.gr import spatial_neighbors_knn
+
+    rng = np.random.default_rng(0)
+    n, n_genes = 500, 50
+    adata = AnnData(rng.standard_normal((n, n_genes)))
+    adata.obsm["spatial"] = rng.random((n, 2))
+    spatial_neighbors_knn(adata, n_neighs=6)
+
+    df = spatial_autocorr(adata, mode=mode, n_perms=200, rng=0, copy=True, show_progress_bar=False)
+    ratio = np.median(df["var_sim"] / df["var_norm"])
+    assert 0.85 < ratio < 1.15, ratio
