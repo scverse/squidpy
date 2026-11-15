@@ -313,17 +313,19 @@ def _pair_terms(  # noqa: PLR0917, numba requires positional arguments
     """``sum_ij w_ij x_i x_j``, ``sum_i x_i deg_i`` and ``sum_i x_i^2 deg_i`` for ``x[pos] = xv``, zero elsewhere.
 
     ``deg`` is row sum + column sum of the graph. ``y`` is an all-zero scratch of ``n_cells``, returned all-zero.
+    ``pos`` is sorted in place: walking the graph in memory order halves the time on dense features.
     """
     n_nz = pos.shape[0]
     for t in range(n_nz):
         y[pos[t]] = xv[t]
+    pos.sort()
     q = l1 = l2 = 0.0
     for t in range(n_nz):
         j = pos[t]
         acc = 0.0
         for e in range(tptr[j], tptr[j + 1]):  # column j of g: sum_i w_ij x_i
             acc += tdat[e] * y[tind[e]]
-        xj = xv[t]
+        xj = y[j]
         q += xj * acc
         l1 += xj * deg[j]
         l2 += xj * xj * deg[j]
