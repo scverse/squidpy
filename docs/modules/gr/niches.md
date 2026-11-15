@@ -22,5 +22,4 @@ The flavors of calculating niches.
     :toctree: ../../api
 
     gr.cluster_auto_k
-    gr.LeidenClusterer
 ```

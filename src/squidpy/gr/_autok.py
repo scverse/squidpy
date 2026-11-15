@@ -56,11 +56,13 @@ def expand_n_clusters(n_clusters: tuple[int, int] | Sequence[int]) -> tuple[list
     """
     if isinstance(n_clusters, tuple):
         if len(n_clusters) != 2:
-            raise ValueError(f"'n_clusters' as a tuple must be (min, max), got {n_clusters!r}")
+            raise ValueError(f"'values' as a tuple must be (min, max), got {n_clusters!r}")
         low, high = n_clusters
         if low > high:
-            raise ValueError(f"'n_clusters' must be (min, max) with min <= max, got {n_clusters!r}")
+            raise ValueError(f"'values' must be (min, max) with min <= max, got {n_clusters!r}")
         requested = set(range(low, high + 1))
+    elif any(k != int(k) for k in n_clusters):
+        raise ValueError(f"'values' must be whole numbers of clusters, got {n_clusters!r}")
     else:
         requested = {int(k) for k in n_clusters}
 
@@ -68,7 +70,7 @@ def expand_n_clusters(n_clusters: tuple[int, int] | Sequence[int]) -> tuple[list
     if len(scored) < len(requested):
         warnings.warn("stability cannot be computed for K < 2, ignoring those values", UserWarning, stacklevel=3)
     if not scored:
-        raise ValueError(f"'n_clusters' must contain at least one value >= 2, got {n_clusters!r}")
+        raise ValueError(f"'values' must contain at least one value >= 2, got {n_clusters!r}")
     return sorted({k + d for k in scored for d in (-1, 0, 1)}), scored
 
 
@@ -198,6 +200,8 @@ def sweep_auto_k(
     base = legacy_random(np.random.default_rng(rng))
 
     ks = list(values)
+    if is_k and max(ks) > X.shape[0]:
+        raise ValueError(f"{param}={max(ks)} is more clusters than the {X.shape[0]} observations")
     # adjacent pairs rather than `k + 1` arithmetic, so non-contiguous grids work
     pairs = list(zip(ks[:-1], ks[1:], strict=True))
     interior = ks[1:-1]

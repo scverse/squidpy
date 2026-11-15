@@ -743,7 +743,7 @@ def calculate_niche_cellcharter(
 
     if n_clusters is not None:
         if clusterer is not None:
-            raise TypeError("'n_clusters' is deprecated; set the number of clusters on 'clusterer' instead")
+            raise ValueError("'n_clusters' is deprecated; set the number of clusters on 'clusterer' instead")
         warnings.warn(
             "'n_clusters' is deprecated and will be removed in squidpy v1.10.0; pass "
             f"clusterer=GaussianMixture(n_components={n_clusters}, reg_covar=1e-4) instead",
@@ -1334,7 +1334,7 @@ def _niche_clusterers(
 ) -> dict[str, Clusterer]:
     """*clusterer*, or one Leiden clusterer per resolution, keyed by the column it labels."""
     if (clusterer is None) == (resolutions is None):
-        raise TypeError("pass either 'resolutions' or 'clusterer'")
+        raise ValueError("pass either 'resolutions' or 'clusterer'")
     if clusterer is not None:
         return {base_colname: clusterer}
     values = _resolution_values(resolutions, pairs_ok=False)

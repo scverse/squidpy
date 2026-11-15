@@ -13,9 +13,9 @@ from scipy.sparse import csr_matrix
 from sklearn.cluster import AffinityPropagation, AgglomerativeClustering, KMeans, SpectralClustering
 from sklearn.mixture import GaussianMixture
 
-from squidpy.gr import LeidenClusterer, cluster_auto_k
+from squidpy.gr import cluster_auto_k
 from squidpy.gr._autok import check_sweep_clusterer, expand_n_clusters, mirror_stability, sweep_auto_k
-from squidpy.gr._clusterers import default_mixture, k_param
+from squidpy.gr._clusterers import LeidenClusterer, default_mixture, k_param
 
 
 def make_blobs(n_per_blob: int = 30, n_features: int = 5, seed: int = 0) -> np.ndarray:
@@ -43,6 +43,7 @@ def test_expand_n_clusters(n_clusters, fit, scored):
         ((2, 10, 3), r"must be \(min, max\)"),
         ((10, 2), r"min <= max"),
         ([0, 1], r"at least one value >= 2"),
+        ([2.5, 4], r"whole numbers of clusters"),
     ],
 )
 @pytest.mark.filterwarnings("ignore:stability cannot be computed")
@@ -100,6 +101,11 @@ def test_default_mixture_fits_a_collapsed_component():
 def test_sweep_rejects_bad_arguments(kwargs, match):
     with pytest.raises(ValueError, match=match):
         sweep_auto_k(make_blobs(), [1, 2, 3], param="n_components", **kwargs)
+
+
+def test_sweep_rejects_more_clusters_than_observations():
+    with pytest.raises(ValueError, match=r"n_components=4 is more clusters than the 3 observations"):
+        sweep_auto_k(make_blobs()[:3], [2, 3, 4], param="n_components")
 
 
 def test_sweep_convergence():
@@ -178,7 +184,8 @@ def test_sweep_rejects_labels_outside_range(relabel):
 
 
 def test_sweep_pins_its_stability_curve():
-    # pins this rng's output, not ground truth (K=4 for 17 of rngs 0-19)
+    # pins this rng's output, not ground truth: 3 blobs, but K=4 for 17 of rngs 0-19, as merging
+    # two blobs (K=2 vs 3) costs more Fowlkes-Mallows similarity than splitting one (K=3 vs 4)
     result = sweep_auto_k(make_blobs(), list(range(1, 7)), max_runs=5, rng=0, param="n_components")
     assert result.best == 4
     np.testing.assert_allclose(

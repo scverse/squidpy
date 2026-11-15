@@ -39,15 +39,15 @@ def cluster_auto_k(
     """Select the number of clusters (K), or another clusterer parameter, by clustering stability.
 
     Every candidate value is fitted ``max_runs`` times, and each is scored by how similar its
-    labeling is to the labeling of the adjacent values across runs (Fowlkes-Mallows). The most
-    stable K is the one whose partition is least sensitive to adding a cluster.
+    labeling is to the labeling of the adjacent values across runs (Fowlkes-Mallows). The score
+    penalizes merging two groups more than splitting one, so on well-separated groups the
+    selected K can be one above their number.
 
     For K, this reimplements the K selection of CellCharter's ``ClusterAutoK``::
 
         sq.gr.cluster_auto_k(adata, use_rep="niche_embedding", values=(2, 10))
 
-    The same score selects any other parameter of *clusterer*, such as the resolution of
-    :class:`~squidpy.gr.LeidenClusterer`.
+    The same score selects any other parameter of *clusterer*, such as a Leiden resolution.
 
     Parameters
     ----------

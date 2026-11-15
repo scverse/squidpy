@@ -1113,7 +1113,7 @@ def test_niche_cellcharter_n_clusters_is_deprecated(dummy_adata2: AnnData):
         dummy_adata2, distance=2, rng=0, clusterer=GaussianMixture(n_components=3), copy=True
     )
     pd.testing.assert_series_equal(old.obs["cellcharter_niche"], new.obs["cellcharter_niche"])
-    with pytest.raises(TypeError, match=r"set the number of clusters on 'clusterer'"):
+    with pytest.raises(ValueError, match=r"set the number of clusters on 'clusterer'"):
         calculate_niche_cellcharter(dummy_adata2, distance=2, n_clusters=3, clusterer=KMeans())
 
 
@@ -1160,7 +1160,7 @@ def test_leiden_flavors_fit_a_clusterer_instead(fn, kwargs):
     "extra", [{"resolutions": 1.0, "clusterer": KMeans(n_clusters=3)}, {}], ids=["both", "neither"]
 )
 def test_leiden_flavors_take_resolutions_or_a_clusterer(fn, kwargs, extra):
-    with pytest.raises(TypeError, match=r"either 'resolutions' or 'clusterer'"):
+    with pytest.raises(ValueError, match=r"either 'resolutions' or 'clusterer'"):
         fn(_tiny(n=60), rng=0, **kwargs, **extra)
 
 

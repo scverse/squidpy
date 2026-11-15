@@ -63,7 +63,7 @@ class LeidenClusterer(ClusterMixin, BaseEstimator):
         sq.gr.cluster_auto_k(
             adata,
             use_rep="niche_embedding",
-            clusterer=sq.gr.LeidenClusterer(),
+            clusterer=LeidenClusterer(),
             param="resolution",
             values=[0.2, 0.4, 0.6, 0.8, 1.0],
         )
