@@ -695,7 +695,7 @@ def calculate_niche_cellcharter(
            ``clusterer=GaussianMixture(n_components=4)``.
     clusterer
         The :class:`~squidpy.types.Clusterer` to fit; its number of clusters is the number of
-        niches. Cloned, and seeded from ``rng`` if it has a ``random_state``. Defaults to
+        niches. Cloned, and seeded from ``rng`` if its ``random_state`` is ``None``. Defaults to
         ``GaussianMixture(n_components=10, reg_covar=1e-4)``. To select the number of clusters,
         run :func:`~squidpy.gr.cluster_auto_k` on ``obsm[embedding_key_added]``.
     n_pca_components
@@ -1371,7 +1371,9 @@ def _fit_clusterers(
         # a fresh clone per fit, so the estimator handed in is never mutated
         fit = clone(clusterer)
         # TODO: pass `rng` once scikit-learn estimators take a numpy Generator
-        if "random_state" in fit.get_params():
+        # a seed the user set is kept; `rng` only fills one left unset
+        params = fit.get_params()
+        if "random_state" in params and params["random_state"] is None:
             fit.set_params(random_state=legacy_random(rng))
         if keep is None:
             labels = np.asarray(fit.fit_predict(embedding)).astype(str)

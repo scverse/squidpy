@@ -1118,7 +1118,7 @@ def test_niche_cellcharter_n_clusters_is_deprecated(dummy_adata2: AnnData):
         calculate_niche_cellcharter(dummy_adata2, distance=2, n_clusters=3, clusterer=KMeans())
 
 
-def test_niche_cellcharter_seeds_a_given_clusterer_from_rng():
+def test_niche_cellcharter_seeds_an_unseeded_clusterer_from_rng():
     seeds = []
 
     class _Recording(KMeans):
@@ -1130,6 +1130,12 @@ def test_niche_cellcharter_seeds_a_given_clusterer_from_rng():
         calculate_niche_cellcharter(_tiny(n=60), distance=2, clusterer=_Recording(n_clusters=3, n_init=1), rng=rng)
     assert None not in seeds
     assert seeds[0] == seeds[1] != seeds[2]
+
+    seeds.clear()
+    for rng in (0, 1):
+        clusterer = _Recording(n_clusters=3, n_init=1, random_state=7)
+        calculate_niche_cellcharter(_tiny(n=60), distance=2, clusterer=clusterer, rng=rng)
+    assert seeds == [7, 7], "a seed the user set is kept"
 
 
 def test_niche_cellcharter_takes_a_clusterer_without_k(dummy_adata2: AnnData):

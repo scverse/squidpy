@@ -264,7 +264,7 @@ _niche_clusterer = """\
 clusterer
     A :class:`~squidpy.types.Clusterer` fitted instead of Leiden, writing ``key_added`` as is;
     ``n_neighbors``, ``flavor`` and ``n_iterations`` then go unused. Cloned, and seeded from
-    ``rng`` if it has a ``random_state``. Pass this or ``resolutions``."""
+    ``rng`` if its ``random_state`` is ``None``. Pass this or ``resolutions``."""
 _niche_leiden_params = f"""\
 flavor
     Leiden backend passed to :func:`scanpy.tl.leiden`. Defaults to ``'igraph'``
