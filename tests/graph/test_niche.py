@@ -501,7 +501,8 @@ def test_weighted_graph_warning_points_at_the_caller():
 
 def test_clusterer_without_a_random_state_is_fitted_unseeded(dummy_adata2: AnnData):
     calculate_niche_cellcharter(dummy_adata2, distance=2, clusterer=AgglomerativeClustering(n_clusters=3))
-    assert dummy_adata2.obs["cellcharter_niche"].nunique() == 3
+    expected = AgglomerativeClustering(n_clusters=3).fit_predict(dummy_adata2.obsm["niche_embedding"])
+    np.testing.assert_array_equal(dummy_adata2.obs["cellcharter_niche"].astype(str), expected.astype(str))
 
 
 @pytest.mark.parametrize(
@@ -1132,9 +1133,16 @@ def test_niche_cellcharter_seeds_a_given_clusterer_from_rng():
 
 
 def test_niche_cellcharter_takes_a_clusterer_without_k(dummy_adata2: AnnData):
-    calculate_niche_cellcharter(dummy_adata2, distance=2, rng=0, clusterer=AffinityPropagation(random_state=0))
-    expected = AffinityPropagation(random_state=0).fit_predict(dummy_adata2.obsm["niche_embedding"])
-    assert dummy_adata2.obs["cellcharter_niche"].nunique() == len(np.unique(expected))
+    seeds = []
+
+    class _Recording(AffinityPropagation):
+        def fit_predict(self, X, y=None):
+            seeds.append(self.random_state)
+            return super().fit_predict(X)
+
+    calculate_niche_cellcharter(dummy_adata2, distance=2, rng=0, clusterer=_Recording())
+    expected = AffinityPropagation(random_state=seeds[0]).fit_predict(dummy_adata2.obsm["niche_embedding"])
+    np.testing.assert_array_equal(dummy_adata2.obs["cellcharter_niche"].astype(str), expected.astype(str))
 
 
 def test_niche_cellcharter_rejects_a_non_clusterer(dummy_adata2: AnnData):
@@ -1151,8 +1159,9 @@ _LEIDEN_FLAVORS = [
 @pytest.mark.parametrize(("fn", "kwargs"), _LEIDEN_FLAVORS)
 def test_leiden_flavors_fit_a_clusterer_instead(fn, kwargs):
     adata = _tiny(n=60)
-    fn(adata, rng=0, clusterer=KMeans(n_clusters=3, n_init=1), key_added="mine", **kwargs)
-    assert adata.obs["mine"].nunique() == 3
+    fn(adata, rng=0, clusterer=AgglomerativeClustering(n_clusters=3), key_added="mine", **kwargs)
+    expected = AgglomerativeClustering(n_clusters=3).fit_predict(adata.obsm["niche_embedding"])
+    np.testing.assert_array_equal(adata.obs["mine"].astype(str), expected.astype(str))
 
 
 @pytest.mark.parametrize(("fn", "kwargs"), _LEIDEN_FLAVORS)
