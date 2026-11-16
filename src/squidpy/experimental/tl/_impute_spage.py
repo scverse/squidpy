@@ -81,9 +81,7 @@ def impute_spage(
         Key in the query's :attr:`anndata.AnnData.obsm` where the result is stored.
     %(n_jobs_threads)s
         A positive value also caps the BLAS and OpenMP threads (via :mod:`threadpoolctl`), which `None` and
-        ``-1`` leave as configured. If several reference cells have identical shared-gene expression, which of
-        them fill a query cell's last neighbor slots may depend on the thread count when the query has at most
-        as many cells as the reference.
+        ``-1`` leave as configured.
     inplace
         If `True`, store the result in the query, otherwise return it.
 
@@ -108,9 +106,6 @@ def impute_spage(
     assert_in_range(n_neighbors, 1, ref.n_obs, name="n_neighbors")
     if not 0 <= cosine_threshold < 1:
         raise ValueError(f"Expected `cosine_threshold` to be in interval `[0, 1)`, found `{cosine_threshold}`.")
-    for adata, side_layer, side in ((ref, ref_layer, "reference"), (query, query_layer, "query")):
-        if side_layer is not None and side_layer not in adata.layers:
-            raise KeyError(f"`layer={side_layer!r}`: no such layer in the {side}. Available: {sorted(adata.layers)}.")
 
     genes = assert_non_empty_sequence(genes, name="genes")
     if missing := [g for g in genes if g not in ref.var_names]:
@@ -118,7 +113,6 @@ def impute_spage(
     shared = query.var_names.intersection(ref.var_names, sort=False).tolist()
     if not shared:
         raise ValueError("The reference and the query have no genes in common.")
-    assert_in_range(n_pv, 2, min(len(shared), query.n_obs - 1, ref.n_obs - 1), name="n_pv")
 
     start = logg.info(f"Imputing `{len(genes)}` genes with SpaGE using `{n_threads}` thread(s)")
     with threadpool_limits(None if n_jobs in (None, -1) else n_threads):
@@ -126,12 +120,10 @@ def impute_spage(
         query_x, query_offset, query_varies = _scale(_extract_expression(query, genes=shared, layer=query_layer)[0])
         # a constant gene has no z-score (SpaGE's `zscore` gives NaN) and carries nothing to align on
         if not (varies := ref_varies & query_varies).all():
-            n_varying = int(np.sum(varies))
-            logg.warning(f"Ignoring `{len(shared) - n_varying}` shared genes that are constant in either dataset")
-            if n_varying < n_pv:
-                raise ValueError(f"Only `{n_varying}` shared genes vary in both datasets, fewer than `n_pv={n_pv}`.")
+            logg.warning(f"Ignoring `{np.sum(~varies)}` shared genes that are constant in either dataset")
             ref_x, ref_offset = ref_x[:, varies], ref_offset[varies]
             query_x, query_offset = query_x[:, varies], query_offset[varies]
+        assert_in_range(n_pv, 2, min(int(np.sum(varies)), query.n_obs - 1, ref.n_obs - 1), name="n_pv")
 
         # the covariance solver is deterministic and centers sparse data implicitly; it forms
         # `x.T @ x - n * mean**2`, which loses too much precision in float32
@@ -152,19 +144,23 @@ def impute_spage(
 
         # z-scored data is `x - offset` (see `_scale`); casting `pvs` keeps float32 data from being copied to
         # float64, and float16 data from being projected in half precision
-        ref_proj = ref_x @ pvs.astype(np.result_type(ref_x.dtype, np.float32)) - ref_offset @ pvs
-        query_proj = query_x @ pvs.astype(np.result_type(query_x.dtype, np.float32)) - query_offset @ pvs
+        ref_proj, query_proj = (
+            x @ pvs.astype(np.result_type(x.dtype, np.float32)) - offset @ pvs
+            for x, offset in ((ref_x, ref_offset), (query_x, query_offset))
+        )
         del ref_x, query_x
         distances, indices = _cosine_neighbors(ref_proj, query_proj, n_neighbors=n_neighbors, n_jobs=n_threads)
 
         y = _extract_expression(ref, genes=genes, layer=ref_layer)[0]
         y = csr_matrix(y, dtype=np.result_type(y.dtype, np.float32))
-        k = indices.shape[1]
         weights = csr_matrix(
-            (_spage_weights(distances).astype(y.dtype).ravel(), indices.ravel(), np.arange(0, query.n_obs * k + 1, k)),
+            (
+                _spage_weights(distances).astype(y.dtype).ravel(),
+                indices.ravel(),
+                np.arange(0, query.n_obs * n_neighbors + 1, n_neighbors),
+            ),
             shape=(query.n_obs, ref.n_obs),
         )
-        weights.eliminate_zeros()  # neighbors at cosine distance >= 1
         # TODO: use `fast_array_utils.linalg.matmul` once released, which runs this product in parallel
         imputed = (weights @ y).toarray()
 
@@ -208,11 +204,7 @@ def _cosine_neighbors(ref: NDArrayA, query: NDArrayA, *, n_neighbors: int, n_job
 
 
 def _spage_weights(distances: NDArrayA) -> NDArrayA:
-    """Weight neighbors at cosine distance below 1 by ``(1 - d_i / sum(d)) / (k - 1)``, zero otherwise.
-
-    The weights of a row sum to 1 unless no neighbor is kept. If the formula is ``0 / 0``
-    (a single kept neighbor, or all kept distances 0), equal weights are used.
-    """
+    """SpaGE's neighbor weights, row-wise; see `impute_spage` for the formula and its ``0 / 0`` cases."""
     keep = distances < 1
     d = np.where(keep, distances, 0.0)
     k = keep.sum(axis=1, keepdims=True)

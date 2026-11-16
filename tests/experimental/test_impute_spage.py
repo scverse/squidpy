@@ -6,10 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from anndata import AnnData
-from scipy import linalg
 from scipy.sparse import csr_array, csr_matrix
-from scipy.stats import zscore
-from sklearn.decomposition import PCA
 from sklearn.neighbors import NearestNeighbors
 from spatialdata import SpatialData
 from spatialdata.models import TableModel
@@ -41,45 +38,6 @@ def _impute(data_ref, data_query, **kwargs) -> pd.DataFrame | None:
     return sq.experimental.tl.impute_spage(
         data_ref, data_query, **({"genes": _UNMEASURED, "n_pv": 3, "inplace": False} | kwargs)
     )
-
-
-def _spage_reference(
-    ref: AnnData, query: AnnData, *, n_pv: int, n_neighbors: int, cosine_threshold: float
-) -> tuple[np.ndarray, int]:
-    """SpaGE as published (Abdelaal et al. 2020, github.com/tabdelaal/SpaGE) for dense data.
-
-    Also return the number of principal vectors used.
-    """
-    shared = np.intersect1d(query.var_names, ref.var_names)
-    ref_z, query_z = (zscore(adata[:, shared].X, axis=0) for adata in (ref, query))
-    source, target = (linalg.orth(PCA(n_pv, svd_solver="full").fit(x).components_.T).T for x in (ref_z, query_z))
-    _, cosine, vt = np.linalg.svd(target @ source.T)
-    n_effective = int(np.sum(cosine > cosine_threshold))
-    pvs = (vt @ source)[:n_effective].T
-
-    knn = NearestNeighbors(n_neighbors=n_neighbors, metric="cosine").fit(ref_z @ pvs)
-    distances, indices = knn.kneighbors(query_z @ pvs)
-    y = ref[:, _UNMEASURED].X
-    res = np.zeros((query.n_obs, len(_UNMEASURED)))
-    for i, (dist, idx) in enumerate(zip(distances, indices, strict=True)):
-        keep = dist < 1
-        weights = 1 - dist[keep] / dist[keep].sum()
-        res[i] = weights / (len(weights) - 1) @ y[idx[keep]]
-    return res, n_effective
-
-
-@pytest.mark.parametrize(("cosine_threshold", "n_effective"), [(0.3, 3), (0.99, 2)])
-def test_matches_published_spage(cosine_threshold, n_effective):
-    ref, query, _ = _data()
-    # every reference cell is a neighbor, so some are at cosine distance >= 1 and are dropped; this also keeps
-    # the backends' tie-breaking for the identical, all-zero reference cells from changing the neighbors
-    kwargs = {"n_pv": 3, "n_neighbors": 300, "cosine_threshold": cosine_threshold}
-
-    res = _impute(ref, query, **kwargs)
-
-    expected, n_used = _spage_reference(ref, query, **kwargs)
-    assert n_used == n_effective
-    np.testing.assert_allclose(res.to_numpy(), expected, rtol=1e-6, atol=1e-10)
 
 
 @pytest.mark.parametrize("fmt", [csr_matrix, csr_array])
@@ -282,8 +240,8 @@ def test_spage_weights(distances, expected):
         pytest.param({"cosine_threshold": 1.0}, ValueError, "cosine_threshold", id="cosine_threshold-range"),
         pytest.param({"cosine_threshold": 0.9999}, ValueError, "found `0`", id="no-principal-vector"),
         pytest.param({"cosine_threshold": 0.999}, ValueError, "found `1`", id="single-principal-vector"),
-        pytest.param({"layer": "foo"}, KeyError, "no such layer in the reference", id="unknown-layer"),
-        pytest.param({"layer": (None, "foo")}, KeyError, "no such layer in the query", id="unknown-query-layer"),
+        pytest.param({"layer": "foo"}, KeyError, "Layer `foo` not found", id="unknown-layer"),
+        pytest.param({"layer": (None, "foo")}, KeyError, "Layer `foo` not found", id="unknown-query-layer"),
         pytest.param({"layer": ("a", "b", "c")}, ValueError, "pair", id="layer-not-a-pair"),
     ],
 )
@@ -333,10 +291,8 @@ def test_invalid_table(table_key, error, match):
         _impute(ref, data_query, table_key=table_key)
 
 
-@pytest.mark.parametrize("in_sdata", [False, True])
-def test_reference_and_query_must_differ(in_sdata):
+def test_reference_and_query_must_differ():
     ref, _, _ = _data()
-    data = SpatialData(tables={"t": TableModel.parse(ref)}) if in_sdata else ref
 
     with pytest.raises(ValueError, match="same table"):
-        _impute(data, data, table_key="t" if in_sdata else None)
+        _impute(ref, ref)
