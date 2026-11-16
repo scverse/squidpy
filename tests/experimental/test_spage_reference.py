@@ -14,10 +14,8 @@ from .test_impute_spage import _data
 
 pytestmark = pytest.mark.internet
 
-_BUNDLE_URL = (
-    "https://github.com/selmanozleyen/squidpy-ports/releases/download/spage-reference-v1/spage_reference.zarr.zip"
-)
-_BUNDLE_SHA256 = "da6cdcd896a3eac22cc076def095500ebc2fff66672a137fb130962c797ed1b0"
+_BUNDLE_URL = "https://github.com/theislab/squidpy-ports/releases/download/spage-reference-v1/spage_reference.zarr.zip"
+_BUNDLE_SHA256 = "8da69ca95afe63587be26e521b63e9240ed52f8cbc6a67bce20c929816a33662"
 
 
 @pytest.fixture(scope="module")
