@@ -4,17 +4,21 @@ import numpy as np
 import pytest
 from anndata import AnnData
 
-from squidpy._constants._constants import RipleyStat
 from squidpy.gr import ripley
 
 CLUSTER_KEY = "leiden"
 
 
-@pytest.mark.parametrize("mode", list(RipleyStat))
-def test_ripley_modes(adata_ripley: AnnData, mode: RipleyStat):
+def test_ripley_L_unsupported_metric_raises(adata_ripley: AnnData):
+    with pytest.raises(ValueError, match="Unsupported metric"):
+        ripley(adata_ripley, cluster_key=CLUSTER_KEY, mode="L", metric="cosine")
+
+
+@pytest.mark.parametrize("mode", ["F", "G", "L"])
+def test_ripley_modes(adata_ripley: AnnData, mode: str):
     adata = adata_ripley
 
-    ripley(adata, cluster_key=CLUSTER_KEY, mode=mode.s)
+    ripley(adata, cluster_key=CLUSTER_KEY, mode=mode)
 
     UNS_KEY = f"{CLUSTER_KEY}_ripley_{mode}"
 
@@ -37,7 +41,7 @@ def test_ripley_modes(adata_ripley: AnnData, mode: RipleyStat):
     assert bins.shape[0] == 50
 
 
-@pytest.mark.parametrize("mode", list(RipleyStat))
+@pytest.mark.parametrize("mode", ["F", "G", "L"])
 @pytest.mark.parametrize(
     "n_simulations",
     [20, 50],
@@ -55,7 +59,7 @@ def test_ripley_modes(adata_ripley: AnnData, mode: RipleyStat):
     [2, 50, 100],
 )
 def test_ripley_results(
-    adata_ripley: AnnData, mode: RipleyStat, n_simulations: int, n_observations: int, max_dist: np.float_, n_steps: int
+    adata_ripley: AnnData, mode: str, n_simulations: int, n_observations: int, max_dist: np.float_, n_steps: int
 ):
     adata = adata_ripley
     n_clusters = adata.obs[CLUSTER_KEY].cat.categories.shape[0]
@@ -63,7 +67,7 @@ def test_ripley_results(
     res = ripley(
         adata,
         cluster_key=CLUSTER_KEY,
-        mode=mode.s,
+        mode=mode,
         n_simulations=n_simulations,
         n_observations=n_observations,
         max_dist=max_dist,
@@ -91,3 +95,26 @@ def test_ripley_results(
     # assert n_zeros == n_clusters
     idx = np.nonzero(obs_df.bins.values)[0]
     assert idx.shape[0] == n_steps * n_clusters - n_clusters
+
+
+@pytest.mark.parametrize("mode", ["F", "G", "L"])
+def test_ripley_rng(adata_ripley: AnnData, mode: str):
+    """Same seed reproduces simulations, different seeds change them, and simulations are not all identical."""
+    adata = adata_ripley
+    kw = {"cluster_key": CLUSTER_KEY, "mode": mode, "n_simulations": 20, "copy": True}
+
+    res1 = ripley(adata, rng=np.random.default_rng(42), **kw)
+    res2 = ripley(adata, rng=np.random.default_rng(42), **kw)
+    res3 = ripley(adata, rng=np.random.default_rng(43), **kw)
+
+    sims1 = res1["sims_stat"].pivot(index="bins", columns="simulations", values="stats").to_numpy()
+    sims2 = res2["sims_stat"].pivot(index="bins", columns="simulations", values="stats").to_numpy()
+    sims3 = res3["sims_stat"].pivot(index="bins", columns="simulations", values="stats").to_numpy()
+
+    # same seed -> identical simulations
+    np.testing.assert_array_equal(sims1, sims2)
+    # different seed -> different simulations
+    assert not np.array_equal(sims1, sims3)
+    # regression: simulations must not all be identical to each other
+    # (previously every simulation reused the same seed and produced the same point pattern)
+    assert not np.allclose(sims1, sims1[:, [0]])

@@ -11,6 +11,7 @@ __all__ = ["tiling_qc"]
 
 def tiling_qc(
     sdata: sd.SpatialData,
+    *,
     labels_key: str,
     qc_key: str | None = None,
     score_col: Literal[
@@ -26,9 +27,7 @@ def tiling_qc(
 ) -> None:
     """Plot labels coloured by their tiling-artifact score.
 
-    Uses ``spatialdata_plot`` to render the label element coloured
-    by the chosen QC score from the linked table.  If tile-boundary
-    artifacts are present the tile grid emerges as lines of
+    Where tile-boundary artifacts are present, the tile grid emerges as lines of
     high-scoring cells.
 
     Parameters
@@ -49,6 +48,10 @@ def tiling_qc(
         Matplotlib colormap name.
     figsize
         Figure size passed to ``spatialdata.SpatialData.pl.show``.
+
+    Returns
+    -------
+    Nothing, just plots the figure.
     """
     table_key = qc_key if qc_key is not None else f"{labels_key}_qc"
     if table_key not in sdata.tables:

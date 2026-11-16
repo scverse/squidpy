@@ -2,6 +2,6 @@
 
 ## Bugfixes
 
-- Unpin ``scikit-image``.
+- Unpin `scikit-image`.
   [@giovp](https://github.com/giovp)
   [#796](https://github.com/scverse/squidpy/pull/796)

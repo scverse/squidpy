@@ -14,8 +14,8 @@ from matplotlib.colors import ListedColormap
 
 from squidpy import pl
 from squidpy._constants._pkg_constants import Key
-from squidpy.gr import spatial_neighbors
-from squidpy.pl._spatial_utils import _get_library_id
+from squidpy.gr import spatial_neighbors_grid, spatial_neighbors_radius
+from squidpy.pl._spatial_utils import _get_image, _get_library_id, _get_scalefactor_size
 from tests.conftest import PlotTester, PlotTesterMeta
 
 sc.set_figure_params(dpi=40, color_map="viridis")
@@ -80,7 +80,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
         )
 
     def test_plot_spatial_scatter_group_multi(self, adata_hne: AnnData):
-        spatial_neighbors(adata_hne)
+        spatial_neighbors_grid(adata_hne)
         pl.spatial_scatter(
             adata_hne,
             shape="circle",
@@ -109,7 +109,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
 
     def test_plot_spatial_scatter_nospatial(self, adata_hne_concat: AnnData):
         adata = adata_hne_concat.copy()
-        spatial_neighbors(adata)
+        spatial_neighbors_grid(adata)
         adata.uns.pop("spatial")
         pl.spatial_scatter(
             adata_hne_concat,
@@ -134,7 +134,7 @@ class TestSpatialStatic(PlotTester, metaclass=PlotTesterMeta):
 
     @pytest.mark.skipif(platform.system() == "Darwin", reason="Fails on macOS 3.8 CI")
     def test_plot_spatial_scatter_novisium(self, adata_mibitof: AnnData):
-        spatial_neighbors(adata_mibitof, coord_type="generic", radius=50)
+        spatial_neighbors_radius(adata_mibitof, radius=50)
         pl.spatial_scatter(
             adata_mibitof,
             library_key="library_id",
@@ -243,3 +243,22 @@ class TestSpatialStaticUtils:
                     _get_libid(adata)
             else:
                 assert library_id == _get_libid(adata)
+
+    def test_custom_spatial_key_reads_uns_of_that_key(self):
+        adata = AnnData(np.zeros((3, 1)), obsm={"spatial_trans": np.zeros((3, 2))})
+        for key, value in [(Key.uns.spatial, 0.0), ("spatial_trans", 1.0)]:
+            adata.uns[key] = {
+                "lib": {
+                    "images": {"hires": np.full((4, 4, 3), value)},
+                    "scalefactors": {"tissue_hires_scalef": value + 0.5, "spot_diameter_fullres": value + 2},
+                }
+            }
+
+        (img,) = _get_image(adata, library_id=["lib"], spatial_key="spatial_trans", img_res_key="hires")
+        assert np.all(img == 1.0)
+
+        scale_factor, size = _get_scalefactor_size(
+            adata, library_id=["lib"], spatial_key="spatial_trans", img_res_key="hires"
+        )
+        assert scale_factor == [1.5]
+        assert size == [3 * 1.5 * 0.5]

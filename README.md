@@ -20,7 +20,7 @@ Head over to the [documentation](https://squidpy.readthedocs.io/en/stable/) for 
 
 ## Installation
 
-We recommend running Squidpy on a recent Linux or macOS system with Python ≥3.11, but it also works on Windows via WSL.
+We recommend running Squidpy on a recent Linux or macOS system with Python ≥3.12, but it also works on Windows via WSL.
 
 Install from [PyPI](https://pypi.org/project/squidpy) with:
 
@@ -72,7 +72,7 @@ If you use Squidpy in your research, cite the original publication:
 }
 ```
 
----
+--------------------------------------------------------------------------------
 
 Squidpy is part of the scverse® project ([website](https://scverse.org/), [governance](https://scverse.org/about/roles/)) and is fiscally sponsored by [NumFOCUS](https://numfocus.org/).
 Please consider making a tax-deductible [donation](https://numfocus.org/donate-to-scverse/) to help the project pay for developer time, professional services, travel, workshops, and a variety of other needs.

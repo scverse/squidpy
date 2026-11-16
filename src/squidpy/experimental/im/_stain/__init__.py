@@ -14,7 +14,25 @@ from squidpy.experimental.im._stain._conversion import (
     rgb_to_sda,
     sda_to_rgb,
 )
-from squidpy.experimental.im._stain._reference import StainMethod, StainReference
+from squidpy.experimental.im._stain._decomposition import (
+    apply_decomposition,
+    fit_decomposition,
+)
+from squidpy.experimental.im._stain._normalize import (
+    estimate_white_point,
+    fit_stain_reference,
+)
+from squidpy.experimental.im._stain._reference import StainFit, StainMethod
+from squidpy.experimental.im._stain._reinhard import (
+    apply_reinhard,
+    fit_reinhard,
+)
+from squidpy.experimental.im._stain._validation import (
+    StainFittingError,
+    complement_third_column,
+    reorder_to_canonical,
+    validate_stain_matrix,
+)
 
 __all__ = [
     "RUDERMAN_LAB_TO_LMS",
@@ -23,10 +41,20 @@ __all__ = [
     "RUDERMAN_RGB_TO_LMS",
     "RUIFROK_HE",
     "SDA_SCALE",
+    "StainFittingError",
     "StainMethod",
-    "StainReference",
+    "StainFit",
+    "apply_decomposition",
+    "apply_reinhard",
+    "complement_third_column",
+    "estimate_white_point",
+    "fit_decomposition",
+    "fit_reinhard",
+    "fit_stain_reference",
     "lab_ruderman_to_rgb",
+    "reorder_to_canonical",
     "rgb_to_lab_ruderman",
     "rgb_to_sda",
     "sda_to_rgb",
+    "validate_stain_matrix",
 ]

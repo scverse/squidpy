@@ -18,7 +18,13 @@ import joblib as jl
 import numba
 import numpy as np
 import xarray as xr
+from scanpy import logging as logg
 from spatialdata.models import Image2DModel, Labels2DModel
+
+from squidpy._compat import SKIP_OWN_FRAMES
+
+if TYPE_CHECKING:
+    from numba_progress import ProgressBar
 
 __all__ = ["singledispatchmethod", "Signal", "SigQueue", "NDArray", "NDArrayA"]
 
@@ -47,15 +53,10 @@ NDArrayA = NDArray[Any]
 
 
 def _cpu_count() -> int:
-    """Number of CPUs available to this process.
-
-    Uses :func:`os.sched_getaffinity` to respect cgroup limits set by
-    SLURM, Docker, or ``taskset``.  Falls back to :func:`os.cpu_count`
-    on platforms where affinity queries are unavailable (e.g. macOS).
-    """
+    """Number of CPUs available to this process, respecting cgroup/``taskset`` limits."""
     try:
         return len(os.sched_getaffinity(0))
-    except (AttributeError, OSError):
+    except (AttributeError, OSError):  # no affinity query, e.g. macOS
         return os.cpu_count() or 1
 
 
@@ -89,6 +90,7 @@ class Signal(Enum):
 def parallelize(
     callback: Callable[..., Any],
     collection: Sequence[Any],
+    *,
     n_jobs: int | None = 1,
     n_split: int | None = None,
     unit: str = "",
@@ -110,8 +112,9 @@ def parallelize(
     collection
         Sequence of items to split into chunks.
     n_jobs
-        Number of parallel jobs to use. If the function uses numba compiled functions, numba may
-        use cores depending on the number of threads set in the environment regardless of this argument.
+        Number of parallel jobs to use. `None` is serial and ``-1`` uses all available cores;
+        ``0`` and values below ``-1`` raise. If the function uses numba compiled functions, numba may use cores depending on the
+        number of threads set in the environment regardless of this argument.
     n_split
         Split ``collection`` into ``n_split`` chunks.
         If <= 0, ``collection`` is assumed to be already split into chunks.
@@ -212,12 +215,7 @@ def parallelize(
 
             return res if extractor is None else extractor(res)
 
-    if n_jobs is None:
-        n_jobs = 1
-    if n_jobs == 0:
-        raise ValueError("Number of jobs cannot be `0`.")
-    elif n_jobs < 0:
-        n_jobs = _cpu_count() + 1 + n_jobs
+    n_jobs = get_n_processes(n_jobs)
 
     if n_split is None:
         n_split = n_jobs
@@ -242,34 +240,127 @@ def parallelize(
     return wrapper
 
 
-def _get_n_cores(n_cores: int | None) -> int:
-    """
-    Make number of cores a positive integer.
+# plain assignments, not PEP-695 `type` statements: those stay opaque to sphinx and would
+# render as the bare alias names on the `*Params.rng` attribute pages
+SeedLike = int | np.integer | Sequence[int] | np.random.SeedSequence
+RNGLike = np.random.Generator | np.random.BitGenerator
 
-    This is useful for especially logging.
+
+def legacy_random(rng: np.random.Generator) -> int:
+    """Draw an int seed for third-party APIs that only accept ``random_state``."""
+    return int(rng.integers(np.iinfo(np.int32).max))
+
+
+@contextmanager
+def numba_threads(n_jobs: int | None) -> Generator[None]:
+    """Temporarily cap numba's thread pool to ``n_jobs``, restoring the previous value on exit.
+
+    ``n_jobs`` is clamped to ``[1, NUMBA_NUM_THREADS]``; ``None`` leaves the current setting untouched.
+    Use around a ``@njit(parallel=True)`` kernel so ``n_jobs`` controls the number of threads it uses.
+    """
+    previous = numba.get_num_threads()
+    if n_jobs is not None:
+        numba.set_num_threads(max(1, min(n_jobs, numba.config.NUMBA_NUM_THREADS)))
+    try:
+        yield
+    finally:
+        numba.set_num_threads(previous)
+
+
+def thread_map(
+    fn: Callable[..., Any],
+    items: Sequence[Any],
+    *,
+    n_jobs: int = 1,
+    show_progress_bar: bool = False,
+    unit: str = "item",
+) -> list[Any]:
+    """Map *fn* over *items* using a thread pool with an optional progress bar.
 
     Parameters
     ----------
-    n_cores
-        Number of cores to use.
+    fn
+        Callable applied to each element of *items*.
+    items
+        Sequence of inputs passed one-by-one to *fn*.
+    n_jobs
+        Number of worker threads; must already be a positive count resolved by the caller.
+        ``1`` runs sequentially (no pool overhead).
+    show_progress_bar
+        Whether to display a ``numba_progress`` progress bar.
+    unit
+        Label shown next to the progress counter.
 
     Returns
     -------
-    int
-        Positive integer corresponding to how many cores to use.
+    list
+        Results in the same order as *items*.
     """
-    if n_cores == 0:
-        raise ValueError("Number of cores cannot be `0`.")
+    from concurrent.futures import ThreadPoolExecutor
+
+    items = list(items)
+
+    def _run(pbar: ProgressBar | None) -> list[Any]:
+        def _consume(results_it: Iterable[Any]) -> list[Any]:
+            results = []
+            # ``map``/``pool.map`` yield in submission order, so results stay aligned with *items*.
+            for res in results_it:
+                results.append(res)
+                if pbar is not None:
+                    pbar.update(1)
+            return results
+
+        if n_jobs == 1:
+            return _consume(map(fn, items))
+
+        with ThreadPoolExecutor(max_workers=n_jobs) as pool:
+            return _consume(pool.map(fn, items))
+
+    if show_progress_bar:
+        from numba_progress import ProgressBar
+
+        with ProgressBar(total=len(items), unit=unit) as pbar:
+            return _run(pbar)
+
+    return _run(None)
+
+
+def get_n_numba_threads(n_threads: int | None) -> int:
+    """Resolve a thread count: `None`/``-1`` is numba's default, the rest raises.
+
+    Use for numba kernels and thread pools over them, whose ceiling is numba's thread pool
+    rather than the cpu count.
+    """
+    max_threads = numba.config.NUMBA_NUM_THREADS
+    if n_threads is None or n_threads == -1:
+        return max_threads
+    if n_threads < -1 or n_threads == 0:
+        raise ValueError(f"Number of threads must be `-1` or a positive integer, got `{n_threads}`.")
+    if n_threads > max_threads:
+        logg.warning(f"Requested `n_jobs={n_threads}`, but numba allows at most `{max_threads}` thread(s).")
+        return max_threads
+
+    return n_threads
+
+
+def get_n_processes(n_cores: int | None) -> int:
+    """Resolve a worker-process count: `None` is serial, ``-1`` is all cores, the rest raises."""
     if n_cores is None:
         return 1
-    if n_cores < 0:
-        return _cpu_count() + 1 + n_cores
+    max_cores = _cpu_count()
+    if n_cores == -1:
+        return max_cores
+    if n_cores < -1 or n_cores == 0:
+        raise ValueError(f"Number of cores must be `-1` or a positive integer, got `{n_cores}`.")
+    if n_cores > max_cores:
+        logg.warning(f"Requested `n_jobs={n_cores}`, but only `{max_cores}` core(s) are available.")
+        return max_cores
 
     return n_cores
 
 
 @contextmanager
-def verbosity(level: int) -> Generator[None, None, None]:
+def verbosity(level: int) -> Generator[None]:
     """
     Temporarily set the verbosity level of :doc:`scanpy <scanpy:index>`.
 
@@ -290,6 +381,28 @@ def verbosity(level: int) -> Generator[None, None, None]:
         yield
     finally:
         sc.settings.verbosity = verbosity
+
+
+def deprecated_randomness_param(func: Callable[..., Any]) -> Callable[..., Any]:
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        for old in ("seed", "random_state"):
+            if old not in kwargs:
+                continue
+            if "rng" in kwargs:
+                raise TypeError(f"`{func.__name__}()` got both `{old}` and `rng`; pass only `rng`.")
+            value = kwargs.pop(old)
+            warnings.warn(
+                f"Parameter `{old}` of `{func.__name__}()` is deprecated in favor of `rng` and will be "
+                f"removed in squidpy v1.9.0. It is now seeding a generator, i.e. `{old}={value!r}` "
+                f"is used as `numpy.random.default_rng({value!r})`, which may change the result.",
+                FutureWarning,
+                skip_file_prefixes=SKIP_OWN_FRAMES,
+            )
+            kwargs["rng"] = value
+        return func(*args, **kwargs)
+
+    return wrapper
 
 
 def deprecated_params(
@@ -313,7 +426,7 @@ def deprecated_params(
                         f"Parameter `{k}` of `{func.__name__}()` is deprecated "
                         f"and has no effect. It will be removed in squidpy v{params[k]}.",
                         FutureWarning,
-                        stacklevel=2,
+                        skip_file_prefixes=SKIP_OWN_FRAMES,
                     )
                     kwargs.pop(k)
             return func(*args, **kwargs)

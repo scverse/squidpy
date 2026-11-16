@@ -16,7 +16,7 @@
   [@dineshpalli](https://github.com/dineshpalli)
   [#468](https://github.com/scverse/squidpy/pull/468)
 
-- An optional ``ax`` keyword can now be passed to {func}`squidpy.pl.nhood_enrichment` function. The
+- An optional `ax` keyword can now be passed to {func}`squidpy.pl.nhood_enrichment` function. The
   keyword can be used to create a matplotlib figure outside of squidpy and then plot on any matplotlib
   subplot, which could give the user greater flexibility in working with enrichment plots.
   [@jo-mueller](https://github.com/jo-mueller)
@@ -30,19 +30,18 @@
   [@MxMstrmn](https://github.com/MxMstrmn)
   [#514](https://github.com/scverse/squidpy/pull/514)
 
-- Add ``library_key`` in {func}`squidpy.gr.spatial_neighbors` to support building graphs across
+- Add `library_key` in {func}`squidpy.gr.spatial_neighbors` to support building graphs across
   multiple slides.
   [@giovp](https://github.com/giovp)
   [#516](https://github.com/scverse/squidpy/pull/516)
 
-
 ## Bugfixes
 
-- Require ``numba>=0.52.0``.
+- Require `numba>=0.52.0`.
   [@michalk8](https://github.com/michalk8)
   [#420](https://github.com/scverse/squidpy/pull/420)
 
-- Fix source/target being ``None`` in {func}`squidpy.gr.ligrec`.
+- Fix source/target being `None` in {func}`squidpy.gr.ligrec`.
   [@michalk8](https://github.com/michalk8)
   [#434](https://github.com/scverse/squidpy/pull/434)
 
@@ -50,7 +49,7 @@
   [@michalk8](https://github.com/michalk8)
   [#488](https://github.com/scverse/squidpy/pull/488)
 
-- Fix ``use_raw`` in {func}`squidpy.gr.spatial_autocorr`.
+- Fix `use_raw` in {func}`squidpy.gr.spatial_autocorr`.
   [@michalk8](https://github.com/michalk8)
   [#506](https://github.com/scverse/squidpy/pull/506)
 
@@ -62,10 +61,9 @@
   [@michalk8](https://github.com/michalk8)
   [#510](https://github.com/scverse/squidpy/pull/510)
 
-
 ## Miscellaneous
 
-- Change imports in the topmost ``__init__.py`` for correct IDE module resolution.
+- Change imports in the topmost `__init__.py` for correct IDE module resolution.
   [@chaichontat](https://github.com/chaichontat)
   [#479](https://github.com/scverse/squidpy/pull/479)
 
@@ -76,7 +74,6 @@
 - Fix missing authors in release notes.
   [@giovp](https://github.com/giovp)
   [#520](https://github.com/scverse/squidpy/pull/520)
-
 
 ## Documentation
 

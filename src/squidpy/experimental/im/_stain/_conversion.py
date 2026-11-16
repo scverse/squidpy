@@ -24,11 +24,37 @@ from squidpy.experimental.im._stain._constants import (
 _CHANNEL_DIM = "c"
 
 
+def dtype_max(dtype: np.dtype | type) -> float:
+    """Valid-intensity upper bound for an image dtype (255 / 65535 / 1.0).
+
+    Integer dtypes use their full range; float RGB is assumed to live in
+    ``[0, 1]``.
+    """
+    dt = np.dtype(dtype)
+    return float(np.iinfo(dt).max) if np.issubdtype(dt, np.integer) else 1.0
+
+
+def cast_to_image_dtype(arr: xr.DataArray, out_dtype: np.dtype | type) -> xr.DataArray:
+    """Cast a clipped working-float image to its final dtype at the write boundary.
+
+    The reconstruction kernels (:func:`sda_to_rgb`, :func:`lab_ruderman_to_rgb`)
+    clip to ``out_dtype``'s valid range but stay in float; this performs the
+    deferred cast. Integer targets are **rounded** (so ``254.6 -> 255``, not
+    ``254``); float targets cast directly. Stays lazy on dask-backed input.
+    """
+    dt = np.dtype(out_dtype)
+    return arr.round().astype(dt) if np.issubdtype(dt, np.integer) else arr.astype(dt)
+
+
 def _check_channel_dim(arr: xr.DataArray) -> None:
     if _CHANNEL_DIM not in arr.dims:
         raise ValueError(f"Input must have a dimension named {_CHANNEL_DIM!r}; got dims {arr.dims}.")
     if arr.sizes[_CHANNEL_DIM] != 3:
-        raise ValueError(f"Channel dimension {_CHANNEL_DIM!r} must have length 3; got {arr.sizes[_CHANNEL_DIM]}.")
+        raise ValueError(
+            f"stain normalization expects a 3-channel RGB image, but the {_CHANNEL_DIM!r} dimension has "
+            f"length {arr.sizes[_CHANNEL_DIM]}. RGBA (4-channel) and multi-channel images are not supported - "
+            "drop the alpha or extra channels first (e.g. keep the first 3 channels)."
+        )
 
 
 def _working_dtype(arr: xr.DataArray) -> np.dtype:
@@ -68,9 +94,9 @@ def _rgb_to_sda_kernel(x: np.ndarray, *, bg: np.ndarray, dtype: np.dtype) -> np.
     return (-np.log((x + 1.0) / (bg + 1.0)) * SDA_SCALE).astype(dtype, copy=False)
 
 
-def _sda_to_rgb_kernel(x: np.ndarray, *, bg: np.ndarray, dtype: np.dtype) -> np.ndarray:
+def _sda_to_rgb_kernel(x: np.ndarray, *, bg: np.ndarray, max_value: float, dtype: np.dtype) -> np.ndarray:
     rgb = (bg + 1.0) * np.exp(-x.astype(dtype, copy=False) / SDA_SCALE) - 1.0
-    np.clip(rgb, 0.0, 255.0, out=rgb)
+    np.clip(rgb, 0.0, max_value, out=rgb)
     return rgb.astype(dtype, copy=False)
 
 
@@ -81,20 +107,20 @@ def _rgb_to_lab_kernel(x: np.ndarray, *, dtype: np.dtype) -> np.ndarray:
     return (lms @ RUDERMAN_LMS_TO_LAB.T.astype(dtype, copy=False)).astype(dtype, copy=False)
 
 
-def _lab_to_rgb_kernel(x: np.ndarray, *, dtype: np.dtype) -> np.ndarray:
+def _lab_to_rgb_kernel(x: np.ndarray, *, max_value: float, dtype: np.dtype) -> np.ndarray:
     x = x.astype(dtype, copy=False)
     log_lms = x @ RUDERMAN_LAB_TO_LMS.T.astype(dtype, copy=False)
     # The +1.0 / -1.0 pair is paired with the matching offset in
     # `_rgb_to_lab_kernel` so the round trip remains exact for valid RGB.
     lms = np.exp(log_lms) - 1.0
     rgb = lms @ RUDERMAN_LMS_TO_RGB.T.astype(dtype, copy=False)
-    np.clip(rgb, 0.0, 255.0, out=rgb)
+    np.clip(rgb, 0.0, max_value, out=rgb)
     return rgb.astype(dtype, copy=False)
 
 
 def rgb_to_sda(
     rgb: xr.DataArray,
-    background_intensity: np.ndarray,
+    white_point: np.ndarray,
 ) -> xr.DataArray:
     """Convert RGB intensities to standard deviation per absorbance (SDA).
 
@@ -112,7 +138,7 @@ def rgb_to_sda(
     rgb
         Image with a ``"c"`` dimension of length 3. May be numpy- or
         dask-backed; the operation is purely elementwise and stays lazy.
-    background_intensity
+    white_point
         Per-channel white-point ``I_0`` as a shape-``(3,)`` numpy array.
         Required: no scanner produces a pure-white background, so the
         caller must supply either an estimate (PR 3 will ship the
@@ -125,24 +151,29 @@ def rgb_to_sda(
     """
     _check_channel_dim(rgb)
     dtype = _working_dtype(rgb)
-    bg = np.asarray(background_intensity, dtype=dtype)
+    bg = np.asarray(white_point, dtype=dtype)
     return _apply_along_channel(rgb, _rgb_to_sda_kernel, out_dtype=dtype, bg=bg, dtype=dtype)
 
 
 def sda_to_rgb(
     sda: xr.DataArray,
-    background_intensity: np.ndarray,
+    white_point: np.ndarray,
+    *,
+    out_dtype: np.dtype | type = np.uint8,
 ) -> xr.DataArray:
-    """Convert SDA back to RGB intensities in ``[0, 255]``.
+    """Convert SDA back to RGB, clipped to ``out_dtype``'s valid range.
 
-    Inverse of :func:`rgb_to_sda`. Pass the same ``background_intensity``
-    used at encode time. The result is clipped to ``[0, 255]`` but kept in
-    float dtype; uint8 conversion is the caller's choice.
+    Inverse of :func:`rgb_to_sda`. Pass the same ``white_point`` used at encode
+    time. ``out_dtype`` is the eventual image dtype: the reconstruction is
+    clipped to that dtype's valid range (``dtype_max`` = 255 / 65535 / 1.0) but
+    kept in float; the final cast to ``out_dtype`` is the caller's choice.
     """
     _check_channel_dim(sda)
     dtype = _working_dtype(sda)
-    bg = np.asarray(background_intensity, dtype=dtype)
-    return _apply_along_channel(sda, _sda_to_rgb_kernel, out_dtype=dtype, bg=bg, dtype=dtype)
+    bg = np.asarray(white_point, dtype=dtype)
+    return _apply_along_channel(
+        sda, _sda_to_rgb_kernel, out_dtype=dtype, bg=bg, max_value=dtype_max(out_dtype), dtype=dtype
+    )
 
 
 def rgb_to_lab_ruderman(rgb: xr.DataArray) -> xr.DataArray:
@@ -161,12 +192,12 @@ def rgb_to_lab_ruderman(rgb: xr.DataArray) -> xr.DataArray:
     return _apply_along_channel(rgb, _rgb_to_lab_kernel, out_dtype=dtype, dtype=dtype)
 
 
-def lab_ruderman_to_rgb(lab: xr.DataArray) -> xr.DataArray:
+def lab_ruderman_to_rgb(lab: xr.DataArray, *, out_dtype: np.dtype | type = np.uint8) -> xr.DataArray:
     """Inverse of :func:`rgb_to_lab_ruderman`.
 
-    Returns RGB clipped to ``[0, 255]`` in float dtype; uint8 conversion is
-    the caller's choice.
+    Clips the reconstruction to ``out_dtype``'s valid range (the eventual image
+    dtype) but keeps it in float; the final cast is the caller's choice.
     """
     _check_channel_dim(lab)
     dtype = _working_dtype(lab)
-    return _apply_along_channel(lab, _lab_to_rgb_kernel, out_dtype=dtype, dtype=dtype)
+    return _apply_along_channel(lab, _lab_to_rgb_kernel, out_dtype=dtype, max_value=dtype_max(out_dtype), dtype=dtype)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Hashable, Iterable, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast, get_args, overload
 
 from squidpy._utils import _unique_order_preserving
 
@@ -90,10 +90,39 @@ def assert_isinstance(value: Any, expected_type: type | tuple[type, ...], *, nam
         raise TypeError(f"Expected `{name}` to be of type `{type_names}`, got `{type(value).__name__}`.")
 
 
-def assert_one_of(value: Any, options: Sequence[Any], *, name: str) -> None:
-    """Raise ValueError if *value* is not in *options*."""
-    if value not in options:
-        raise ValueError(f"Expected `{name}` to be one of `{list(options)}`, got `{value!r}`.")
+def options_of(literal: Any) -> tuple[Any, ...]:
+    """Return the members of a `Literal`, so an option list is never retyped beside its annotation.
+
+    Accepts a `type X = Literal[...]` alias too, whose lazy value `typing.get_args` alone would miss.
+    """
+    return get_args(getattr(literal, "__value__", literal))
+
+
+_RAISE = object()
+"""Sentinel: `normalize_choice` raises rather than returning a miss."""
+
+
+@overload
+def normalize_choice[T](value: Any, options: Iterable[T], *, name: str) -> T: ...
+@overload
+def normalize_choice[T, D](value: Any, options: Iterable[T], *, name: str, default: D) -> T | D: ...
+def normalize_choice[T, D](value: Any, options: Iterable[T], *, name: str, default: D | object = _RAISE) -> T | D:
+    """Return the option in *options* matching *value*, ignoring the case of strings.
+
+    Raise ValueError naming the valid options if nothing matches, or return *default*
+    if one was given. `None` is a legal option, so misses are signalled by *default*
+    alone, never by a `None` return.
+    """
+    options = list(options)
+    if isinstance(value, str):
+        for opt in options:
+            if isinstance(opt, str) and opt.casefold() == value.casefold():
+                return opt
+    elif value in options:
+        return value
+    if default is not _RAISE:
+        return cast("D", default)
+    raise ValueError(f"Expected `{name}` to be one of `{options}`, got `{value!r}`.")
 
 
 def assert_key_in(obj: Any, key: str, *, attr: str, obj_name: str, extra_msg: str = "") -> None:

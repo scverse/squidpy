@@ -24,6 +24,7 @@ import squidpy as sq
 from squidpy._constants._pkg_constants import Key
 from squidpy.im import ImageContainer
 from squidpy.im._coords import _NULL_COORDS, CropCoords, CropPadding
+from tests.conftest import SKIMAGE_PLUGIN_DEPRECATION
 
 
 class SimpleHTMLValidator(HTMLParser):  # modified from CellRank
@@ -157,6 +158,7 @@ class TestContainerIO:
 
     @pytest.mark.parametrize("ext", ["jpg", "png"])
     @pytest.mark.parametrize("shape", [(100, 200, 3), (100, 200, 1)])
+    @SKIMAGE_PLUGIN_DEPRECATION
     def test_load_ext(self, shape: tuple[int, ...], ext: str, tmpdir):
         fname = tmpdir / f"tmp.{ext}"
 
@@ -490,6 +492,7 @@ class TestContainerCropping:
 
     @pytest.mark.parametrize("return_obs", [False, True])
     @pytest.mark.parametrize("as_array", [False, True, "baz"])
+    @SKIMAGE_PLUGIN_DEPRECATION
     def test_spot_crops_as_array_return_obs(
         self, adata: AnnData, cont: ImageContainer, as_array: bool, return_obs: bool
     ):
@@ -518,6 +521,7 @@ class TestContainerCropping:
                 assert crop.shape == size
 
     @pytest.mark.parametrize("n_names", [None, 4])
+    @SKIMAGE_PLUGIN_DEPRECATION
     def test_spot_crops_obs_names(self, adata: AnnData, cont: ImageContainer, n_names: int | None):
         obs = adata.obs_names[:n_names] if isinstance(n_names, int) else adata.obs_names
         crops = list(cont.generate_spot_crops(adata, obs_names=obs))
@@ -528,6 +532,7 @@ class TestContainerCropping:
 
     @pytest.mark.parametrize("spot_scale", [1, 0.5, 2])
     @pytest.mark.parametrize("scale", [1, 0.5, 2])
+    @SKIMAGE_PLUGIN_DEPRECATION
     def test_spot_crops_spot_scale(self, adata: AnnData, cont: ImageContainer, scale: float, spot_scale: float):
         diameter = adata.uns["spatial"][Key.uns.library_id(adata, "spatial")]["scalefactors"]["spot_diameter_fullres"]
         radius = int(round(diameter // 2) * spot_scale)
@@ -536,6 +541,7 @@ class TestContainerCropping:
         for crop in cont.generate_spot_crops(adata, spot_scale=spot_scale, scale=scale):
             assert crop.shape == size
 
+    @SKIMAGE_PLUGIN_DEPRECATION
     def test_spot_crops_with_scaled(self, adata: AnnData, cont: ImageContainer):
         # test generating spot crops with differently scaled images
         # crop locations should be the same when scaling spot crops or scaling cont beforehand
@@ -558,6 +564,7 @@ class TestContainerCropping:
             assert c4.data.attrs["coords"].x0 == c3.data.attrs["coords"].x0
             assert c4.data.attrs["coords"].y0 == c3.data.attrs["coords"].y0
 
+    @SKIMAGE_PLUGIN_DEPRECATION
     def test_spot_crops_with_cropped(self, adata: AnnData, cont: ImageContainer):
         # crops should be the same when cropping from cropped cont or original cont
         # (as long as cropped cont contains all spots)
@@ -579,6 +586,7 @@ class TestContainerCropping:
             assert np.issubdtype(crop["image"].dtype, np.signedinteger)
             np.testing.assert_array_equal(crop["image"][:10, :10], -5)
 
+    @SKIMAGE_PLUGIN_DEPRECATION
     def test_spot_crops_mask_circle(self, adata: AnnData, cont: ImageContainer):
         for crop in cont.generate_spot_crops(adata, cval=np.nan, mask_circle=True, preserve_dtypes=False):
             assert crop.shape[0] == crop.shape[1]
@@ -588,6 +596,7 @@ class TestContainerCropping:
             np.testing.assert_array_equal(crop["image"].values[..., 0][~mask.values], np.nan)
 
     @pytest.mark.parametrize("diameter", [13, 17])
+    @SKIMAGE_PLUGIN_DEPRECATION
     def test_spot_crops_diameter(self, adata: AnnData, cont: ImageContainer, diameter: int):
         adata.uns[Key.uns.spatial] = {"bar": {"scalefactors": {"foo": diameter}}}
         for crop in cont.generate_spot_crops(adata, spot_diameter_key="foo"):

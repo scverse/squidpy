@@ -30,47 +30,31 @@ import math
 from typing import Literal
 
 import anndata as ad
-import dask
 import numpy as np
 import pandas as pd
 import spatialdata as sd
 import xarray as xr
-from dask.diagnostics import ProgressBar
 from numba import njit
 from skimage.measure import find_contours, regionprops
 from sklearn.neighbors import BallTree
 from spatialdata._logging import logger as logg
 from spatialdata.models import TableModel
 
-from squidpy._utils import _get_n_cores
+from squidpy._validators import assert_non_negative, assert_positive
 from squidpy.experimental.im._tiling import (
+    _run_tiled,
     build_tile_specs,
     compute_cell_info,
     compute_cell_info_multiscale,
     compute_cell_info_tiled,
     extract_labels_tile_lazy,
 )
+from squidpy.experimental.utils._labels import resolve_labels_array
 
 __all__ = ["calculate_tiling_qc"]
 
-# Minimum cell area in pixels - smaller cells produce noisy contours
-_MIN_CELL_AREA = 20
 
-# Default perpendicular distance tolerance for collinearity (pixels).
-# Points within this distance of the start→end line are considered
-# part of the same straight segment.  0.75 px works well for
-# sub-pixel contours from marching squares.
-_DEFAULT_DISTANCE_TOL = 0.75
-
-# Default maximum contour points to analyse.  Longer contours are
-# resampled to this length via equidistant arc-length interpolation
-# to bound the O(n²) two-pointer scan.  Exposed as the
-# ``max_contour_points`` argument of :func:`calculate_tiling_qc`.
-_DEFAULT_MAX_CONTOUR_POINTS = 500
-
-# Consistency factor for normal distributions: sd ~ 1.4826 x MAD.
-# Used to convert MAD-based thresholds to standard-deviation units so
-# `nmads_*` parameters behave like z-score multipliers.
+# Standard consistency factor sd ~ 1.4826 x MAD for normal distributions.
 _MAD_TO_SD = 1.4826
 
 _TILE_SCORE_COLUMNS = ["max_straight_edge_ratio", "cardinal_alignment_score", "cut_score"]
@@ -79,27 +63,7 @@ _SCORE_COLUMNS = _TILE_SCORE_COLUMNS + _POST_SCORE_COLUMNS
 _NAN_TILE_SCORES = dict.fromkeys(_TILE_SCORE_COLUMNS, np.nan)
 
 
-def _has_distributed_client() -> bool:
-    """Return True iff a ``dask.distributed.Client`` is active in this process.
-
-    Mirrors the public dask idiom: if a Client is in scope, ``dask.compute``
-    will pick it up automatically — we only need to know whether to fall
-    back to the local threaded scheduler.
-    """
-    try:
-        # ImportError guards against partial dask installs without the distributed extra;
-        # ValueError is what get_client() raises when no Client is currently active.
-        from dask.distributed import get_client
-
-        get_client()
-    except (ImportError, ValueError):
-        return False
-    return True
-
-
-# ---------------------------------------------------------------------------
 # Core geometry
-# ---------------------------------------------------------------------------
 
 
 @njit(cache=True, nogil=True)
@@ -187,8 +151,8 @@ def _resample_contour(contour: np.ndarray, max_points: int) -> np.ndarray:
 
 def _longest_collinear_segment(
     contour: np.ndarray,
-    distance_tol: float = _DEFAULT_DISTANCE_TOL,
-    max_contour_points: int = _DEFAULT_MAX_CONTOUR_POINTS,
+    distance_tol: float = 0.75,
+    max_contour_points: int = 500,
 ) -> tuple[float, float]:
     """Find the longest collinear run of contour points.
 
@@ -280,8 +244,8 @@ def _cardinal_alignment(angle: float) -> float:
 def _straight_edge_metrics(
     contour: np.ndarray,
     cell_area: float,
-    distance_tol: float = _DEFAULT_DISTANCE_TOL,
-    max_contour_points: int = _DEFAULT_MAX_CONTOUR_POINTS,
+    distance_tol: float = 0.75,
+    max_contour_points: int = 500,
 ) -> tuple[float, float, float]:
     """Compute straight-edge metrics for a single cell contour.
 
@@ -315,17 +279,15 @@ def _straight_edge_metrics(
     return float(straight_ratio), float(cardinal), float(cut_score)
 
 
-# ---------------------------------------------------------------------------
 # Per-tile scoring
-# ---------------------------------------------------------------------------
 
 
 def _score_tile(
     tile_labels: np.ndarray,
-    distance_tol: float = _DEFAULT_DISTANCE_TOL,
-    min_area: int = _MIN_CELL_AREA,
+    distance_tol: float = 0.75,
+    min_area: int = 20,
     downsample: int = 1,
-    max_contour_points: int = _DEFAULT_MAX_CONTOUR_POINTS,
+    max_contour_points: int = 500,
 ) -> pd.DataFrame:
     """Compute tiling QC metrics for all cells in a numpy label tile.
 
@@ -342,7 +304,7 @@ def _score_tile(
         Factor by which to downsample each cell's bounding-box crop
         before contour extraction.  ``1`` = full resolution, ``2`` =
         half, etc.  Straight edges are scale-invariant so moderate
-        downsampling (2–4x) is safe and much faster for large cells.
+        downsampling (2-4x) is safe and much faster for large cells.
 
     Returns
     -------
@@ -390,13 +352,12 @@ def _score_tile(
     return pd.DataFrame.from_dict(rows, orient="index")
 
 
-# ---------------------------------------------------------------------------
 # Centroid computation (shared logic with _feature.py)
-# ---------------------------------------------------------------------------
 
 
 def _compute_centroids_for_labels(
     sdata: sd.SpatialData,
+    *,
     labels_key: str,
     labels_da: xr.DataArray,
     scale: str | None,
@@ -417,9 +378,7 @@ def _compute_centroids_for_labels(
     return compute_cell_info_tiled(labels_da)
 
 
-# ---------------------------------------------------------------------------
 # Public API
-# ---------------------------------------------------------------------------
 
 
 _METHOD_KEY = "tiling_qc"
@@ -427,22 +386,23 @@ _METHOD_KEY = "tiling_qc"
 
 def calculate_tiling_qc(
     sdata: sd.SpatialData,
+    *,
     labels_key: str,
     scale: str | None = None,
     tile_size: int = 2048,
     overlap_margin: int | Literal["auto"] = "auto",
-    distance_tol: float = _DEFAULT_DISTANCE_TOL,
-    min_area: int = _MIN_CELL_AREA,
     downsample: int = 1,
     outlier_use_cut: bool = True,
     outlier_use_smoothed: bool = True,
     nmads_cut: float = 1.5,
     nmads_smoothed: float = 3,
     n_neighbors: int = 10,
-    max_contour_points: int = _DEFAULT_MAX_CONTOUR_POINTS,
     n_jobs: int = -1,
     table_key_added: str | None = None,
     inplace: bool = True,
+    distance_tol: float = 0.75,
+    min_area: int = 20,
+    max_contour_points: int = 500,
 ) -> ad.AnnData | None:
     """Score cells for tile-boundary segmentation artifacts.
 
@@ -469,12 +429,6 @@ def calculate_tiling_qc(
     overlap_margin
         Overlap around each tile.  ``"auto"`` computes the minimum from
         the largest cell's bounding box.
-    distance_tol
-        Maximum perpendicular distance (pixels) from the fitted line
-        for a contour point to be considered part of a straight
-        segment.  Default 0.75 px.
-    min_area
-        Cells smaller than this (pixels) are skipped (NaN scores).
     downsample
         Factor by which to downsample each cell's bounding-box crop
         before contour extraction.  Straightness is scale-invariant,
@@ -499,16 +453,10 @@ def calculate_tiling_qc(
         perfect grid each cell has 8 immediate neighbours; the default
         of 10 leaves a little wiggle room for biological irregularity
         without wasting compute on distant cells.
-    max_contour_points
-        Cap on contour resolution for the collinearity scan.  Cells
-        with longer contours are resampled to this length via
-        arc-length interpolation before the ``O(n^2)`` two-pointer
-        scan, bounding worst-case runtime on very large cells.  The
-        default of 500 keeps results stable for typical cells; raise
-        only if cells are unusually large or ragged.
     n_jobs
-        Number of threads for tile processing.  ``-1`` (default) uses
-        all available CPUs.  Ignored when an active
+        Number of threads for tile processing.  ``-1`` uses
+        all available CPUs; ``0`` and values below ``-1`` raise.
+        Ignored when an active
         ``dask.distributed.Client`` is in scope (the client's own
         worker pool is used instead).
     table_key_added
@@ -517,6 +465,15 @@ def calculate_tiling_qc(
     inplace
         If ``True``, store result in ``sdata.tables``.  Otherwise
         return the AnnData directly.
+    distance_tol
+        Maximum perpendicular distance (pixels) from the fitted line for a
+        contour point to count as straight.
+    min_area
+        Cells smaller than this (pixels at analysis resolution) are skipped
+        (NaN scores).
+    max_contour_points
+        Cap on contour resolution; longer contours are arc-length-resampled
+        before the O(n^2) collinearity scan.
 
     Returns
     -------
@@ -540,10 +497,10 @@ def calculate_tiling_qc(
 
     Notes
     -----
-    Tile processing is parallelised via :func:`dask.compute`.  When an
-    active ``dask.distributed.Client`` is in scope it is picked up
-    automatically and used for execution; otherwise a local threaded
-    scheduler with ``n_jobs`` workers is used.
+    Tile processing is parallelised via dask.  When an active
+    ``dask.distributed.Client`` is in scope it is picked up automatically
+    and used for execution; otherwise a local threaded scheduler with
+    ``n_jobs`` workers is used (the per-tile work releases the GIL).
 
     If you invoke this function from inside a dask worker task (e.g.,
     via ``client.submit(calculate_tiling_qc, ...)``), wrap the call in
@@ -556,24 +513,22 @@ def calculate_tiling_qc(
         raise ValueError(f"Labels key '{labels_key}' not found, valid keys: {list(sdata.labels.keys())}")
     if not outlier_use_cut and not outlier_use_smoothed:
         raise ValueError("At least one outlier gate must be enabled (outlier_use_cut or outlier_use_smoothed).")
-    if outlier_use_cut and nmads_cut <= 0:
-        raise ValueError(f"nmads_cut must be positive, got {nmads_cut}.")
-    if outlier_use_smoothed and nmads_smoothed <= 0:
-        raise ValueError(f"nmads_smoothed must be positive, got {nmads_smoothed}.")
+    if outlier_use_cut:
+        assert_positive(nmads_cut, name="nmads_cut")
+    if outlier_use_smoothed:
+        assert_positive(nmads_smoothed, name="nmads_smoothed")
     if n_neighbors < 1:
         raise ValueError(f"n_neighbors must be >= 1, got {n_neighbors}.")
+    distance_tol = float(distance_tol)
+    assert_non_negative(distance_tol, name="distance_tol")
+    min_area, max_contour_points = int(min_area), int(max_contour_points)
+    assert_positive(min_area, name="min_area")
+    if max_contour_points < 3:  # the floor is 3, not 1, so no helper fits
+        raise ValueError(f"`max_contour_points` must be >= 3 (collinearity needs 3 points), got {max_contour_points}.")
 
-    labels_node = sdata.labels[labels_key]
-    if isinstance(labels_node, xr.DataTree):
-        if scale is None:
-            raise ValueError("When using multi-scale labels, please specify the scale.")
-        labels_da = labels_node[scale].ds["image"]
-    else:
-        if scale is not None:
-            logg.warning(f"`scale={scale!r}` ignored: labels at {labels_key!r} are single-scale.")
-        labels_da = labels_node
+    labels_da = resolve_labels_array(sdata, labels_key=labels_key, scale=scale)
 
-    cell_info = _compute_centroids_for_labels(sdata, labels_key, labels_da, scale)
+    cell_info = _compute_centroids_for_labels(sdata, labels_key=labels_key, labels_da=labels_da, scale=scale)
     if not cell_info:
         raise ValueError("No cells found in labels (all zeros).")
 
@@ -585,7 +540,6 @@ def calculate_tiling_qc(
         f"Tiling QC: {len(specs)} tiles ({tile_size}x{tile_size}, margin={overlap_margin}, downsample={downsample}x)."
     )
 
-    @dask.delayed
     def _process_one(spec):
         tile_lbl = extract_labels_tile_lazy(labels_da, spec)
         return _score_tile(
@@ -596,19 +550,8 @@ def calculate_tiling_qc(
             max_contour_points=max_contour_points,
         )
 
-    tasks = [_process_one(spec) for spec in specs]
-
-    if _has_distributed_client():
-        if n_jobs != -1:
-            logg.warning(
-                "`n_jobs` is ignored when an active dask.distributed Client is in scope. "
-                "Parallelism is controlled by the client."
-            )
-        results = dask.compute(*tasks)
-    else:
-        num_workers = _get_n_cores(n_jobs)
-        with ProgressBar():
-            results = dask.compute(*tasks, scheduler="threads", num_workers=num_workers)
+    # `_score_tile` is numba `nogil`, so threads scale (no process/pickle cost).
+    results = _run_tiled(specs, _process_one, n_jobs=n_jobs, kind="threads", desc="tiles")
 
     tile_dfs = [df for df in results if not df.empty]
 
@@ -645,7 +588,7 @@ def calculate_tiling_qc(
         combined["smoothed_cut_score"] = smoothed
 
         # Build is_outlier from enabled gates (AND when both active).
-        # A gate whose MAD is degenerate has no signal — treat it as a
+        # A gate whose MAD is degenerate has no signal - treat it as a
         # no-op so it cannot poison the other gate's result.  If no gate
         # produced a meaningful filter, fall back to "no outliers".
         is_outlier = np.ones(n_cells, dtype=bool)
@@ -676,7 +619,8 @@ def calculate_tiling_qc(
     adata = ad.AnnData(
         X=np.empty((n_cells, 0), dtype=np.float32),
     )
-    adata.obs_names = [f"cell_{i}" for i in combined.index]
+    # obs_names are the cell's label-image ID, matching calculate_image_features.
+    adata.obs_names = [str(i) for i in combined.index]
 
     adata.obs["region"] = pd.Categorical([labels_key] * n_cells)
     adata.obs["label_id"] = combined.index.values
@@ -699,19 +643,48 @@ def calculate_tiling_qc(
         "scale": scale,
         "tile_size": tile_size,
         "overlap_margin": overlap_margin,
-        "distance_tol": distance_tol,
-        "min_area": min_area,
         "downsample": downsample,
         "outlier_use_cut": outlier_use_cut,
         "outlier_use_smoothed": outlier_use_smoothed,
         "nmads_cut": nmads_cut,
         "nmads_smoothed": nmads_smoothed,
         "n_neighbors": n_neighbors,
+        "distance_tol": distance_tol,
+        "min_area": min_area,
         "max_contour_points": max_contour_points,
     }
 
     if inplace:
         table_key = table_key_added if table_key_added is not None else f"{labels_key}_qc"
+        _warn_if_dropping_stitch_columns(sdata, table_key=table_key, labels_key=labels_key)
         sdata.tables[table_key] = TableModel.parse(adata)
         return None
     return adata
+
+
+def _warn_if_dropping_stitch_columns(sdata: sd.SpatialData, *, table_key: str, labels_key: str) -> None:
+    """Warn if re-running QC would drop downstream stitch results.
+
+    ``calculate_tiling_qc`` replaces the QC table wholesale, so any columns
+    added by :func:`~squidpy.experimental.tl.assign_stitch_groups` to a previous
+    version of this table are about to disappear.  We emit an actionable warning
+    listing the previous stitch parameters (from ``.uns["tiling_stitch"]``) and a
+    copy-pasteable invocation to restore them.
+    """
+    if table_key not in sdata.tables:
+        return
+    stitch = sdata.tables[table_key].uns.get("tiling_stitch")
+    if stitch is None:
+        return
+    params = dict(stitch["params"])
+    # tables written before the stitch knobs were flattened keep them nested
+    params |= params.pop("stitch_params", None) or {}
+    parts = [f"labels_key={labels_key!r}"]
+    if table_key != f"{labels_key}_qc":
+        parts.append(f"qc_table_key={table_key!r}")
+    parts.extend(f"{k}={v!r}" for k, v in params.items())
+    rerun = f"sq.experimental.tl.assign_stitch_groups(sdata, {', '.join(parts)})"
+    logg.warning(
+        f"Re-running calculate_tiling_qc dropped the previous stitch columns from sdata.tables[{table_key!r}].  "
+        f"To restore them, run: {rerun}"
+    )

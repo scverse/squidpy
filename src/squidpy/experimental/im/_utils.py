@@ -9,8 +9,11 @@ import xarray as xr
 from shapely import box
 from spatialdata import SpatialData
 from spatialdata._logging import logger
-from spatialdata.models import ShapesModel
+from spatialdata.models import Labels2DModel, ShapesModel
 from spatialdata.transformations import get_transformation, set_transformation
+
+from squidpy._utils import _yx_from_shape
+from squidpy._validators import normalize_choice
 
 
 class TileGrid:
@@ -20,6 +23,7 @@ class TileGrid:
         self,
         H: int,
         W: int,
+        *,
         tile_size: Literal["auto"] | tuple[int, int] = "auto",
         target_tiles: int = 100,
         offset_y: int = 0,
@@ -102,6 +106,8 @@ def get_element_data(
     scale: str | Literal["auto"],
     element_type: str = "element",
     element_key: str = "",
+    *,
+    prefer: Literal["coarsest", "finest"] = "coarsest",
 ) -> xr.DataArray:
     """
     Extract data array from a spatialdata element (image or label) node.
@@ -112,11 +118,15 @@ def get_element_data(
     element_node
         The element node from sdata.images[key] or sdata.labels[key]
     scale
-        Scale level to use, or "auto" for images (picks coarsest).
+        Scale level to use, or "auto" to pick a level according to ``prefer``.
     element_type
         Type of element for error messages (e.g., "image", "label").
     element_key
         Key of the element for error messages.
+    prefer
+        Which level ``scale="auto"`` resolves to on a multiscale element:
+        ``"coarsest"`` (smallest, cheapest) or ``"finest"`` (full resolution).
+        Ignored for explicit scales and single-scale elements.
 
     Returns
     -------
@@ -133,7 +143,7 @@ def get_element_data(
                 num = "".join(ch for ch in k if ch.isdigit())
                 return int(num) if num else -1
 
-            chosen = max(available, key=_idx)
+            chosen = min(available, key=_idx) if prefer == "finest" else max(available, key=_idx)
         elif scale not in available:
             logger.warning(f"Scale {scale!r} not found. Available: {available}")
             # Try scale0 as fallback, otherwise use first available
@@ -181,6 +191,7 @@ def flatten_channels(
     xr.DataArray
         Greyscale image with shape (y, x)
     """
+    channel_format = normalize_choice(channel_format, ("infer", "rgb", "rgba", "multichannel"), name="channel_format")
     n_channels = img.sizes["c"]
 
     # 1 channel: always return greyscale
@@ -207,22 +218,16 @@ def flatten_channels(
         weights = xr.DataArray([0.299, 0.587, 0.114, 0.0], dims=["c"], coords={"c": img.coords["c"]})
         return (img * weights).sum(dim="c")
 
-    elif channel_format == "infer":
-        if n_channels == 3:
-            # 3 channels + infer -> RGB luminance formula
-            weights = xr.DataArray([0.299, 0.587, 0.114], dims=["c"], coords={"c": img.coords["c"]})
-            return (img * weights).sum(dim="c")
-        else:
-            # 2 channels or 4+ channels + infer -> multichannel
-            return img.mean(dim="c")
-
+    elif n_channels == 3:
+        # 3 channels + infer -> RGB luminance formula
+        weights = xr.DataArray([0.299, 0.587, 0.114], dims=["c"], coords={"c": img.coords["c"]})
+        return (img * weights).sum(dim="c")
     else:
-        raise ValueError(
-            f"Invalid channel_format: {channel_format}. Must be one of 'infer', 'rgb', 'rgba', 'multichannel'."
-        )
+        # 2 channels or 4+ channels + infer -> multichannel
+        return img.mean(dim="c")
 
 
-def get_mask_dask(sdata: SpatialData, mask_key: str, scale: str) -> da.Array:
+def get_mask_dask(sdata: SpatialData, *, mask_key: str, scale: str) -> da.Array:
     """Extract mask as a lazy dask array from ``sdata.labels``."""
     if mask_key not in sdata.labels:
         raise KeyError(f"Mask key '{mask_key}' not found in sdata.labels")
@@ -240,28 +245,51 @@ def get_mask_dask(sdata: SpatialData, mask_key: str, scale: str) -> da.Array:
     return arr
 
 
-def get_mask_materialized(sdata: SpatialData, mask_key: str, scale: str) -> np.ndarray:
+def get_mask_materialized(sdata: SpatialData, *, mask_key: str, scale: str) -> np.ndarray:
     """Extract a 2D mask array from ``sdata.labels`` at the requested scale (materialized)."""
-    arr = get_mask_dask(sdata, mask_key, scale)
+    arr = get_mask_dask(sdata, mask_key=mask_key, scale=scale)
     return np.asarray(arr.compute())
+
+
+def _choose_label_scale_for_image(label_node: Labels2DModel, target_hw: tuple[int, int]) -> str:
+    """Pick the label scale closest to the target image height/width."""
+    if not hasattr(label_node, "keys"):
+        return "scale0"  # single-scale labels default to their only scale
+    target_h, target_w = target_hw
+    best = None
+    best_diff = float("inf")
+    for k in label_node.keys():
+        y, x = _yx_from_shape(label_node[k].image.shape)
+        diff = abs(y - target_h) + abs(x - target_w)
+        if diff == 0:
+            return k
+        if diff < best_diff:
+            best_diff = diff
+            best = k
+    return best or "scale0"
 
 
 def resolve_tissue_mask(
     sdata: SpatialData,
+    *,
     image_key: str,
     scale: str,
     tissue_mask_key: str | None = None,
+    auto_create: bool = True,
 ) -> str:
     """Return the key of a tissue mask in ``sdata.labels``, creating one if needed.
 
     If *tissue_mask_key* is given and exists, it is returned as-is.
-    Otherwise falls back to ``f"{image_key}_tissue"``, running ``detect_tissue``
-    to create it when missing.
+    Otherwise falls back to ``f"{image_key}_tissue"``. When that key is missing,
+    the behaviour depends on *auto_create*: if ``True`` ``detect_tissue``
+    is run to create it; if ``False`` a :class:`KeyError` is raised asking the
+    caller to run ``detect_tissue`` first.
 
     Raises
     ------
     KeyError
-        If *tissue_mask_key* is given but not found in ``sdata.labels``.
+        If *tissue_mask_key* is given but not found in ``sdata.labels``, or if
+        *auto_create* is ``False`` and no tissue mask exists.
     Exception
         Any exception raised by ``detect_tissue`` if auto-creation fails.
         Callers needing graceful fallback should wrap this call in try/except.
@@ -273,6 +301,12 @@ def resolve_tissue_mask(
 
     mask_key = f"{image_key}_tissue"
     if mask_key not in sdata.labels:
+        if not auto_create:
+            raise KeyError(
+                f"No tissue mask found in sdata.labels (looked for {mask_key!r}). Run "
+                f"`squidpy.experimental.im.detect_tissue(sdata, {image_key!r})` first, "
+                "or pass an explicit `tissue_mask_key`."
+            )
         from squidpy.experimental.im._detect_tissue import detect_tissue
 
         detect_tissue(sdata=sdata, image_key=image_key, scale=scale, inplace=True, new_labels_key=mask_key)
@@ -282,9 +316,9 @@ def resolve_tissue_mask(
 
 def save_tile_grid_to_shapes(
     sdata: SpatialData,
+    *,
     tg: TileGrid,
     shapes_key: str,
-    *,
     copy_transforms_from_key: str | None = None,
 ) -> None:
     """Save a TileGrid to ``sdata.shapes`` as a GeoDataFrame.

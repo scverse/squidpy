@@ -1,0 +1,116 @@
+from __future__ import annotations
+
+import dask.array as da
+import numpy as np
+import pytest
+import xarray as xr
+
+from squidpy._params import resolve_params
+from squidpy.experimental.im._stain._conversion import rgb_to_lab_ruderman
+from squidpy.experimental.im._stain._reference import StainFit
+from squidpy.experimental.im._stain._reinhard import (
+    _SIGMA_FLOOR,
+    _stats_from_moments,
+    _tissue_lab_moments,
+    apply_reinhard,
+    fit_reinhard,
+)
+from squidpy.experimental.im._stain._validation import StainFittingError
+from squidpy.types import ReinhardParams
+
+
+def _da(values: np.ndarray, *, chunked: bool) -> xr.DataArray:
+    data = da.from_array(values, chunks=(3, 8, 8)) if chunked else values
+    return xr.DataArray(data, dims=("c", "y", "x"))
+
+
+@pytest.fixture
+def rgb_a() -> np.ndarray:
+    rng = np.random.default_rng(0)
+    return rng.uniform(60.0, 190.0, size=(3, 32, 32))
+
+
+@pytest.fixture
+def rgb_b() -> np.ndarray:
+    rng = np.random.default_rng(1)
+    return rng.uniform(60.0, 190.0, size=(3, 32, 32))
+
+
+class TestTissueLabMoments:
+    @staticmethod
+    def _stats(rgb: xr.DataArray, mask: np.ndarray | None) -> tuple[np.ndarray, np.ndarray]:
+        params = resolve_params({"mask_background": False}, ReinhardParams)
+        return _stats_from_moments(*_tissue_lab_moments(rgb, params, mask, image_key=None))
+
+    @pytest.mark.parametrize("chunked", [False, True])
+    def test_matches_numpy(self, chunked: bool) -> None:
+        rng = np.random.default_rng(7)
+        values = rng.uniform(0.0, 10.0, size=(3, 16, 16))
+        mask = rng.random((16, 16)) > 0.3
+
+        mu, sigma = self._stats(_da(values, chunked=chunked), mask)
+
+        sel = np.asarray(rgb_to_lab_ruderman(_da(values, chunked=False)).values)[:, mask]
+        np.testing.assert_allclose(mu, sel.mean(axis=1), atol=1e-6)
+        np.testing.assert_allclose(sigma, sel.std(axis=1), atol=1e-6)
+
+    def test_numpy_dask_identical(self) -> None:
+        rng = np.random.default_rng(8)
+        values = rng.uniform(0.0, 10.0, size=(3, 16, 16))
+        mu_n, sigma_n = self._stats(_da(values, chunked=False), None)
+        mu_d, sigma_d = self._stats(_da(values, chunked=True), None)
+        np.testing.assert_allclose(mu_n, mu_d, atol=1e-6)
+        np.testing.assert_allclose(sigma_n, sigma_d, atol=1e-6)
+
+    def test_empty_mask_raises(self) -> None:
+        with pytest.raises(StainFittingError, match="zero tissue pixels"):
+            self._stats(_da(np.ones((3, 8, 8)), chunked=False), np.zeros((8, 8), dtype=bool))
+
+
+class TestFitReinhard:
+    def test_returns_valid_reference(self, rgb_a: np.ndarray) -> None:
+        ref = fit_reinhard(_da(rgb_a, chunked=False), resolve_params(None, ReinhardParams))
+        assert ref.method == "reinhard"
+        assert ref.mu.shape == (3,)
+        assert ref.sigma.shape == (3,)
+        assert np.all(np.isfinite(ref.mu))
+        assert np.all(ref.sigma > 0)
+
+
+class TestApplyReinhard:
+    def test_idempotent_when_source_is_reference(self, rgb_a: np.ndarray) -> None:
+        params = resolve_params(None, ReinhardParams)
+        src = _da(rgb_a, chunked=False)
+        ref = fit_reinhard(src, params)
+        out = apply_reinhard(src, ref, params)
+        np.testing.assert_allclose(out.values, rgb_a, atol=1e-4)
+
+    def test_transfer_matches_reference_stats(self, rgb_a: np.ndarray, rgb_b: np.ndarray) -> None:
+        params = resolve_params({"mask_background": False}, ReinhardParams)
+        ref = fit_reinhard(_da(rgb_a, chunked=False), params)
+        normalized = apply_reinhard(_da(rgb_b, chunked=False), ref, params)
+        refit = fit_reinhard(normalized, params)
+        np.testing.assert_allclose(refit.mu, ref.mu, atol=1e-4)
+        np.testing.assert_allclose(refit.sigma, ref.sigma, atol=1e-4)
+
+    def test_lazy_in_lazy_out(self, rgb_a: np.ndarray, rgb_b: np.ndarray) -> None:
+        params = resolve_params(None, ReinhardParams)
+        ref = fit_reinhard(_da(rgb_a, chunked=False), params)
+        out = apply_reinhard(_da(rgb_b, chunked=True), ref, params)
+        assert isinstance(out.data, da.Array)
+
+    def test_degenerate_channel_no_nan(self, rgb_a: np.ndarray) -> None:
+        params = resolve_params({"mask_background": False}, ReinhardParams)
+        ref = fit_reinhard(_da(rgb_a, chunked=False), params)
+        flat = rgb_a.copy()
+        flat[0] = 128.0  # constant channel -> sigma_src == 0
+        out = apply_reinhard(_da(flat, chunked=False), ref, params)
+        assert np.all(np.isfinite(out.values))
+
+    def test_sigma_floor_is_small(self) -> None:
+        assert 0 < _SIGMA_FLOOR < 1e-3
+
+
+def test_reference_is_stain_fit(rgb_a: np.ndarray) -> None:
+    ref = fit_reinhard(_da(rgb_a, chunked=False), resolve_params(None, ReinhardParams))
+    assert isinstance(ref, StainFit)

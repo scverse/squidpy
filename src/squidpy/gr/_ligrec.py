@@ -3,25 +3,35 @@
 from __future__ import annotations
 
 from abc import ABC
-from collections import namedtuple
 from collections.abc import Iterable, Mapping, Sequence
-from functools import partial
 from itertools import product
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 import numpy as np
 import pandas as pd
 from anndata import AnnData
+from numba import njit, prange
+from numba.typed import List
+from numba_progress import ProgressBar
+from numpy.typing import NDArray
 from scanpy import logging as logg
 from scipy.sparse import csc_matrix
 from spatialdata import SpatialData
 
-from squidpy._constants._constants import ComplexPolicy, CorrAxis
+from squidpy._compat import old_positionals
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
-from squidpy._validators import assert_positive, check_tuple_needles
+from squidpy._utils import (
+    NDArrayA,
+    RNGLike,
+    SeedLike,
+    deprecated_params,
+    deprecated_randomness_param,
+    get_n_numba_threads,
+    numba_threads,
+)
+from squidpy._validators import assert_positive, check_tuple_needles, normalize_choice
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _genesymbols,
@@ -31,118 +41,29 @@ from squidpy.gr._utils import (
 
 __all__ = ["ligrec", "PermutationTest"]
 
-StrSeq: TypeAlias = Sequence[str]
-SeqTuple: TypeAlias = Sequence[tuple[str, str]]
-Interaction_t: TypeAlias = pd.DataFrame | Mapping[str, StrSeq] | StrSeq | tuple[StrSeq, StrSeq] | SeqTuple
+type StrSeq = Sequence[str]
+type SeqTuple = Sequence[tuple[str, str]]
+type Interaction_t = pd.DataFrame | Mapping[str, StrSeq] | StrSeq | tuple[StrSeq, StrSeq] | SeqTuple
 
-Cluster_t: TypeAlias = StrSeq | tuple[StrSeq, StrSeq] | SeqTuple
+type Cluster_t = StrSeq | tuple[StrSeq, StrSeq] | SeqTuple
 
 SOURCE = "source"
 TARGET = "target"
 
-TempResult = namedtuple("TempResult", ["means", "pvalues"])
 
-_template = """
-from __future__ import annotations
+class TempResult(NamedTuple):
+    """Result of the permutation analysis, both of shape ``(n_interactions, n_interaction_clusters)``."""
 
-from numba import njit, prange
-import numpy as np
-
-@njit(parallel={parallel}, cache=False, fastmath=False)
-def _test_{n_cls}_{ret_means}_{parallel}(
-    interactions: NDArrayA[np.uint32],
-    interaction_clusters: NDArrayA[np.uint32],
-    data: NDArrayA[np.float64],
-    clustering: NDArrayA[np.uint32],
-    mean: NDArrayA[np.float64],
-    mask: NDArrayA[np.bool_],
-    res: NDArrayA[np.float64],
-    {args}
-) -> None:
-
-    {init}
-    {loop}
-    {finalize}
-
-    for i in prange(len(interactions)):
-        rec, lig = interactions[i]
-        for j in prange(len(interaction_clusters)):
-            c1, c2 = interaction_clusters[j]
-            m1, m2 = mean[rec, c1], mean[lig, c2]
-
-            if np.isnan(res[i, j]):
-                continue
-
-            if m1 > 0 and m2 > 0:
-                {set_means}
-                if mask[rec, c1] and mask[lig, c2]:
-                    # both rec, lig are sufficiently expressed in c1, c2
-                    res[i, j] += (groups[c1, rec] + groups[c2, lig]) > (m1 + m2)
-                else:
-                    res[i, j] = np.nan
-            else:
-                # res_means is initialized with 0s
-                res[i, j] = np.nan
-"""
-
-
-def _create_template(n_cls: int, return_means: bool = False, parallel: bool = True) -> str:
-    if n_cls <= 0:
-        raise ValueError(f"Expected number of clusters to be positive, found `{n_cls}`.")
-
-    rng = range(n_cls)
-    init = "".join(
-        f"""
-    g{i} = np.zeros((data.shape[1],), dtype=np.float64); s{i} = 0"""
-        for i in rng
-    )
-    init += """
-    error = False
-    """
-
-    loop_body = """
-        if cl == 0:
-            g0 += data[row]
-            s0 += 1"""
-    loop_body = loop_body + "".join(
-        f"""
-        elif cl == {i}:
-            g{i} += data[row]
-            s{i} += 1"""
-        for i in range(1, n_cls)
-    )
-    loop = f"""
-    for row in prange(data.shape[0]):
-        cl = clustering[row]
-        {loop_body}
-        else:
-            error = True
-    """
-    finalize = ", ".join(f"g{i} / s{i}" for i in rng)
-    finalize = f"groups = np.stack(({finalize}))"
-
-    if return_means:
-        args = "res_means: NDArrayA,  # [np.float64]"
-        set_means = "res_means[i, j] = (m1 + m2) / 2.0"
-    else:
-        args = set_means = ""
-
-    return _template.format(
-        n_cls=n_cls,
-        parallel=bool(parallel),
-        ret_means=int(return_means),
-        args=args,
-        init=init,
-        loop=loop,
-        finalize=finalize,
-        set_means=set_means,
-    )
+    means: NDArray[np.float64]
+    """Mean of the two interacting means, `0` where either of them is `0`."""
+    pvalues: NDArray[np.float64]
+    """Fraction of permutations scoring above the observed statistic, `NaN` where not tested."""
 
 
 def _fdr_correct(
     pvals: pd.DataFrame,
     corr_method: str,
-    corr_axis: Literal["interactions", "clusters"] | CorrAxis,
+    corr_axis: Literal["interactions", "clusters"],
     alpha: float = 0.05,
 ) -> pd.DataFrame:
     """Correct p-values for FDR along specific axis in ``pvals``."""
@@ -161,12 +82,12 @@ def _fdr_correct(
 
         return SparseArray(qvals, dtype=qvals.dtype, fill_value=np.nan)
 
-    corr_axis = CorrAxis(corr_axis)
+    corr_axis = normalize_choice(corr_axis, ("interactions", "clusters"), name="corr_axis")
 
-    if corr_axis == CorrAxis.CLUSTERS:
+    if corr_axis == "clusters":
         # clusters are in columns
         pvals = pvals.apply(fdr)
-    elif corr_axis == CorrAxis.INTERACTIONS:
+    elif corr_axis == "interactions":
         pvals = pvals.T.apply(fdr).T
     else:
         raise NotImplementedError(f"FDR correction for `{corr_axis}` is not implemented.")
@@ -218,10 +139,8 @@ class PermutationTestABC(ABC):
 
     @d.get_full_description(base="PT_prepare")
     @d.get_sections(base="PT_prepare", sections=["Parameters", "Returns"])
-    @inject_docs(src=SOURCE, tgt=TARGET, cp=ComplexPolicy)
-    def prepare(
-        self, interactions: Interaction_t, complex_policy: Literal["min", "all"] | ComplexPolicy = ComplexPolicy.MIN.v
-    ) -> PermutationTestABC:
+    @inject_docs(src=SOURCE, tgt=TARGET)
+    def prepare(self, interactions: Interaction_t, complex_policy: Literal["min", "all"] = "min") -> PermutationTestABC:
         """
         Prepare self for running the permutation test.
 
@@ -240,9 +159,9 @@ class PermutationTestABC(ABC):
         complex_policy
             Policy on how to handle complexes. Valid options are:
 
-                - `{cp.MIN.s!r}` - select gene with the minimum average expression. This is the same as in
+                - `'min'` - select gene with the minimum average expression. This is the same as in
                   :cite:`cellphonedb`.
-                - `{cp.ALL.s!r}` - select all possible combinations between `{src!r}` and `{tgt!r}` complexes.
+                - `'all'` - select all possible combinations between `{src!r}` and `{tgt!r}` complexes.
 
         Returns
         -------
@@ -250,7 +169,7 @@ class PermutationTestABC(ABC):
 
             - :attr:`interactions` - filtered interactions whose `{src!r}` and `{tgt!r}` are both in the data.
         """
-        complex_policy = ComplexPolicy(complex_policy)
+        complex_policy = normalize_choice(complex_policy, ("min", "all"), name="complex_policy")
 
         if isinstance(interactions, Mapping):
             interactions = pd.DataFrame(interactions)
@@ -313,21 +232,24 @@ class PermutationTestABC(ABC):
     @d.get_full_description(base="PT_test")
     @d.get_sections(base="PT_test", sections=["Parameters"])
     @d.dedent
-    @inject_docs(src=SOURCE, tgt=TARGET, fa=CorrAxis)
+    @inject_docs(src=SOURCE, tgt=TARGET)
+    @deprecated_params({"numba_parallel": "1.10.0", "backend": "1.10.0"})
+    @deprecated_randomness_param
     def test(
         self,
         cluster_key: str,
+        *,
         clusters: Cluster_t | None = None,
         n_perms: int = 1000,
         threshold: float = 0.01,
-        seed: int | None = None,
+        rng: SeedLike | RNGLike | None = None,
         corr_method: str | None = None,
-        corr_axis: Literal["interactions", "clusters"] | CorrAxis = CorrAxis.INTERACTIONS.v,
+        corr_axis: Literal["interactions", "clusters"] = "interactions",
         alpha: float = 0.05,
         copy: bool = False,
         key_added: str | None = None,
-        numba_parallel: bool | None = None,
-        **kwargs: Any,
+        n_jobs: int | None = None,
+        show_progress_bar: bool = True,
     ) -> Mapping[str, pd.DataFrame] | None:
         """
         Perform the permutation test as described in :cite:`cellphonedb`.
@@ -342,21 +264,24 @@ class PermutationTestABC(ABC):
         threshold
             Do not perform permutation test if any of the interacting components is being expressed
             in less than ``threshold`` percent of cells within a given cluster.
-        %(seed)s
+        %(rng)s
         %(corr_method)s
         corr_axis
             Axis over which to perform the FDR correction. Only used when ``corr_method != None``. Valid options are:
 
-                - `{fa.INTERACTIONS.s!r}` - correct interactions by performing FDR correction across the clusters.
-                - `{fa.CLUSTERS.s!r}` - correct clusters by performing FDR correction across the interactions.
+                - `'interactions'` - correct interactions by performing FDR correction across the clusters.
+                - `'clusters'` - correct clusters by performing FDR correction across the interactions.
         alpha
             Significance level for FDR correction. Only used when ``corr_method != None``.
         %(copy)s
         key_added
             Key in :attr:`anndata.AnnData.uns` where the result is stored if ``copy = False``.
             If `None`, ``'{{cluster_key}}_ligrec'`` will be used.
-        %(numba_parallel)s
-        %(parallelize)s
+        n_jobs
+            Number of numba threads used for the permutations. Peak memory grows linearly with it.
+            If `None`, numba's default thread count (usually all cores) is used; negative values
+            count down from the maximum.
+        %(show_progress_bar)s
 
         Returns
         -------
@@ -366,9 +291,7 @@ class PermutationTestABC(ABC):
         _assert_categorical_obs(self._adata, key=cluster_key)
 
         if corr_method is not None:
-            corr_axis = CorrAxis(corr_axis)
-        if TYPE_CHECKING:
-            assert isinstance(corr_axis, CorrAxis)
+            corr_axis = normalize_choice(corr_axis, ("interactions", "clusters"), name="corr_axis")
 
         if len(self._adata.obs[cluster_key].cat.categories) <= 1:
             raise ValueError(
@@ -409,43 +332,39 @@ class PermutationTestABC(ABC):
         # much faster than applymap (tested on 1M interactions)
         interactions_ = np.vectorize(lambda g: gene_mapper[g])(interactions.values)
 
-        n_jobs = _get_n_cores(kwargs.pop("n_jobs", None))
+        n_threads = get_n_numba_threads(n_jobs)
         start = logg.info(
             f"Running `{n_perms}` permutations on `{len(interactions)}` interactions "
-            f"and `{len(clusters)}` cluster combinations using `{n_jobs}` core(s)"
+            f"and `{len(clusters)}` cluster combinations using `{n_threads}` thread(s)"
         )
-        res = _analysis(
+        analysis = _analysis(
             data,
             interactions_,
             clusters_,
             threshold=threshold,
             n_perms=n_perms,
-            seed=seed,
-            n_jobs=n_jobs,
-            numba_parallel=numba_parallel,
-            **kwargs,
+            rng=np.random.default_rng(rng),
+            n_jobs=n_threads,
+            show_progress_bar=show_progress_bar,
         )
         index = pd.MultiIndex.from_frame(interactions, names=[SOURCE, TARGET])
         columns = pd.MultiIndex.from_tuples(clusters, names=["cluster_1", "cluster_2"])
-        res = {
+        res: dict[str, pd.DataFrame] = {
             "means": pd.DataFrame(
-                {c: pd.arrays.SparseArray(res.means[:, i], fill_value=0) for i, c in enumerate(columns)},
+                {c: pd.arrays.SparseArray(analysis.means[:, i], fill_value=0) for i, c in enumerate(columns)},
                 index=index,
             ),
             "pvalues": pd.DataFrame(
-                {c: pd.arrays.SparseArray(res.pvalues[:, i], fill_value=np.nan) for i, c in enumerate(columns)},
+                {c: pd.arrays.SparseArray(analysis.pvalues[:, i], fill_value=np.nan) for i, c in enumerate(columns)},
                 index=index,
             ),
             "metadata": self.interactions[self.interactions.columns.difference([SOURCE, TARGET])],
         }
         res["metadata"].index = res["means"].index.copy()
 
-        if TYPE_CHECKING:
-            assert isinstance(res, dict)
-
         if corr_method is not None:
             logg.info(
-                f"Performing FDR correction across the `{corr_axis.v}` using method `{corr_method}` at level `{alpha}`"
+                f"Performing FDR correction across the `{corr_axis}` using method `{corr_method}` at level `{alpha}`"
             )
             res["pvalues"] = _fdr_correct(res["pvalues"], corr_method, corr_axis, alpha=alpha)
 
@@ -454,6 +373,7 @@ class PermutationTestABC(ABC):
             return res
 
         _save_data(self._adata, attr="uns", key=Key.uns.ligrec(cluster_key, key_added), data=res, time=start)
+        return None
 
     def _trim_data(self) -> None:
         """Subset genes :attr:`_data` to those present in interactions."""
@@ -477,8 +397,8 @@ class PermutationTestABC(ABC):
         if self.interactions.empty:
             raise ValueError("After filtering by genes, no interactions remain.")
 
-    @inject_docs(src=SOURCE, tgt=TARGET, cp=ComplexPolicy)
-    def _filter_interactions_complexes(self, complex_policy: ComplexPolicy) -> None:
+    @inject_docs(src=SOURCE, tgt=TARGET)
+    def _filter_interactions_complexes(self, complex_policy: Literal["min", "all"]) -> None:
         """
         Filter the :attr:`interactions` by extracting genes from complexes.
 
@@ -487,9 +407,9 @@ class PermutationTestABC(ABC):
         complex_policy
             Policy on how to handle complexes. Valid options are:
 
-                - `{cp.MIN.s!r}` - select gene with the minimum average expression. This is the same as in
+                - `'min'` - select gene with the minimum average expression. This is the same as in
                   :cite:`cellphonedb`.
-                - `{cp.ALL.s!r}` - select all possible combinations between `{src!r}` and `{tgt!r}` complexes.
+                - `'all'` - select all possible combinations between `{src!r}` and `{tgt!r}` complexes.
 
         Returns
         -------
@@ -497,7 +417,7 @@ class PermutationTestABC(ABC):
 
             - :attr:`interactions` - filtered interactions whose `{src!r}` and `{tgt!r}` are both in the data.
 
-        Note that for ``complex_policy={cp.ALL.s!r}``, all pairwise comparisons within a complex are created,
+        Note that for ``complex_policy='all'``, all pairwise comparisons within a complex are created,
         but no filtering happens at this stage - genes not present in the data are filtered at a later stage.
         """
 
@@ -526,11 +446,11 @@ class PermutationTestABC(ABC):
             assert isinstance(self._interactions, pd.DataFrame)
             assert isinstance(self.interactions, pd.DataFrame)
 
-        if complex_policy == ComplexPolicy.MIN:
+        if complex_policy == "min":
             logg.debug("DEBUG: Selecting genes from complexes based on minimum average expression")
             self.interactions[SOURCE] = self.interactions[SOURCE].apply(find_min_gene_in_complex)
             self.interactions[TARGET] = self.interactions[TARGET].apply(find_min_gene_in_complex)
-        elif complex_policy == ComplexPolicy.ALL:
+        elif complex_policy == "all":
             logg.debug("DEBUG: Creating all gene combinations within complexes")
             src = self.interactions.pop(SOURCE).apply(lambda s: str(s).split("_")).explode()
             src.name = SOURCE
@@ -572,7 +492,7 @@ class PermutationTest(PermutationTestABC):
     def prepare(
         self,
         interactions: Interaction_t | None = None,
-        complex_policy: Literal["min", "all"] = ComplexPolicy.MIN.v,
+        complex_policy: Literal["min", "all"] = "min",
         interactions_params: Mapping[str, Any] = MappingProxyType({}),
         transmitter_params: Mapping[str, Any] = MappingProxyType({"categories": "ligand"}),
         receiver_params: Mapping[str, Any] = MappingProxyType({"categories": "receptor"}),
@@ -630,21 +550,43 @@ class PermutationTest(PermutationTestABC):
 
 
 @d.dedent
+@old_positionals(
+    "cluster_key",
+    "interactions",
+    "complex_policy",
+    "threshold",
+    "corr_method",
+    "corr_axis",
+    "use_raw",
+    "copy",
+    "key_added",
+    "gene_symbols",
+)
+@deprecated_params({"numba_parallel": "1.10.0", "backend": "1.10.0"})
+@deprecated_randomness_param
 def ligrec(
     adata: AnnData | SpatialData,
+    *,
     cluster_key: str,
     interactions: Interaction_t | None = None,
-    complex_policy: Literal["min", "all"] = ComplexPolicy.MIN.v,
+    complex_policy: Literal["min", "all"] = "min",
     threshold: float = 0.01,
     corr_method: str | None = None,
-    corr_axis: Literal["interactions", "clusters"] = CorrAxis.CLUSTERS.v,
+    corr_axis: Literal["interactions", "clusters"] = "clusters",
     use_raw: bool = True,
     copy: bool = False,
     key_added: str | None = None,
     gene_symbols: str | None = None,
-    *,
+    n_perms: int = 1000,
+    rng: SeedLike | RNGLike | None = None,
+    clusters: Cluster_t | None = None,
+    alpha: float = 0.05,
+    n_jobs: int | None = None,
+    show_progress_bar: bool = True,
+    interactions_params: Mapping[str, Any] = MappingProxyType({}),
+    transmitter_params: Mapping[str, Any] = MappingProxyType({"categories": "ligand"}),
+    receiver_params: Mapping[str, Any] = MappingProxyType({"categories": "receptor"}),
     table_key: str | None = None,
-    **kwargs: Any,
 ) -> Mapping[str, pd.DataFrame] | None:
     """
     %(PT_test.full_desc)s
@@ -666,17 +608,88 @@ def ligrec(
     with _genesymbols(adata, key=gene_symbols, use_raw=use_raw, make_unique=False):
         return (  # type: ignore[no-any-return]
             PermutationTest(adata, use_raw=use_raw)
-            .prepare(interactions, complex_policy=complex_policy, **kwargs)
+            .prepare(
+                interactions,
+                complex_policy=complex_policy,
+                interactions_params=interactions_params,
+                transmitter_params=transmitter_params,
+                receiver_params=receiver_params,
+            )
             .test(
                 cluster_key=cluster_key,
+                clusters=clusters,
+                n_perms=n_perms,
                 threshold=threshold,
+                rng=rng,
                 corr_method=corr_method,
                 corr_axis=corr_axis,
+                alpha=alpha,
                 copy=copy,
                 key_added=key_added,
-                **kwargs,
+                n_jobs=n_jobs,
+                show_progress_bar=show_progress_bar,
             )
         )
+
+
+@njit(parallel=True, cache=True)
+def _score_permutations(  # noqa: PLR0917, numba requires positional arguments
+    data: NDArrayA,
+    clustering: NDArrayA,
+    rngs: list[np.random.Generator],
+    inv_counts: NDArrayA,
+    mean_obs: NDArrayA,
+    interactions: NDArrayA,
+    interaction_clusters: NDArrayA,
+    valid: NDArrayA,
+    progress: ProgressBar,
+) -> NDArrayA:
+    """Shuffle and score one permutation per RNG in ``rngs``; return accumulated p-value counts.
+
+    ``rngs`` must be a :class:`numba.typed.List`, so that it can be indexed inside ``prange``.
+    """
+    n_perms = len(rngs)
+    n_cells = data.shape[0]
+    n_genes = data.shape[1]
+    n_cls = mean_obs.shape[0]
+    n_inter = interactions.shape[0]
+    n_cpairs = interaction_clusters.shape[0]
+
+    counts = np.zeros((n_inter, n_cpairs), dtype=np.int64)
+    for p in prange(n_perms):
+        perm = clustering.copy()
+        # explicit int64 index: under prange the loop var is uint64 and indexing the typed list
+        # would otherwise trigger a (harmless) uint64->int64 NumbaTypeSafetyWarning
+        rngs[np.int64(p)].shuffle(perm)
+
+        groups = np.zeros((n_cls, n_genes), dtype=np.float64)
+        for cell in range(n_cells):
+            cl = perm[cell]
+            for g in range(n_genes):
+                groups[cl, g] += data[cell, g]
+        for k in range(n_cls):
+            inv_c = inv_counts[k]
+            for g in range(n_genes):
+                groups[k, g] *= inv_c
+
+        # this permutation's 0/1 indicators; the temporary is needed because numba only recognizes
+        # whole-array in-place updates as a reduction - `counts[i, j] += 1` here would race instead
+        local_counts = np.zeros((n_inter, n_cpairs), dtype=np.int64)
+        for i in range(n_inter):
+            rec = interactions[i, 0]
+            lig = interactions[i, 1]
+            for j in range(n_cpairs):
+                if valid[i, j]:
+                    a = interaction_clusters[j, 0]
+                    b = interaction_clusters[j, 1]
+                    shuf = groups[a, rec] + groups[b, lig]
+                    obs = mean_obs[a, rec] + mean_obs[b, lig]
+                    if shuf > obs:
+                        local_counts[i, j] = 1
+        counts += local_counts
+        progress.update(1)
+
+    return counts
 
 
 @d.dedent
@@ -684,17 +697,15 @@ def _analysis(
     data: pd.DataFrame,
     interactions: NDArrayA,
     interaction_clusters: NDArrayA,
+    *,
+    rng: np.random.Generator,
     threshold: float = 0.1,
     n_perms: int = 1000,
-    seed: int | None = None,
     n_jobs: int = 1,
-    numba_parallel: bool | None = None,
-    **kwargs: Any,
+    show_progress_bar: bool = True,
 ) -> TempResult:
     """
     Run the analysis as described in :cite:`cellphonedb`.
-
-    This function runs the mean, percent and shuffled analysis.
 
     Parameters
     ----------
@@ -707,13 +718,13 @@ def _analysis(
     threshold
         Percentage threshold for removing lowly expressed genes in clusters.
     %(n_perms)s
-    %(seed)s
+    %(rng)s
     n_jobs
-        Number of parallel jobs to launch.
-    numba_parallel
-        Whether to use :func:`numba.prange` or not. If `None`, it's determined automatically.
-    kwargs
-        Keyword arguments for :func:`squidpy._utils.parallelize`, such as ``n_jobs`` or ``backend``.
+        Number of numba threads to use. Each thread holds two `(n_interactions, n_interaction_clusters)`
+        :class:`numpy.int64` arrays (its private reduction copy plus the per-permutation indicators),
+        so peak memory grows linearly with it.
+    show_progress_bar
+        Whether to show the progress bar.
 
     Returns
     -------
@@ -722,145 +733,64 @@ def _analysis(
         - `'means'` - array of shape `(n_interactions, n_interaction_clusters)` containing the means.
         - `'pvalues'` - array of shape `(n_interactions, n_interaction_clusters)` containing the p-values.
     """
-
-    def extractor(res: Sequence[TempResult]) -> TempResult:
-        assert len(res) == n_jobs, f"Expected to find `{n_jobs}` results, found `{len(res)}`."
-
-        meanss: list[NDArrayA] = [r.means for r in res if r.means is not None]
-        assert len(meanss) == 1, f"Only `1` job should've calculated the means, but found `{len(meanss)}`."
-        means = meanss[0]
-        if TYPE_CHECKING:
-            assert isinstance(means, np.ndarray)
-
-        pvalues = np.sum([r.pvalues for r in res if r.pvalues is not None], axis=0) / float(n_perms)
-        assert means.shape == pvalues.shape, f"Means and p-values differ in shape: `{means.shape}`, `{pvalues.shape}`."
-
-        return TempResult(means=means, pvalues=pvalues)
-
+    # int cluster ids the kernel indexes `groups`/`mean_obs` rows with
     clustering = np.array(data["clusters"].values, dtype=np.int32)
-    # densify the data earlier to avoid concatenating sparse arrays
-    # with multiple fill values: '[0.0, nan]' (which leads to PerformanceWarning)
+    # densify gene columns to float64 so the kernel does pure float math (no sparse/mixed dtypes)
     data = data.astype({c: np.float64 for c in data.columns if c != "clusters"})
     groups = data.groupby("clusters", observed=True)
 
-    mean = groups.mean().values.T  # (n_genes, n_clusters)
+    mean_obs = groups.mean().values  # (n_clusters, n_genes)
     # see https://github.com/scverse/squidpy/pull/991#issuecomment-2888506296
     # for why we need to cast to int64 here
     mask = groups.apply(
         lambda c: ((c > 0).astype(np.int64).sum() / len(c)) >= threshold
-    ).values.T  # (n_genes, n_clusters)
+    ).values  # (n_clusters, n_genes)
 
-    # (n_cells, n_genes)
-    data = np.array(data[data.columns.difference(["clusters"])].values, dtype=np.float64, order="C")
-    # all 3 should be C contiguous
-    return parallelize(  # type: ignore[no-any-return]
-        _analysis_helper,
-        np.arange(n_perms, dtype=np.int32).tolist(),
-        n_jobs=n_jobs,
-        unit="permutation",
-        extractor=extractor,
-        **kwargs,
-    )(
-        data,
-        mean,
-        mask,
-        interactions,
-        interaction_clusters=interaction_clusters,
-        clustering=clustering,
-        seed=seed,
-        numba_parallel=numba_parallel,
-    )
+    # float sizes so `1.0 / max(...)` is a true reciprocal, not integer division that would zero the means
+    cluster_sizes = groups.size().values.astype(np.float64)
+    inv_counts = 1.0 / np.maximum(cluster_sizes, 1)
 
+    # contiguous C-order float64 (n_cells, n_genes) for cache-friendly kernel access
+    data_arr = np.array(data[data.columns.difference(["clusters"])].values, dtype=np.float64, order="C")
 
-def _analysis_helper(
-    perms: NDArrayA,
-    data: NDArrayA,
-    mean: NDArrayA,
-    mask: NDArrayA,
-    interactions: NDArrayA,
-    interaction_clusters: NDArrayA,
-    clustering: NDArrayA,
-    seed: int | None = None,
-    numba_parallel: bool | None = None,
-    queue: SigQueue | None = None,
-) -> TempResult:
-    """
-    Run the results of mean, percent and shuffled analysis.
+    # the kernel indexes with these, so keep the dtype in one place
+    interactions_i32 = np.array(interactions, dtype=np.int32)
+    clusters_i32 = np.array(interaction_clusters, dtype=np.int32)
+    rec = interactions_i32[:, 0]
+    lig = interactions_i32[:, 1]
+    c1 = clusters_i32[:, 0]
+    c2 = clusters_i32[:, 1]
 
-    Parameters
-    ----------
-    perms
-        Permutation indices. Only used to set the ``seed``.
-    data
-        Array of shape `(n_cells, n_genes)`.
-    mean
-        Array of shape `(n_genes, n_clusters)` representing mean expression per cluster.
-    mask
-        Array of shape `(n_genes, n_clusters)` containing `True` if the a gene within a cluster is
-        expressed at least in ``threshold`` percentage of cells.
-    interactions
-        Array of shape `(n_interactions, 2)`.
-    interaction_clusters
-        Array of shape `(n_interaction_clusters, 2)`.
-    clustering
-        Array of shape `(n_cells,)` containing the original clustering.
-    seed
-        Random seed for :class:`numpy.random.RandomState`.
-    numba_parallel
-        Whether to use :func:`numba.prange` or not. If `None`, it's determined automatically.
-    queue
-        Signalling queue to update progress bar.
+    # all of shape (n_interactions, n_interaction_clusters), as are `valid` and the kernel's counts
+    m_rec = mean_obs[c1, :][:, rec].T
+    m_lig = mean_obs[c2, :][:, lig].T
+    nonzero = (m_rec > 0) & (m_lig > 0)
+    valid = nonzero & mask[c1, :][:, rec].T & mask[c2, :][:, lig].T
+    res_means = np.where(nonzero, (m_rec + m_lig) / 2.0, 0.0)
 
-    Returns
-    -------
-    Tuple of the following format:
+    # one independent RNG per permutation; a numba typed list so the kernel can index it in prange
+    rngs = List(rng.spawn(n_perms))
 
-        - `'means'` - array of shape `(n_interactions, n_interaction_clusters)` containing the true test
-          statistic. It is `None` if ``min(perms)!=0`` so that only 1 worker calculates it.
-        - `'pvalues'` - array of shape `(n_interactions, n_interaction_clusters)`  containing `np.sum(T0 > T)`
-          where `T0` is the test statistic under null hypothesis and `T` is the true test statistic.
-    """
-    rs = np.random.RandomState(None if seed is None else perms[0] + seed)
-
-    clustering = clustering.copy()
-    n_cls = mean.shape[1]
-    return_means = np.min(perms) == 0
-
-    # ideally, these would be both sparse array, but there is no numba impl. (sparse.COO is read-only and very limited)
-    # keep it f64, because we're setting NaN
-    res = np.zeros((len(interactions), len(interaction_clusters)), dtype=np.float64)
-    numba_parallel = (
-        (np.prod(res.shape) >= 2**20 or clustering.shape[0] >= 2**15) if numba_parallel is None else numba_parallel  # type: ignore[assignment]
-    )
-
-    fn_key = f"_test_{n_cls}_{int(return_means)}_{bool(numba_parallel)}"
-    if fn_key not in globals():
-        exec(
-            compile(_create_template(n_cls, return_means=return_means, parallel=numba_parallel), "", "exec"),  # type: ignore[arg-type]
-            globals(),
+    # the whole permutation loop runs in a single numba call; ``n_jobs`` sets its thread count and
+    # the kernel updates ``progress`` (a numba_progress proxy) once per permutation
+    with (
+        numba_threads(n_jobs),
+        ProgressBar(total=n_perms, unit="permutation", disable=not show_progress_bar) as progress,
+    ):
+        pval_counts = _score_permutations(
+            data_arr,
+            clustering,
+            rngs,
+            inv_counts,
+            mean_obs,
+            interactions_i32,
+            clusters_i32,
+            valid,
+            progress,
         )
-    _test = globals()[fn_key]
 
-    if return_means:
-        res_means: NDArrayA | None = np.zeros((len(interactions), len(interaction_clusters)), dtype=np.float64)
-        test = partial(_test, res_means=res_means)
-    else:
-        res_means = None
-        test = _test
+    # float counts before dividing, so p-values are fractions and not truncated to 0
+    pvalues = pval_counts.astype(np.float64) / n_perms
+    pvalues[~valid] = np.nan
 
-    for _ in perms:
-        rs.shuffle(clustering)
-        error = test(interactions, interaction_clusters, data, clustering, mean, mask, res=res)
-        if error:
-            raise ValueError("In the execution of the numba function, an unhandled case was encountered. ")
-            # This is mainly to avoid a numba warning
-            # Otherwise, the numba function wouldn't be
-            # executed in parallel
-            # See: https://github.com/scverse/squidpy/issues/994
-        if queue is not None:
-            queue.put(Signal.UPDATE)
-
-    if queue is not None:
-        queue.put(Signal.FINISH)
-
-    return TempResult(means=res_means, pvalues=res)
+    return TempResult(means=res_means, pvalues=pvalues)

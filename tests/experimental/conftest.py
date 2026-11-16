@@ -16,9 +16,7 @@ from skimage.draw import ellipse
 from spatialdata import SpatialData
 from spatialdata.models import Image2DModel, Labels2DModel
 
-# ---------------------------------------------------------------------------
 # Tile-boundary QC fixture
-# ---------------------------------------------------------------------------
 
 _IMAGE_SIZE = 600
 _TILE_BORDERS = (200, 400)  # 3x3 grid on 600 px - borders at 200, 400

@@ -29,6 +29,7 @@ _DATASET_FUNCTIONS = [
     # 10x Visium
     "visium",
     "visium_hne_sdata",
+    "cells",
 ]
 
 

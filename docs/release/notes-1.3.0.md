@@ -7,7 +7,6 @@
   [@LLehner](https://github.com/LLehner)
   [#591](https://github.com/scverse/squidpy/pull/591)
 
-
 ## Bugfixes
 
 - Fix {mod}`pandas` inf {func}`squidpy.pl.ligrec`.
@@ -35,7 +34,6 @@
   [@dfhannum](https://github.com/dfhannum)
   [#692](https://github.com/scverse/squidpy/pull/692)
 
-
 ## Miscellaneous
 
 - Update pre-commits and unpin numba and numpy.
@@ -53,7 +51,6 @@
 - Add {class}`spatialdata.SpatialData` as possible input for graph functions.
   [@LLehner](https://github.com/LLehner)
   [#701](https://github.com/scverse/squidpy/pull/701)
-
 
 ## Documentation
 

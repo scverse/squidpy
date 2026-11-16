@@ -2,30 +2,40 @@
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import scanpy as sc
 import seaborn as sns
 from anndata import AnnData
 from matplotlib.axes import Axes
 
-from squidpy._constants._constants import RipleyStat
+from squidpy._compat import old_positionals
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
-from squidpy._validators import assert_non_empty_sequence, get_valid_values
+from squidpy._validators import assert_non_empty_sequence, get_valid_values, normalize_choice
+from squidpy.gr._nhood import CentralityScore
 from squidpy.gr._utils import _assert_categorical_obs
 from squidpy.pl._color_utils import Palette_t, _get_palette, _maybe_set_colors
 from squidpy.pl._utils import _heatmap, save_fig
 
-__all__ = ["centrality_scores", "interaction_matrix", "nhood_enrichment", "ripley", "co_occurrence"]
+__all__ = [
+    "centrality_scores",
+    "interaction_matrix",
+    "nhood_enrichment",
+    "nhood_enrichment_dotplot",
+    "ripley",
+    "co_occurrence",
+]
 
 
-def _get_data(adata: AnnData, cluster_key: str, func_name: str, attr: str = "uns", **kwargs: Any) -> Any:
+def _get_data(adata: AnnData, *, cluster_key: str, func_name: str, attr: str = "uns", **kwargs: Any) -> Any:
     key = getattr(Key.uns, func_name)(cluster_key, **kwargs)
 
     try:
@@ -43,10 +53,12 @@ def _get_data(adata: AnnData, cluster_key: str, func_name: str, attr: str = "uns
 
 
 @d.dedent
+@old_positionals("cluster_key", "score", "legend_kwargs", "palette", "figsize", "dpi", "save")
 def centrality_scores(
     adata: AnnData,
+    *,
     cluster_key: str,
-    score: str | Sequence[str] | None = None,
+    score: CentralityScore | Sequence[CentralityScore] | None = None,
     legend_kwargs: Mapping[str, Any] = MappingProxyType({}),
     palette: Palette_t = None,
     figsize: tuple[float, float] | None = None,
@@ -89,7 +101,9 @@ def centrality_scores(
 
     score = scores if score is None else score
     score = assert_non_empty_sequence(score, name="centrality scores")
-    score = sorted(get_valid_values(score, scores))
+
+    # Names that match no computed column keep their spelling and get dropped by get_valid_values.
+    score = sorted(get_valid_values([normalize_choice(s, scores, name="score", default=s) for s in score], scores))
 
     fig, axs = plt.subplots(1, len(score), figsize=figsize, dpi=dpi, constrained_layout=True)
     axs = np.ravel(axs)  # make into iterable
@@ -115,8 +129,12 @@ def centrality_scores(
 
 
 @d.dedent
+@old_positionals(
+    "cluster_key", "annotate", "method", "title", "cmap", "palette", "cbar_kwargs", "figsize", "dpi", "save", "ax"
+)
 def interaction_matrix(
     adata: AnnData,
+    *,
     cluster_key: str,
     annotate: bool = False,
     method: str | None = None,
@@ -173,8 +191,23 @@ def interaction_matrix(
 
 
 @d.dedent
+@old_positionals(
+    "cluster_key",
+    "mode",
+    "annotate",
+    "method",
+    "title",
+    "cmap",
+    "palette",
+    "cbar_kwargs",
+    "figsize",
+    "dpi",
+    "save",
+    "ax",
+)
 def nhood_enrichment(
     adata: AnnData,
+    *,
     cluster_key: str,
     mode: Literal["zscore", "count"] = "zscore",
     annotate: bool = False,
@@ -213,6 +246,7 @@ def nhood_enrichment(
     %(plotting_returns)s
     """
     _assert_categorical_obs(adata, key=cluster_key)
+    mode = normalize_choice(mode, ("zscore", "count"), name="mode")
     array = _get_data(adata, cluster_key=cluster_key, func_name="nhood_enrichment")[mode]
 
     ad = AnnData(X=array, obs={cluster_key: pd.Categorical(adata.obs[cluster_key].cat.categories)})
@@ -238,8 +272,121 @@ def nhood_enrichment(
 
 
 @d.dedent
+def nhood_enrichment_dotplot(
+    adata: AnnData,
+    *,
+    cluster_key: str,
+    annotate: bool = False,
+    title: str | None = None,
+    cmap: str = "RdBu_r",
+    figsize: tuple[float, float] | None = None,
+    dpi: int | None = None,
+    size_range: tuple[float, float] = (10, 200),
+    save: str | Path | None = None,
+    ax: Axes | None = None,
+    **kwargs: Any,
+) -> None:
+    """
+    Dot plot of neighborhood enrichment.
+
+    The enrichment is computed by :func:`squidpy.gr.nhood_enrichment`. Color shows the z-score,
+    dot size the conditional cell ratio (CCR) from ``normalization='conditional'`` -- the fraction
+    of cells of the row type having at least one neighbor of the column type.
+
+    Parameters
+    ----------
+    %(adata)s
+    %(cluster_key)s
+    annotate
+        Whether to annotate the dots with their CCR values.
+    title
+        The title of the plot.
+    cmap
+        Diverging colormap for the z-score, centered on zero whenever the data spans both signs.
+    size_range
+        Smallest and largest dot size, which the CCR is scaled onto.
+    %(plotting)s
+    ax
+        Axes, :class:`matplotlib.axes.Axes`.
+    kwargs
+        Keyword arguments for :meth:`scanpy.pl.DotPlot.style`.
+
+    Returns
+    -------
+    %(plotting_returns)s
+    """
+    _assert_categorical_obs(adata, key=cluster_key)
+    enrichment = _get_data(adata, cluster_key=cluster_key, func_name="nhood_enrichment")
+
+    zscore = enrichment["zscore"]
+    ccr = enrichment.get("conditional_ratio")
+
+    if ccr is None:
+        warnings.warn(
+            "'conditional_ratio' is None in nhood_enrichment results. Please run nhood_enrichment "
+            "with normalization = 'conditional'. Dot size will not reflect conditional cell ratios.",
+            UserWarning,
+            stacklevel=2,
+        )
+        ccr = np.ones_like(zscore)
+        annotate = False  # the values are a placeholder; printing them would look like real data
+
+    cats = list(adata.obs[cluster_key].cat.categories)
+    # `DotPlot` reads its values from ``dot_color_df``/``dot_size_df``, so this stand-in only has to
+    # carry the right groups and var names; ``X`` is never touched.
+    grid = AnnData(
+        np.zeros((len(cats), len(cats)), dtype=np.float32),
+        obs=pd.DataFrame({cluster_key: pd.Categorical(cats, categories=cats)}, index=cats),
+        var=pd.DataFrame(index=pd.Index(cats)),
+    )
+    # A z-score is signed, so anchor the colormap at zero. Only when the data actually straddles
+    # zero, since TwoSlopeNorm requires vmin < vcenter < vmax -- and only with explicit bounds,
+    # because undefined enrichments are NaN by default and autoscaling over them yields NaN.
+    finite = zscore[np.isfinite(zscore)]
+    if finite.size and finite.min() < 0 < finite.max():
+        vmin, vmax, vcenter = float(finite.min()), float(finite.max()), 0.0
+    else:
+        vmin = vmax = vcenter = None
+    dp = (
+        sc.pl.DotPlot(
+            grid,
+            var_names=cats,
+            groupby=cluster_key,
+            dot_color_df=pd.DataFrame(zscore, index=cats, columns=cats),
+            dot_size_df=pd.DataFrame(ccr, index=cats, columns=cats),
+            title=title,
+            figsize=figsize,
+            vmin=vmin,
+            vmax=vmax,
+            vcenter=vcenter,
+            ax=ax,
+        )
+        .style(cmap=cmap, smallest_dot=size_range[0], largest_dot=size_range[1], **kwargs)
+        .legend(colorbar_title="Z-score", size_title="CCR")
+    )
+    dp.make_figure()
+
+    main_ax = dp.get_axes()["mainplot_ax"]
+    main_ax.set_xlabel("Neighbor cell type")
+    main_ax.set_ylabel("Index cell type")
+    if annotate:
+        for i in range(len(cats)):
+            for j in range(len(cats)):
+                main_ax.text(j + 0.5, i + 0.5, f"{ccr[i, j]:.2f}", ha="center", va="center")
+
+    fig = main_ax.figure
+    if dpi is not None:
+        fig.set_dpi(dpi)
+    if save is not None:
+        # `set_dpi` is not honoured by `savefig`, so the saved file needs it passed through
+        save_fig(fig, path=save, **({} if dpi is None else {"dpi": dpi}))
+
+
+@d.dedent
+@old_positionals("cluster_key", "mode", "plot_sims", "palette", "figsize", "dpi", "save", "ax", "legend_kwargs")
 def ripley(
     adata: AnnData,
+    *,
     cluster_key: str,
     mode: Literal["F", "G", "L"] = "F",
     plot_sims: bool = True,
@@ -278,11 +425,8 @@ def ripley(
     """
     _assert_categorical_obs(adata, key=cluster_key)
 
+    mode = normalize_choice(mode, ("F", "G", "L"), name="mode")
     res = _get_data(adata, cluster_key=cluster_key, func_name="ripley", mode=mode)
-
-    mode = RipleyStat(mode)  # type: ignore[assignment]
-    if TYPE_CHECKING:
-        assert isinstance(mode, RipleyStat)
 
     legend_kwargs = dict(legend_kwargs)
     if "loc" not in legend_kwargs:
@@ -299,7 +443,7 @@ def ripley(
         y="stats",
         x="bins",
         hue=cluster_key,
-        data=res[f"{mode.s}_stat"],
+        data=res[f"{mode}_stat"],
         hue_order=categories,
         palette=palette,
         ax=ax,
@@ -309,15 +453,17 @@ def ripley(
         sns.lineplot(y="stats", x="bins", errorbar="sd", alpha=0.01, color="gray", data=res["sims_stat"], ax=ax)
     ax.legend(**legend_kwargs)
     ax.set_ylabel("value")
-    ax.set_title(f"Ripley's {mode.s}")
+    ax.set_title(f"Ripley's {mode}")
 
     if save is not None:
         save_fig(fig, path=save)
 
 
 @d.dedent
+@old_positionals("cluster_key", "palette", "clusters", "figsize", "dpi", "save", "legend_kwargs")
 def co_occurrence(
     adata: AnnData,
+    *,
     cluster_key: str,
     palette: Palette_t = None,
     clusters: str | Sequence[str] | None = None,

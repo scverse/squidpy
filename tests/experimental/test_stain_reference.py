@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from squidpy.experimental.im._stain._constants import RUIFROK_HE
-from squidpy.experimental.im._stain._reference import StainReference
+from squidpy.experimental.im._stain._reference import StainFit
 
 # Tests construct stain matrices and background estimates by hand; there is
 # no library-wide pure-white default to lean on.
@@ -18,45 +18,45 @@ def _ruifrok_matrix() -> np.ndarray:
 
 
 def test_macenko_basic() -> None:
-    ref = StainReference(
+    ref = StainFit(
         method="macenko",
         stain_matrix=_ruifrok_matrix(),
-        background_intensity=_TEST_BACKGROUND,
+        white_point=_TEST_BACKGROUND,
     )
     assert ref.method == "macenko"
     assert ref.stain_matrix.shape == (3, 3)
     assert ref.mu is None and ref.sigma is None
-    np.testing.assert_array_equal(ref.background_intensity, _TEST_BACKGROUND)
+    np.testing.assert_array_equal(ref.white_point, _TEST_BACKGROUND)
 
 
 def test_reinhard_basic() -> None:
-    ref = StainReference(method="reinhard", mu=np.array([1.0, 0.5, -0.2]), sigma=np.array([0.1, 0.1, 0.1]))
+    ref = StainFit(method="reinhard", mu=np.array([1.0, 0.5, -0.2]), sigma=np.array([0.1, 0.1, 0.1]))
     assert ref.method == "reinhard"
     assert ref.stain_matrix is None
-    assert ref.background_intensity is None
+    assert ref.white_point is None
 
 
 def test_unknown_method_raises() -> None:
-    with pytest.raises(ValueError, match="Unknown method"):
-        StainReference(method="not-a-method")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="Expected `method` to be one of"):
+        StainFit(method="not-a-method")  # type: ignore[arg-type]
 
 
 def test_decomposition_requires_stain_matrix() -> None:
     with pytest.raises(ValueError, match="requires stain_matrix"):
-        StainReference(method="macenko", background_intensity=_TEST_BACKGROUND)
+        StainFit(method="macenko", white_point=_TEST_BACKGROUND)
 
 
-def test_decomposition_requires_background_intensity() -> None:
-    with pytest.raises(ValueError, match="requires background_intensity"):
-        StainReference(method="macenko", stain_matrix=_ruifrok_matrix())
+def test_decomposition_requires_white_point() -> None:
+    with pytest.raises(ValueError, match="requires white_point"):
+        StainFit(method="macenko", stain_matrix=_ruifrok_matrix())
 
 
 def test_decomposition_forbids_mu_sigma() -> None:
     with pytest.raises(ValueError, match="forbids mu/sigma"):
-        StainReference(
+        StainFit(
             method="macenko",
             stain_matrix=_ruifrok_matrix(),
-            background_intensity=_TEST_BACKGROUND,
+            white_point=_TEST_BACKGROUND,
             mu=np.zeros(3),
             sigma=np.ones(3),
         )
@@ -64,17 +64,17 @@ def test_decomposition_forbids_mu_sigma() -> None:
 
 def test_reinhard_requires_mu_and_sigma() -> None:
     with pytest.raises(ValueError, match="requires both mu and sigma"):
-        StainReference(method="reinhard", mu=np.zeros(3))
+        StainFit(method="reinhard", mu=np.zeros(3))
 
 
 def test_reinhard_rejects_non_positive_sigma() -> None:
     with pytest.raises(ValueError, match="strictly positive"):
-        StainReference(method="reinhard", mu=np.zeros(3), sigma=np.array([1.0, 0.0, 1.0]))
+        StainFit(method="reinhard", mu=np.zeros(3), sigma=np.array([1.0, 0.0, 1.0]))
 
 
 def test_reinhard_forbids_stain_matrix() -> None:
     with pytest.raises(ValueError, match="forbids stain_matrix"):
-        StainReference(
+        StainFit(
             method="reinhard",
             mu=np.zeros(3),
             sigma=np.ones(3),
@@ -82,38 +82,51 @@ def test_reinhard_forbids_stain_matrix() -> None:
         )
 
 
-def test_reinhard_forbids_background_intensity() -> None:
-    with pytest.raises(ValueError, match="forbids background_intensity"):
-        StainReference(
+def test_reinhard_forbids_white_point() -> None:
+    with pytest.raises(ValueError, match="forbids white_point"):
+        StainFit(
             method="reinhard",
             mu=np.zeros(3),
             sigma=np.ones(3),
-            background_intensity=_TEST_BACKGROUND,
+            white_point=_TEST_BACKGROUND,
         )
 
 
-def test_bad_background_intensity() -> None:
-    with pytest.raises(ValueError, match="background_intensity"):
-        StainReference(
+def test_bad_white_point() -> None:
+    with pytest.raises(ValueError, match="white_point"):
+        StainFit(
             method="macenko",
             stain_matrix=_ruifrok_matrix(),
-            background_intensity=np.array([255.0, -1.0, 255.0]),
+            white_point=np.array([255.0, -1.0, 255.0]),
         )
 
 
 def test_rejects_bad_shape() -> None:
     with pytest.raises(ValueError, match=r"stain_matrix must have shape"):
-        StainReference(
+        StainFit(
             method="macenko",
             stain_matrix=np.zeros((2, 3)),
-            background_intensity=_TEST_BACKGROUND,
+            white_point=_TEST_BACKGROUND,
         )
 
 
 def test_rejects_non_finite() -> None:
     with pytest.raises(ValueError, match=r"mu contains non-finite values"):
-        StainReference(
+        StainFit(
             method="reinhard",
             mu=np.array([np.nan, 0.0, 0.0]),
             sigma=np.ones(3),
         )
+
+
+def test_comparing_or_hashing_fits_raises() -> None:
+    """A fit holds arrays, so comparing two fits is ambiguous and a fit is not hashable.
+
+    Both raise, as numpy's arrays do, rather than falling back to identity silently.
+    """
+    a = StainFit(method="reinhard", mu=np.array([1.0, 2.0, 3.0]), sigma=np.ones(3))
+    b = StainFit(method="reinhard", mu=np.array([1.0, 2.0, 3.0]), sigma=np.ones(3))
+    with pytest.raises(ValueError, match="ambiguous"):
+        a == b  # noqa: B015
+    with pytest.raises(TypeError, match="unhashable"):
+        hash(a)

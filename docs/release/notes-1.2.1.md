@@ -6,7 +6,6 @@
   [@michalk8](https://github.com/michalk8)
   [#534](https://github.com/scverse/squidpy/pull/534)
 
-
 ## Bugfixes
 
 - Add discourse, zulip badges and links.
@@ -29,7 +28,7 @@
   [@dineshpalli](https://github.com/dineshpalli)
   [#546](https://github.com/scverse/squidpy/pull/546)
 
-- Return ``cell_id`` for segmentation masks in {func}`squidpy.read.nanostring`.
+- Return `cell_id` for segmentation masks in {func}`squidpy.read.nanostring`.
   [@giovp](https://github.com/giovp)
   [#547](https://github.com/scverse/squidpy/pull/547)
 
@@ -37,10 +36,9 @@
   [@giovp](https://github.com/giovp)
   [#548](https://github.com/scverse/squidpy/pull/548)
 
-- Rename default branch from ``master`` to ``main``.
+- Rename default branch from `master` to `main`.
   [@giovp](https://github.com/giovp)
   [#549](https://github.com/scverse/squidpy/pull/549)
-
 
 ## Miscellaneous
 

@@ -19,10 +19,7 @@ def main(args: argparse.Namespace) -> None:
     from anndata import AnnData
 
     import squidpy as sq
-    from squidpy.datasets._downloader import get_downloader
-
-    downloader = get_downloader()
-    registry = downloader.registry
+    from squidpy.datasets._registry import dataset_names
 
     # Visium samples tested in CI
     visium_samples_to_cache = [
@@ -35,23 +32,23 @@ def main(args: argparse.Namespace) -> None:
         logger.info("Cache: %s", settings.datasetdir)
         logger.info(
             "Would download: %d AnnData, %d images, %d SpatialData, %d Visium",
-            len(registry.anndata_datasets),
-            len(registry.image_datasets),
-            len(registry.spatialdata_datasets),
+            len(dataset_names("anndata")),
+            len(dataset_names("image")),
+            len(dataset_names("spatialdata")),
             len(visium_samples_to_cache),
         )
         return
 
     # Download all datasets - the downloader handles caching
-    for name in registry.anndata_datasets:
+    for name in dataset_names("anndata"):
         obj = getattr(sq.datasets, name)()
         assert isinstance(obj, AnnData)
 
-    for name in registry.image_datasets:
+    for name in dataset_names("image"):
         obj = getattr(sq.datasets, name)()
         assert isinstance(obj, sq.im.ImageContainer)
 
-    for name in registry.spatialdata_datasets:
+    for name in dataset_names("spatialdata"):
         getattr(sq.datasets, name)()
 
     for sample in visium_samples_to_cache:

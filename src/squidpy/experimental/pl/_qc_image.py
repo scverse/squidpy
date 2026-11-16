@@ -8,43 +8,42 @@ from scipy.stats import gaussian_kde
 from spatialdata import SpatialData
 from spatialdata._logging import logger as logg
 
+from squidpy._validators import normalize_choice
 from squidpy.experimental.im._qc_metrics import QCMetric
 
 
 def qc_image(
     sdata: SpatialData,
+    *,
     image_key: str,
     metrics: QCMetric | list[QCMetric] | None = None,
     figsize: tuple[int, int] | None = None,
     return_ax: bool = False,
     **kwargs: Any,
 ) -> np.ndarray | None:
-    """
-    Plot a summary view of QC metrics from qc_image results.
+    """Plot the QC metrics :func:`~squidpy.experimental.im.qc_image` computed.
 
-    Automatically scans adata.uns for calculated metrics and plots the values.
-    Creates a multi-panel plot: one panel per calculated metric.
-    Each panel shows: spatial view, KDE plot, and statistics.
+    One panel per metric, each showing a spatial view, a KDE plot and summary statistics.
 
     Parameters
     ----------
-    sdata : SpatialData
-        SpatialData object containing QC results.
-    image_key : str
-        Image key used in qc_image function.
-    metrics : QCMetric or list of QCMetric, optional
-        Specific metrics to plot. If None, plots all calculated metrics.
-    figsize : tuple, optional
-        Figure size (width, height). Auto-calculated if None.
-    return_ax : bool
-        Whether to return the axes array. Default is False.
+    sdata
+        SpatialData object holding the QC results.
+    image_key
+        Image key the metrics were computed for.
+    metrics
+        Metrics to plot, by the names :func:`~squidpy.experimental.im.qc_image` lists.
+        If `None`, plots every metric found.
+    figsize
+        Figure size as ``(width, height)``; derived from the panel count if `None`.
+    return_ax
+        Whether to return the axes array.
     **kwargs
-        Additional arguments passed to render_shapes().
+        Passed to ``spatialdata_plot``'s ``render_shapes``.
 
     Returns
     -------
-    axes : numpy.ndarray of matplotlib.axes.Axes or None
-        The axes array if return_ax=True, otherwise None.
+    The axes array if ``return_ax=True``, otherwise `None`.
     """
     table_key = f"qc_img_{image_key}"
     shapes_key = f"qc_img_{image_key}_grid"
@@ -64,12 +63,7 @@ def qc_image(
 
     if metrics is not None:
         metrics_list = metrics if isinstance(metrics, list) else [metrics]
-        metrics_to_plot = []
-        for metric in metrics_list:
-            metric_name = metric.value if isinstance(metric, QCMetric) else metric
-            if metric_name not in calculated_metrics:
-                raise ValueError(f"Metric '{metric_name}' not found. Available: {calculated_metrics}")
-            metrics_to_plot.append(metric_name)
+        metrics_to_plot = [normalize_choice(m, calculated_metrics, name="metrics") for m in metrics_list]
     else:
         metrics_to_plot = calculated_metrics
 

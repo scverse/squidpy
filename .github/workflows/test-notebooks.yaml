@@ -10,6 +10,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 env:
   # TODO: remove once hatch is compatible with virtualenv 21+ (pypa/hatch#2193)
   UV_CONSTRAINT: ${{ github.workspace }}/.github/uv-constraints.txt
@@ -18,20 +21,21 @@ jobs:
   ensure-data-is-cached:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           filter: blob:none
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: false
-          python-version: "3.13"
+          python-version: "3.14"
 
       - name: Restore data cache
         id: data-cache
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: data # IMPORTANT: this will fail if scanpy.settings.datasetdir default changes
           key: data-${{ hashFiles('**/download_data.py') }}
@@ -51,18 +55,19 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        python: ["3.12"]
+        python: ["3.13"]
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
+          persist-credentials: false
       - name: Set up Python ${{ matrix.python }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python }}
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
           python-version: ${{ matrix.python }}
@@ -70,7 +75,7 @@ jobs:
 
       - name: Restore data cache
         id: data-cache
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: data # IMPORTANT: this will fail if scanpy.settings.datasetdir default changes
           key: data-${{ hashFiles('**/download_data.py') }}

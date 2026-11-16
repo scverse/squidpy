@@ -11,8 +11,8 @@ from anndata import AnnData
 from scanpy import logging as logg
 from sklearn.metrics import DistanceMetric
 from sklearn.neighbors import KDTree
-from sklearn.preprocessing import MinMaxScaler
 
+from squidpy._compat import old_positionals
 from squidpy._docs import d
 from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _save_data
@@ -21,8 +21,20 @@ __all__ = ["var_by_distance"]
 
 
 @d.dedent
+@old_positionals(
+    "groups",
+    "cluster_key",
+    "library_key",
+    "library_id",
+    "design_matrix_key",
+    "covariates",
+    "metric",
+    "spatial_key",
+    "copy",
+)
 def var_by_distance(
     adata: AnnData,
+    *,
     groups: str | list[str] | NDArrayA,
     cluster_key: str | None = None,
     library_key: str | None = None,
@@ -92,7 +104,6 @@ def var_by_distance(
         raise TypeError(f"Expected `library_key` to be of type `str`, got `{type(library_key).__name__}`.")
 
     batch_design_matrices = {}
-    max_distances = {}
     anchor_col_id = 2
     # iterate over slide + anchor combinations (anchor only possible as well)
     combinations: Iterator[tuple[str, str | None]] | zip[tuple[list[int | float], str]]  # mypy
@@ -110,22 +121,32 @@ def var_by_distance(
         if batch_var is not None:
             if cluster_key is not None:
                 if anchor_var in pd.unique(adata[adata.obs[library_key] == batch_var].obs[cluster_key]):
-                    df = _init_design_matrix(adata, cluster_key, library_key, batch_var)
+                    df = _init_design_matrix(
+                        adata, cluster_key=cluster_key, library_key=library_key, batch_var=batch_var
+                    )
                     anchor_coord, batch_coord, nan_ids = _get_coordinates(
-                        adata[adata.obs[library_key] == batch_var], anchor_var, cluster_key, spatial_key
+                        adata[adata.obs[library_key] == batch_var],
+                        anchor=anchor_var,
+                        annotation=cluster_key,
+                        spatial_key=spatial_key,
                     )
                 else:
                     continue
             else:
-                df = _init_design_matrix(adata, cluster_key, library_key, batch_var)
+                df = _init_design_matrix(adata, cluster_key=cluster_key, library_key=library_key, batch_var=batch_var)
                 anchor_coord, batch_coord, nan_ids = _get_coordinates(
-                    adata[adata.obs[library_key] == batch_var], anchor_var, cluster_key, spatial_key
+                    adata[adata.obs[library_key] == batch_var],
+                    anchor=anchor_var,
+                    annotation=cluster_key,
+                    spatial_key=spatial_key,
                 )
                 anchor_col_id = 1
 
         else:
-            df = _init_design_matrix(adata, cluster_key, None, None)
-            anchor_coord, batch_coord, nan_ids = _get_coordinates(adata, anchor_var, cluster_key, spatial_key)
+            df = _init_design_matrix(adata, cluster_key=cluster_key, library_key=None, batch_var=None)
+            anchor_coord, batch_coord, nan_ids = _get_coordinates(
+                adata, anchor=anchor_var, annotation=cluster_key, spatial_key=spatial_key
+            )
             anchor_col_id = 1
 
         tree = KDTree(
@@ -146,12 +167,11 @@ def var_by_distance(
         else:
             df["obs"] = adata.obs_names
 
-        # store dataframes by (slide, anchor) combination and also the corresponding maximum distance for normalization
+        # store dataframes by (slide, anchor) combination
         batch_design_matrices[(batch_var, anchor_var)] = df
-        max_distances[(batch_var, anchor_var)] = df[anchor_var].max()
 
     # normalize euclidean distances by slide
-    batch_design_matrices_ = _normalize_distances(batch_design_matrices, anchor, batch, max_distances)
+    batch_design_matrices_ = _normalize_distances(batch_design_matrices, anchor)
 
     # combine individual data frames
     # merge if multiple anchor points are used but there is no separation by slides
@@ -202,6 +222,7 @@ def var_by_distance(
 
 def _init_design_matrix(
     adata: AnnData,
+    *,
     cluster_key: str | None,
     library_key: str | None,
     batch_var: str | None,
@@ -222,7 +243,7 @@ def _init_design_matrix(
 
 
 def _get_coordinates(
-    adata: AnnData, anchor: str | list[int | float], annotation: str | None, spatial_key: str
+    adata: AnnData, *, anchor: str | list[int | float], annotation: str | None, spatial_key: str
 ) -> tuple[Any, Any, Any]:
     """Get anchor point coordinates and coordinates of all observations, excluding nan values."""
     # since amount of distances have to match n_obs, the nan ids are stored an inserted after KDTree construction
@@ -231,12 +252,12 @@ def _get_coordinates(
     if nan_ids.size != 0:
         nan_ids = np.unique(nan_ids)
 
-    batch_coord = adata.obsm["spatial"][~np.isnan(adata.obsm["spatial"]).any(axis=1)]
+    batch_coord = adata.obsm[spatial_key][~np.isnan(adata.obsm[spatial_key]).any(axis=1)]
 
     if isinstance(anchor, list):
         anchor_coord = np.array(anchor).reshape(1, -1)
     else:
-        anchor_arr = np.array(adata[adata.obs[annotation] == anchor].obsm["spatial"])
+        anchor_arr = np.array(adata[adata.obs[annotation] == anchor].obsm[spatial_key])
         anchor_coord = anchor_arr[~np.isnan(anchor_arr).any(axis=1)]
     return anchor_coord, batch_coord, nan_ids
 
@@ -244,8 +265,6 @@ def _get_coordinates(
 def _normalize_distances(
     mapping_design_matrix: dict[tuple[Any | None, Any], pd.DataFrame],
     anchor: str | list[str],
-    slides: list[str] | list[None],
-    mapping_max_distances: dict[tuple[Any | None, Any], float],
 ) -> list[pd.DataFrame]:
     """Normalize distances to anchor."""
     if not isinstance(anchor, list):
@@ -259,7 +278,5 @@ def _normalize_distances(
 
     # normalize each slide separately will result in all conditions having a maximum distance of 1, which makes them comparable across all distances
     for (_, anchor_point), design_matrix in mapping_design_matrix.items():
-        scaler = MinMaxScaler()
-        scaler.fit(design_matrix[[anchor_point]].values)
-        design_matrix[anchor_point] = scaler.transform(design_matrix[[anchor_point]].values)
+        design_matrix[anchor_point] = design_matrix[anchor_point] / design_matrix[anchor_point].max()
     return list(mapping_design_matrix.values())

@@ -30,7 +30,7 @@
   [#313](https://github.com/scverse/squidpy/pull/313)
   [@giovp](https://github.com/giovp)
 
-- Replace ``squidpy.gr.moran`` with {func}`squidpy.gr.spatial_autocorr`, which implements both Moran's I and
+- Replace `squidpy.gr.moran` with {func}`squidpy.gr.spatial_autocorr`, which implements both Moran's I and
   Geary's C.
   [#317](https://github.com/scverse/squidpy/pull/317)
   [@giovp](https://github.com/giovp)
@@ -47,7 +47,7 @@
   [#329](https://github.com/scverse/squidpy/pull/329)
   [@hspitzer](https://github.com/hspitzer)
 
-- Replace ``squidpy.gr.ripley_k`` with {func}`squidpy.gr.ripley`.
+- Replace `squidpy.gr.ripley_k` with {func}`squidpy.gr.ripley`.
   [#331](https://github.com/scverse/squidpy/pull/331)
   [@giovp](https://github.com/giovp)
 
@@ -59,14 +59,14 @@
   - {func}`squidpy.datasets.merfish`
   - {func}`squidpy.datasets.mibitof`
   - {func}`squidpy.datasets.slideseqv2`
-  [#348](https://github.com/scverse/squidpy/pull/348)
-  [@giovp](https://github.com/giovp)
+    [#348](https://github.com/scverse/squidpy/pull/348)
+    [@giovp](https://github.com/giovp)
 
 - Enable additional layer specification in {func}`squidpy.im.calculate_image_features`.
   [#354](https://github.com/scverse/squidpy/pull/354)
   [@hspitzer](https://github.com/hspitzer)
 
-- Expose ``canvas_only`` in `squidpy.pl.Interactive.screenshot`.
+- Expose `canvas_only` in `squidpy.pl.Interactive.screenshot`.
   [#363](https://github.com/scverse/squidpy/pull/363)
   [@giovp](https://github.com/giovp)
 

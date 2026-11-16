@@ -11,8 +11,7 @@ the [scientific Python tutorials][], or the [scanpy developer guide][].
 [scientific Python tutorials]: https://learn.scientific-python.org/development/tutorials/
 [scanpy developer guide]: https://scanpy.readthedocs.io/en/latest/dev/index.html
 
-:::{tip} The *hatch* project manager
-
+:::{tip} The _hatch_ project manager
 We highly recommend to familiarize yourself with [`hatch`][hatch].
 Hatch is a Python project manager that
 
@@ -23,19 +22,17 @@ Hatch is a Python project manager that
 
 While the project is setup with `hatch` in mind,
 it is still possible to use different tools to manage dependencies, such as `uv` or `pip`.
-
 :::
 
 [hatch]: https://hatch.pypa.io/latest/
 
 ## Installing dev dependencies
 
-In addition to the packages needed to _use_ this package,
+In addition to the packages needed to *use* this package,
 you need additional python packages to {ref}`writing-tests` and {ref}`docs-building`.
 
 :::::{tabs}
 ::::{group-tab} Hatch
-
 On the command line, you typically interact with hatch through its command line interface (CLI).
 Running one of the following commands will automatically resolve the environments for testing and
 building the documentation in the background:
@@ -63,8 +60,8 @@ This will list “Standalone” environments and a table of “Matrix” environ
 | Name       | Type    | Envs                     | Features | Dependencies                    | Scripts     |
 +------------+---------+--------------------------+----------+---------------------------------+-------------+
 | hatch-test | virtual | hatch-test.py3.10-stable | dev      | coverage-enable-subprocess==1.0 | cov-combine |
-|            |         | hatch-test.py3.13-stable | test     | coverage[toml]~=7.4             | cov-report  |
-|            |         | hatch-test.py3.13-pre    |          | pytest-mock~=3.12               | run         |
+|            |         | hatch-test.py3.14-stable | test     | coverage[toml]~=7.4             | cov-report  |
+|            |         | hatch-test.py3.14-pre    |          | pytest-mock~=3.12               | run         |
 |            |         |                          |          | pytest-randomly~=3.15           | run-cov     |
 |            |         |                          |          | pytest-rerunfailures~=14.0      |             |
 |            |         |                          |          | pytest-xdist[psutil]~=3.5       |             |
@@ -73,29 +70,27 @@ This will list “Standalone” environments and a table of “Matrix” environ
 ```
 
 From the `Envs` column, select the environment name you want to use for development.
-In this example, it would be `hatch-test.py3.13-stable`.
+In this example, it would be `hatch-test.py3.14-stable`.
 
 Next, create the environment with
 
 ```bash
-hatch env create hatch-test.py3.13-stable
+hatch env create hatch-test.py3.14-stable
 ```
 
 Then, obtain the path to the environment using
 
 ```bash
-hatch env find hatch-test.py3.13-stable
+hatch env find hatch-test.py3.14-stable
 ```
 
 In case you are using VScode, now open the command palette (Ctrl+Shift+P) and search for `Python: Select Interpreter`.
 Choose `Enter Interpreter Path` and paste the path to the virtual environment from above.
 
 In this future, this may become easier through a hatch vscode extension.
-
 ::::
 
 ::::{group-tab} uv
-
 A popular choice for managing virtual environments is [uv][].
 The main disadvantage compared to hatch is that it supports only a single environment per project at a time,
 which requires you to mix the dependencies for running tests and building docs.
@@ -110,11 +105,9 @@ uv sync --all-extras
 ```
 
 The `.venv` directory is typically automatically discovered by IDEs such as VS Code.
-
 ::::
 
 ::::{group-tab} Pip
-
 Pip is nowadays mostly superseded by environment manager such as [hatch][].
 However, for the sake of completeness, and since it’s ubiquitously available,
 we describe how you can manage environments manually using `pip`:
@@ -126,7 +119,6 @@ pip install -e ".[dev,test,doc]"
 ```
 
 The `.venv` directory is typically automatically discovered by IDEs such as VS Code.
-
 ::::
 :::::
 
@@ -159,13 +151,23 @@ git pull --rebase
 to integrate the changes into yours.
 While the [pre-commit.ci][] is useful, we strongly encourage installing and running pre-commit locally first to understand its usage.
 
-Finally, most editors have an _autoformat on save_ feature.
+Finally, most editors have an *autoformat on save* feature.
 Consider enabling this option for [ruff][ruff-editors] and [biome][biome-editors].
 
 [pre-commit]: https://pre-commit.com/
 [pre-commit.ci]: https://pre-commit.ci/
 [ruff-editors]: https://docs.astral.sh/ruff/integrations/
 [biome-editors]: https://biomejs.dev/guides/integrate-in-editor/
+
+### Conventions
+
+- **Keyword-only arguments**: a public function takes its data object (`adata`, `sdata` or `data`) positionally, and every other argument is keyword-only, e.g. `def nhood_enrichment(adata, *, cluster_key, ...)`. Avoid catch-all `**kwargs` that forward whatever they are given unchecked.
+- **Parameter bags**: a `*Params` {class}`~typing.TypedDict` in {mod}`squidpy.types`, each key declaring its default as `Annotated[type, Default(value)]`, only when the knobs depend on another argument (one bag per `method`, taken as `method_params`) or several functions share them (taken as `**kwargs: Unpack[XParams]`). Resolve it with `resolve_params` from `squidpy._params`, so unknown keys raise, and keep its keys out of the signature.
+- **String choices** (a `Literal[...]` such as `method="otsu"`) are case-insensitive. Resolve the argument once at the top of the public function with `value = normalize_choice(value, options, name=...)` from `squidpy._validators`, which returns the canonical spelling and raises naming the valid options. Keys the user chose (obs/obsm keys, layer, channel or cluster names, paths) stay case-sensitive. Derive a reused option set from its own annotation with `options_of` rather than retyping it: `_Feature = Literal[...]`, `_FEATURES = options_of(_Feature)`.
+- **Fits**, returned by one function for others to consume, are frozen dataclasses with methods (e.g. `.transform`). Pass them whole.
+- **Results**, returned instead of writing into the input, are {class}`~typing.NamedTuple`s.
+- **Randomness**: take `rng: SeedLike | RNGLike | None = None` ([SPEC 7](https://scientific-python.org/specs/spec-0007/)), never `seed`/`generator`/`random_state`; the exception is `random_state` on sklearn-style estimators (the clusterers), which follow sklearn's `get_params`/`set_params` protocol. Spawn one generator per independent task with `rng.spawn(n)`, and pass `legacy_random(rng)` to APIs that only take an integer seed.
+- **Warnings**: `warnings.warn` for anything about the call: deprecations (`FutureWarning`) and arguments whose effect the caller may not expect, such as clusters dropped by `min_cell_count` (`UserWarning`). What the computation is doing, such as the PCA it runs, goes through `logg`.
 
 (writing-tests)=
 
@@ -186,30 +188,24 @@ Alternatively, you can run all tests from the command line by executing
 
 :::::{tabs}
 ::::{group-tab} Hatch
-
 ```bash
 hatch test  # test with the highest supported Python version
 # or
 hatch test --all  # test with all supported Python versions
 ```
-
 ::::
 
 ::::{group-tab} uv
-
 ```bash
 uv run pytest
 ```
-
 ::::
 
 ::::{group-tab} Pip
-
 ```bash
 source .venv/bin/activate
 pytest
 ```
-
 ::::
 :::::
 
@@ -246,7 +242,7 @@ Please adhere to [Semantic Versioning][semver], in brief
 >
 > Additional labels for pre-release and build metadata are available as extensions to the MAJOR.MINOR.PATCH format.
 
-Once you are done, commit and push your changes and navigate to the "Releases" page of this project on GitHub.
+Once you are done, commit and push your changes and navigate to the “Releases” page of this project on GitHub.
 Specify `vX.X.X` as a tag name and create a release.
 For more information, see [managing GitHub releases][].
 This will automatically create a git tag and trigger a Github workflow that creates a release on [PyPI][].
@@ -299,32 +295,26 @@ please check out [this feature request][issue-render-notebooks] in the `cookiecu
 
 :::::{tabs}
 ::::{group-tab} Hatch
-
 ```bash
 hatch run docs:build
 hatch run docs:open
 ```
-
 ::::
 
 ::::{group-tab} uv
-
 ```bash
 cd docs
 uv run sphinx-build -M html . _build -W
 (xdg-)open _build/html/index.html
 ```
-
 ::::
 
 ::::{group-tab} Pip
-
 ```bash
 source .venv/bin/activate
 cd docs
 sphinx-build -M html . _build -W
 (xdg-)open _build/html/index.html
 ```
-
 ::::
 :::::

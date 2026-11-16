@@ -10,10 +10,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from scanpy import settings
-
-from squidpy.datasets._downloader import get_downloader
-from squidpy.datasets._registry import DatasetType, get_registry
+from squidpy._validators import normalize_choice
+from squidpy.datasets._downloader import download
+from squidpy.datasets._registry import dataset_names, get_registry
 from squidpy.read._utils import PathLike
 
 if TYPE_CHECKING:
@@ -90,7 +89,7 @@ ImageDatasets = Literal[
 ]
 
 # SpatialData datasets (.zarr)
-SpatialDataDatasets = Literal["visium_hne_sdata",]
+SpatialDataDatasets = Literal["visium_hne_sdata", "cells"]
 
 
 # =============================================================================
@@ -122,19 +121,13 @@ def visium(
     :class:`anndata.AnnData`
         Spatial AnnData object.
     """
-    # Validate sample_id against known names
-    downloader = get_downloader()
+    # guard against the visium_10x names specifically: a valid-but-wrong-type name
+    # (e.g. "imc", an AnnData dataset) would otherwise pass and fail deep in the
+    # anndata loader with a confusing ``unexpected keyword argument 'include_hires_tiff'``.
+    sample_id = normalize_choice(sample_id, dataset_names("visium_10x"), name="sample_id")
 
-    if sample_id not in downloader.registry:
-        msg = f"Unknown Visium sample: {sample_id}. "
-        msg += f"Available samples: {downloader.registry.visium_datasets}"
-        raise ValueError(msg)
-
-    # Use scanpy.settings.datasetdir/visium if base_dir not specified
-    if base_dir is None:
-        base_dir = Path(settings.datasetdir) / "visium"
-
-    return downloader.download(sample_id, base_dir, include_hires_tiff=include_hires_tiff)
+    # downloads land in <datasetdir>/visium_10x/<sample_id>/
+    return download(sample_id, base_dir, include_hires_tiff=include_hires_tiff)
 
 
 def visium_hne_sdata(folderpath: Path | str | None = None) -> sd.SpatialData:
@@ -152,8 +145,25 @@ def visium_hne_sdata(folderpath: Path | str | None = None) -> sd.SpatialData:
     :class:`spatialdata.SpatialData`
         The downloaded and extracted Visium H&E dataset.
     """
-    downloader = get_downloader()
-    return downloader.download("visium_hne_sdata", folderpath)
+    return download("visium_hne_sdata", folderpath)
+
+
+def cells(folderpath: Path | str | None = None) -> sd.SpatialData:
+    """
+    Download the cells dataset as a SpatialData object.
+
+    Parameters
+    ----------
+    folderpath
+        A folder path where the dataset will be downloaded and extracted.
+        If `None`, uses :attr:`scanpy.settings.datasetdir`.
+
+    Returns
+    -------
+    :class:`spatialdata.SpatialData`
+        The downloaded and extracted cells dataset.
+    """
+    return download("cells", folderpath)
 
 
 # =============================================================================
@@ -185,9 +195,9 @@ _IMAGE_DOC = _DocParts(
     return_type=":class:`squidpy.im.ImageContainer`\n        The image data.",
 )
 
-_DOC_PARTS_BY_TYPE: dict[DatasetType, _DocParts] = {
-    DatasetType.ANNDATA: _ANNDATA_DOC,
-    DatasetType.IMAGE: _IMAGE_DOC,
+_DOC_PARTS_BY_TYPE: dict[str, _DocParts] = {
+    "anndata": _ANNDATA_DOC,
+    "image": _IMAGE_DOC,
 }
 
 
@@ -206,12 +216,12 @@ def _make_loader(dataset_name: str):
         raise ValueError(f"Unsupported type for loader factory: {entry.type}")
 
     def loader(path: PathLike | None = None, **kwargs: Any):
-        return get_downloader().download(dataset_name, path, **kwargs)
+        return download(dataset_name, path, **kwargs)
 
     loader.__doc__ = f"""
-    {entry.doc_header}
+    {entry.metadata.get("doc_header")}
 
-    {doc_parts.shape_prefix} ``{entry.shape}``.
+    {doc_parts.shape_prefix} ``{entry.metadata.get("shape")}``.
 
     Parameters
     ----------

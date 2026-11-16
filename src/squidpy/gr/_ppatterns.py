@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from numba import njit, prange
-from numpy.random import default_rng
 from scanpy import logging as logg
 from scanpy.metrics import gearys_c, morans_i
 from scipy import stats
@@ -20,11 +19,21 @@ from sklearn.preprocessing import normalize
 from spatialdata import SpatialData
 from statsmodels.stats.multitest import multipletests
 
-from squidpy._constants._constants import SpatialAutocorr
+from squidpy._compat import old_positionals
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, deprecated_params, parallelize
-from squidpy._validators import assert_key_in_adata, assert_positive
+from squidpy._utils import (
+    NDArrayA,
+    RNGLike,
+    SeedLike,
+    Signal,
+    SigQueue,
+    deprecated_params,
+    deprecated_randomness_param,
+    get_n_processes,
+    parallelize,
+)
+from squidpy._validators import assert_key_in_adata, assert_positive, normalize_choice
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_connectivity_key,
@@ -45,31 +54,60 @@ bl = nt.boolean
 
 
 @d.dedent
-@inject_docs(key=Key.obsp.spatial_conn(), sp=SpatialAutocorr)
+@inject_docs(key=Key.obsp.spatial_conn())
+@old_positionals(
+    "connectivity_key",
+    "genes",
+    "mode",
+    "transformation",
+    "n_perms",
+    "two_tailed",
+    "corr_method",
+    "attr",
+    "layer",
+    "seed",
+    "use_raw",
+    "copy",
+    "n_jobs",
+    "backend",
+    "show_progress_bar",
+)
+@deprecated_randomness_param
 def spatial_autocorr(
     adata: AnnData | SpatialData,
+    *,
     connectivity_key: str = Key.obsp.spatial_conn(),
     genes: str | int | Sequence[str] | Sequence[int] | None = None,
-    mode: SpatialAutocorr | Literal["moran", "geary"] = "moran",
+    mode: Literal["moran", "geary"] = "moran",
     transformation: bool = True,
     n_perms: int | None = None,
     two_tailed: bool = False,
     corr_method: str | None = "fdr_bh",
     attr: Literal["obs", "X", "obsm"] = "X",
     layer: str | None = None,
-    seed: int | None = None,
+    rng: SeedLike | RNGLike | None = None,
     use_raw: bool = False,
     copy: bool = False,
     n_jobs: int | None = None,
     backend: str = "loky",
     show_progress_bar: bool = True,
-    *,
     table_key: str | None = None,
 ) -> pd.DataFrame | None:
     """
     Calculate Global Autocorrelation Statistic (Moran’s I  or Geary's C).
 
     See :cite:`pysal` for reference.
+
+    .. versionchanged:: 1.8.2
+        The analytic (normality-assumption) variance for Geary's C was corrected; previously the
+        Moran's I variance was reused for ``mode = 'geary'``. As a result, ``'var_norm'`` and
+        ``'pval_norm'`` for Geary's C differ from earlier versions. Permutation-based p-values
+        (``'pval_sim'``, ``'pval_z_sim'``) are unaffected.
+        See `#1183 <https://github.com/scverse/squidpy/issues/1183>`_.
+
+    %(seed_versionchanged)s
+
+    %(rng_versionchanged)s
 
     Parameters
     ----------
@@ -90,8 +128,8 @@ def spatial_autocorr(
     mode
         Mode of score calculation:
 
-            - `{sp.MORAN.s!r}` - `Moran's I autocorrelation <https://en.wikipedia.org/wiki/Moran%27s_I>`_.
-            - `{sp.GEARY.s!r}` - `Geary's C autocorrelation <https://en.wikipedia.org/wiki/Geary%27s_C>`_.
+            - `'moran'` - `Moran's I autocorrelation <https://en.wikipedia.org/wiki/Moran%27s_I>`_.
+            - `'geary'` - `Geary's C autocorrelation <https://en.wikipedia.org/wiki/Geary%27s_C>`_.
 
     transformation
         If `True`, weights in :attr:`anndata.AnnData.obsp` ``['{key}']`` are row-normalized,
@@ -108,7 +146,7 @@ def spatial_autocorr(
         Layer in :attr:`anndata.AnnData.layers` to use. If `None`, use :attr:`anndata.AnnData.X`.
     attr
         Which attribute of :class:`~anndata.AnnData` to access. See ``genes`` parameter for more information.
-    %(seed)s
+    %(rng)s
     %(copy)s
     %(parallelize)s
 
@@ -129,11 +167,11 @@ def spatial_autocorr(
 
     Otherwise, modifies the ``adata`` with the following key:
 
-        - :attr:`anndata.AnnData.uns` ``['moranI']`` - the above mentioned dataframe, if ``mode = {sp.MORAN.s!r}``.
-        - :attr:`anndata.AnnData.uns` ``['gearyC']`` - the above mentioned dataframe, if ``mode = {sp.GEARY.s!r}``.
+        - :attr:`anndata.AnnData.uns` ``['moranI']`` - the above mentioned dataframe, if ``mode = 'moran'``.
+        - :attr:`anndata.AnnData.uns` ``['gearyC']`` - the above mentioned dataframe, if ``mode = 'geary'``.
     """
     adata = extract_adata_if_sdata(adata, table_key=table_key)
-    _assert_connectivity_key(adata, connectivity_key)
+    _assert_connectivity_key(adata, key=connectivity_key)
 
     def extract_X(adata: AnnData, genes: str | Sequence[str] | None) -> tuple[NDArrayA | spmatrix, Sequence[Any]]:
         if genes is None:
@@ -168,24 +206,23 @@ def spatial_autocorr(
 
         return adata.obsm[layer][:, ixs].T, ixs
 
+    attr = normalize_choice(attr, ("obs", "X", "obsm"), name="attr")
     if attr == "X":
         vals, index = extract_X(adata, genes)  # type: ignore
     elif attr == "obs":
         vals, index = extract_obs(adata, genes)  # type: ignore
-    elif attr == "obsm":
-        vals, index = extract_obsm(adata, genes)  # type: ignore
     else:
-        raise NotImplementedError(f"Extracting from `adata.{attr}` is not yet implemented.")
+        vals, index = extract_obsm(adata, genes)  # type: ignore
 
-    mode = SpatialAutocorr(mode)
-    params = {"mode": mode.s, "transformation": transformation, "two_tailed": two_tailed}
+    mode = normalize_choice(mode, ("moran", "geary"), name="mode")
+    params = {"mode": mode, "transformation": transformation, "two_tailed": two_tailed}
 
-    if mode == SpatialAutocorr.MORAN:
+    if mode == "moran":
         params["func"] = morans_i
         params["stat"] = "I"
         params["expected"] = -1.0 / (adata.shape[0] - 1)  # expected score
         params["ascending"] = False
-    elif mode == SpatialAutocorr.GEARY:
+    elif mode == "geary":
         params["func"] = gearys_c
         params["stat"] = "C"
         params["expected"] = 1.0
@@ -199,21 +236,21 @@ def spatial_autocorr(
 
     score = params["func"](g, vals)  # type: ignore
 
-    n_jobs = _get_n_cores(n_jobs)
+    n_jobs = get_n_processes(n_jobs)
     start = logg.info(f"Calculating {mode}'s statistic for `{n_perms}` permutations using `{n_jobs}` core(s)")
     if n_perms is not None:
         assert_positive(n_perms, name="n_perms")
         perms = list(np.arange(n_perms))
+        rngs = np.random.default_rng(rng).spawn(n_perms)
 
         score_perms = parallelize(
             _score_helper,
             collection=perms,
             extractor=np.concatenate,
-            use_ixs=True,
             n_jobs=n_jobs,
             backend=backend,
             show_progress_bar=show_progress_bar,
-        )(mode=mode, g=g, vals=vals, seed=seed)
+        )(mode=mode, g=g, vals=vals, rngs=rngs)
     else:
         score_perms = None
 
@@ -240,19 +277,19 @@ def spatial_autocorr(
 
 
 def _score_helper(
-    ix: int,
     perms: Sequence[int],
-    mode: SpatialAutocorr,
+    mode: Literal["moran", "geary"],
     g: spmatrix,
     vals: NDArrayA,
-    seed: int | None = None,
+    rngs: Sequence[np.random.Generator],
+    *,
     queue: SigQueue | None = None,
 ) -> pd.DataFrame:
     score_perms = np.empty((len(perms), vals.shape[0]))
-    rng = default_rng(None if seed is None else ix + seed)
-    func = morans_i if mode == SpatialAutocorr.MORAN else gearys_c
+    func = morans_i if mode == "moran" else gearys_c
 
-    for i in range(len(perms)):
+    for i, p in enumerate(perms):
+        rng = rngs[p]
         idx_shuffle = rng.permutation(g.shape[0])
         score_perms[i, :] = func(g[idx_shuffle, :], vals)
 
@@ -266,7 +303,7 @@ def _score_helper(
 
 
 @njit(parallel=True, fastmath=True, cache=True)
-def _occur_count(
+def _occur_count(  # noqa: PLR0917, numba requires positional arguments
     spatial_x: NDArrayA, spatial_y: NDArrayA, thresholds: NDArrayA, label_idx: NDArrayA, n: int, k: int, l_val: int
 ) -> NDArrayA:
     # Allocate a 2D array to store a flat local result per point.
@@ -281,7 +318,7 @@ def _occur_count(
             dy = spatial_y[i] - spatial_y[j]
             d2 = dx * dx + dy * dy
 
-            pair = label_idx[i] * k + label_idx[j]  # fixed in r–loop
+            pair = label_idx[i] * k + label_idx[j]  # fixed in r-loop
             base = pair * l_val  # first cell for that pair
 
             for r in range(l_val):
@@ -303,9 +340,9 @@ def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs
     Parameters
     ----------
     v_x : np.ndarray, float64
-         x–coordinates.
+         x-coordinates.
     v_y : np.ndarray, float64
-         y–coordinates.
+         y-coordinates.
     v_radium : np.ndarray, float64
          Distance thresholds (in ascending order).
     labs : np.ndarray
@@ -344,14 +381,15 @@ def _co_occurrence_helper(v_x: NDArrayA, v_y: NDArrayA, v_radium: NDArrayA, labs
 
 
 @d.dedent
+@old_positionals("cluster_key", "spatial_key", "interval", "copy")
 @deprecated_params({"n_splits": "1.10.0", "n_jobs": "1.10.0", "backend": "1.10.0", "show_progress_bar": "1.10.0"})
 def co_occurrence(
     adata: AnnData | SpatialData,
+    *,
     cluster_key: str,
     spatial_key: str = Key.obsm.spatial,
     interval: int | NDArrayA = 50,
     copy: bool = False,
-    *,
     table_key: str | None = None,
 ) -> tuple[NDArrayA, NDArrayA] | None:
     """
@@ -385,8 +423,10 @@ def co_occurrence(
 
     spatial = adata.obsm[spatial_key].astype(fp)
     original_clust = adata.obs[cluster_key]
-    clust_map = {v: i for i, v in enumerate(original_clust.cat.categories.values)}
-    labs = np.array([clust_map[c] for c in original_clust], dtype=ip)
+    labs = original_clust.cat.codes.to_numpy().astype(ip)  # same mapping, without a per-cell loop
+    if (labs < 0).any():
+        # code -1 would index out of bounds in the kernel (the old per-cell dict raised KeyError)
+        raise ValueError(f"`adata.obs[{cluster_key!r}]` contains missing values.")
 
     # create intervals thresholds
     if isinstance(interval, int):
@@ -493,11 +533,23 @@ def _analytic_pval(score: NDArrayA, g: spmatrix | NDArrayA, params: dict[str, An
     s0, s1, s2 = _g_moments(g)
     n = g.shape[0]
     s02 = s0 * s0
-    n2 = n * n
-    v_num = n2 * s1 - n * s2 + 3 * s02
-    v_den = (n - 1) * (n + 1) * s02
 
-    Vscore_norm = v_num / v_den - (1.0 / (n - 1)) ** 2
+    match params["mode"]:
+        case "geary":
+            # Geary's C and Moran's I have different sampling variances under the
+            # normality assumption (Cliff & Ord 1981). Use the Geary's C variance
+            # (matching pysal/esda ``Geary``); reusing Moran's variance here gives a
+            # miscalibrated analytic p-value (see #1183).
+            Vscore_norm = ((2 * s1 + s2) * (n - 1) - 4 * s02) / (2 * (n + 1) * s02)
+        case "moran":
+            # Moran's I normality variance (Cliff & Ord 1981; pysal/esda ``Moran``).
+            n2 = n * n
+            v_num = n2 * s1 - n * s2 + 3 * s02
+            v_den = (n - 1) * (n + 1) * s02
+            Vscore_norm = v_num / v_den - (1.0 / (n - 1)) ** 2
+        case mode:
+            raise AssertionError(f"Unexpected mode `{mode}`.")
+
     seScore_norm = Vscore_norm ** (1 / 2.0)
 
     z_norm = (score - params["expected"]) / seScore_norm

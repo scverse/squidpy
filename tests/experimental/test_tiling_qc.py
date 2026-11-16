@@ -11,9 +11,7 @@ import squidpy as sq
 from squidpy.experimental.im._tiling import compute_cell_info, compute_cell_info_tiled
 from tests.conftest import PlotTester, PlotTesterMeta
 
-# ---------------------------------------------------------------------------
 # Core behavioural tests
-# ---------------------------------------------------------------------------
 
 
 class TestCalculateTilingQC:
@@ -53,7 +51,7 @@ class TestCalculateTilingQC:
         assert cut.mean() > intact.mean()
 
     def test_tiled_vs_single_tile(self, sdata_tile_boundary):
-        """Tiling must not change results — scores should be identical."""
+        """Tiling must not change results - scores should be identical."""
         sdata, _ = sdata_tile_boundary
         adata_tiled = sq.experimental.tl.calculate_tiling_qc(
             sdata,
@@ -104,6 +102,9 @@ class TestCalculateTilingQC:
 
         # n_neighbors stored in uns
         assert adata.uns["tiling_qc"]["n_neighbors"] == 10
+        assert adata.uns["tiling_qc"]["distance_tol"] == 0.75
+        assert adata.uns["tiling_qc"]["min_area"] == 20
+        assert adata.uns["tiling_qc"]["max_contour_points"] == 500
 
     def test_outlier_fraction_consistent_with_is_outlier(self, sdata_tile_boundary):
         """nhood_outlier_fraction should be 1.0 only when all k neighbors are outliers."""
@@ -168,7 +169,7 @@ class TestCalculateTilingQC:
 
     def test_invalid_nmads_raises(self, sdata_tile_boundary):
         sdata, _ = sdata_tile_boundary
-        with pytest.raises(ValueError, match="nmads_cut must be positive"):
+        with pytest.raises(ValueError, match="`nmads_cut` to be positive"):
             sq.experimental.tl.calculate_tiling_qc(
                 sdata,
                 labels_key="labels",
@@ -176,7 +177,7 @@ class TestCalculateTilingQC:
                 inplace=False,
                 nmads_cut=0,
             )
-        with pytest.raises(ValueError, match="nmads_smoothed must be positive"):
+        with pytest.raises(ValueError, match="`nmads_smoothed` to be positive"):
             sq.experimental.tl.calculate_tiling_qc(
                 sdata,
                 labels_key="labels",
@@ -214,9 +215,67 @@ class TestCalculateTilingQC:
         assert adata.obs["is_outlier"].dtype == bool
 
 
-# ---------------------------------------------------------------------------
+# Params resolution
+
+
+class TestTilingQCParamsValidation:
+    def test_min_area_reaches_the_scorer(self, sdata_tile_boundary):
+        sdata, _ = sdata_tile_boundary
+        adata = sq.experimental.tl.calculate_tiling_qc(sdata, labels_key="labels", inplace=False, min_area=10**9)
+        assert adata.obs["cut_score"].isna().all()
+
+    @pytest.mark.parametrize(
+        ("kwargs", "match"),
+        [
+            ({"distance_tol": -1.0}, "`distance_tol` to be non-negative"),
+            ({"min_area": 0}, "`min_area` to be positive"),
+            ({"max_contour_points": 2}, "`max_contour_points` must be >= 3"),
+            ({"min_area": 0.5}, "`min_area` to be positive"),
+            ({"n_neighbors": 0.5}, "n_neighbors must be >= 1"),
+        ],
+        ids=[
+            "negative_distance_tol",
+            "zero_min_area",
+            "tiny_max_contour_points",
+            "fractional_min_area",
+            "fractional_n_neighbors",
+        ],
+    )
+    def test_invalid_raises_value_error(self, sdata_tile_boundary, kwargs, match):
+        sdata, _ = sdata_tile_boundary
+        with pytest.raises(ValueError, match=match):
+            sq.experimental.tl.calculate_tiling_qc(sdata, labels_key="labels", inplace=False, **kwargs)
+
+
+# resolve_labels_array helper
+
+
+class TestResolveLabelsArray:
+    def test_single_scale_passthrough(self, sdata_clean):
+        from squidpy.experimental.utils._labels import resolve_labels_array
+
+        da = resolve_labels_array(sdata_clean, labels_key="labels", scale=None)
+        assert da is sdata_clean.labels["labels"]
+
+    def test_multi_scale_without_scale_raises(self):
+        from spatialdata import SpatialData
+        from spatialdata.models import Labels2DModel
+
+        from squidpy.experimental.utils._labels import resolve_labels_array
+
+        labels = np.zeros((128, 128), dtype=np.int32)
+        labels[20:40, 20:40] = 1
+        ms_labels = Labels2DModel.parse(
+            xr.DataArray(da.from_array(labels, chunks=(64, 64)), dims=["y", "x"]),
+            scale_factors=[2],
+        )
+        sdata = SpatialData(labels={"labels": ms_labels})
+
+        with pytest.raises(ValueError, match="multi-scale"):
+            resolve_labels_array(sdata, labels_key="labels", scale=None)
+
+
 # Tiled centroid backend
-# ---------------------------------------------------------------------------
 
 
 class TestComputeCellInfoTiled:
@@ -267,9 +326,7 @@ class TestComputeCellInfoTiled:
             assert ci_tiled.bbox_w == ci_ref.bbox_w
 
 
-# ---------------------------------------------------------------------------
 # Visual regression tests (PlotTester)
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture()

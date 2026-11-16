@@ -1,0 +1,434 @@
+"""Public, ``sdata``-aware entry points for stain normalization.
+
+The single integration boundary for the stain module: the only file that
+reads ``sdata.images[...]``, writes back via :class:`Image2DModel`, and is
+re-exported publicly. Everything it calls is a pure DataArray-layer
+primitive (:mod:`._reinhard`, :mod:`._mask`, :mod:`._conversion`).
+
+Both entry points dispatch on the fitting ``method`` (``"reinhard"`` colour
+transfer, or ``"macenko"``/``"vahadane"`` absorbance decomposition); a third
+entry, :meth:`~squidpy.experimental.im.StainFit.decompose`, projects an image onto its stain matrix.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable, Mapping
+from typing import Any, Literal
+
+import numpy as np
+import spatialdata as sd
+import xarray as xr
+from numpy.typing import DTypeLike
+from spatialdata.models import Image2DModel
+from spatialdata.transformations import get_transformation
+
+from squidpy._params import resolve_params
+from squidpy._utils import _get_scale_factors
+from squidpy._validators import normalize_choice
+from squidpy.experimental.im._stain._constants import RUIFROK_HE
+from squidpy.experimental.im._stain._conversion import _check_channel_dim, cast_to_image_dtype
+from squidpy.experimental.im._stain._decomposition import (
+    apply_decomposition,
+    decompose_to_concentrations,
+    fit_decomposition,
+    validate_macenko_params,
+    validate_vahadane_params,
+)
+from squidpy.experimental.im._stain._reference import (
+    _DECOMPOSITION_METHODS,
+    _VALID_METHODS,
+    StainFit,
+    StainMethod,
+)
+from squidpy.experimental.im._stain._reinhard import (
+    apply_reinhard,
+    fit_reinhard,
+    validate_reinhard_params,
+)
+from squidpy.experimental.im._stain._white_point import (
+    default_white_point,
+    validate_rgb_range,
+    white_point_from_background,
+)
+from squidpy.experimental.im._utils import (
+    _choose_label_scale_for_image,
+    get_element_data,
+    get_mask_materialized,
+    resolve_tissue_mask,
+)
+from squidpy.types import MacenkoParams, ReinhardParams, VahadaneParams
+
+#: The params type each method takes.
+_METHOD_PARAMS: dict[str, type[ReinhardParams | MacenkoParams | VahadaneParams]] = {
+    "reinhard": ReinhardParams,
+    "macenko": MacenkoParams,
+    "vahadane": VahadaneParams,
+}
+#: The validator each method's params are resolved with (coerces in place, raises on bad values).
+_METHOD_VALIDATORS: dict[str, Callable[[dict[str, Any]], None]] = {
+    "reinhard": validate_reinhard_params,
+    "macenko": validate_macenko_params,
+    "vahadane": validate_vahadane_params,
+}
+_CONCENTRATION_CHANNELS = ["hematoxylin", "eosin", "residual"]
+
+# Public union accepted by the method_params argument of the dispatchers.
+MethodParams = ReinhardParams | MacenkoParams | VahadaneParams | Mapping[str, Any] | None
+
+
+def _resolve_image(
+    sdata: sd.SpatialData,
+    *,
+    image_key: str,
+    scale: str,
+    prefer: Literal["coarsest", "finest"],
+) -> xr.DataArray:
+    if image_key not in sdata.images:
+        raise ValueError(f"image_key {image_key!r} not found, valid keys: {list(sdata.images.keys())}")
+    node = sdata.images[image_key]
+    da = get_element_data(node, scale, "image", image_key, prefer=prefer)
+    _check_channel_dim(da)
+    return da
+
+
+def _resolve_mask_key_and_scale(
+    sdata: sd.SpatialData, *, image_key: str, target_da: xr.DataArray, tissue_mask_key: str | None
+) -> tuple[str, str, tuple[int, int]]:
+    """Resolve the (mandatory) tissue-mask key and the label scale closest to ``target_da``.
+
+    Shared by the two mask consumers below. Consumes a
+    :func:`!detect_tissue` labels element - raises if
+    none exists.
+    """
+    mask_key = resolve_tissue_mask(
+        sdata, image_key=image_key, scale="auto", tissue_mask_key=tissue_mask_key, auto_create=False
+    )
+    target_hw = (int(target_da.sizes["y"]), int(target_da.sizes["x"]))
+    label_scale = _choose_label_scale_for_image(sdata.labels[mask_key], target_hw)
+    return mask_key, label_scale, target_hw
+
+
+def _resolve_tissue_bool_mask(
+    sdata: sd.SpatialData, *, image_key: str, fit_da: xr.DataArray, tissue_mask_key: str | None
+) -> np.ndarray:
+    """Return a materialised ``(y, x)`` boolean tissue mask aligned to ``fit_da``.
+
+    For the (coarse) fit: nearest-resizes to ``fit_da``'s ``(y, x)`` when the
+    closest label scale differs. The fits run on a coarse level, so the mask
+    stays small.
+    """
+    mask_key, label_scale, target_hw = _resolve_mask_key_and_scale(
+        sdata, image_key=image_key, target_da=fit_da, tissue_mask_key=tissue_mask_key
+    )
+    mask = get_mask_materialized(sdata, mask_key=mask_key, scale=label_scale) > 0
+    if mask.shape != target_hw:
+        from skimage.transform import resize
+
+        mask = resize(mask, target_hw, order=0, preserve_range=True) > 0.5
+    return mask
+
+
+def _resolve_fit_inputs(
+    sdata: sd.SpatialData, *, image_key: str, scale: str, tissue_mask_key: str | None
+) -> tuple[xr.DataArray, np.ndarray]:
+    da = _resolve_image(sdata, image_key=image_key, scale=scale, prefer="coarsest")
+    validate_rgb_range(da)
+    return da, _resolve_tissue_bool_mask(sdata, image_key=image_key, fit_da=da, tissue_mask_key=tissue_mask_key)
+
+
+def _resolve_output_tissue_mask(
+    sdata: sd.SpatialData, *, image_key: str, target_da: xr.DataArray, tissue_mask_key: str | None
+) -> xr.DataArray:
+    """Return a lazy ``(y, x)`` boolean tissue mask aligned to ``target_da``.
+
+    Like :func:`_resolve_tissue_bool_mask` but kept lazy and at the (full-res)
+    output resolution, for compositing the original background back into the
+    normalized image without materialising the full frame. The label pyramid
+    shares the image's scale factors, so the matching level usually lines up
+    exactly; only a residual size mismatch forces a (small) eager resize.
+    """
+    mask_key, label_scale, target_hw = _resolve_mask_key_and_scale(
+        sdata, image_key=image_key, target_da=target_da, tissue_mask_key=tissue_mask_key
+    )
+    coords = {d: target_da.coords[d] for d in ("y", "x") if d in target_da.coords}
+    mask = get_element_data(sdata.labels[mask_key], label_scale, "label", mask_key).squeeze() > 0
+    if (int(mask.sizes["y"]), int(mask.sizes["x"])) == target_hw:
+        return mask.assign_coords(coords)
+    from skimage.transform import resize
+
+    resized = resize(np.asarray(mask.data) > 0, target_hw, order=0, preserve_range=True) > 0.5
+    return xr.DataArray(resized, dims=("y", "x"), coords=coords)
+
+
+def _write_image(
+    sdata: sd.SpatialData,
+    *,
+    source_node: Any,
+    image_key_added: str,
+    data_array: xr.DataArray,
+    c_coords: list[Any] | None = None,
+) -> None:
+    """Write a derived image element, preserving the source's transforms/pyramid.
+
+    Reconstructs the element from the bare array (a derived DataArray would
+    carry the source's ``transform`` attr and collide with the transformations
+    we pass) plus the dims/channel-coords/transforms to preserve. The same
+    idiom as detect_tissue. ``_get_scale_factors`` returns ``[]`` for a
+    single-scale source; parse needs ``None`` there (an empty list builds a
+    degenerate single-level pyramid).
+    """
+    if image_key_added in sdata.images:
+        raise ValueError(f"image_key_added={image_key_added!r} already exists in sdata.images.")
+    if c_coords is None:
+        c_coords = data_array.coords["c"].values.tolist() if "c" in data_array.coords else None
+    sdata.images[image_key_added] = Image2DModel.parse(
+        data_array.data,
+        dims=data_array.dims,
+        c_coords=c_coords,
+        transformations=get_transformation(source_node, get_all=True),
+        scale_factors=_get_scale_factors(source_node) or None,
+    )
+
+
+def estimate_white_point(
+    sdata: sd.SpatialData,
+    *,
+    image_key: str,
+    tissue_mask_key: str | None = None,
+    scale: str | Literal["auto"] = "auto",
+) -> np.ndarray:
+    """Estimate the white point ``I_0`` from a slide's background (non-tissue median).
+
+    Opt-in alternative to the fixed dtype-aware default white point, for a slide
+    whose unstained background is genuinely not full white. Samples the
+    per-channel median over **non-tissue** pixels (background = the complement of
+    the :func:`!detect_tissue` mask).
+
+    Parameters
+    ----------
+    sdata, image_key
+        The SpatialData object and the RGB image key.
+    tissue_mask_key
+        Tissue-label element key (defaults to ``f"{image_key}_tissue"``); a
+        tissue mask is required, as for :func:`fit_stain_reference`.
+    scale
+        Scale level to sample on. ``"auto"`` uses the coarsest level.
+        The sampled level is materialised to take the median, so keep this
+        coarse - do not pass a fine level on a whole-slide image.
+
+    Returns
+    -------
+    Shape-``(3,)`` white point; pass it as ``white_point`` to
+    :func:`fit_stain_reference` / :meth:`~squidpy.experimental.im.StainFit.decompose`.
+    """
+    da, tissue_mask = _resolve_fit_inputs(sdata, image_key=image_key, scale=scale, tissue_mask_key=tissue_mask_key)
+    return white_point_from_background(da, ~tissue_mask)
+
+
+def fit_stain_reference(
+    sdata: sd.SpatialData,
+    *,
+    image_key: str | list[str],
+    method: StainMethod = "macenko",
+    scale: str | Literal["auto"] = "auto",
+    method_params: MethodParams = None,
+    white_point: np.ndarray | None = None,
+    tissue_mask_key: str | list[str] | None = None,
+    max_angle_deg: float = 45.0,
+    canonical_reference: Mapping[str, np.ndarray] | None = None,
+) -> StainFit:
+    """Fit a stain reference from an image in a :class:`~spatialdata.SpatialData` object.
+
+    Parameters
+    ----------
+    sdata
+        SpatialData object containing the image.
+    image_key
+        Key of the RGB image in ``sdata.images`` to fit on, or a **list of keys**
+        to fit one reference from the pooled tissue pixels of several images
+        (e.g. a representative cohort). Pooled images must share a dtype. The
+        pool is a pool of *pixels*: each image contributes in proportion to its
+        tissue pixel count at the resolved ``scale``, not equally, so images
+        whose pyramids bottom out at different sizes carry different weight.
+    method
+        Fitting method: ``"macenko"`` or ``"vahadane"`` (physical
+        stain-matrix decomposition, usable by both :meth:`~squidpy.experimental.im.StainFit.transform` and
+        :meth:`~squidpy.experimental.im.StainFit.decompose`), or ``"reinhard"`` (faster statistical colour
+        transfer, no stain separation). Macenko is the default because its one
+        documented weakness - artifact pixels contaminating the fit - is removed
+        by the mandatory tissue mask.
+    scale
+        Scale level to fit on. ``"auto"`` uses the coarsest level,
+        which is cheap and sufficient for colour statistics.
+    method_params
+        A mapping of ``ReinhardParams``/``MacenkoParams``/``VahadaneParams`` keys,
+        or ``None`` for defaults. Must match ``method``.
+    white_point
+        Per-channel white point ``I_0`` ``(3,)`` for the decomposition methods.
+        If ``None``, a fixed full-white ``[255, 255, 255]`` is used (the
+        HistomicsTK/Macenko convention), so unstained pixels round-trip to
+        white. Pass :func:`estimate_white_point` only for slides with a
+        known non-white background. Ignored by Reinhard.
+    tissue_mask_key
+        Key of a tissue-label element in ``sdata.labels`` (as produced by
+        :func:`!detect_tissue`) restricting the fit to
+        tissue pixels. If ``None``, ``f"{image_key}_tissue"`` is used. A tissue
+        mask is **required**: if neither exists, a :class:`KeyError` asks you to
+        run :func:`!detect_tissue` first. When ``image_key`` is a list, pass a
+        list of mask keys **order-matched** to it (or ``None`` for the
+        ``{key}_tissue`` convention per image).
+    max_angle_deg
+        Tolerance of the H/E sanity gate for the decomposition methods: the fit
+        raises :class:`!StainFittingError` if either recovered stain vector
+        deviates more than this many degrees from its canonical reference.
+        Default ``45``. Ignored by Reinhard.
+    canonical_reference
+        Canonical H/E reference for the decomposition methods, a mapping with
+        ``"hematoxylin"`` and ``"eosin"`` keys to ``(3,)`` RGB optical-density
+        unit vectors. Drives both the H/E column ordering and the deviation
+        gate. If ``None``, the Ruifrok H&E vectors are used. Ignored by Reinhard.
+
+    Returns
+    -------
+    The fitted :class:`~squidpy.experimental.im.StainFit`. Nothing is written to ``sdata``.
+    """
+    method = normalize_choice(method, _VALID_METHODS, name="method")
+    # Normalise to lists: a single image is a pool of one, so both cases share one path.
+    keys = [image_key] if isinstance(image_key, str) else list(image_key)
+    if not keys:
+        raise ValueError("`image_key` is empty; pass at least one image key.")
+    if len(set(keys)) != len(keys):
+        dupes = sorted({k for k in keys if keys.count(k) > 1})
+        raise ValueError(f"`image_key` has duplicate keys: {dupes}; each image may be pooled only once.")
+    if tissue_mask_key is None:
+        mask_keys: list[str | None] = [None] * len(keys)
+    else:
+        mask_keys = [tissue_mask_key] if isinstance(tissue_mask_key, str) else list(tissue_mask_key)
+    if len(mask_keys) != len(keys):
+        raise ValueError(
+            f"`tissue_mask_key` has {len(mask_keys)} entries but `image_key` has {len(keys)}; "
+            "pass one mask key per image (order-matched) or None for the `{image_key}_tissue` convention."
+        )
+
+    params = resolve_params(method_params, _METHOD_PARAMS[method], validate=_METHOD_VALIDATORS[method])
+    resolved = [
+        _resolve_fit_inputs(sdata, image_key=k, scale=scale, tissue_mask_key=mk)
+        for k, mk in zip(keys, mask_keys, strict=True)
+    ]
+    das, masks = [d for d, _ in resolved], [m for _, m in resolved]
+    dtypes = {str(da.dtype) for da in das}
+    if len(dtypes) != 1:
+        raise ValueError(f"pooled images must share a dtype; got {sorted(dtypes)}.")
+
+    if method == "reinhard":
+        return fit_reinhard(das, params, tissue_mask=masks, image_key=keys)
+    bg = default_white_point(das[0]) if white_point is None else np.asarray(white_point, np.float64)
+    reference = RUIFROK_HE if canonical_reference is None else dict(canonical_reference)
+    return fit_decomposition(
+        das,
+        method,
+        params,
+        bg,
+        tissue_mask=masks,
+        image_key=keys,
+        reference=reference,
+        max_angle_deg=max_angle_deg,
+    )
+
+
+def _normalize_stains(
+    sdata: sd.SpatialData,
+    *,
+    image_key: str,
+    reference: StainFit,
+    scale: str | Literal["auto"] = "auto",
+    method_params: MethodParams = None,
+    image_key_added: str | None = None,
+    inplace: bool = True,
+    output_dtype: DTypeLike | None = None,
+    tissue_mask_key: str | None = None,
+    preserve_background: bool = True,
+) -> xr.DataArray | None:
+    """Implementation of :meth:`~squidpy.experimental.im.StainFit.transform`, which documents it."""
+    da = _resolve_image(sdata, image_key=image_key, scale=scale, prefer="finest")
+    target_key = image_key_added if image_key_added is not None else f"{image_key}_normalized"
+    if inplace and target_key in sdata.images:
+        raise ValueError(f"image_key_added={target_key!r} already exists in sdata.images.")
+    params = resolve_params(
+        method_params, _METHOD_PARAMS[reference.method], validate=_METHOD_VALIDATORS[reference.method]
+    )
+    # Source statistics (Reinhard mu/sigma or the decomposition source matrix)
+    # are reduced on a coarse level with a tissue mask; the lazy transform is
+    # then applied to the full-resolution `da`.
+    # the range check rejects a mis-typed source (e.g. 0-255 float) before the dtype-clipped reconstruction
+    fit_rgb, tissue_mask = _resolve_fit_inputs(sdata, image_key=image_key, scale=scale, tissue_mask_key=tissue_mask_key)
+    out_dtype = da.dtype if output_dtype is None else np.dtype(output_dtype)  # clip range + final cast
+    if reference.method == "reinhard":
+        normalized = apply_reinhard(
+            da, reference, params, fit_rgb=fit_rgb, tissue_mask=tissue_mask, out_dtype=out_dtype
+        )
+    else:
+        normalized = apply_decomposition(
+            da, reference, params, fit_rgb=fit_rgb, tissue_mask=tissue_mask, out_dtype=out_dtype
+        )
+
+    if preserve_background:
+        # Keep non-tissue pixels byte-identical to the source: the global colour
+        # map would otherwise recolour background/white pixels (HistomicsTK's
+        # `mask_out`). Stays lazy - the mask aligns to `da` without materialising.
+        keep = _resolve_output_tissue_mask(sdata, image_key=image_key, target_da=da, tissue_mask_key=tissue_mask_key)
+        normalized = normalized.where(keep, da)
+
+    # Deferred cast at the write boundary: the reconstruction was kept in float
+    # (clipped to `out_dtype`'s range); round + cast here so the stored image is
+    # the requested dtype and integer background stays byte-identical.
+    normalized = cast_to_image_dtype(normalized, out_dtype)
+
+    # The output is a 3-channel RGB image; tag it r/g/b so RGB-aware viewers
+    # (spatialdata-plot) use one hue-preserving scale, not per-channel auto-contrast.
+    normalized = normalized.assign_coords(c=["r", "g", "b"])
+
+    if not inplace:
+        return normalized
+    _write_image(sdata, source_node=sdata.images[image_key], image_key_added=target_key, data_array=normalized)
+    return None
+
+
+def _decompose_stains(
+    sdata: sd.SpatialData,
+    *,
+    image_key: str,
+    reference: StainFit,
+    scale: str | Literal["auto"] = "auto",
+    image_key_added: str | None = None,
+    inplace: bool = True,
+    output_dtype: DTypeLike = np.float16,
+    include_residual: bool = True,
+) -> dict[str, xr.DataArray] | None:
+    """Implementation of :meth:`~squidpy.experimental.im.StainFit.decompose`, which documents it."""
+    da = _resolve_image(sdata, image_key=image_key, scale=scale, prefer="finest")
+    if reference.method not in _DECOMPOSITION_METHODS or reference.stain_matrix is None:
+        raise ValueError("decompose requires a macenko/vahadane reference with a stain matrix.")
+    stain_matrix, bg = reference.stain_matrix, reference.white_point
+
+    names = ["hematoxylin", "eosin"] + (["residual"] if include_residual else [])
+    prefix = image_key_added if image_key_added is not None else image_key
+    target_keys = [f"{prefix}_{name}" for name in names]
+    if inplace:  # validate all keys free up front, so a partial write can't leave a half-decomposed sdata
+        clashes = [k for k in target_keys if k in sdata.images]
+        if clashes:
+            raise ValueError(f"decompose would overwrite existing image(s): {clashes}.")
+
+    concentrations = decompose_to_concentrations(da, stain_matrix, bg).assign_coords(c=_CONCENTRATION_CHANNELS)
+    concentrations = concentrations.astype(np.dtype(output_dtype))
+
+    if not inplace:
+        return {name: concentrations.sel(c=name) for name in names}
+
+    source = sdata.images[image_key]
+    for name, key in zip(names, target_keys, strict=True):
+        # keep the c dim (length 1) so Image2DModel.parse accepts it
+        _write_image(
+            sdata, source_node=source, image_key_added=key, data_array=concentrations.sel(c=[name]), c_coords=[name]
+        )
+    return None

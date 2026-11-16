@@ -7,8 +7,6 @@ from typing import Any
 
 from anndata import AnnData
 
-from squidpy._constants._constants import Processing, SegmentationBackend
-
 _SEP = "_"
 
 
@@ -23,18 +21,14 @@ class cprop:
 class Key:
     class img:
         @classmethod
-        def segment(cls, backend: str | SegmentationBackend, layer_added: str | None = None) -> str:
-            return f"segmented_{SegmentationBackend(backend).s}" if layer_added is None else layer_added
+        def segment(cls, backend: str, layer_added: str | None = None) -> str:
+            return f"segmented_{backend}" if layer_added is None else layer_added
 
         @classmethod
-        def process(
-            cls, method: str | Processing | Callable[[Any], Any], img_id: str, layer_added: str | None = None
-        ) -> str:
+        def process(cls, method: str | Callable[[Any], Any], img_id: str, layer_added: str | None = None) -> str:
             if layer_added is not None:
                 return layer_added
-            if isinstance(method, Processing):
-                method = method.s
-            elif callable(method):
+            if callable(method):
                 method = getattr(method, "__name__", "custom")
 
             return f"{img_id}_{method}"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable
 from typing import Literal
 
 import dask
@@ -15,6 +16,7 @@ from spatialdata._logging import logger
 from spatialdata.models import TableModel
 
 from squidpy._utils import _ensure_dim_order
+from squidpy._validators import normalize_choice, options_of
 from squidpy.experimental.im._intensity_metrics import hed_metrics
 from squidpy.experimental.im._qc_metrics import _HNE_METRICS, InputKind, QCMetric, get_metric_info
 from squidpy.experimental.im._utils import (
@@ -26,26 +28,26 @@ from squidpy.experimental.im._utils import (
 )
 
 _DEFAULT_HNE_METRICS: list[QCMetric] = [
-    QCMetric.TENENGRAD,
-    QCMetric.VAR_OF_LAPLACIAN,
-    QCMetric.ENTROPY,
-    QCMetric.BRIGHTNESS_MEAN,
-    QCMetric.HEMATOXYLIN_MEAN,
-    QCMetric.EOSIN_MEAN,
+    "tenengrad",
+    "var_of_laplacian",
+    "entropy",
+    "brightness_mean",
+    "hematoxylin_mean",
+    "eosin_mean",
 ]
 
 _DEFAULT_GENERIC_METRICS: list[QCMetric] = [
-    QCMetric.TENENGRAD,
-    QCMetric.VAR_OF_LAPLACIAN,
-    QCMetric.ENTROPY,
-    QCMetric.BRIGHTNESS_MEAN,
+    "tenengrad",
+    "var_of_laplacian",
+    "entropy",
+    "brightness_mean",
 ]
 
 
 def qc_image(
     sdata: SpatialData,
-    image_key: str,
     *,
+    image_key: str,
     scale: str = "scale0",
     metrics: QCMetric | list[QCMetric] | None = None,
     tile_size: Literal["auto"] | tuple[int, int] = "auto",
@@ -70,10 +72,18 @@ def qc_image(
     image_key
         Key of the image in ``sdata.images`` to analyze.
     scale
-        Scale level to use for processing. Defaults to ``"scale0"``.
+        Scale level to use for processing.
     metrics
-        QC metrics to compute. Can be a single metric or list of metrics.
-        If ``None``, uses sensible defaults based on ``is_hne``.
+        QC metric name, or a list of them. ``None`` uses sensible defaults based on
+        ``is_hne``. Accepted values, by what they measure:
+
+        - sharpness: ``"tenengrad"``, ``"var_of_laplacian"``, ``"variance"``,
+          ``"fft_high_freq_energy"``, ``"haar_wavelet_energy"``
+        - intensity: ``"brightness_mean"``, ``"brightness_std"``, ``"entropy"``
+        - staining, H&E only: ``"hematoxylin_mean"``, ``"hematoxylin_std"``,
+          ``"eosin_mean"``, ``"eosin_std"``, ``"he_ratio"``
+        - artifacts, H&E only: ``"fold_fraction"``
+        - tissue coverage: ``"tissue_fraction"``
     tile_size
         Size of tiles for analysis. If ``"auto"``, automatically determines size.
     is_hne
@@ -88,7 +98,7 @@ def qc_image(
         Percentile threshold (0-1) for outlier detection. A tile is flagged as
         an outlier if its within-tissue percentile rank falls below this value.
         For example, ``0.1`` flags the bottom 10% of tissue tiles (by their
-        worst sharpness metric) as outliers. Default is ``0.1``.
+        worst sharpness metric) as outliers.
     progress
         Whether to show progress bar during computation.
     tissue_mask_key
@@ -116,20 +126,21 @@ def qc_image(
 
     if metrics is None:
         metrics = list(_DEFAULT_HNE_METRICS if is_hne else _DEFAULT_GENERIC_METRICS)
-    elif isinstance(metrics, QCMetric):
-        metrics = [metrics]
+    elif isinstance(metrics, str) or not isinstance(metrics, Iterable):
+        metrics = [metrics]  # a non-iterable then fails the name check below
     else:
         metrics = list(metrics)
 
-    if not isinstance(metrics, list) or not all(isinstance(m, QCMetric) for m in metrics):
-        available = ", ".join(m.value for m in QCMetric)
-        raise TypeError(f"metrics must be QCMetric or list of QCMetric. Available: {available}")
+    resolved = [normalize_choice(m, options_of(QCMetric), name="metrics", default=None) for m in metrics]
+    if unknown := [m for m, match in zip(metrics, resolved, strict=True) if match is None]:
+        raise ValueError(f"Unknown metrics {unknown}. Available: {', '.join(options_of(QCMetric))}")
+    metrics = resolved
 
     # Validate H&E constraint
     if not is_hne:
         hne_requested = _HNE_METRICS & set(metrics)
         if hne_requested:
-            names = ", ".join(m.value for m in hne_requested)
+            names = ", ".join(hne_requested)
             raise ValueError(
                 f"H&E-specific metrics ({names}) cannot be used when is_hne=False. "
                 f"Set is_hne=True or remove these metrics."
@@ -145,7 +156,7 @@ def qc_image(
     gray = _to_gray_dask_yx(img_yxc)
     H, W = int(gray.shape[0]), int(gray.shape[1])
 
-    tg = TileGrid(H, W, tile_size)
+    tg = TileGrid(H, W, tile_size=tile_size)
     obs_names = tg.names()
 
     logger.info("Quantifying image quality.")
@@ -166,8 +177,10 @@ def qc_image(
 
     _tissue_binary_da: da.Array | None = None
     if InputKind.MASK in groups or detect_tissue:
-        mask_key_resolved = resolve_tissue_mask(sdata, image_key, scale, tissue_mask_key)
-        raw_mask = get_mask_dask(sdata, mask_key_resolved, scale)
+        mask_key_resolved = resolve_tissue_mask(
+            sdata, image_key=image_key, scale=scale, tissue_mask_key=tissue_mask_key
+        )
+        raw_mask = get_mask_dask(sdata, mask_key=mask_key_resolved, scale=scale)
         _tissue_binary_da = (raw_mask > 0).astype(np.float32).rechunk((tg.ty, tg.tx))
 
     if InputKind.GRAYSCALE in groups:
@@ -187,11 +200,11 @@ def qc_image(
     # Build all dask graphs lazily
     delayed_scores: dict[str, da.Array] = {}
     hed_metric_indices = {
-        QCMetric.HEMATOXYLIN_MEAN: 0,
-        QCMetric.HEMATOXYLIN_STD: 1,
-        QCMetric.EOSIN_MEAN: 2,
-        QCMetric.EOSIN_STD: 3,
-        QCMetric.HE_RATIO: 4,
+        "hematoxylin_mean": 0,
+        "hematoxylin_std": 1,
+        "eosin_mean": 2,
+        "eosin_std": 3,
+        "he_ratio": 4,
     }
     hed_scores: da.Array | None = None
 
@@ -206,20 +219,18 @@ def qc_image(
                     drop_axis=2,
                     new_axis=2,
                 )
-            delayed_scores[m.value] = hed_scores[..., hed_metric_indices[m]]
-            logger.info(f"- Calculating metric: '{m.value}'")
+            delayed_scores[m] = hed_scores[..., hed_metric_indices[m]]
+            logger.info(f"- Calculating metric: '{m}'")
             continue
 
         kind, metric_func = get_metric_info(m)
         source = prepared_inputs[kind]
 
         if kind == InputKind.RGB:
-            delayed_scores[m.value] = da.map_blocks(
-                metric_func, source, dtype=np.float32, chunks=out_chunks, drop_axis=2
-            )
+            delayed_scores[m] = da.map_blocks(metric_func, source, dtype=np.float32, chunks=out_chunks, drop_axis=2)
         else:
-            delayed_scores[m.value] = da.map_blocks(metric_func, source, dtype=np.float32, chunks=out_chunks)
-        logger.info(f"- Calculating metric: '{m.value}'")
+            delayed_scores[m] = da.map_blocks(metric_func, source, dtype=np.float32, chunks=out_chunks)
+        logger.info(f"- Calculating metric: '{m}'")
 
     # Single dask.compute() across all metric types
     if progress:
@@ -230,7 +241,7 @@ def qc_image(
     all_scores: dict[str, np.ndarray] = dict(zip(delayed_scores.keys(), results, strict=True))
 
     # Build AnnData
-    metric_names = [m.value for m in metrics]
+    metric_names = list(metrics)
     first = next(iter(all_scores.values()))
     cents, _ = tg.centroids_and_polygons()
     n_tiles = first.size
@@ -302,7 +313,7 @@ def qc_image(
     shapes_key = f"qc_img_{image_key}_grid"
 
     # Build shapes first (need the index for tile_id linkage)
-    save_tile_grid_to_shapes(sdata, tg, shapes_key, copy_transforms_from_key=image_key)
+    save_tile_grid_to_shapes(sdata, tg=tg, shapes_key=shapes_key, copy_transforms_from_key=image_key)
 
     # Set spatialdata linkage on adata BEFORE TableModel.parse
     adata.obs["grid_name"] = pd.Categorical([shapes_key] * len(adata))
@@ -367,8 +378,10 @@ def _classify_tiles_by_tissue(
         Boolean arrays of shape ``(n_tiles,)``.
     """
     if binary_mask_da is None:
-        mask_key_resolved = resolve_tissue_mask(sdata, image_key, scale, tissue_mask_key)
-        raw_mask = get_mask_dask(sdata, mask_key_resolved, scale)
+        mask_key_resolved = resolve_tissue_mask(
+            sdata, image_key=image_key, scale=scale, tissue_mask_key=tissue_mask_key
+        )
+        raw_mask = get_mask_dask(sdata, mask_key=mask_key_resolved, scale=scale)
         binary_mask_da = (raw_mask > 0).astype(np.float32).rechunk((tg.ty, tg.tx))
 
     H, W = binary_mask_da.shape

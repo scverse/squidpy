@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Literal
 
 import dask.array as da
 import numpy as np
@@ -12,9 +13,12 @@ from scanpy import logging as logg
 from skimage.io import imread
 from tifffile import TiffFile
 
-from squidpy._constants._constants import InferDimensions
-from squidpy._docs import inject_docs
 from squidpy._utils import NDArrayA
+from squidpy._validators import options_of
+
+_InferDim = Literal["default", "channels_last", "z_last"]
+_INFER_DIMS = options_of(_InferDim)
+InferDims_t = _InferDim | Sequence[str]
 
 
 def _assert_dims_present(dims: tuple[str, ...], include_z: bool = True) -> None:
@@ -97,10 +101,9 @@ def _get_image_shape_dtype(fname: str) -> tuple[tuple[int, ...], np.dtype[np.gen
             Image.MAX_IMAGE_PIXELS = old_max_image_pixels
 
 
-@inject_docs(id=InferDimensions)
 def _infer_dimensions(
     obj: NDArrayA | xr.DataArray | str,
-    infer_dimensions: InferDimensions | tuple[str, ...] = InferDimensions.DEFAULT,
+    infer_dimensions: InferDims_t = "default",
 ) -> tuple[tuple[int, ...], tuple[str, ...], np.dtype[np.generic], tuple[int, ...]]:
     """
     Infer dimension names of an array.
@@ -112,9 +115,9 @@ def _infer_dimensions(
     infer_dimensions
         Policy that determines how to name the dimensions. Valid options are:
 
-            - `{id.CHANNELS_LAST.s!r}` - load `channels` dimension as `channels`.
-            - `{id.Z_LAST.s!r}` - load `z` dimension as `channels`.
-            - `{id.DEFAULT.s!r}` - only matters if the number of dimensions is `3` or `4`.
+            - `'channels_last'` - load `channels` dimension as `channels`.
+            - `'z_last'` - load `z` dimension as `channels`.
+            - `'default'` - only matters if the number of dimensions is `3` or `4`.
               If `z` dimension is `1`, load it as `z`.
               Otherwise, if `channels` dimension is `1`, load `z` dimension (now larger than `1`) as `channels`.
               Otherwise, load `z` dimension as `z` and `channels` as `channels`.
@@ -147,7 +150,7 @@ def _infer_dimensions(
         return tuple(np.array(["z", "y", "x", "channels"], dtype=object)[np.argsort(order)])
 
     def infer(y: int, x: int, z: int, c: int) -> tuple[str, ...]:
-        if infer_dimensions == InferDimensions.DEFAULT:
+        if infer_dimensions == "default":
             if shape[z] == 1:
                 return dims([z, y, x, c])
             if shape[c] == 1:
@@ -155,7 +158,7 @@ def _infer_dimensions(
 
             return dims([z, y, x, c])
 
-        if infer_dimensions == InferDimensions.Z_LAST:
+        if infer_dimensions == "z_last":
             return dims([c, y, x, z])
 
         return dims([z, y, x, c])
@@ -168,7 +171,7 @@ def _infer_dimensions(
 
     ndim = len(shape)
 
-    if not isinstance(infer_dimensions, InferDimensions):
+    if not isinstance(infer_dimensions, str):
         if ndim not in (2, 3, 4):
             raise ValueError(f"Expected the image to be either `2`, `3` or `4` dimensional, found `{ndim}`.")
         # explicitly passed dims as tuple
@@ -214,7 +217,7 @@ def _infer_dimensions(
 
 def _lazy_load_image(
     fname: str | Path,
-    dims: InferDimensions | tuple[str, ...] = InferDimensions.DEFAULT,
+    dims: InferDims_t = "default",
     chunks: int | str | tuple[int, ...] | Mapping[str, int | str] | None = None,
 ) -> xr.DataArray:
     # TODO(michalk8): switch to pims for tiffs? or switch completely once lazy-loading of JPEGs is done

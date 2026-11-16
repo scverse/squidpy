@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from typing import Literal
 
 import numpy as np
@@ -8,13 +8,14 @@ import pandas as pd
 from anndata import AnnData
 from numba import njit
 from scanpy import logging as logg
-from scipy.sparse import csr_matrix, isspmatrix_csr, spmatrix
+from scipy.sparse import csc_matrix, csr_matrix, issparse, isspmatrix_csr, spmatrix
 from sklearn.metrics import pairwise_distances
 from spatialdata import SpatialData
 
+from squidpy._compat import old_positionals
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
-from squidpy._utils import NDArrayA, Signal, SigQueue, _get_n_cores, parallelize
+from squidpy._utils import NDArrayA, deprecated_params, get_n_numba_threads, thread_map
 from squidpy._validators import assert_non_empty_sequence
 from squidpy.gr._utils import (
     _assert_connectivity_key,
@@ -29,8 +30,24 @@ __all__ = ["sepal"]
 
 @d.dedent
 @inject_docs(key=Key.obsp.spatial_conn())
+@old_positionals(
+    "max_neighs",
+    "genes",
+    "n_iter",
+    "dt",
+    "thresh",
+    "connectivity_key",
+    "spatial_key",
+    "layer",
+    "use_raw",
+    "copy",
+    "n_jobs",
+    "show_progress_bar",
+)
+@deprecated_params({"backend": "1.10.0"})
 def sepal(
     adata: AnnData | SpatialData,
+    *,
     max_neighs: Literal[4, 6],
     genes: str | Sequence[str] | None = None,
     n_iter: int | None = 30000,
@@ -42,9 +59,7 @@ def sepal(
     use_raw: bool = False,
     copy: bool = False,
     n_jobs: int | None = None,
-    backend: str = "loky",
     show_progress_bar: bool = True,
-    *,
     table_key: str | None = None,
 ) -> pd.DataFrame | None:
     """
@@ -82,8 +97,8 @@ def sepal(
     use_raw
         Whether to access :attr:`anndata.AnnData.raw`.
     %(copy)s
-    %(parallelize)s
-
+    %(n_jobs_threads)s
+    %(show_progress_bar)s
     Returns
     -------
     If ``copy = True``, returns a :class:`pandas.DataFrame` with the sepal scores.
@@ -98,7 +113,7 @@ def sepal(
     consider re-running the function with increased ``n_iter``.
     """
     adata = extract_adata_if_sdata(adata, table_key=table_key)
-    _assert_connectivity_key(adata, connectivity_key)
+    _assert_connectivity_key(adata, key=connectivity_key)
     _assert_spatial_basis(adata, key=spatial_key)
     if max_neighs not in (4, 6):
         raise ValueError(f"Expected `max_neighs` to be either `4` or `6`, found `{max_neighs}`.")
@@ -111,7 +126,7 @@ def sepal(
             genes = genes[adata.var["highly_variable"].values]
     genes = assert_non_empty_sequence(genes, name="genes")
 
-    n_jobs = _get_n_cores(n_jobs)
+    n_jobs = get_n_numba_threads(n_jobs)
 
     g = adata.obsp[connectivity_key]
     if not isspmatrix_csr(g):
@@ -127,19 +142,15 @@ def sepal(
 
     # get counts
     vals, genes = _extract_expression(adata, genes=genes, use_raw=use_raw, layer=layer)
-    start = logg.info(f"Calculating sepal score for `{len(genes)}` genes using `{n_jobs}` core(s)")
+    start = logg.info(f"Calculating sepal score for `{len(genes)}` genes using `{n_jobs}` thread(s)")
 
-    score = parallelize(
-        _score_helper,
-        collection=np.arange(len(genes)).tolist(),
-        extractor=np.hstack,
-        use_ixs=False,
-        n_jobs=n_jobs,
-        backend=backend,
-        show_progress_bar=show_progress_bar,
-    )(
-        vals=vals,
-        max_neighs=max_neighs,
+    use_hex = max_neighs == 6
+
+    if issparse(vals):
+        vals = csc_matrix(vals)
+    score = _diffusion_genes(
+        vals,
+        use_hex=use_hex,
         n_iter=n_iter,
         sat=sat,
         sat_idx=sat_idx,
@@ -147,6 +158,8 @@ def sepal(
         unsat_idx=unsat_idx,
         dt=dt,
         thresh=thresh,
+        n_jobs=n_jobs,
+        show_progress_bar=show_progress_bar,
     )
 
     key_added = "sepal_score"
@@ -163,10 +176,10 @@ def sepal(
     _save_data(adata, attr="uns", key=key_added, data=sepal_score, time=start)
 
 
-def _score_helper(
-    ixs: Sequence[int],
-    vals: spmatrix | NDArrayA,
-    max_neighs: int,
+def _diffusion_genes(
+    vals: NDArrayA | spmatrix,
+    *,
+    use_hex: bool,
     n_iter: int,
     sat: NDArrayA,
     sat_idx: NDArrayA,
@@ -174,58 +187,70 @@ def _score_helper(
     unsat_idx: NDArrayA,
     dt: float,
     thresh: float,
-    queue: SigQueue | None = None,
+    n_jobs: int,
+    show_progress_bar: bool = True,
 ) -> NDArrayA:
-    if max_neighs == 4:
-        fun = _laplacian_rect
-    elif max_neighs == 6:
-        fun = _laplacian_hex
-    else:
-        raise NotImplementedError(f"Laplacian for `{max_neighs}` neighbors is not yet implemented.")
+    """Run diffusion for each gene column, parallelised across threads."""
 
-    score = []
-    for i in ixs:
-        if isinstance(vals, spmatrix):
-            conc = vals[:, i].toarray().flatten()  # Safe to call toarray()
+    sparse = issparse(vals)
+
+    def _process_gene(i: int) -> float:
+        if sparse:
+            conc = np.ascontiguousarray(vals[:, i].toarray().ravel(), dtype=np.float64)
         else:
-            conc = vals[:, i].copy()  # vals is assumed to be a NumPy array here
+            conc = np.ascontiguousarray(vals[:, i], dtype=np.float64)
+        time_iter = _diffusion(
+            conc,
+            use_hex,
+            n_iter,
+            sat,
+            sat_idx,
+            unsat,
+            unsat_idx,
+            dt,
+            thresh,
+        )
+        return dt * time_iter
 
-        time_iter = _diffusion(conc, fun, n_iter, sat, sat_idx, unsat, unsat_idx, dt=dt, thresh=thresh)
-        score.append(dt * time_iter)
-
-        if queue is not None:
-            queue.put(Signal.UPDATE)
-
-    if queue is not None:
-        queue.put(Signal.FINISH)
-
-    return np.array(score)
+    scores = thread_map(
+        _process_gene,
+        range(vals.shape[1]),
+        n_jobs=n_jobs,
+        show_progress_bar=show_progress_bar,
+        unit="gene",
+    )
+    return np.array(scores)
 
 
-@njit(fastmath=True)
-def _diffusion(
+@njit(fastmath=True, nogil=True)
+def _diffusion(  # noqa: PLR0917, numba requires positional arguments
     conc: NDArrayA,
-    laplacian: Callable[[NDArrayA, NDArrayA], float],
+    use_hex: bool,
     n_iter: int,
     sat: NDArrayA,
     sat_idx: NDArrayA,
     unsat: NDArrayA,
     unsat_idx: NDArrayA,
-    dt: float = 0.001,
-    thresh: float = 1e-8,
+    dt: float,
+    thresh: float,
 ) -> float:
     """Simulate diffusion process on a regular graph."""
-    sat_shape, conc_shape = sat.shape[0], conc.shape[0]
+    sat_shape = sat.shape[0]
+    n_cells = conc.shape[0]
     entropy_arr = np.zeros(n_iter)
-    prev_ent = 1.0
     nhood = np.zeros(sat_shape)
+    dcdt = np.zeros(n_cells)
+    prev_ent = 1.0
 
     for i in range(n_iter):
         for j in range(sat_shape):
             nhood[j] = np.sum(conc[sat_idx[j]])
-        d2 = laplacian(conc[sat], nhood)
+        if use_hex:
+            d2 = _laplacian_hex(conc[sat], nhood)
+        else:
+            d2 = _laplacian_rect(conc[sat], nhood)
 
-        dcdt = np.zeros(conc_shape)
+        dcdt[:] = 0.0
         dcdt[sat] = d2
         conc[sat] += dcdt[sat] * dt
         conc[unsat] += dcdt[unsat_idx] * dt

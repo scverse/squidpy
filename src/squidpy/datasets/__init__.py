@@ -6,6 +6,7 @@ from squidpy.datasets._datasets import (
     ImageDatasets,
     SpatialDataDatasets,
     VisiumDatasets,
+    cells,
     # AnnData datasets
     four_i,
     imc,
@@ -54,4 +55,5 @@ __all__ = [
     "visium_hne_image",
     # SpatialData
     "visium_hne_sdata",
+    "cells",
 ]

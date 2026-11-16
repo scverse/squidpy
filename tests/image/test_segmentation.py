@@ -7,7 +7,6 @@ import numpy as np
 import pytest
 from pytest_mock import MockerFixture
 
-from squidpy._constants._constants import SegmentationBackend
 from squidpy._constants._pkg_constants import Key
 from squidpy.im import (
     ImageContainer,
@@ -93,7 +92,7 @@ class TestHighLevel:
         assert res.shape == small_cont.shape
 
         if callable(method):
-            method = SegmentationBackend.CUSTOM.s
+            method = "custom"
 
         assert Key.img.segment(method) in res
 

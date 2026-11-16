@@ -1,58 +1,35 @@
 # -- Path setup --------------------------------------------------------------
 from __future__ import annotations
 
-import sys
 from datetime import datetime
+from functools import cache
 from importlib.metadata import metadata
-from pathlib import Path
 
+from scverse_doc.config import DEFAULTS
+from scverse_doc.registry import intersphinx
 from sphinx.application import Sphinx
 
-HERE = Path(__file__).parent
-sys.path.insert(0, str(HERE / "extensions"))
-
-
-# -- Project information -----------------------------------------------------
 info = metadata("squidpy")
-project_name = info["Name"]
+project = info["Name"]
 author = info["Author"]
 copyright = f"{datetime.now():%Y}, {author}"
 version = info["Version"]
 urls = dict(pu.split(", ") for pu in info.get_all("Project-URL"))
-repository_url = urls["Source"]
-
-# The full version, including alpha/beta/rc tags
+source_repository = urls["Source"]
 release = info["Version"]
 
-needs_sphinx = "4.0"
-
-# -- General configuration ---------------------------------------------------
 extensions = [
-    "sphinx.ext.autodoc",
-    "sphinx.ext.napoleon",
+    "scverse_doc",
     "sphinx.ext.viewcode",
     "sphinx_autodoc_typehints",
-    "sphinx.ext.intersphinx",
-    "sphinx.ext.autosummary",
-    "sphinx.ext.mathjax",
     "sphinxcontrib.bibtex",
-    "sphinx_copybutton",
-    "sphinx_design",
     "sphinx_tabs.tabs",
-    "myst_nb",
     "nbsphinx",
-    "typed_returns",
+    "scverse_misc.sphinx_ext",
     "IPython.sphinxext.ipython_console_highlighting",
 ]
-intersphinx_mapping = dict(  # noqa: C408
-    python=("https://docs.python.org/3", None),
-    numpy=("https://numpy.org/doc/stable", None),
+intersphinx_mapping = intersphinx() | dict(  # noqa: C408
     statsmodels=("https://www.statsmodels.org/stable", None),
-    scipy=("https://docs.scipy.org/doc/scipy", None),
-    pandas=("https://pandas.pydata.org/pandas-docs/stable", None),
-    anndata=("https://anndata.readthedocs.io/en/stable", None),
-    scanpy=("https://scanpy.readthedocs.io/en/stable", None),
-    matplotlib=("https://matplotlib.org/stable", None),
     cycler=("https://matplotlib.org/cycler", None),
     seaborn=("https://seaborn.pydata.org", None),
     joblib=("https://joblib.readthedocs.io/en/latest", None),
@@ -64,33 +41,23 @@ intersphinx_mapping = dict(  # noqa: C408
     xarray=("https://docs.xarray.dev/en/stable", None),
     omnipath=("https://omnipath.readthedocs.io/en/latest", None),
     napari=("https://napari.org", None),
-    spatialdata=("https://spatialdata.scverse.org/en/latest", None),
     shapely=("https://shapely.readthedocs.io/en/stable", None),
 )
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
-source_suffix = {".rst": "restructuredtext", ".ipynb": "myst-nb"}
 master_doc = "index"
-pygments_style = "sphinx"
 
-# myst
-nb_execution_mode = "off"
-myst_enable_extensions = [
-    "colon_fence",
-    "dollarmath",
-    "amsmath",
-]
 myst_heading_anchors = 2
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = [
+    *DEFAULTS.exclude_patterns,
     "notebooks/README.rst",
     "notebooks/CONTRIBUTING.rst",
     "release/changelog/*",
-    "**.ipynb_checkpoints",
     "build",
 ]
 suppress_warnings = ["download.not_readable", "git.too_shallow"]
@@ -99,15 +66,18 @@ suppress_warnings = ["download.not_readable", "git.too_shallow"]
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-autosummary_generate = True
-autodoc_member_order = "groupwise"
+# no nav entry per documented object: a function page would list itself under its own nav entry
+toc_object_entries = False
 autodoc_typehints = "signature"
+# show each parameter's default next to its type, as scanpy does
+typehints_defaults = "braces"
+# a closed vocabulary this long is unreadable spelled out, and `qc_image` spells it
+# twice, once bare and once inside a list; the alias name is the useful thing
+autodoc_type_aliases = {"QCMetric": "QCMetric"}
 autodoc_docstring_signature = True
-napoleon_google_docstring = False
-napoleon_numpy_docstring = True
-napoleon_include_init_with_doc = False
-napoleon_use_rtype = True
-napoleon_use_param = True
+napoleon_use_rtype = False
+# fold the return type into the Returns section rather than giving it its own
+typehints_use_rtype = False
 todo_include_todos = False
 
 # bibliography
@@ -136,7 +106,6 @@ spelling_filters = [
 ]
 
 # Link checking
-nitpicky = True  # this is linkcheck for Sphinx.
 nitpick_ignore = [
     ("py:func", "numba.prange"),  # no reference for this function
     ("py:class", "matplotlib_scalebar.ScaleBar"),  # this project has no sphinx docs
@@ -145,12 +114,15 @@ nitpick_ignore = [
     ("py:data", "typing.Union"),
     # there seems to be a bug with autodoc for NamedTuple attributes
     ("py:class", "NDArray"),
+    # numpy.typing.NDArray canonicalizes to this private path, which has no doc target
+    ("py:class", "numpy._typing._array_like.NDArray"),
+    # public name of the above since sphinx-autodoc-typehints 3.14, still linked as a class; numpy documents it as data
+    # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/1104
+    ("py:class", "numpy.typing.NDArray"),
     ("py:class", "np.number"),
     ("py:class", "csr_matrix"),
-    # no idea why those aren’t exported
-    ("py:class", "squidpy._constants._constants.SpatialAutocorr"),
-    ("py:class", "squidpy._constants._constants.CoordType"),
-    ("py:class", "squidpy._constants._constants.Transform"),
+    # SpatialNeighborsResult's own PEP 695 type parameter, which has no doc target on the squidpy.types page
+    ("py:class", "GraphMatrixT"),
     ("py:class", "pandas.core.frame.DataFrame"),
 ]
 # see the solution from: https://github.com/sphinx-doc/sphinx/issues/7369
@@ -166,15 +138,60 @@ linkcheck_ignore = [
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
 html_logo = "_static/img/squidpy_horizontal.png"
-html_theme_options = {"navigation_depth": 4, "logo_only": True}
+html_theme_options = {
+    "secondary_accent": True,
+    # the default of 3 drops the methods of the fit classes and the gr.neighbors classes from the nav
+    "navigation_depth": 5,
+}
 html_show_sphinx = False
 
 
+# Each params key carries its default in the `Annotated` metadata of its
+# declaration (`squidpy._params.Default`). Read it from there: one source of truth,
+# no defaults restated in docstrings where they could drift.
+
+
+@cache
+def _params_defaults() -> dict[str, dict[str, object]]:
+    """Read every params key's ``Default``, then hide it from autodoc.
+
+    Autodoc renders `Annotated` metadata verbatim (`Annotated[float, Default(1.0)]`),
+    so once the defaults are in hand each annotation is replaced by its bare type.
+    `_append_default` puts the default back where it belongs, in the description.
+    """
+    from typing import get_type_hints
+
+    from squidpy import types
+    from squidpy._params import defaults_of
+
+    defaults = {}
+    # only the `*Params` types carry per-key defaults; the result types do not
+    for name in (n for n in types.__all__ if n.endswith("Params")):
+        cls = getattr(types, name)
+        defaults[name] = dict(defaults_of(cls))
+        cls.__annotations__ = {
+            key: hint.__origin__ if hasattr(hint, "__metadata__") else hint
+            for key, hint in get_type_hints(cls, include_extras=True).items()
+        }
+    return defaults
+
+
+def _append_default(app, what, name, obj, options, lines) -> None:  # type: ignore[no-untyped-def]
+    """Append ``Default: <repr>`` to each documented params key."""
+    cls_path, _, key = name.rpartition(".")
+    if what != "attribute" or not cls_path:
+        return
+    defaults = _params_defaults().get(cls_path.rpartition(".")[2], {})
+    if key in defaults:
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines.append(f"Default: ``{defaults[key]!r}``")
+
+
 def setup(app: Sphinx) -> None:
+    app.connect("builder-inited", lambda _app: _params_defaults())
+    app.connect("autodoc-process-docstring", _append_default)
     app.add_css_file("css/custom.css")
-    app.add_css_file("css/sphinx_gallery.css")
-    app.add_css_file("css/nbsphinx.css")
     app.add_css_file("css/dataframe.css")  # had to add this manually

@@ -12,7 +12,7 @@ import spatialdata as sd
 from anndata.tests.helpers import assert_adata_equal
 from scanpy import settings
 
-from squidpy.datasets import visium, visium_hne_sdata
+from squidpy.datasets import cells, visium, visium_hne_sdata
 
 
 @pytest.mark.timeout(120)
@@ -39,7 +39,7 @@ def test_visium_datasets(sample):
 
     # Test that downloading tissue image works
     sample_dataset = visium(sample, include_hires_tiff=True)
-    expected_image_path = (Path(settings.datasetdir) / "visium" / sample / "image.tif").resolve()
+    expected_image_path = (Path(settings.datasetdir) / "visium_10x" / sample / "image.tif").resolve()
     spatial_metadata = sample_dataset.uns["spatial"][sample]["metadata"]
     image_path = Path(spatial_metadata["source_image_path"]).resolve()
     assert image_path == expected_image_path
@@ -64,3 +64,10 @@ def test_visium_sdata_dataset():
     assert isinstance(sdata, sd.SpatialData)
     assert list(sdata.shapes.keys()) == ["spots"]
     assert list(sdata.images.keys()) == ["hne"]
+
+
+@pytest.mark.timeout(240)
+@pytest.mark.internet()
+def test_cells_sdata_dataset():
+    sdata = cells()
+    assert isinstance(sdata, sd.SpatialData)

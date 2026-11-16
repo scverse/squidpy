@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any, Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -14,10 +14,11 @@ from matplotlib.colorbar import ColorbarBase
 from scanpy import logging as logg
 from scipy.cluster import hierarchy as sch
 
-from squidpy._constants._constants import DendrogramAxis
+from squidpy._compat import old_positionals
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
 from squidpy._utils import _unique_order_preserving, verbosity
+from squidpy._validators import normalize_choice
 from squidpy.pl._utils import _dendrogram, _filter_kwargs, save_fig
 
 __all__ = ["ligrec"]
@@ -129,8 +130,25 @@ class CustomDotplot(sc.pl.DotPlot):
 
 
 @d.dedent
+@old_positionals(
+    "cluster_key",
+    "source_groups",
+    "target_groups",
+    "means_range",
+    "pvalue_threshold",
+    "remove_empty_interactions",
+    "remove_nonsig_interactions",
+    "dendrogram",
+    "alpha",
+    "swap_axes",
+    "title",
+    "figsize",
+    "dpi",
+    "save",
+)
 def ligrec(
     adata: AnnData | Mapping[str, pd.DataFrame],
+    *,
     cluster_key: str | None = None,
     source_groups: str | Sequence[str] | None = None,
     target_groups: str | Sequence[str] | None = None,
@@ -138,7 +156,7 @@ def ligrec(
     pvalue_threshold: float = 1.0,
     remove_empty_interactions: bool = True,
     remove_nonsig_interactions: bool = False,
-    dendrogram: str | None = None,
+    dendrogram: Literal["interacting_molecules", "interacting_clusters", "both"] | None = None,
     alpha: float | None = 0.001,
     swap_axes: bool = False,
     title: str | None = None,
@@ -236,16 +254,16 @@ def ligrec(
         }
 
     if dendrogram is not None:
-        dendrogram = DendrogramAxis(dendrogram)  # type: ignore[assignment]
-        if TYPE_CHECKING:
-            assert isinstance(dendrogram, DendrogramAxis)
+        dendrogram = normalize_choice(
+            dendrogram, ("interacting_molecules", "interacting_clusters", "both"), name="dendrogram"
+        )
 
     if isinstance(adata, AnnData):
         if cluster_key is None:
             raise ValueError("Please provide `cluster_key` when supplying an `AnnData` object.")
 
         cluster_key = Key.uns.ligrec(cluster_key)
-        if cluster_key not in adata.uns_keys():
+        if cluster_key not in adata.uns:
             raise KeyError(f"Key `{cluster_key}` not found in `adata.uns`.")
         adata = adata.uns[cluster_key]
 
@@ -286,6 +304,10 @@ def ligrec(
 
     pvals: pd.DataFrame = adata["pvalues"].loc[:, (source_groups, target_groups)]
     means: pd.DataFrame = adata["means"].loc[:, (source_groups, target_groups)]
+    # stored sparse with different fill values (`nan` and 0); every concat below densifies them
+    # one at a time and warns, so densify once here
+    pvals = pvals.astype(np.float64)
+    means = means.astype(np.float64)
 
     if pvals.empty:
         raise ValueError("No valid clusters have been selected.")
@@ -300,7 +322,7 @@ def ligrec(
 
     start, label_ranges = 0, {}
 
-    if dendrogram == DendrogramAxis.INTERACTING_CLUSTERS:
+    if dendrogram == "interacting_clusters":
         # rows are now cluster combinations, not interacting pairs
         pvals = pvals.T
         means = means.T
@@ -331,7 +353,7 @@ def ligrec(
     adata.X = (adata.X - minn) / delta
 
     try:
-        if dendrogram == DendrogramAxis.BOTH:
+        if dendrogram == "both":
             row_order, col_order, _, _ = _dendrogram(
                 adata.X,
                 method="complete",
@@ -366,8 +388,8 @@ def ligrec(
             dot_color_df=means,
             dot_size_df=pvals,
             title=title,
-            var_group_labels=(None if dendrogram == DendrogramAxis.BOTH else list(label_ranges.keys())),
-            var_group_positions=(None if dendrogram == DendrogramAxis.BOTH else list(label_ranges.values())),
+            var_group_labels=(None if dendrogram == "both" else list(label_ranges.keys())),
+            var_group_positions=(None if dendrogram == "both" else list(label_ranges.values())),
             standard_scale=None,
             figsize=figsize,
         )
@@ -380,10 +402,7 @@ def ligrec(
             **_filter_kwargs(sc.pl.DotPlot.legend, kwargs),
         )
     )
-    if dendrogram in (
-        DendrogramAxis.INTERACTING_MOLS,
-        DendrogramAxis.INTERACTING_CLUSTERS,
-    ):
+    if dendrogram in ("interacting_molecules", "interacting_clusters"):
         # ignore the warning about mismatching groups
         with verbosity(0):
             dp.add_dendrogram(size=1.6, dendrogram_key="dendrogram")
@@ -392,7 +411,7 @@ def ligrec(
 
     dp.make_figure()
 
-    if dendrogram != DendrogramAxis.BOTH:
+    if dendrogram != "both":
         # remove the target part in: source | target
         labs = dp.ax_dict["mainplot_ax"].get_yticklabels() if swap_axes else dp.ax_dict["mainplot_ax"].get_xticklabels()
         for text in labs:
