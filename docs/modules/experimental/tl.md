@@ -9,4 +9,5 @@
    tl.calculate_tiling_qc
    tl.assign_stitch_groups
    tl.make_stitched_labels
+   tl.impute_spage
 ```

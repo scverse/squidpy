@@ -9,10 +9,11 @@ from typing import Any
 import numpy as np
 from anndata import AnnData
 from anndata.utils import make_index_unique
+from fast_array_utils.types import CSBase
 from pandas import CategoricalDtype, Series
 from pandas.api.types import infer_dtype
 from scanpy import logging as logg
-from scipy.sparse import csc_matrix, csr_matrix, spmatrix
+from scipy.sparse import csc_matrix, csr_matrix
 from spatialdata import SpatialData
 
 from squidpy._compat import ArrayView, SparseCSCView, SparseCSRView
@@ -87,7 +88,7 @@ def _save_data(adata: AnnData, *, attr: str, key: str, data: Any, prefix: bool =
 
 def _extract_expression(
     adata: AnnData, *, genes: Sequence[str] | None = None, use_raw: bool = False, layer: str | None = None
-) -> tuple[NDArrayA | spmatrix, Sequence[str]]:
+) -> tuple[NDArrayA | CSBase, Sequence[str]]:
     if use_raw and adata.raw is None:
         logg.warning("AnnData object has no attribute `raw`. Setting `use_raw=False`")
         use_raw = False
@@ -111,7 +112,7 @@ def _extract_expression(
             res = adata[:, genes].layers[layer]
             if isinstance(res, AnnData):
                 res = res.X
-            elif not isinstance(res, np.ndarray | spmatrix):
+            elif not isinstance(res, np.ndarray | CSBase):
                 raise TypeError(f"Invalid expression type `{type(res).__name__}`.")
 
     # handle views
