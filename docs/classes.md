@@ -4,9 +4,9 @@
 .. currentmodule:: squidpy
 
 .. autosummary::
-    :toctree: classes
+   :toctree: classes
 
-    im.ImageContainer
-    im.SegmentationWatershed
-    im.SegmentationCustom
+   im.ImageContainer
+   im.SegmentationWatershed
+   im.SegmentationCustom
 ```

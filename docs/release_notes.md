@@ -2,9 +2,9 @@
 
 ```{eval-rst}
 .. toctree::
-    :maxdepth: 3
-    :glob:
-    :reversed:
+   :maxdepth: 3
+   :glob:
+   :reversed:
 
-    release/notes-*.*.*
+   release/notes-*.*.*
 ```

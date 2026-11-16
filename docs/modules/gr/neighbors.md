@@ -9,17 +9,17 @@ public API.
 .. module:: squidpy.gr.neighbors
 .. currentmodule:: squidpy.gr
 .. autosummary::
-    :toctree: ../../api
+   :toctree: ../../api
 
-    neighbors.GraphBuilder
-    neighbors.GraphBuilderCSR
-    neighbors.GraphPostprocessor
-    neighbors.DistanceIntervalPostprocessor
-    neighbors.PercentilePostprocessor
-    neighbors.TransformPostprocessor
-    neighbors.KNNBuilder
-    neighbors.RadiusBuilder
-    neighbors.DelaunayBuilder
-    neighbors.GridBuilder
-    neighbors.GraphMatrixT
+   neighbors.GraphBuilder
+   neighbors.GraphBuilderCSR
+   neighbors.GraphPostprocessor
+   neighbors.DistanceIntervalPostprocessor
+   neighbors.PercentilePostprocessor
+   neighbors.TransformPostprocessor
+   neighbors.KNNBuilder
+   neighbors.RadiusBuilder
+   neighbors.DelaunayBuilder
+   neighbors.GridBuilder
+   neighbors.GraphMatrixT
 ```

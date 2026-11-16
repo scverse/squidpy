@@ -10,7 +10,6 @@
   [@giovp](https://github.com/giovp)
   [#775](https://github.com/scverse/squidpy/pull/775)
 
-
 ## Miscellaneous
 
 - Fix napari installation.
