@@ -30,12 +30,16 @@ pip install git+https://github.com/scverse/squidpy@main
 
 The `stalign_align_*` functions in {mod}`squidpy.experimental.tl` need JAX. Install it with the `jax` extra::
 
-    pip install "squidpy[jax]"
+```
+pip install "squidpy[jax]"
+```
 
 This installs the CPU build. For a GPU, add the matching JAX build to the same command, e.g. for an
 NVIDIA GPU on Linux::
 
-    pip install "squidpy[jax]" "jax[cuda13]"
+```
+pip install "squidpy[jax]" "jax[cuda13]"
+```
 
 For other GPUs, TPUs and the driver each build needs, see the
 [JAX installation guide](https://docs.jax.dev/en/latest/installation.html).
