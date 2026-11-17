@@ -14,6 +14,7 @@ from scanpy import logging as logg
 from scanpy.metrics import gearys_c, morans_i
 from scipy import stats
 from scipy.sparse import spmatrix
+from scipy.spatial import ConvexHull, QhullError
 from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import normalize
 from spatialdata import SpatialData
@@ -402,8 +403,14 @@ def co_occurrence(
     %(cluster_key)s
     %(spatial_key)s
     interval
-        Distances interval at which co-occurrence is computed. If :class:`int`, uniformly spaced interval
-        of the given size will be used.
+        Distances interval at which co-occurrence is computed. If :class:`int`, that many evenly spaced
+        distances up to the radius expected to hold 1000 cells, ``sqrt(1000 * hull_area / (pi * n_obs))``
+        (the 1000-point term of spatstat's ``rmax.rule`` :cite:`Baddeley2005-spatstat,Baddeley2015-lm`),
+        or up to about half the tissue's diagonal if that is shorter or there are at most 1000 cells.
+
+        .. versionchanged:: 1.9.0
+            The default used to end at about half the tissue's diagonal for any number of cells. To
+            reproduce earlier results, pass the ``interval`` they stored.
     %(copy)s
 
     Returns
@@ -431,6 +438,9 @@ def co_occurrence(
     # create intervals thresholds
     if isinstance(interval, int):
         thresh_min, thresh_max = _find_min_max(spatial)
+        local = _local_rmax(spatial[:, :2])
+        if thresh_min < local < thresh_max:  # near-collinear cells: hull area ~0, local below thresh_min
+            thresh_max = local
         interval = np.linspace(thresh_min, thresh_max, num=interval, dtype=fp)
     else:
         interval = np.array(sorted(interval), dtype=fp, copy=True)
@@ -451,6 +461,17 @@ def co_occurrence(
     _save_data(
         adata, attr="uns", key=Key.uns.co_occurrence(cluster_key), data={"occ": out, "interval": interval}, time=start
     )
+
+
+def _local_rmax(spatial: NDArrayA) -> float:
+    """Radius expected to hold 1000 cells at the convex-hull density; ``inf`` with at most 1000 cells or no area."""
+    if len(spatial) <= 1000:
+        return np.inf
+    try:
+        area = ConvexHull(spatial).volume
+    except QhullError:
+        return np.inf
+    return float(np.sqrt(1000 * area / (np.pi * len(spatial))))
 
 
 def _find_min_max(spatial: NDArrayA) -> tuple[float, float]:

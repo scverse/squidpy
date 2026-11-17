@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 import numpy as np
+import pandas as pd
 import pytest
 from anndata import AnnData
 from pandas.testing import assert_frame_equal
@@ -201,6 +202,33 @@ def test_co_occurrence_missing_labels_raise(adata: AnnData):
     adata.obs.loc[adata.obs_names[:3], "leiden"] = np.nan
     with pytest.raises(ValueError, match=r"contains missing values"):
         co_occurrence(adata, cluster_key="leiden", copy=True)
+
+
+def _default_interval(xy: np.ndarray) -> np.ndarray:
+    obs = pd.DataFrame({"c": pd.Categorical(np.arange(len(xy)) % 3)}, index=np.arange(len(xy)).astype(str))
+    occ, interval = co_occurrence(AnnData(obs=obs, obsm={"spatial": xy}), cluster_key="c", copy=True)
+    assert occ.shape == (3, 3, 49)
+    return interval
+
+
+def test_co_occurrence_default_interval_capped():
+    # right triangle x + y <= 55: hull area 55**2 / 2, half its bounding box
+    xy = np.array([(x, y) for x in range(56) for y in range(56 - x)], dtype=float)
+    interval = _default_interval(np.c_[xy, np.zeros(len(xy))])  # flat z: a 3D hull would raise
+    assert interval[0] == 1
+    assert interval[-1] == pytest.approx(np.sqrt(1000 * 55**2 / 2 / (np.pi * len(xy))), rel=1e-6)
+
+
+@pytest.mark.parametrize(
+    ("xy", "expected_max"),
+    [
+        pytest.param(np.mgrid[:40, :25].reshape(2, -1).T.astype(float), np.hypot(39, 24) / 2, id="n_eq_1000"),
+        pytest.param(np.c_[np.arange(1500.0), 2 * np.arange(1500.0)], 1499 * np.sqrt(5) / 2, id="collinear"),
+        pytest.param(np.c_[np.arange(1500.0), np.arange(1500) % 2 * 1e-3], 1499 / 2, id="near_collinear"),
+    ],
+)
+def test_co_occurrence_default_interval_uncapped(xy: np.ndarray, expected_max: float):
+    assert _default_interval(xy)[-1] == pytest.approx(expected_max, rel=1e-6)
 
 
 @pytest.mark.parametrize("size", [1, 3])
