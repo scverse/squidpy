@@ -19,6 +19,7 @@ from squidpy.experimental.im._intensity_metrics import (
     tissue_fraction,
 )
 from squidpy.experimental.im._sharpness_metrics import (
+    edge_sharpness,
     fft_high_freq_energy,
     haar_wavelet_energy,
     laplacian_variance,
@@ -43,6 +44,7 @@ QCMetric = Literal[
     "variance",
     "fft_high_freq_energy",
     "haar_wavelet_energy",
+    "edge_sharpness",
     # Intensity (grayscale input)
     "brightness_mean",
     "brightness_std",
@@ -79,6 +81,7 @@ _METRIC_REGISTRY: dict[QCMetric, tuple[InputKind, MetricFn]] = {
     "variance": (InputKind.GRAYSCALE, pop_variance),
     "fft_high_freq_energy": (InputKind.GRAYSCALE, fft_high_freq_energy),
     "haar_wavelet_energy": (InputKind.GRAYSCALE, haar_wavelet_energy),
+    "edge_sharpness": (InputKind.GRAYSCALE, edge_sharpness),
     # Intensity (grayscale)
     "brightness_mean": (InputKind.GRAYSCALE, brightness_mean),
     "brightness_std": (InputKind.GRAYSCALE, brightness_std),
