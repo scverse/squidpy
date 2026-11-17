@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import numpy as np
-from scipy.fft import fft2, fftfreq
 from scipy import ndimage as ndi
+from scipy.fft import fft2, fftfreq
 from skimage.filters import laplace, sobel, sobel_h, sobel_v
 
 
