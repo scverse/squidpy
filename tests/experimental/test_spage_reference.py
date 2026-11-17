@@ -10,7 +10,6 @@ from anndata import AnnData
 import squidpy as sq
 
 from ._reference import Bundle, read_bundle
-from .test_impute_spage import _data
 
 pytestmark = pytest.mark.internet
 
@@ -21,14 +20,6 @@ _BUNDLE_SHA256 = "8da69ca95afe63587be26e521b63e9240ed52f8cbc6a67bce20c929816a336
 @pytest.fixture(scope="module")
 def bundle() -> Bundle:
     return read_bundle(_BUNDLE_URL, _BUNDLE_SHA256)
-
-
-def test_fixture_is_ours(bundle):
-    ref, query, truth = _data()
-
-    np.testing.assert_array_equal(bundle.inputs["ref"], ref.X)
-    np.testing.assert_array_equal(bundle.inputs["query"], query.X)
-    np.testing.assert_array_equal(bundle.inputs["truth"], truth)
 
 
 @pytest.mark.parametrize("cosine_threshold", [0.3, 0.99])

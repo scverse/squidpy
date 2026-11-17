@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import scanpy as sc
 from anndata import AnnData
+from fast_array_utils.conv import to_dense
 from fast_array_utils.types import CSBase
 from scanpy import logging as logg
 from scipy.sparse import csr_matrix
@@ -99,8 +100,9 @@ def impute_spage(
     )
     ref = resolve_table(data_ref, ref_table, side="reference")
     query = resolve_table(data_query, query_table, side="query")
-    if ref is query:
-        raise ValueError("The reference and the query are the same table.")
+    for side, adata in (("reference", ref), ("query", query)):
+        if not adata.var_names.is_unique:
+            raise ValueError(f"The {side} has duplicate gene names; make them unique with `var_names_make_unique`.")
 
     n_threads = get_n_numba_threads(n_jobs)
     assert_in_range(n_neighbors, 1, ref.n_obs, name="n_neighbors")
@@ -152,7 +154,7 @@ def impute_spage(
         distances, indices = _cosine_neighbors(ref_proj, query_proj, n_neighbors=n_neighbors, n_jobs=n_threads)
 
         y = _extract_expression(ref, genes=genes, layer=ref_layer)[0]
-        y = csr_matrix(y, dtype=np.result_type(y.dtype, np.float32))
+        y = y.astype(np.result_type(y.dtype, np.float32), copy=False)
         weights = csr_matrix(
             (
                 _spage_weights(distances).astype(y.dtype).ravel(),
@@ -162,7 +164,7 @@ def impute_spage(
             shape=(query.n_obs, ref.n_obs),
         )
         # TODO: use `fast_array_utils.linalg.matmul` once released, which runs this product in parallel
-        imputed = (weights @ y).toarray()
+        imputed = to_dense(weights @ y)
 
     res = pd.DataFrame(imputed, index=query.obs_names, columns=genes, copy=False)
     if not inplace:

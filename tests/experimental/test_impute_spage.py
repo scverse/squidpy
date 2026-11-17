@@ -52,7 +52,6 @@ def test_sparse_matches_dense(fmt):
 
 
 def test_recovers_unmeasured_genes():
-    # guards against a bug shared by the implementation and `_spage_reference`
     ref, query, truth = _data()
 
     res = _impute(ref, query, n_neighbors=20)
@@ -291,8 +290,11 @@ def test_invalid_table(table_key, error, match):
         _impute(ref, data_query, table_key=table_key)
 
 
-def test_reference_and_query_must_differ():
-    ref, _, _ = _data()
+@pytest.mark.parametrize("side", ["reference", "query"])
+def test_duplicate_genes(side):
+    ref, query, _ = _data()
+    adata = ref if side == "reference" else query
+    adata.var_names = [*adata.var_names[:-1], adata.var_names[0]]
 
-    with pytest.raises(ValueError, match="same table"):
-        _impute(ref, ref)
+    with pytest.raises(ValueError, match=f"The {side} has duplicate gene names"):
+        _impute(ref, query)
