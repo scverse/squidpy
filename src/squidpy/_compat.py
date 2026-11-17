@@ -78,10 +78,11 @@ def get_vector(adata: AnnData, key: str, *, layer: str | None = None, use_raw: b
     Drop-in replacement for ``AnnData.obs_vector`` that avoids the ``FutureWarning``
     emitted by anndata >= 0.13 (see https://github.com/scverse/squidpy/issues/1261).
     Delegates to :func:`scanpy.get.obs_df`, whose contract already covers ``.obs``
-    columns and ``.var_names`` genes (honoring ``layer`` / ``use_raw`` and preserving
-    ``Categorical`` dtype), mirroring the ``use_raw``-then-``layer`` precedence of the
-    original ``obs_vector`` calls.
+    columns and ``.var_names`` genes (honoring ``layer`` and preserving ``Categorical``
+    dtype), mirroring the ``use_raw``-then-``layer`` precedence of the original
+    ``obs_vector`` calls. ``.raw`` is read directly, since scanpy >= 1.13 deprecates
+    ``obs_df(use_raw=...)`` without an accessor replacement.
     """
     if use_raw and key not in adata.obs:
-        return obs_df(adata, keys=[key], use_raw=True)[key].values
+        return adata.raw.obs_vector(key)
     return obs_df(adata, keys=[key], use=None if layer is None else A.layers[layer])[key].values
