@@ -82,7 +82,7 @@ def impute_spage(
     key_added
         Key in the query's :attr:`anndata.AnnData.obsm` where the result is stored.
     %(n_jobs_threads)s
-        A positive value also caps the BLAS and OpenMP threads (via :mod:`threadpoolctl`), which `None` and
+        A positive value also caps the BLAS and OpenMP threads (via ``threadpoolctl``), which `None` and
         ``-1`` leave as configured.
     inplace
         If `True`, store the result in the query, otherwise return it.
@@ -116,6 +116,8 @@ def impute_spage(
     shared = query.var_names.intersection(ref.var_names, sort=False).tolist()
     if not shared:
         raise ValueError("The reference and the query have no genes in common.")
+    # the bounds known before scaling; constant genes lower the gene bound below
+    assert_in_range(n_pv, 2, min(len(shared), query.n_obs - 1, ref.n_obs - 1), name="n_pv")
 
     start = logg.info(f"Imputing `{len(genes)}` genes with SpaGE using `{n_threads}` thread(s)")
     with threadpool_limits(None if n_jobs in (None, -1) else n_threads):

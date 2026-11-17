@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from anndata import AnnData
-from scipy.sparse import csr_array, csr_matrix
+from scipy.sparse import csc_array, csc_matrix, csr_array, csr_matrix
 from sklearn.neighbors import NearestNeighbors
 from spatialdata import SpatialData
 from spatialdata.models import TableModel
@@ -40,7 +40,7 @@ def _impute(data_ref, data_query, **kwargs) -> pd.DataFrame | None:
     )
 
 
-@pytest.mark.parametrize("fmt", [csr_matrix, csr_array])
+@pytest.mark.parametrize("fmt", [csr_matrix, csr_array, csc_matrix])
 def test_sparse_matches_dense(fmt):
     ref, query, _ = _data()
     dense = _impute(ref, query)
@@ -300,11 +300,13 @@ def test_duplicate_genes(side):
         _impute(ref, query)
 
 
-@pytest.mark.parametrize("fmt", [np.asarray, csr_matrix, csr_array])
+@pytest.mark.parametrize("fmt", [np.asarray, np.asfortranarray, csr_matrix, csr_array, csc_matrix, csc_array])
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
-def test_matmul_matches_scipy(fmt, dtype):
+@pytest.mark.parametrize("index_dtype", [np.int32, np.int64])
+def test_matmul_matches_scipy(fmt, dtype, index_dtype):
     rng = np.random.default_rng(0)
     x = csr_matrix(rng.random((40, 30)) * (rng.random((40, 30)) < 0.2), dtype=dtype)
+    x.indices, x.indptr = x.indices.astype(index_dtype), x.indptr.astype(index_dtype)
     y = rng.random((30, 7)) * (rng.random((30, 7)) < 0.5)
 
     np.testing.assert_allclose(_matmul(x, fmt(y.astype(dtype))), (x @ y).astype(dtype), rtol=1e-6)
