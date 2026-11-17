@@ -9,7 +9,7 @@ from anndata import AnnData
 from anndata.io import read_text
 from h5py import File
 from PIL import Image
-from scanpy import read_10x_h5, read_10x_mtx
+from scanpy.io import read_10x_h5, read_10x_mtx
 
 from squidpy._constants._pkg_constants import Key
 from squidpy._utils import NDArrayA

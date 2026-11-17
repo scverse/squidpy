@@ -26,25 +26,7 @@ from squidpy._compat import SKIP_OWN_FRAMES
 if TYPE_CHECKING:
     from numba_progress import ProgressBar
 
-__all__ = ["singledispatchmethod", "Signal", "SigQueue", "NDArray", "NDArrayA"]
-
-
-try:
-    from functools import singledispatchmethod
-except ImportError:
-    from functools import singledispatch, update_wrapper
-
-    def singledispatchmethod(func: Callable[..., Any]) -> Callable[..., Any]:  # type: ignore[no-redef]
-        """Backport of `singledispatchmethod` for < Python 3.8."""
-        dispatcher = singledispatch(func)
-
-        def wrapper(*args: Any, **kw: Any) -> Any:
-            return dispatcher.dispatch(args[1].__class__)(*args, **kw)
-
-        wrapper.register = dispatcher.register  # type: ignore[attr-defined]
-        update_wrapper(wrapper, func)
-
-        return wrapper
+__all__ = ["Signal", "SigQueue", "NDArray", "NDArrayA"]
 
 
 from numpy.typing import NDArray

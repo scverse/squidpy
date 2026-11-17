@@ -5,6 +5,7 @@ from typing import Any, Literal, Protocol, Self, runtime_checkable
 import anndata as ad
 import pandas as pd
 import scanpy as sc
+from anndata.acc import A
 from fast_array_utils.types import HasArrayNamespace as Array
 from sklearn.base import BaseEstimator, ClusterMixin
 
@@ -59,7 +60,7 @@ class LeidenClusterer(ClusterMixin, BaseEstimator):
         """Partition *X*, leaving the labels in ``labels_``."""
         shell = ad.AnnData(X=X, obs=pd.DataFrame(index=[str(i) for i in range(X.shape[0])]))
         # no dimensionality reduction, matching the original implementation
-        sc.pp.neighbors(shell, n_neighbors=self.n_neighbors, use_rep="X")
+        sc.pp.neighbors(shell, n_neighbors=self.n_neighbors, use=A.X)
 
         # Default to the igraph backend so niche labels are reproducible across versions;
         # leidenalg is deprecated in scanpy and unstable on small graphs. See
@@ -73,7 +74,7 @@ class LeidenClusterer(ClusterMixin, BaseEstimator):
         sc.tl.leiden(
             shell,
             resolution=self.resolution,
-            key_added="niche",
+            out=A.obs["niche"],
             random_state=self.random_state,
             **kwargs,
         )

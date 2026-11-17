@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from copy import copy, deepcopy
-from functools import partial
+from functools import partial, singledispatchmethod
 from itertools import chain
 from pathlib import Path
 from types import MappingProxyType
@@ -25,7 +25,7 @@ from skimage.util import img_as_float
 from squidpy._compat import default_palette
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
-from squidpy._utils import NDArrayA, singledispatchmethod
+from squidpy._utils import NDArrayA
 from squidpy._validators import (
     assert_in_range,
     assert_non_empty_sequence,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping, Sequence
+from functools import singledispatchmethod
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -15,7 +16,7 @@ from skimage.segmentation import watershed
 
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
-from squidpy._utils import NDArrayA, singledispatchmethod
+from squidpy._utils import NDArrayA
 from squidpy._validators import normalize_choice
 from squidpy.im._container import ImageContainer
 
