@@ -6,8 +6,9 @@ import numpy as np
 import pandas as pd
 import scanpy as sc
 from anndata import AnnData
-from fast_array_utils.conv import to_dense
+from fast_array_utils import stats
 from fast_array_utils.types import CSBase
+from numba import njit, prange
 from scanpy import logging as logg
 from scipy.sparse import csr_matrix
 from sklearn.neighbors import NearestNeighbors
@@ -16,7 +17,7 @@ from spatialdata import SpatialData
 from threadpoolctl import threadpool_limits
 
 from squidpy._docs import d
-from squidpy._utils import NDArrayA, get_n_numba_threads
+from squidpy._utils import NDArrayA, get_n_numba_threads, numba_threads
 from squidpy._validators import assert_in_range, assert_non_empty_sequence
 from squidpy.experimental.tl._utils import query_of, resolve_pair, resolve_table
 from squidpy.gr._utils import _extract_expression, _save_data
@@ -151,7 +152,7 @@ def impute_spage(
             for x, offset in ((ref_x, ref_offset), (query_x, query_offset))
         )
         del ref_x, query_x
-        distances, indices = _cosine_neighbors(ref_proj, query_proj, n_neighbors=n_neighbors, n_jobs=n_threads)
+        distances, indices = _cosine_neighbors(ref_proj, query_proj, n_neighbors=n_neighbors)
 
         y = _extract_expression(ref, genes=genes, layer=ref_layer)[0]
         y = y.astype(np.result_type(y.dtype, np.float32), copy=False)
@@ -163,8 +164,8 @@ def impute_spage(
             ),
             shape=(query.n_obs, ref.n_obs),
         )
-        # TODO: use `fast_array_utils.linalg.matmul` once released, which runs this product in parallel
-        imputed = to_dense(weights @ y)
+        with numba_threads(n_threads):
+            imputed = _matmul(weights, y)
 
     res = pd.DataFrame(imputed, index=query.obs_names, columns=genes, copy=False)
     if not inplace:
@@ -181,10 +182,10 @@ def _scale(x: NDArrayA | CSBase) -> tuple[NDArrayA | CSBase, NDArrayA, NDArrayA]
     and a mask of the non-constant genes. Constant genes are left unscaled.
     """
     scaler = StandardScaler(with_mean=False).fit(x)
-    return scaler.transform(x), scaler.mean_ / scaler.scale_, scaler.var_ > 0
+    return scaler.transform(x), scaler.mean_ / scaler.scale_, ~stats.is_constant(x, axis=0)
 
 
-def _cosine_neighbors(ref: NDArrayA, query: NDArrayA, *, n_neighbors: int, n_jobs: int) -> tuple[NDArrayA, NDArrayA]:
+def _cosine_neighbors(ref: NDArrayA, query: NDArrayA, *, n_neighbors: int) -> tuple[NDArrayA, NDArrayA]:
     """Cosine distances and indices of each query row's nearest reference rows, as sklearn's `"cosine"` metric gives.
 
     For unit vectors the cosine distance is half the squared euclidean one, which unlike `"cosine"` takes sklearn's
@@ -199,11 +200,50 @@ def _cosine_neighbors(ref: NDArrayA, query: NDArrayA, *, n_neighbors: int, n_job
         ref = np.hstack([np.where(ref_zero[:, None], 0.0, ref), ref_zero[:, None]])
         query = np.hstack([query, np.zeros((len(query), 1))])
     # `metric="cosine"` gives the same neighbors but made `impute_spage` 9x slower at 50k cells on 64 threads
-    knn = NearestNeighbors(n_neighbors=n_neighbors, algorithm="brute", metric="sqeuclidean", n_jobs=n_jobs)
+    knn = NearestNeighbors(n_neighbors=n_neighbors, algorithm="brute", metric="sqeuclidean")
     distances, indices = knn.fit(ref).kneighbors(query)
     distances /= 2
     distances[query_zero] = 1
     return distances, indices
+
+
+# TODO: replace with `fast_array_utils.linalg.matmul` once released; the kernels below are its port
+def _matmul(x: csr_matrix, y: NDArrayA | CSBase) -> NDArrayA:
+    """``(x @ y)`` as a dense array, multithreaded over the rows of ``x``; scipy runs it on one thread."""
+    out = np.zeros((x.shape[0], y.shape[1]), dtype=np.result_type(x.dtype, y.dtype))
+    if isinstance(y, CSBase):
+        y = y.tocsr()
+        _matmul_csr_csr(x.indptr, x.indices, x.data, y.indptr, y.indices, y.data, out)
+    else:
+        _matmul_csr_dense(x.indptr, x.indices, x.data, np.ascontiguousarray(y), out)
+    return out
+
+
+# each row of `x` only adds to its own row of `out`, in a fixed order, so the result is the same for any thread count
+@njit(parallel=True, cache=True)
+def _matmul_csr_dense(indptr: NDArrayA, indices: NDArrayA, data: NDArrayA, y: NDArrayA, out: NDArrayA) -> None:
+    for i in prange(out.shape[0]):
+        for p in range(indptr[i], indptr[i + 1]):
+            w, row = data[p], indices[p]
+            for j in range(out.shape[1]):
+                out[i, j] += w * y[row, j]
+
+
+@njit(parallel=True, cache=True)
+def _matmul_csr_csr(  # noqa: PLR0917, numba requires positional arguments
+    indptr: NDArrayA,
+    indices: NDArrayA,
+    data: NDArrayA,
+    y_indptr: NDArrayA,
+    y_indices: NDArrayA,
+    y_data: NDArrayA,
+    out: NDArrayA,
+) -> None:
+    for i in prange(out.shape[0]):
+        for p in range(indptr[i], indptr[i + 1]):
+            w, row = data[p], indices[p]
+            for q in range(y_indptr[row], y_indptr[row + 1]):
+                out[i, y_indices[q]] += w * y_data[q]
 
 
 def _spage_weights(distances: NDArrayA) -> NDArrayA:

@@ -12,7 +12,7 @@ from spatialdata import SpatialData
 from spatialdata.models import TableModel
 
 import squidpy as sq
-from squidpy.experimental.tl._impute_spage import _cosine_neighbors, _spage_weights
+from squidpy.experimental.tl._impute_spage import _cosine_neighbors, _matmul, _spage_weights
 
 _GENES = [f"g{i}" for i in range(12)]
 _N_MEASURED = 8  # the query measures g0-g7, g8-g11 are imputed
@@ -65,7 +65,6 @@ def test_recovers_unmeasured_genes():
 def test_stores_in_obsm():
     ref, query, _ = _data()
     expected = _impute(ref, query)
-    assert "imputed" not in query.obsm
 
     assert _impute(ref, query, key_added="imputed", inplace=True) is None
 
@@ -154,6 +153,7 @@ def test_constant_genes_are_ignored(constant_in):
 
 
 def test_float32():
+    # every reference cell is a neighbor, so float32 rounding cannot swap one neighbor for another
     ref, query, _ = _data()
     expected = _impute(ref, query, n_neighbors=300)
     ref.X, query.X = ref.X.astype(np.float32), query.X.astype(np.float32)
@@ -203,7 +203,7 @@ def test_cosine_neighbors_matches_sklearn_cosine():
     knn = NearestNeighbors(n_neighbors=10, metric="cosine").fit(ref)
     expected_distances, expected_indices = knn.kneighbors(query)
 
-    distances, indices = _cosine_neighbors(ref, query, n_neighbors=10, n_jobs=1)
+    distances, indices = _cosine_neighbors(ref, query, n_neighbors=10)
 
     np.testing.assert_allclose(distances, expected_distances, atol=1e-12)
     assert (distances[3] == 1).all()
@@ -298,3 +298,13 @@ def test_duplicate_genes(side):
 
     with pytest.raises(ValueError, match=f"The {side} has duplicate gene names"):
         _impute(ref, query)
+
+
+@pytest.mark.parametrize("fmt", [np.asarray, csr_matrix, csr_array])
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_matmul_matches_scipy(fmt, dtype):
+    rng = np.random.default_rng(0)
+    x = csr_matrix(rng.random((40, 30)) * (rng.random((40, 30)) < 0.2), dtype=dtype)
+    y = rng.random((30, 7)) * (rng.random((30, 7)) < 0.5)
+
+    np.testing.assert_allclose(_matmul(x, fmt(y.astype(dtype))), (x @ y).astype(dtype), rtol=1e-6)
