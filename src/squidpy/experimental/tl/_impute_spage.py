@@ -198,6 +198,7 @@ def _cosine_neighbors(ref: NDArrayA, query: NDArrayA, *, n_neighbors: int, n_job
     if ref_zero.any():
         ref = np.hstack([np.where(ref_zero[:, None], 0.0, ref), ref_zero[:, None]])
         query = np.hstack([query, np.zeros((len(query), 1))])
+    # `metric="cosine"` gives the same neighbors but made `impute_spage` 9x slower at 50k cells on 64 threads
     knn = NearestNeighbors(n_neighbors=n_neighbors, algorithm="brute", metric="sqeuclidean", n_jobs=n_jobs)
     distances, indices = knn.fit(ref).kneighbors(query)
     distances /= 2
