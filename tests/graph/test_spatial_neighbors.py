@@ -338,6 +338,7 @@ class TestSpatialNeighbors:
         ("func", "radius", "expected"),
         [
             (spatial_neighbors_radius, 5.0, 5.0),
+            (spatial_neighbors_radius, np.int64(5), 5.0),
             (spatial_neighbors_radius, (2.0, 4.0), [2.0, 4.0]),
             (spatial_neighbors_delaunay, (2.0, 4.0), [2.0, 4.0]),
             (spatial_neighbors_delaunay, 5.0, [0.0, 5.0]),
@@ -346,6 +347,7 @@ class TestSpatialNeighbors:
         ],
         ids=[
             "radius_scalar",
+            "radius_int64",
             "radius_interval",
             "delaunay_interval",
             "delaunay_scalar",
@@ -357,7 +359,9 @@ class TestSpatialNeighbors:
         func(non_visium_adata, radius=radius)
 
         # an interval radius is stored as a list: `anndata` cannot write tuples
-        assert non_visium_adata.uns[Key.uns.spatial_neighs()]["params"]["radius"] == expected
+        stored = non_visium_adata.uns[Key.uns.spatial_neighs()]["params"]["radius"]
+        assert stored == expected
+        assert type(stored) is type(expected)
         non_visium_adata.write_h5ad(tmp_path / "adata.h5ad")
 
     def test_delaunay_mode_warns_on_n_neighs(self, non_visium_adata: AnnData):

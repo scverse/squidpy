@@ -250,7 +250,7 @@ class RadiusBuilder(GraphBuilderCSR):
             postprocessors=postprocessors,
         )
         # Store intervals as a list: :mod:`anndata` cannot write tuples to ``uns``.
-        self.radius = radius if isinstance(interval, float) else np.asarray(radius).tolist()
+        self.radius = interval if isinstance(interval, float) else np.asarray(radius).tolist()
         self._max_radius = interval if isinstance(interval, float) else interval[1]
 
     def uns_params(self) -> dict[str, Any]:
