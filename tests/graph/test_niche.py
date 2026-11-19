@@ -1072,6 +1072,7 @@ def test_key_added_defaults_reproduce_the_derived_names():
     assert "utag_niche_res=1.0" in adata.obs.columns
 
 
+@pytest.mark.timeout(120)
 def test_leiden_clusterer_caps_scanpy_n_jobs_to_numba_threads(monkeypatch):
     # >=8192 cells so scanpy uses pynndescent, which passes settings.n_jobs to numba.set_num_threads
     import numba
@@ -1082,4 +1083,19 @@ def test_leiden_clusterer_caps_scanpy_n_jobs_to_numba_threads(monkeypatch):
     X = np.random.default_rng(0).normal(size=(9000, 4)).astype(np.float32)
     labels = LeidenClusterer(random_state=0).fit(X).labels_
     assert len(labels) == 9000
+    assert sc.settings.n_jobs == numba.config.NUMBA_NUM_THREADS + 1
+
+
+def test_leiden_clusterer_restores_n_jobs_when_neighbors_raises(monkeypatch):
+    import numba
+
+    from squidpy.gr._clusterers import LeidenClusterer
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(sc.settings, "n_jobs", numba.config.NUMBA_NUM_THREADS + 1)
+    monkeypatch.setattr(sc.pp, "neighbors", boom)
+    with pytest.raises(RuntimeError, match="boom"):
+        LeidenClusterer().fit(np.zeros((10, 2), dtype=np.float32))
     assert sc.settings.n_jobs == numba.config.NUMBA_NUM_THREADS + 1
