@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Literal, Protocol, Self, runtime_checkable
 
 import anndata as ad
+import numba
 import pandas as pd
 import scanpy as sc
 from fast_array_utils.types import HasArrayNamespace as Array
@@ -59,7 +60,15 @@ class LeidenClusterer(ClusterMixin, BaseEstimator):
         """Partition *X*, leaving the labels in ``labels_``."""
         shell = ad.AnnData(X=X, obs=pd.DataFrame(index=[str(i) for i in range(X.shape[0])]))
         # no dimensionality reduction, matching the original implementation
-        sc.pp.neighbors(shell, n_neighbors=self.n_neighbors, use_rep="X")
+        # pynndescent>=0.7 hands scanpy's ``settings.n_jobs`` (default 4) to ``numba.set_num_threads``,
+        # which raises on machines with fewer numba threads (e.g. 2-3 core laptops, CI runners).
+        n_jobs = sc.settings.n_jobs
+        if n_jobs > numba.config.NUMBA_NUM_THREADS:
+            sc.settings.n_jobs = numba.config.NUMBA_NUM_THREADS
+        try:
+            sc.pp.neighbors(shell, n_neighbors=self.n_neighbors, use_rep="X")
+        finally:
+            sc.settings.n_jobs = n_jobs
 
         # Default to the igraph backend so niche labels are reproducible across versions;
         # leidenalg is deprecated in scanpy and unstable on small graphs. See
