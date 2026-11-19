@@ -9,7 +9,6 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from anndata.utils import make_index_unique
 from numba import njit
 from shapely import LineString, MultiPolygon, Polygon
 from spatialdata import SpatialData
@@ -829,7 +828,6 @@ def _run_spatial_neighbors(
     if library_key is not None:
         _assert_categorical_obs(adata, key=library_key)
         libs = adata.obs[library_key].cat.categories
-        make_index_unique(adata.obs_names)
     else:
         libs = [None]
 
