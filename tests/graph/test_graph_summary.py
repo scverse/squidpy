@@ -93,7 +93,8 @@ class TestBuildWarning:
         assert "percentile" not in uns["params"]
         assert uns["summary"]["n_obs"] == 100
         assert uns["summary"]["n_isolated"] == 0
-        assert uns["summary"]["nn_dist_median"] == pytest.approx(10.0)
+        assert uns["summary"]["mean_degree"] == pytest.approx(graph_summary(adata).iloc[-1]["degree_mean"])
+        assert "nn_dist_median" not in uns["summary"]  # only computed for graphs that trigger the warning
 
 
 class TestGraphSummary:

@@ -99,18 +99,18 @@ def _check_graph(
         frac_isolated = np.bincount(codes, weights=isolated, minlength=len(categories)) / n_lib
         mean_degree = np.bincount(codes, weights=out_deg, minlength=len(categories)) / n_lib
 
-    radius = _builder_radius(builder)
-    nn = np.full(adj.shape[0], np.nan)
-    nn_median = np.full(len(categories), np.nan)
-    if radius is not None:
-        for i in np.flatnonzero(n_lib > 1):
-            mask = codes == i
-            nn[mask] = _nn_distances(coords[mask])
-            nn_median[i] = np.median(nn[mask])
-
     bad = np.flatnonzero(
         (n_lib > 0) & ((frac_isolated >= ISOLATED_FRAC_THRESHOLD) | (mean_degree < MEAN_DEGREE_THRESHOLD))
     )
+
+    # The nearest-neighbour query costs about a third of a radius build on 1M cells,
+    # so it only runs for the libraries named in the warning.
+    radius = _builder_radius(builder)
+    nn_median = np.full(len(categories), np.nan)
+    if radius is not None:
+        for i in bad[:_MAX_LIBRARIES_IN_MESSAGE]:
+            if n_lib[i] > 1:
+                nn_median[i] = np.median(_nn_distances(coords[codes == i]))
     if len(bad):
         parts = []
         for i in bad[:_MAX_LIBRARIES_IN_MESSAGE]:
@@ -138,8 +138,6 @@ def _check_graph(
         "mean_degree": float(out_deg.mean()) if adj.shape[0] else 0.0,
         "n_isolated": int(isolated.sum()),
     }
-    if radius is not None and not np.isnan(nn).all():
-        summary["nn_dist_median"] = float(np.nanmedian(nn))
     return summary
 
 
