@@ -106,3 +106,14 @@ def test_parallelize(func, backend):
 
     assert numba.get_num_threads() == init_threads, "Number of threads should stay the same after parallelization"
     assert np.allclose(result, expected), f"Expected: {expected} but got {result}"
+
+
+def _square(x):
+    return x * x
+
+
+@pytest.mark.timeout(30)
+def test_parallelize_use_runner_returns_callback_results():
+    p_func = parallelize(_square, list(range(5)), n_jobs=1, use_runner=True, show_progress_bar=False)
+    # one list per chunk, and n_jobs=1 gives a single chunk
+    assert p_func() == [[0, 1, 4, 9, 16]]

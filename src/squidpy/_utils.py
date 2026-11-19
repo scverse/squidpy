@@ -159,7 +159,7 @@ def parallelize(
         for it in iterable:
             res = callback(it, *args, **kwargs)
             if res is not None:
-                result.append(result)
+                result.append(res)
             if queue is not None:
                 queue.put(Signal.UPDATE)
 
