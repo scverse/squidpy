@@ -33,8 +33,10 @@ _LIBRARY_COLUMN_HINTS = ("library", "sample", "slide", "fov", "region", "batch")
 class SpatialGraphWarning(UserWarning):
     """Warning for a spatial graph in which many cells have no neighbour.
 
-    The ``spatial_neighbors_*`` functions emit it when, in any library, at least 25% of the
-    cells have no edge in either direction, or the mean number of neighbours is below 1.
+    The ``spatial_neighbors_*`` functions and :func:`squidpy.gr.mask_graph` emit it when, in
+    any library, at least 25% of the cells have no edge in either direction, or the mean number
+    of neighbours is below 1. The graph build also emits it when ``adata.uns["spatial"]`` lists
+    several libraries but no ``library_key`` was passed.
     A radius below the typical cell spacing, or coordinates in other units than the radius
     (e.g. pixels vs micrometres), are the usual causes. The message names the library, the
     radius and the median nearest-neighbour distance. :func:`squidpy.gr.graph_summary`
@@ -42,8 +44,8 @@ class SpatialGraphWarning(UserWarning):
 
     The thresholds come from graphs built at 1.5x, 2x and 3x the median nearest-neighbour
     distance on seqFISH, MERFISH, Slide-seqV2, IMC, MIBI-TOF and sparse Xenium sections
-    (subcutaneous adipose and lung). None of those graphs reaches them. The sparsest healthy
-    case, adipose at 1.5x the nearest-neighbour distance, leaves 22.6% of the cells isolated.
+    (subcutaneous adipose and lung). None of the calibration graphs reaches the thresholds,
+    and sparse adipose tissue at 1.5x the nearest-neighbour distance comes closest.
 
     Silence it with the standard :mod:`warnings` filters::
 
@@ -181,10 +183,10 @@ def graph_summary(
 ) -> pd.DataFrame:
     """Summarize a spatial graph per library.
 
-    Use it after building a graph, or before choosing a radius, to see how many neighbours
-    the cells have and how that compares with the spacing between cells. It works on any
-    graph in :attr:`anndata.AnnData.obsp`, including graphs built outside squidpy. The
-    function only reports numbers. It doesn't pick a radius.
+    Use it after building a graph, or before choosing a radius, to compare the number of
+    neighbours per cell with the spacing between cells. It works on any graph in
+    :attr:`anndata.AnnData.obsp`, including graphs built outside squidpy, and it reports
+    numbers without picking a radius.
 
     Parameters
     ----------
@@ -211,12 +213,12 @@ def graph_summary(
         - ``degree_mean``, ``degree_sd``, ``degree_median``, ``degree_min``, ``degree_max``:
           neighbours per cell (out-degree).
         - ``n_isolated``, ``frac_isolated``: cells with no edge in either direction.
-        - ``n_in_degree_zero``: cells that are no cell's neighbour. In a directed kNN graph
-          these cells are invisible to anything that aggregates over neighbours.
+        - ``n_in_degree_zero``: cells that are no cell's neighbour. In a directed kNN graph,
+          an aggregation over neighbours never uses such a cell.
         - ``n_components``, ``largest_component_frac``: weakly connected components.
         - ``reciprocity``: fraction of edges whose reverse edge also exists.
         - ``nn_dist_median``: median distance to the nearest other cell, in the units of
-          ``spatial_key``. squidpy doesn't know these units.
+          ``spatial_key``. squidpy doesn't know the units.
         - ``n_duplicate_coords``: cells that share their position with another cell.
         - ``n_cross_library_edges``: edges between libraries, only when ``library_key`` is set.
 
@@ -227,12 +229,13 @@ def graph_summary(
     Notes
     -----
     The graph build warns with :class:`~squidpy.gr.SpatialGraphWarning` only when cells have
-    too few neighbours. A graph with too many neighbours is not flagged. For example, MERFISH
-    coordinates stored in millimetres with a radius meant in micrometres (30) give a mean of
-    5,577 neighbours per cell. Compare ``nn_dist_median`` with your radius to catch this case.
+    too few neighbours. A graph with too many neighbours is not flagged, e.g., coordinates
+    stored in millimetres with a radius meant in micrometres, which connects each cell to
+    thousands of others. Compare ``nn_dist_median`` with your radius to catch an over-connected
+    graph.
 
-    Values stored in ``adata.uns[...]["summary"]`` at build time are not used, because they go
-    stale when cells are subset.
+    The function doesn't read the values stored in ``adata.uns[...]["summary"]`` at build
+    time, because they go stale when cells are subset.
 
     Examples
     --------
