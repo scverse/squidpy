@@ -298,9 +298,10 @@ class TestSpatialNeighbors:
         ],
         ids=["legacy_delaunay", "delaunay", "radius"],
     )
-    @pytest.mark.parametrize("radius", [[4.0, 2.0], np.array([2, 4])], ids=["list", "array"])
+    # (3, 6) drops the length-2 edge, so ignoring the lower bound changes the graph
+    @pytest.mark.parametrize("radius", [[6.0, 3.0], np.array([3, 6])], ids=["list", "array"])
     def test_radius_sequence_equals_tuple(self, non_visium_adata: AnnData, func, radius):
-        expected = func(non_visium_adata, radius=(2.0, 4.0), copy=True)
+        expected = func(non_visium_adata, radius=(3.0, 6.0), copy=True)
         result = func(non_visium_adata, radius=radius, copy=True)
 
         np.testing.assert_array_equal(expected.connectivities.toarray(), result.connectivities.toarray())
