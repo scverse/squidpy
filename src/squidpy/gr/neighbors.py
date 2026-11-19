@@ -533,7 +533,9 @@ def symmetric_normalize_csr(adj: spmatrix) -> csr_matrix:
     -------
     scipy.sparse.csr_matrix
     """
-    degrees = np.squeeze(np.array(np.sqrt(1.0 / fau_stats.sum(adj, axis=0))))
+    # isolated cells have degree 0; their rows and columns hold no entries, so the inf is never used
+    with np.errstate(divide="ignore"):
+        degrees = np.squeeze(np.array(np.sqrt(1.0 / fau_stats.sum(adj, axis=0))))
     if adj.shape[0] != len(degrees):
         raise ValueError("len(degrees) must equal number of rows of adj")
     res_data = _csr_bilateral_diag_scale_helper(adj, degrees)

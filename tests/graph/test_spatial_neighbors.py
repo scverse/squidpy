@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import warnings
+
 import anndata as ad
 import numpy as np
 import pytest
@@ -526,6 +528,14 @@ class TestSpatialNeighbors:
 
             # Verify transform parameter is saved
             assert small_adata.uns[Key.uns.spatial_neighs()]["params"]["transform"] == transform
+
+    def test_spectral_transform_isolated_cell(self):
+        adata = AnnData(np.zeros((3, 1)), obsm={Key.obsm.spatial: np.array([[0.0, 0.0], [1.0, 0.0], [100.0, 100.0]])})
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            result = spatial_neighbors_radius(adata, radius=2.0, transform="spectral", copy=True)
+
+        np.testing.assert_allclose(result.connectivities.toarray(), [[0, 1, 0], [1, 0, 0], [0, 0, 0]])
 
     def test_spatial_neighbors_spectral_transform_properties(self, non_visium_adata: AnnData):
         """
