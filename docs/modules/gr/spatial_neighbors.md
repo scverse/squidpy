@@ -13,6 +13,8 @@ The flavors of building a spatial graph.
    gr.spatial_neighbors_radius
    gr.spatial_neighbors_delaunay
    gr.spatial_neighbors_grid
+   gr.graph_summary
+   gr.SpatialGraphWarning
 ```
 
 ```{toctree}

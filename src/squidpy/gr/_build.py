@@ -12,6 +12,7 @@ import pandas as pd
 from anndata import AnnData
 from anndata.utils import make_index_unique
 from numba import njit
+from scipy.sparse import csr_matrix, issparse
 from shapely import LineString, MultiPolygon, Polygon
 from spatialdata import SpatialData
 from spatialdata._core.centroids import get_centroids
@@ -29,6 +30,7 @@ from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
 from squidpy._utils import NDArrayA, get_n_numba_threads, thread_map
 from squidpy._validators import assert_positive, normalize_choice
+from squidpy.gr._graph_diagnostics import _check_graph, _warn_multiple_libraries
 from squidpy.gr._utils import (
     _assert_categorical_obs,
     _assert_spatial_basis,
@@ -828,6 +830,7 @@ def _run_spatial_neighbors(
     n_jobs: int = 1,
 ) -> SpatialNeighborsResult | None:
     """Shared core: build the graph from a resolved builder and save results."""
+    _warn_multiple_libraries(adata, library_key)
     if library_key is not None:
         _assert_categorical_obs(adata, key=library_key)
         libs = adata.obs[library_key].cat.categories
@@ -857,11 +860,36 @@ def _run_spatial_neighbors(
     conns_key = Key.obsp.spatial_conn(key_added)
     dists_key = Key.obsp.spatial_dist(key_added)
 
-    neighbors_dict = {
+    params = builder.uns_params()
+    # additive build metadata; `None` values are left out so that h5ad writing can't break
+    extra = {
+        "builder": type(builder).__name__,
+        "spatial_key": spatial_key,
+        "library_key": library_key,
+        "set_diag": builder.set_diag,
+        "percentile": builder.percentile,
+    }
+    for k, v in extra.items():
+        if v is not None:
+            params.setdefault(k, v)
+    neighbors_dict: dict[str, Any] = {
         "connectivities_key": conns_key,
         "distances_key": dists_key,
-        "params": builder.uns_params(),
+        "params": params,
     }
+    if issparse(adj):
+        if library_key is not None:
+            lib_codes, lib_names = adata.obs[library_key].cat.codes.to_numpy(), [str(c) for c in libs]
+        else:
+            lib_codes, lib_names = np.zeros(adata.n_obs, dtype=np.int64), ["all"]
+        neighbors_dict["summary"] = _check_graph(
+            csr_matrix(adj),
+            np.asarray(adata.obsm[spatial_key]),
+            lib_codes.astype(np.int64),
+            lib_names,
+            builder=builder,
+            key_added=key_added,
+        )
 
     if copy:
         return SpatialNeighborsResult(connectivities=adj, distances=dst)
@@ -955,6 +983,15 @@ def mask_graph(
     # filter_distances
     dst[filt_idx_out[:, 0], filt_idx_out[:, 1]] = 0
     dst.eliminate_zeros()
+
+    _check_graph(
+        csr_matrix(adj),
+        np.asarray(coords),
+        np.zeros(adj.shape[0], dtype=np.int64),
+        ["all"],
+        builder=None,
+        key_added=f"{key_added}_{spatial_key}",
+    )
 
     mask_conns_key = f"{key_added}_{conns_key}"
     mask_dists_key = f"{key_added}_{dists_key}"

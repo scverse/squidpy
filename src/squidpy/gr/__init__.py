@@ -13,6 +13,7 @@ from squidpy.gr._build import (
     spatial_neighbors_knn,
     spatial_neighbors_radius,
 )
+from squidpy.gr._graph_diagnostics import SpatialGraphWarning, graph_summary
 from squidpy.gr._ligrec import ligrec
 from squidpy.gr._nhood import (
     NhoodEnrichmentResult,
@@ -44,6 +45,8 @@ __all__ = [
     "spatial_neighbors_radius",
     "spatial_neighbors_delaunay",
     "spatial_neighbors_grid",
+    "graph_summary",
+    "SpatialGraphWarning",
     "calculate_niche",
     "calculate_niche_neighborhood",
     "calculate_niche_utag",
