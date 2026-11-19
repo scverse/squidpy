@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import numpy as np
+from scipy import ndimage as ndi
 from scipy.fft import fft2, fftfreq
-from skimage.filters import laplace, sobel_h, sobel_v
+from skimage.filters import laplace, sobel, sobel_h, sobel_v
 
 
 def to_f32_2d(x: np.ndarray) -> np.ndarray:
@@ -92,3 +93,26 @@ def haar_wavelet_energy(block: np.ndarray) -> np.ndarray:
         ratio = detail / total if np.isfinite(detail) else 0.0
         ratio = np.clip(ratio, 0.0, 1.0)
     return np.array([[ratio]], dtype=np.float32)
+
+
+def edge_sharpness(block: np.ndarray, *, min_edge_pixels: int = 100) -> np.ndarray:
+    """Edge sharpness: median Sobel magnitude / local (7x7) intensity range at the 2% strongest edges.
+
+    The ratio is roughly the inverse width of an intensity step, independent of the step's height, so it falls with
+    defocus but not with stain intensity or tissue contrast. Only pixels whose local range exceeds 20/255 of full
+    scale count as edges. Tiles with fewer than ``min_edge_pixels`` such pixels (empty glass, fat, pale stroma) return
+    NaN rather than a score.
+    """
+    # the ratio is scale-free, only the edge cutoff needs intensities in [0, 1]
+    full_scale = np.iinfo(block.dtype).max if np.issubdtype(block.dtype, np.integer) else 1.0
+    b = to_f32_2d(block)
+    if full_scale == 1.0 and b.max() > 1.5:  # float block holding 8-bit values
+        full_scale = 255.0
+    b = b / np.float32(full_scale)
+    rng = ndi.maximum_filter(b, 7) - ndi.minimum_filter(b, 7)
+    ok = rng > 20 / 255
+    if ok.sum() < min_edge_pixels:
+        return np.array([[np.nan]], dtype=np.float32)
+    grad = sobel(b)
+    sel = ok & (grad >= np.quantile(grad[ok], 0.98))
+    return np.array([[float(np.median(grad[sel] / rng[sel]))]], dtype=np.float32)

@@ -128,6 +128,7 @@ def test_qc_image_default_metrics_hne(sdata_hne):
     )
     adata = sdata_hne.tables["qc_img_hne"]
     expected = {
+        "qc_edge_sharpness",
         "qc_tenengrad",
         "qc_var_of_laplacian",
         "qc_entropy",
@@ -235,3 +236,84 @@ def test_qc_image_compute_only(sdata_hne):
     # Spatial coordinates should still be present
     assert "centroid_y" in adata.obs.columns
     assert "spatial" in adata.obsm
+
+
+def _synthetic_tile(seed: int = 0) -> np.ndarray:
+    """Random dark blobs on a bright background: sharp intensity steps, like nuclei in H&E."""
+    from scipy import ndimage as ndi
+
+    rng = np.random.default_rng(seed)
+    img = np.full((256, 256), 220.0, dtype=np.float32)
+    for _ in range(40):
+        y, x = rng.integers(10, 246, 2)
+        r = rng.integers(3, 8)
+        yy, xx = np.ogrid[:256, :256]
+        img[(yy - y) ** 2 + (xx - x) ** 2 <= r * r] = 80.0
+    return ndi.gaussian_filter(img, 0.5)  # a scanner's own slight softness
+
+
+def test_edge_sharpness_falls_with_blur_and_ignores_contrast() -> None:
+    from scipy import ndimage as ndi
+
+    from squidpy.experimental.im._sharpness_metrics import edge_sharpness
+
+    tile = _synthetic_tile()
+    values = [float(edge_sharpness(ndi.gaussian_filter(tile, s))[0, 0]) for s in (0, 1, 2, 4)]
+    assert values == sorted(values, reverse=True)
+    # halving the contrast of every step leaves the edge width, and the score, nearly unchanged
+    low_contrast = 150 + (tile - 150) * 0.5
+    assert abs(float(edge_sharpness(low_contrast)[0, 0]) - values[0]) < 0.05 * values[0]
+
+
+def test_edge_sharpness_is_nan_without_edges() -> None:
+    from squidpy.experimental.im._sharpness_metrics import edge_sharpness
+
+    assert np.isnan(edge_sharpness(np.full((128, 128), 200.0, dtype=np.float32))[0, 0])
+
+
+def test_robust_unfocus_z_flags_only_the_blurred_tile() -> None:
+    from scipy import ndimage as ndi
+
+    from squidpy.experimental.im._qc_image import _robust_unfocus_z
+    from squidpy.experimental.im._sharpness_metrics import edge_sharpness
+
+    tiles = [_synthetic_tile(seed) for seed in range(20)]
+    tiles[7] = ndi.gaussian_filter(tiles[7], 3)
+    z = _robust_unfocus_z(np.array([edge_sharpness(t)[0, 0] for t in tiles]))
+    assert np.flatnonzero(z > 3).tolist() == [7]
+
+
+def test_qc_image_robust_z_needs_edge_sharpness(sdata_hne) -> None:
+    with pytest.raises(ValueError, match="edge_sharpness"):
+        sq.experimental.im.qc_image(
+            sdata_hne,
+            image_key="hne",
+            tile_size=_FAST_TILE,
+            metrics=["tenengrad"],
+            outlier_method="robust_z",
+            progress=False,
+            preview=False,
+        )
+
+
+def test_qc_image_default_outlier_method_follows_metrics(sdata_hne) -> None:
+    sq.experimental.im.qc_image(sdata_hne, image_key="hne", tile_size=_FAST_TILE, progress=False, preview=False)
+    assert sdata_hne.tables["qc_img_hne"].uns["qc_image"]["outlier_method"] == "robust_z"
+    sq.experimental.im.qc_image(
+        sdata_hne, image_key="hne", tile_size=_FAST_TILE, metrics=["tenengrad"], progress=False, preview=False
+    )
+    assert sdata_hne.tables["qc_img_hne"].uns["qc_image"]["outlier_method"] == "percentile"
+
+
+def test_edge_sharpness_uses_dtype_full_scale() -> None:
+    # 16-bit fluorescence must be scaled by its dtype range, not by 255
+    from squidpy.experimental.im._sharpness_metrics import edge_sharpness
+
+    rng = np.random.default_rng(0)
+    img8 = np.zeros((64, 64), dtype=np.uint8)
+    img8[:, 32:] = 200
+    img8 = np.clip(img8.astype(int) + rng.integers(0, 3, img8.shape), 0, 255).astype(np.uint8)
+    img16 = img8.astype(np.uint16) * 257
+    low_contrast16 = (img8.astype(np.uint16) // 20) * 257 // 10  # step of ~10/255 of full 16-bit scale
+    assert np.isclose(edge_sharpness(img8)[0, 0], edge_sharpness(img16)[0, 0], rtol=1e-3)
+    assert np.isnan(edge_sharpness(low_contrast16)[0, 0])

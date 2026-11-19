@@ -28,6 +28,7 @@ from squidpy.experimental.im._utils import (
 )
 
 _DEFAULT_HNE_METRICS: list[QCMetric] = [
+    "edge_sharpness",
     "tenengrad",
     "var_of_laplacian",
     "entropy",
@@ -36,6 +37,7 @@ _DEFAULT_HNE_METRICS: list[QCMetric] = [
     "eosin_mean",
 ]
 
+# edge_sharpness and the robust-z rule were only evaluated on H&E, so fluorescence keeps the percentile default
 _DEFAULT_GENERIC_METRICS: list[QCMetric] = [
     "tenengrad",
     "var_of_laplacian",
@@ -55,6 +57,8 @@ def qc_image(
     detect_outliers: bool = True,
     detect_tissue: bool = True,
     outlier_threshold: float = 0.1,
+    outlier_method: Literal["robust_z", "percentile"] | None = None,
+    outlier_z: float = 3.0,
     progress: bool = True,
     tissue_mask_key: str | None = None,
     preview: bool = True,
@@ -77,7 +81,7 @@ def qc_image(
         QC metric name, or a list of them. ``None`` uses sensible defaults based on
         ``is_hne``. Accepted values, by what they measure:
 
-        - sharpness: ``"tenengrad"``, ``"var_of_laplacian"``, ``"variance"``,
+        - sharpness: ``"edge_sharpness"``, ``"tenengrad"``, ``"var_of_laplacian"``, ``"variance"``,
           ``"fft_high_freq_energy"``, ``"haar_wavelet_energy"``
         - intensity: ``"brightness_mean"``, ``"brightness_std"``, ``"entropy"``
         - staining, H&E only: ``"hematoxylin_mean"``, ``"hematoxylin_std"``,
@@ -95,10 +99,24 @@ def qc_image(
     detect_tissue
         Whether to detect tissue regions for context-aware outlier detection.
     outlier_threshold
-        Percentile threshold (0-1) for outlier detection. A tile is flagged as
-        an outlier if its within-tissue percentile rank falls below this value.
-        For example, ``0.1`` flags the bottom 10% of tissue tiles (by their
-        worst sharpness metric) as outliers.
+        Only for ``outlier_method="percentile"``: share (0-1) of tissue tiles to flag. A tile is flagged if its
+        within-tissue percentile rank on its worst sharpness metric falls below this value, so this rule always flags
+        about this share of tiles, whether or not any are out of focus.
+    outlier_method
+        How ``unfocus_score`` and ``qc_outlier`` are computed. ``None`` (the default) uses ``"robust_z"`` when the
+        ``"edge_sharpness"`` metric is computed (it is in the default H&E metrics) and ``"percentile"`` otherwise, so an
+        explicit ``metrics`` list without it keeps the previous behaviour.
+
+            - ``"robust_z"``: ``unfocus_score`` is the robust z-score of ``edge_sharpness`` among the
+              scored tissue tiles, ``(median - value) / (1.4826 * MAD)``, so higher means blurrier than the slide's
+              typical tile. Tiles with ``unfocus_score > outlier_z`` are outliers; a sharp slide gets few or none.
+              Requires the ``"edge_sharpness"`` metric. Tiles without enough edges to score get NaN and are not
+              flagged.
+            - ``"percentile"``: the previous rule, ``1 - min`` of the within-tissue percentile ranks of
+              ``tenengrad`` and ``var_of_laplacian``, flagging the bottom ``outlier_threshold``. These two metrics
+              also track tissue type (smooth muscle ranks as unfocused, nucleus-dense tissue as sharp).
+    outlier_z
+        Only for ``outlier_method="robust_z"``: robust z-score above which a tile is flagged.
     progress
         Whether to show progress bar during computation.
     tissue_mask_key
@@ -148,6 +166,12 @@ def qc_image(
 
     if not 0 < outlier_threshold < 1:
         raise ValueError(f"outlier_threshold must be in (0, 1), got {outlier_threshold}")
+    if outlier_method is None:
+        outlier_method = "robust_z" if "edge_sharpness" in metrics else "percentile"
+    if outlier_method not in ("robust_z", "percentile"):
+        raise ValueError(f"outlier_method must be 'robust_z', 'percentile' or None, got {outlier_method!r}")
+    if detect_outliers and outlier_method == "robust_z" and "edge_sharpness" not in metrics:
+        raise ValueError("outlier_method='robust_z' needs the 'edge_sharpness' metric; add it or use 'percentile'.")
 
     # Compute QC metrics
     img_node = sdata.images[image_key]
@@ -272,16 +296,17 @@ def qc_image(
             )
             logger.info(f"- Classified tiles: background: {back.sum()}, tissue: {tissue.sum()}.")
 
-        if detect_tissue and tissue.any():
-            tissue_scores = _compute_unfocus_scores(X[tissue], var_names)
-            unfocus_scores = np.full(n_tiles, np.nan, dtype=np.float32)
-            unfocus_scores[tissue] = tissue_scores
-            outlier_labels = np.ones(n_tiles, dtype=int)
-            outlier_labels[tissue] = np.where(tissue_scores >= 1 - outlier_threshold, -1, 1)
+        scored = tissue if (detect_tissue and tissue.any()) else np.ones(n_tiles, dtype=bool)
+        unfocus_scores = np.full(n_tiles, np.nan, dtype=np.float32)
+        outlier_labels = np.ones(n_tiles, dtype=int)
+        if outlier_method == "robust_z":
+            sub = _robust_unfocus_z(X[scored, var_names.index("qc_edge_sharpness")])
+            flagged = sub > outlier_z  # NaN (unscorable tile) compares False
         else:
-            all_scores_arr = _compute_unfocus_scores(X, var_names)
-            unfocus_scores = all_scores_arr
-            outlier_labels = np.where(all_scores_arr >= 1 - outlier_threshold, -1, 1)
+            sub = _compute_unfocus_scores(X[scored], var_names)
+            flagged = sub >= 1 - outlier_threshold
+        unfocus_scores[scored] = sub
+        outlier_labels[scored] = np.where(flagged, -1, 1)
 
         adata.obs["qc_outlier"] = pd.Categorical((outlier_labels == -1).astype(str), categories=["False", "True"])
         if detect_tissue:
@@ -304,6 +329,8 @@ def qc_image(
         "is_hne": is_hne,
         "detect_tissue": detect_tissue,
         "outlier_threshold": outlier_threshold,
+        "outlier_method": outlier_method,
+        "outlier_z": outlier_z,
         "n_tissue_tiles": int(tissue.sum()),
         "n_background_tiles": int(back.sum()),
         "n_outlier_tiles": int((outlier_labels == -1).sum()),
@@ -402,6 +429,23 @@ def _classify_tiles_by_tissue(
 
     tissue = frac > 0.5
     return tissue, ~tissue
+
+
+def _robust_unfocus_z(edge: np.ndarray) -> np.ndarray:
+    """Robust z-score of edge sharpness, oriented so that higher = blurrier: (median - x) / (1.4826 * MAD).
+
+    The scale is floored at 2% of the median, so a slide whose tiles are almost equally sharp doesn't turn tiny
+    differences into outliers.
+    """
+    edge = np.asarray(edge, dtype=np.float64)
+    ok = np.isfinite(edge)
+    z = np.full(edge.shape, np.nan, dtype=np.float32)
+    if ok.sum() < 2:
+        return z
+    med = np.median(edge[ok])
+    mad = 1.4826 * np.median(np.abs(edge[ok] - med))
+    z[ok] = (med - edge[ok]) / max(mad, 0.02 * abs(med), 1e-12)
+    return z
 
 
 def _compute_unfocus_scores(X: np.ndarray, var_names: list[str]) -> np.ndarray:
