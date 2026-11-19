@@ -151,7 +151,6 @@ def test_qc_image_default_metrics_generic(sdata_hne):
     )
     adata = sdata_hne.tables["qc_img_hne"]
     expected = {
-        "qc_edge_sharpness",
         "qc_tenengrad",
         "qc_var_of_laplacian",
         "qc_entropy",
@@ -304,3 +303,17 @@ def test_qc_image_default_outlier_method_follows_metrics(sdata_hne) -> None:
         sdata_hne, image_key="hne", tile_size=_FAST_TILE, metrics=["tenengrad"], progress=False, preview=False
     )
     assert sdata_hne.tables["qc_img_hne"].uns["qc_image"]["outlier_method"] == "percentile"
+
+
+def test_edge_sharpness_uses_dtype_full_scale() -> None:
+    # 16-bit fluorescence must be scaled by its dtype range, not by 255
+    from squidpy.experimental.im._sharpness_metrics import edge_sharpness
+
+    rng = np.random.default_rng(0)
+    img8 = np.zeros((64, 64), dtype=np.uint8)
+    img8[:, 32:] = 200
+    img8 = np.clip(img8.astype(int) + rng.integers(0, 3, img8.shape), 0, 255).astype(np.uint8)
+    img16 = img8.astype(np.uint16) * 257
+    low_contrast16 = (img8.astype(np.uint16) // 20) * 257 // 10  # step of ~10/255 of full 16-bit scale
+    assert np.isclose(edge_sharpness(img8)[0, 0], edge_sharpness(img16)[0, 0], rtol=1e-3)
+    assert np.isnan(edge_sharpness(low_contrast16)[0, 0])

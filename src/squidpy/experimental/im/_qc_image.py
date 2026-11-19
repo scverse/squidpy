@@ -37,8 +37,8 @@ _DEFAULT_HNE_METRICS: list[QCMetric] = [
     "eosin_mean",
 ]
 
+# edge_sharpness and the robust-z rule were only evaluated on H&E, so fluorescence keeps the percentile default
 _DEFAULT_GENERIC_METRICS: list[QCMetric] = [
-    "edge_sharpness",
     "tenengrad",
     "var_of_laplacian",
     "entropy",
@@ -104,7 +104,7 @@ def qc_image(
         about this share of tiles, whether or not any are out of focus.
     outlier_method
         How ``unfocus_score`` and ``qc_outlier`` are computed. ``None`` (the default) uses ``"robust_z"`` when the
-        ``"edge_sharpness"`` metric is computed (it is in the default metrics) and ``"percentile"`` otherwise, so an
+        ``"edge_sharpness"`` metric is computed (it is in the default H&E metrics) and ``"percentile"`` otherwise, so an
         explicit ``metrics`` list without it keeps the previous behaviour.
 
             - ``"robust_z"``: ``unfocus_score`` is the robust z-score of ``edge_sharpness`` among the
