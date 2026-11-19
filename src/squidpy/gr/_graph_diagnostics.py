@@ -198,6 +198,8 @@ def graph_summary(
     library_key
         Categorical column in :attr:`anndata.AnnData.obs` with one category per library.
         If `None`, the ``library_key`` stored when squidpy built the graph is used, if any.
+        Cells with a missing library are left out of the per-library rows but counted in the
+        ``"all"`` row.
     radii
         Radii at which to count neighbours directly from the coordinates, without building
         a graph. Each radius adds one row per library.
