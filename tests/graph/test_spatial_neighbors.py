@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from functools import partial
+
 import anndata as ad
 import numpy as np
 import pytest
@@ -288,14 +290,67 @@ class TestSpatialNeighbors:
         np.testing.assert_allclose(scalar.distances.toarray(), interval.distances.toarray())
 
     @pytest.mark.parametrize(
+        "func",
+        [
+            partial(spatial_neighbors, coord_type="generic", delaunay=True),
+            spatial_neighbors_delaunay,
+            spatial_neighbors_radius,
+        ],
+        ids=["legacy_delaunay", "delaunay", "radius"],
+    )
+    @pytest.mark.parametrize("radius", [[4.0, 2.0], np.array([2, 4])], ids=["list", "array"])
+    def test_radius_sequence_equals_tuple(self, non_visium_adata: AnnData, func, radius):
+        expected = func(non_visium_adata, radius=(2.0, 4.0), copy=True)
+        result = func(non_visium_adata, radius=radius, copy=True)
+
+        np.testing.assert_array_equal(expected.connectivities.toarray(), result.connectivities.toarray())
+        np.testing.assert_allclose(expected.distances.toarray(), result.distances.toarray())
+
+    @pytest.mark.parametrize(
+        "func",
+        [
+            partial(spatial_neighbors, coord_type="generic", delaunay=True),
+            partial(spatial_neighbors, coord_type="generic"),
+            spatial_neighbors_delaunay,
+            spatial_neighbors_radius,
+        ],
+        ids=["legacy_delaunay", "legacy_radius", "delaunay", "radius"],
+    )
+    @pytest.mark.parametrize("radius", [[1.0, 2.0, 3.0], np.array([5.0]), ()], ids=["three", "one", "empty"])
+    def test_radius_sequence_wrong_length_raises(self, non_visium_adata: AnnData, func, radius):
+        with pytest.raises(ValueError, match=r"`radius` must be a number or a `\(min, max\)` pair"):
+            func(non_visium_adata, radius=radius, copy=True)
+
+    @pytest.mark.parametrize("radius", [np.float64(5.0), np.int64(5)], ids=["float64", "int64"])
+    def test_numpy_scalar_radius(self, non_visium_adata: AnnData, radius):
+        default = spatial_neighbors(non_visium_adata, coord_type="generic", delaunay=True, copy=True)
+        ignored = spatial_neighbors(non_visium_adata, coord_type="generic", delaunay=True, radius=radius, copy=True)
+        np.testing.assert_array_equal(default.connectivities.toarray(), ignored.connectivities.toarray())
+
+        for func in (spatial_neighbors_delaunay, spatial_neighbors_radius):
+            expected = func(non_visium_adata, radius=5.0, copy=True)
+            result = func(non_visium_adata, radius=radius, copy=True)
+            np.testing.assert_array_equal(expected.connectivities.toarray(), result.connectivities.toarray())
+            np.testing.assert_allclose(expected.distances.toarray(), result.distances.toarray())
+
+    @pytest.mark.parametrize(
         ("func", "radius", "expected"),
         [
             (spatial_neighbors_radius, 5.0, 5.0),
             (spatial_neighbors_radius, (2.0, 4.0), [2.0, 4.0]),
             (spatial_neighbors_delaunay, (2.0, 4.0), [2.0, 4.0]),
             (spatial_neighbors_delaunay, 5.0, [0.0, 5.0]),
+            (spatial_neighbors_radius, np.array([2.0, 4.0]), [2.0, 4.0]),
+            (spatial_neighbors_delaunay, np.array([2.0, 4.0]), [2.0, 4.0]),
         ],
-        ids=["radius_scalar", "radius_interval", "delaunay_interval", "delaunay_scalar"],
+        ids=[
+            "radius_scalar",
+            "radius_interval",
+            "delaunay_interval",
+            "delaunay_scalar",
+            "radius_array",
+            "delaunay_array",
+        ],
     )
     def test_radius_stored_in_uns_is_writable(self, non_visium_adata: AnnData, tmp_path, func, radius, expected):
         func(non_visium_adata, radius=radius)

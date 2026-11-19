@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numbers
 import warnings
 from typing import Any, Literal, NamedTuple
 
@@ -113,8 +114,8 @@ def _resolve_graph_builder(
         # `spatial_neighbors`, a scalar `radius` with `delaunay=True` is silently
         # ignored. The new `DelaunayBuilder(radius=r)` interprets a scalar as
         # the interval `(0.0, r)`, so we strip scalars here before delegating
-        # and only forward tuple intervals to keep the legacy behavior intact.
-        legacy_radius = radius if isinstance(radius, tuple) else None
+        # and only forward `(min, max)` intervals (tuple, list or array).
+        legacy_radius = None if isinstance(radius, numbers.Real) else radius
         return DelaunayBuilder(**common, radius=legacy_radius, percentile=percentile)
     if radius is not None:
         # TODO: below check should be removed when spatial_neighbors is deprecated
@@ -211,7 +212,8 @@ def spatial_neighbors(
         Depending on the type:
 
             - :class:`float` - compute the graph based on neighborhood radius.
-            - :class:`tuple` - prune the final graph to only contain edges in interval `[min(radius), max(radius)]`.
+            - ``(min, max)`` pair (:class:`tuple`, :class:`list` or array) - prune the final graph to only contain
+              edges in interval `[min(radius), max(radius)]`.
     delaunay
         Whether to compute the graph from Delaunay triangulation. Only used when ``coord_type = 'generic'``.
         Defaults to ``False``.
@@ -607,7 +609,7 @@ def spatial_neighbors_radius(
     %(sdata_params)s
     %(library_key)s
     radius
-        Neighborhood radius.  If a :class:`tuple`, the graph is built with the
+        Neighborhood radius.  If a ``(min, max)`` pair (:class:`tuple`, :class:`list` or array), the graph is built with the
         maximum radius and then pruned to the interval ``[min(radius), max(radius)]``.
         In practice, a single value defines a disk around each observation,
         whereas a tuple defines an annulus by keeping only edges within the
@@ -683,7 +685,7 @@ def spatial_neighbors_delaunay(
         Post-construction edge pruning of the Delaunay graph. The triangulation
         itself is never changed; only the resulting edges are filtered.
 
-            - :class:`tuple` ``(min, max)``: keep edges with Euclidean length
+            - ``(min, max)`` pair (:class:`tuple`, :class:`list` or array): keep edges with Euclidean length
               in ``[min(radius), max(radius)]``.
             - :class:`float` / :class:`int` ``r``: shorthand for ``(0.0, r)``,
               i.e. keep edges with length at most ``r``.
