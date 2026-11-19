@@ -5,6 +5,7 @@ See the :doc:`/extensibility` guide for how to implement a custom builder.
 
 from __future__ import annotations
 
+import numbers
 import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
@@ -235,9 +236,10 @@ class RadiusBuilder(GraphBuilderCSR):
         set_diag: bool = False,
         percentile: float | None = None,
     ) -> None:
+        interval = _normalize_radius(radius)
         postprocessors: list[GraphPostprocessor[csr_matrix]] = []
-        if isinstance(radius, tuple):
-            postprocessors.append(DistanceIntervalPostprocessor(tuple(sorted(radius))))
+        if isinstance(interval, tuple):
+            postprocessors.append(DistanceIntervalPostprocessor(interval))
         if percentile is not None:
             postprocessors.append(PercentilePostprocessor(percentile))
         postprocessors.append(TransformPostprocessor(_as_transform(transform)))
@@ -248,7 +250,8 @@ class RadiusBuilder(GraphBuilderCSR):
             postprocessors=postprocessors,
         )
         # Store intervals as a list: :mod:`anndata` cannot write tuples to ``uns``.
-        self.radius = list(radius) if isinstance(radius, tuple) else radius
+        self.radius = interval if isinstance(interval, float) else np.asarray(radius).tolist()
+        self._max_radius = interval if isinstance(interval, float) else interval[1]
 
     def uns_params(self) -> dict[str, Any]:
         return {
@@ -259,7 +262,7 @@ class RadiusBuilder(GraphBuilderCSR):
 
     def build_graph(self, coords: NDArrayA) -> tuple[csr_matrix, csr_matrix]:
         N = coords.shape[0]
-        r = self.radius if isinstance(self.radius, int | float) else max(self.radius)
+        r = self._max_radius
         tree = NearestNeighbors(radius=r, metric="euclidean")
         tree.fit(coords)
 
@@ -288,7 +291,7 @@ class DelaunayBuilder(GraphBuilderCSR):
     and stores real Euclidean edge lengths.
 
     ``radius`` only controls post-construction edge pruning; the triangulation
-    itself is unchanged. A tuple ``(min, max)`` keeps edges with Euclidean
+    itself is unchanged. A ``(min, max)`` pair (tuple, list or array) keeps edges with Euclidean
     length in that interval. A scalar ``r`` is shorthand for ``(0.0, r)``,
     i.e. keep edges with length at most ``r``. ``None`` keeps every edge.
 
@@ -303,11 +306,12 @@ class DelaunayBuilder(GraphBuilderCSR):
         set_diag: bool = False,
         percentile: float | None = None,
     ) -> None:
-        if isinstance(radius, int | float):
-            radius = (0.0, float(radius))
+        interval = None if radius is None else _normalize_radius(radius)
+        if isinstance(interval, float):
+            radius = interval = (0.0, interval)
         postprocessors: list[GraphPostprocessor[csr_matrix]] = []
-        if radius is not None:
-            postprocessors.append(DistanceIntervalPostprocessor(tuple(sorted(radius))))
+        if interval is not None:
+            postprocessors.append(DistanceIntervalPostprocessor(interval))
         if percentile is not None:
             postprocessors.append(PercentilePostprocessor(percentile))
         postprocessors.append(TransformPostprocessor(_as_transform(transform)))
@@ -318,7 +322,7 @@ class DelaunayBuilder(GraphBuilderCSR):
             postprocessors=postprocessors,
         )
         # Store intervals as a list: :mod:`anndata` cannot write tuples to ``uns``.
-        self.radius = list(radius) if isinstance(radius, tuple) else radius
+        self.radius = None if radius is None else np.asarray(radius).tolist()
 
     def uns_params(self) -> dict[str, Any]:
         return {
@@ -426,6 +430,17 @@ class GridBuilder(GraphBuilderCSR):
 # ---------------------------------------------------------------------------
 # Private helpers used by the builder classes
 # ---------------------------------------------------------------------------
+
+
+def _normalize_radius(radius: Any) -> float | tuple[float, float]:
+    """Return a scalar ``radius`` as :class:`float` and any ``(min, max)`` pair as a sorted tuple."""
+    if isinstance(radius, numbers.Real):
+        return float(radius)
+    interval = tuple(radius)
+    if len(interval) != 2:
+        raise ValueError(f"`radius` must be a number or a `(min, max)` pair, got {len(interval)} values: {radius!r}.")
+    minn, maxx = sorted(float(r) for r in interval)
+    return minn, maxx
 
 
 def _filter_by_radius_interval(
