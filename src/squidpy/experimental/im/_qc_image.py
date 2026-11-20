@@ -313,7 +313,7 @@ def qc_image(
     shapes_key = f"qc_img_{image_key}_grid"
 
     # Build shapes first (need the index for tile_id linkage)
-    save_tile_grid_to_shapes(sdata, tg=tg, shapes_key=shapes_key, copy_transforms_from_key=image_key)
+    save_tile_grid_to_shapes(sdata, tg=tg, shapes_key=shapes_key, copy_transforms_from_key=image_key, scale=scale)
 
     # Set spatialdata linkage on adata BEFORE TableModel.parse
     adata.obs["grid_name"] = pd.Categorical([shapes_key] * len(adata))

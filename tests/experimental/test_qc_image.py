@@ -216,6 +216,28 @@ def test_qc_image_outlier_detection_without_tissue(sdata_hne):
     assert not np.any(np.isnan(adata.obs["unfocus_score"].values))
 
 
+@pytest.mark.parametrize("scale", ["scale0", "scale1"])
+def test_qc_image_grid_covers_image_at_any_scale(sdata_hne, scale):
+    """The tile grid must cover the image in global coordinates, whichever scale QC ran on."""
+    from spatialdata import get_extent
+
+    sq.experimental.im.qc_image(
+        sdata_hne,
+        image_key="hne",
+        scale=scale,
+        tile_size=_FAST_TILE,
+        metrics=["brightness_mean"],
+        detect_outliers=False,
+        detect_tissue=False,
+        progress=False,
+        preview=False,
+    )
+    grid = get_extent(sdata_hne.shapes["qc_img_hne_grid"], coordinate_system="global")
+    image = get_extent(sdata_hne.images["hne"], coordinate_system="global")
+    for ax in ("x", "y"):
+        np.testing.assert_allclose(grid[ax], image[ax], atol=2)
+
+
 def test_qc_image_compute_only(sdata_hne):
     """Test compute-only mode without outlier detection."""
     sq.experimental.im.qc_image(
