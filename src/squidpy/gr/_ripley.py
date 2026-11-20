@@ -7,7 +7,6 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from scanpy import logging as logg
 from scipy.spatial import ConvexHull, Delaunay
 from sklearn.neighbors import KDTree, NearestNeighbors
 from sklearn.preprocessing import LabelEncoder
@@ -16,6 +15,7 @@ from spatialdata import SpatialData
 from squidpy._compat import old_positionals
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
+from squidpy._logging import logg
 from squidpy._utils import NDArrayA, RNGLike, SeedLike, deprecated_randomness_param
 from squidpy._validators import normalize_choice
 from squidpy.gr._utils import _assert_categorical_obs, _assert_spatial_basis, _save_data, extract_adata_if_sdata
@@ -146,7 +146,7 @@ def ripley(
     cluster_idx = le.transform(clusters)
     obs_arr = np.empty((le.classes_.shape[0], n_steps))
 
-    start = logg.info(
+    start = logg.debug(
         f"Calculating Ripley's {mode} statistic for `{le.classes_.shape[0]}` clusters and `{n_simulations}` simulations"
     )
     obs_rng, *sim_rngs = np.random.default_rng(rng).spawn(n_simulations + 1)
@@ -195,7 +195,7 @@ def ripley(
     res = {f"{mode}_stat": obs_df, "sims_stat": sims_df, "bins": bins, "pvalues": pvalues}
 
     if copy:
-        logg.info("Finish", time=start)
+        logg.info("Computed Ripley's statistic", time=start)
         return res
 
     _save_data(adata, attr="uns", key=Key.uns.ripley(cluster_key, mode), data=res, time=start)

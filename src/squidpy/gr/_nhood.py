@@ -17,13 +17,13 @@ from numba import get_num_threads, njit, prange
 from numba.typed import List
 from numba_progress import ProgressBar
 from numpy.typing import NDArray
-from scanpy import logging as logg
 from scipy.sparse import csr_array, csr_matrix, issparse
 from spatialdata import SpatialData
 
 from squidpy._compat import SKIP_OWN_FRAMES, old_positionals
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
+from squidpy._logging import logg
 from squidpy._utils import (
     NDArrayA,
     RNGLike,
@@ -458,7 +458,7 @@ def nhood_enrichment(
             count_normalized = count.copy()
 
     n_jobs = get_n_numba_threads(n_jobs)
-    start = logg.info(f"Calculating neighborhood enrichment using `{n_jobs}` thread(s)")
+    start = logg.debug(f"Calculating neighborhood enrichment using `{n_jobs}` thread(s)")
     norm_code = _NORM_CODES[normalization]
 
     rngs = List(np.random.default_rng(rng).spawn(n_perms))
@@ -614,7 +614,7 @@ def centrality_scores(
     cat = adata.obs[cluster_key].cat.categories.values
 
     n_jobs = get_n_numba_threads(n_jobs)
-    start = logg.info(f"Calculating centralities `{centrality}` using `{n_jobs}` thread(s)")
+    start = logg.debug(f"Calculating centralities `{centrality}` using `{n_jobs}` thread(s)")
 
     # cells with a missing label join no group but stay in the graph, so they still count as non-group
     offsets, members = _group_offsets(adata.obs[cluster_key])

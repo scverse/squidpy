@@ -23,11 +23,11 @@ def _run_qc_and_stitch(sdata, **stitch_kwargs):
 
 
 def _qc_rerun_hint(sdata, **qc_kwargs) -> str:
-    """Re-run QC and return the restore call it logs (the spatialdata logger does not propagate to caplog)."""
+    """Re-run QC and return the restore call it logs (the scverse logger does not propagate to caplog)."""
     records: list[logging.LogRecord] = []
     handler = logging.Handler()
     handler.emit = records.append
-    logger = logging.getLogger("spatialdata._logging")
+    logger = logging.getLogger("scverse")
     logger.addHandler(handler)
     try:
         sq.experimental.tl.calculate_tiling_qc(sdata, **qc_kwargs)

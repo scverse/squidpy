@@ -21,11 +21,11 @@ from skimage import measure
 from skimage.feature import graycomatrix, graycoprops
 from skimage.segmentation import relabel_sequential
 from spatialdata import SpatialData, rasterize
-from spatialdata._logging import logger as logg
 from spatialdata.models import TableModel, get_channel_names
 from spatialdata.transformations import get_transformation
 from threadpoolctl import threadpool_limits
 
+from squidpy._logging import logg
 from squidpy._validators import normalize_choice
 from squidpy.experimental.im._tiling import (
     CellInfo,
@@ -154,7 +154,7 @@ def _dedupe_morphology_against_cp(
         return morphology_props
     kept = morphology_props & _SKIMAGE_MORPH_ONLY
     if notify and kept != morphology_props:
-        logg.info(
+        logg.debug(
             f"Dropping {len(morphology_props - kept)} skimage morphology prop(s) already "
             f"computed by cp_measure:sizeshape; keeping skimage-only {sorted(kept) or 'none'}."
         )
@@ -859,9 +859,9 @@ def _compute_centroids(
         full_grid = (full.sizes.get("y"), full.sizes.get("x"))
         cur_grid = (labels_da.sizes.get("y"), labels_da.sizes.get("x"))
         if cur_grid == full_grid:
-            logg.info("Computing centroids from coarse scale.")
+            logg.debug("Computing centroids from coarse scale.")
             return compute_cell_info_multiscale(sdata.labels[labels_key], target_scale=scale or "scale0")
-        logg.info("Computing centroids in tiled mode (aligned multiscale labels).")
+        logg.debug("Computing centroids in tiled mode (aligned multiscale labels).")
         return compute_cell_info_tiled(labels_da)
 
     # Small enough to fit in memory - direct regionprops
@@ -873,7 +873,7 @@ def _compute_centroids(
         return compute_cell_info(lbl_np)
 
     # Large single-scale - tiled centroid computation
-    logg.info("Computing centroids in tiled mode (large single-scale labels).")
+    logg.debug("Computing centroids in tiled mode (large single-scale labels).")
     return compute_cell_info_tiled(labels_da)
 
 
@@ -1102,7 +1102,7 @@ def calculate_image_features(
     # not exposed -- any manual value either truncates boundary cells or wastes reads.
     specs = build_tile_specs((H, W), cell_info, tile_size=tile_size, overlap_margin="auto")
     total_tiles = len(specs)
-    logg.info(f"Tiling input into {total_tiles} tile(s) of size {tile_size} px.")
+    logg.debug(f"Tiling input into {total_tiles} tile(s) of size {tile_size} px.")
 
     # Clamp BLAS/OpenMP per tile (tiny per-cell arrays oversubscribe otherwise);
     # the clamp lives inside the fn so it also reaches worker processes.

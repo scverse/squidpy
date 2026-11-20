@@ -19,3 +19,18 @@ sq.pl.nhood_enrichment(adata, cluster_key="celltype_mapped_refined")
 
 The genes ranked by Moran’s I end up in `adata.uns["moranI"]`.
 The {doc}`notebooks/tutorials/index` apply these steps to other technologies, and {doc}`api` lists every function.
+
+## Logging
+
+Squidpy logs through the shared scverse logger from [scverse-misc](https://scverse-misc.readthedocs.io/).
+By default it shows only warnings.
+Set the level once, and every package on the shared logger follows it:
+
+```python
+from scverse_misc.logging import config
+
+config.verbosity = "info"  # one line per call; "debug" also shows each step
+```
+
+To change squidpy alone, set its own logger: `logging.getLogger("scverse.squidpy").setLevel("debug")`.
+`sc.settings.verbosity` no longer affects squidpy.

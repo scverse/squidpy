@@ -12,9 +12,9 @@ import xarray as xr
 from anndata import AnnData
 from dask.diagnostics import ProgressBar
 from spatialdata import SpatialData
-from spatialdata._logging import logger
 from spatialdata.models import TableModel
 
+from squidpy._logging import logg
 from squidpy._utils import _ensure_dim_order
 from squidpy._validators import normalize_choice, options_of
 from squidpy.experimental.im._intensity_metrics import hed_metrics
@@ -159,10 +159,10 @@ def qc_image(
     tg = TileGrid(H, W, tile_size=tile_size)
     obs_names = tg.names()
 
-    logger.info("Quantifying image quality.")
-    logger.info(f"- Input image (x, y): ({W}, {H})")
-    logger.info(f"- Tile size (x, y): ({tg.tx}, {tg.ty})")
-    logger.info(f"- Number of tiles (n_x, n_y): ({tg.tiles_x}, {tg.tiles_y})")
+    logg.debug("Quantifying image quality.")
+    logg.debug(f"- Input image (x, y): ({W}, {H})")
+    logg.debug(f"- Tile size (x, y): ({tg.tx}, {tg.ty})")
+    logg.debug(f"- Number of tiles (n_x, n_y): ({tg.tiles_x}, {tg.tiles_y})")
 
     # Group metrics by InputKind
     groups: dict[InputKind, list[QCMetric]] = defaultdict(list)
@@ -220,7 +220,7 @@ def qc_image(
                     new_axis=2,
                 )
             delayed_scores[m] = hed_scores[..., hed_metric_indices[m]]
-            logger.info(f"- Calculating metric: '{m}'")
+            logg.debug(f"- Calculating metric: '{m}'")
             continue
 
         kind, metric_func = get_metric_info(m)
@@ -230,7 +230,7 @@ def qc_image(
             delayed_scores[m] = da.map_blocks(metric_func, source, dtype=np.float32, chunks=out_chunks, drop_axis=2)
         else:
             delayed_scores[m] = da.map_blocks(metric_func, source, dtype=np.float32, chunks=out_chunks)
-        logger.info(f"- Calculating metric: '{m}'")
+        logg.debug(f"- Calculating metric: '{m}'")
 
     # Single dask.compute() across all metric types
     if progress:
@@ -270,7 +270,7 @@ def qc_image(
                 tissue_mask_key=tissue_mask_key,
                 binary_mask_da=_tissue_binary_da,
             )
-            logger.info(f"- Classified tiles: background: {back.sum()}, tissue: {tissue.sum()}.")
+            logg.debug(f"- Classified tiles: background: {back.sum()}, tissue: {tissue.sum()}.")
 
         if detect_tissue and tissue.any():
             tissue_scores = _compute_unfocus_scores(X[tissue], var_names)
@@ -289,7 +289,7 @@ def qc_image(
             adata.obs["is_background"] = pd.Categorical(back.astype(str), categories=["False", "True"])
         adata.obs["unfocus_score"] = unfocus_scores
 
-        logger.info(f"- Detected {int((outlier_labels == -1).sum())} outlier tiles.")
+        logg.debug(f"- Detected {int((outlier_labels == -1).sum())} outlier tiles.")
 
     adata.uns["qc_image"] = {
         "metrics": list(all_scores.keys()),
@@ -325,7 +325,7 @@ def qc_image(
     }
 
     sdata.tables[table_key] = TableModel.parse(adata)
-    logger.info(f"- Saved QC scores as 'sdata.tables[\"{table_key}\"]'")
+    logg.info(f"Saved QC scores as 'sdata.tables[\"{table_key}\"]'")
 
     if preview and detect_outliers and "qc_outlier" in adata.obs.columns:
         try:
@@ -342,7 +342,7 @@ def qc_image(
                 .pl.show()
             )
         except (AttributeError, KeyError, ValueError) as e:
-            logger.warning(f"Could not generate preview plot: {e}")
+            logg.warning(f"Could not generate preview plot: {e}")
 
 
 _LUMINANCE_WEIGHTS = da.from_array(np.array([0.2126, 0.7152, 0.0722], dtype=np.float32), chunks=(3,))

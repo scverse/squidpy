@@ -11,12 +11,12 @@ import scanpy as sc
 from anndata import AnnData
 from matplotlib.axes import Axes
 from matplotlib.colorbar import ColorbarBase
-from scanpy import logging as logg
 from scipy.cluster import hierarchy as sch
 
 from squidpy._compat import old_positionals
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
+from squidpy._logging import logg
 from squidpy._utils import _unique_order_preserving, verbosity
 from squidpy._validators import normalize_choice
 from squidpy.pl._utils import _dendrogram, _filter_kwargs, save_fig

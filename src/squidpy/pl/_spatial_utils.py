@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+import warnings
 from collections.abc import Mapping, Sequence
 from copy import copy
 from functools import partial
@@ -28,14 +29,14 @@ from matplotlib.gridspec import GridSpec
 from matplotlib.patches import Circle, Polygon, Rectangle
 from matplotlib_scalebar.scalebar import ScaleBar
 from pandas import CategoricalDtype
-from scanpy import logging as logg
 from skimage.color import label2rgb
 from skimage.morphology import erosion, footprint_rectangle
 from skimage.segmentation import find_boundaries
 from skimage.util import map_array
 
-from squidpy._compat import add_categorical_legend, default_frameon, get_vector, vector_friendly
+from squidpy._compat import SKIP_OWN_FRAMES, add_categorical_legend, default_frameon, get_vector, vector_friendly
 from squidpy._constants._pkg_constants import Key
+from squidpy._logging import logg
 from squidpy._utils import NDArrayA
 from squidpy._validators import assert_key_in_adata, normalize_choice, options_of
 from squidpy.im._coords import CropCoords
@@ -139,7 +140,11 @@ def _get_library_id(
             library_id = [library_id]
         return library_id
     if library_id is None:
-        logg.warning("Please specify a valid `library_id` or set it permanently in `adata.uns['spatial']`")
+        warnings.warn(
+            "Please specify a valid `library_id` or set it permanently in `adata.uns['spatial']`",
+            UserWarning,
+            skip_file_prefixes=SKIP_OWN_FRAMES,
+        )
         library_id = [""]  # dummy value to maintain logic of number of plots (nplots=library_id*color)
     elif isinstance(library_id, list):  # get library_id from arg
         pass

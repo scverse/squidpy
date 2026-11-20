@@ -15,7 +15,6 @@ from shapely import LineString, MultiPolygon, Polygon
 from spatialdata import SpatialData
 from spatialdata._core.centroids import get_centroids
 from spatialdata._core.query.relational_query import get_element_instances, match_element_to_table
-from spatialdata._logging import logger as logg
 from spatialdata.models import get_table_keys
 from spatialdata.models.models import (
     Labels2DModel,
@@ -26,6 +25,7 @@ from spatialdata.models.models import (
 from squidpy._compat import SKIP_OWN_FRAMES, old_positionals
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
+from squidpy._logging import logg
 from squidpy._utils import NDArrayA, get_n_numba_threads, thread_map
 from squidpy._validators import assert_positive, normalize_choice
 from squidpy.gr._utils import (
@@ -85,9 +85,11 @@ def _resolve_graph_builder(
 
     if coord_type is None:
         if radius is not None:
-            logg.warning(
+            warnings.warn(
                 "Graph creation with `radius` is only available for generic coordinates. "
-                f"Ignoring parameter `radius = {radius}`."
+                f"Ignoring parameter `radius = {radius}`.",
+                UserWarning,
+                skip_file_prefixes=SKIP_OWN_FRAMES,
             )
         coord_type = "grid" if has_spatial_uns else "generic"
     else:
@@ -833,7 +835,7 @@ def _run_spatial_neighbors(
     else:
         libs = [None]
 
-    start = logg.info(f"Creating graph using `{builder.transform}` transform and `{len(libs)}` libraries.")
+    start = logg.debug(f"Creating graph using `{builder.transform}` transform and `{len(libs)}` libraries.")
     if library_key is not None:
         # Slice the coordinates per library; subsetting the AnnData per library dominates the runtime.
         coords = adata.obsm[spatial_key]
@@ -865,8 +867,8 @@ def _run_spatial_neighbors(
         return SpatialNeighborsResult(connectivities=adj, distances=dst)
 
     _save_data(adata, attr="obsp", key=conns_key, data=adj)
-    _save_data(adata, attr="obsp", key=dists_key, data=dst, prefix=False)
-    _save_data(adata, attr="uns", key=neighs_key, data=neighbors_dict, prefix=False, time=start)
+    _save_data(adata, attr="obsp", key=dists_key, data=dst)
+    _save_data(adata, attr="uns", key=neighs_key, data=neighbors_dict, time=start)
     return None
 
 
@@ -973,8 +975,8 @@ def mask_graph(
 
     # save back to spatialdata
     _save_data(table, attr="obsp", key=mask_conns_key, data=adj)
-    _save_data(table, attr="obsp", key=mask_dists_key, data=dst, prefix=False)
-    _save_data(table, attr="uns", key=mask_neighs_key, data=neighbors_dict, prefix=False)
+    _save_data(table, attr="obsp", key=mask_dists_key, data=dst)
+    _save_data(table, attr="uns", key=mask_neighs_key, data=neighbors_dict)
 
 
 @njit

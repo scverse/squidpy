@@ -15,13 +15,13 @@ from numba import njit, prange
 from numba.typed import List
 from numba_progress import ProgressBar
 from numpy.typing import NDArray
-from scanpy import logging as logg
 from scipy.sparse import csc_matrix
 from spatialdata import SpatialData
 
 from squidpy._compat import old_positionals
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
+from squidpy._logging import logg
 from squidpy._utils import (
     NDArrayA,
     RNGLike,
@@ -210,11 +210,11 @@ class PermutationTestABC(ABC):
         self.interactions[SOURCE] = self.interactions[SOURCE].str.upper()
         self.interactions[TARGET] = self.interactions[TARGET].str.upper()
 
-        logg.debug("DEBUG: Removing duplicate interactions")
+        logg.debug("Removing duplicate interactions")
         self.interactions.dropna(subset=(SOURCE, TARGET), inplace=True, how="any")
         self.interactions.drop_duplicates(subset=(SOURCE, TARGET), inplace=True, keep="first")
 
-        logg.debug("DEBUG: Removing duplicate genes in the data")
+        logg.debug("Removing duplicate genes in the data")
         n_genes_prior = self._data.shape[1]
         self._data = self._data.loc[:, ~self._data.columns.duplicated()]
         if self._data.shape[1] != n_genes_prior:
@@ -333,7 +333,7 @@ class PermutationTestABC(ABC):
         interactions_ = np.vectorize(lambda g: gene_mapper[g])(interactions.values)
 
         n_threads = get_n_numba_threads(n_jobs)
-        start = logg.info(
+        start = logg.debug(
             f"Running `{n_perms}` permutations on `{len(interactions)}` interactions "
             f"and `{len(clusters)}` cluster combinations using `{n_threads}` thread(s)"
         )
@@ -363,13 +363,13 @@ class PermutationTestABC(ABC):
         res["metadata"].index = res["means"].index.copy()
 
         if corr_method is not None:
-            logg.info(
+            logg.debug(
                 f"Performing FDR correction across the `{corr_axis}` using method `{corr_method}` at level `{alpha}`"
             )
             res["pvalues"] = _fdr_correct(res["pvalues"], corr_method, corr_axis, alpha=alpha)
 
         if copy:
-            logg.info("Finish", time=start)
+            logg.info("Computed ligand-receptor permutations", time=start)
             return res
 
         _save_data(self._adata, attr="uns", key=Key.uns.ligrec(cluster_key, key_added), data=res, time=start)
@@ -381,7 +381,7 @@ class PermutationTestABC(ABC):
             assert isinstance(self._data, pd.DataFrame)
             assert isinstance(self.interactions, pd.DataFrame)
 
-        logg.debug("DEBUG: Removing genes not in any interaction")
+        logg.debug("Removing genes not in any interaction")
         self._filtered_data = self._data.loc[:, list(set(self.interactions[SOURCE]) | set(self.interactions[TARGET]))]
 
     def _filter_interactions_by_genes(self) -> None:
@@ -389,7 +389,7 @@ class PermutationTestABC(ABC):
         if TYPE_CHECKING:
             assert isinstance(self.interactions, pd.DataFrame)
 
-        logg.debug("DEBUG: Removing interactions with no genes in the data")
+        logg.debug("Removing interactions with no genes in the data")
         self._interactions = self.interactions[
             self.interactions[SOURCE].isin(self._data.columns) & self.interactions[TARGET].isin(self._data.columns)
         ]
@@ -447,11 +447,11 @@ class PermutationTestABC(ABC):
             assert isinstance(self.interactions, pd.DataFrame)
 
         if complex_policy == "min":
-            logg.debug("DEBUG: Selecting genes from complexes based on minimum average expression")
+            logg.debug("Selecting genes from complexes based on minimum average expression")
             self.interactions[SOURCE] = self.interactions[SOURCE].apply(find_min_gene_in_complex)
             self.interactions[TARGET] = self.interactions[TARGET].apply(find_min_gene_in_complex)
         elif complex_policy == "all":
-            logg.debug("DEBUG: Creating all gene combinations within complexes")
+            logg.debug("Creating all gene combinations within complexes")
             src = self.interactions.pop(SOURCE).apply(lambda s: str(s).split("_")).explode()
             src.name = SOURCE
             tgt = self.interactions.pop(TARGET).apply(lambda s: str(s).split("_")).explode()
@@ -522,7 +522,7 @@ class PermutationTest(PermutationTestABC):
         if interactions is None:
             from omnipath.interactions import import_intercell_network
 
-            start = logg.info("Fetching interactions from `omnipath`")
+            start = logg.debug("Fetching interactions from `omnipath`")
             interactions = import_intercell_network(
                 interactions_params=interactions_params,
                 transmitter_params=transmitter_params,
@@ -531,7 +531,7 @@ class PermutationTest(PermutationTestABC):
             if TYPE_CHECKING:
                 assert isinstance(interactions, pd.DataFrame)
 
-            logg.info(f"Fetched `{len(interactions)}` interactions\n    Finish", time=start)
+            logg.info(f"Fetched `{len(interactions)}` interactions from `omnipath`", time=start)
 
             # we don't really care about these
             if SOURCE in interactions.columns:

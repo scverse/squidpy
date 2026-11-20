@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from numba import njit, prange
-from scanpy import logging as logg
 from scanpy.metrics import gearys_c, morans_i
 from scipy import stats
 from scipy.sparse import spmatrix
@@ -22,6 +21,7 @@ from statsmodels.stats.multitest import multipletests
 from squidpy._compat import old_positionals
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d, inject_docs
+from squidpy._logging import logg
 from squidpy._utils import (
     NDArrayA,
     RNGLike,
@@ -237,7 +237,7 @@ def spatial_autocorr(
     score = params["func"](g, vals)  # type: ignore
 
     n_jobs = get_n_processes(n_jobs)
-    start = logg.info(f"Calculating {mode}'s statistic for `{n_perms}` permutations using `{n_jobs}` core(s)")
+    start = logg.debug(f"Calculating {mode}'s statistic for `{n_perms}` permutations using `{n_jobs}` core(s)")
     if n_perms is not None:
         assert_positive(n_perms, name="n_perms")
         perms = list(np.arange(n_perms))
@@ -268,7 +268,7 @@ def spatial_autocorr(
     df.sort_values(by=params["stat"], ascending=params["ascending"], inplace=True)
 
     if copy:
-        logg.info("Finish", time=start)
+        logg.info("Computed spatial autocorrelation", time=start)
         return df
 
     mode_str = str(params["mode"])
@@ -442,10 +442,10 @@ def co_occurrence(
 
     # Compute co-occurrence probabilities using the fast numba routine.
     out = _co_occurrence_helper(spatial_x, spatial_y, interval, labs)
-    start = logg.info(f"Calculating co-occurrence probabilities for `{len(interval)}` intervals")
+    start = logg.debug(f"Calculating co-occurrence probabilities for `{len(interval)}` intervals")
 
     if copy:
-        logg.info("Finish", time=start)
+        logg.info("Computed co-occurrence", time=start)
         return out, interval
 
     _save_data(

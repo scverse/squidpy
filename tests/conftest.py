@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import logging
 import pickle
-import sys
 import warnings
 from abc import ABC, ABCMeta
 from collections.abc import Callable, Mapping, Sequence
@@ -21,6 +21,7 @@ import spatialdata as sd
 from anndata import AnnData, OldFormatWarning
 from matplotlib.testing.compare import compare_images
 from scipy.sparse import csr_matrix
+from scverse_misc.logging import config as log_config
 from shapely import Point, Polygon
 
 import squidpy as sq
@@ -352,11 +353,24 @@ def ligrec_result() -> Mapping[str, pd.DataFrame]:
 
 @pytest.fixture(autouse=True)
 def _logging_state():
-    # modified from scanpy
-    verbosity_orig = sc.settings.verbosity
+    verbosity_orig = log_config.verbosity
     yield
-    sc.settings.logfile = sys.stderr
-    sc.settings.verbosity = verbosity_orig
+    log_config.verbosity = verbosity_orig
+
+
+@pytest.fixture()
+def squidpy_logs():
+    """Records logged through the shared ``scverse`` logger.
+
+    It does not propagate, so before pytest 9 ``caplog`` cannot see them.
+    """
+    records: list[logging.LogRecord] = []
+    handler = logging.Handler()
+    handler.emit = records.append
+    logger = logging.getLogger("scverse")
+    logger.addHandler(handler)
+    yield records
+    logger.removeHandler(handler)
 
 
 @pytest.fixture()

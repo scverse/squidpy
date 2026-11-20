@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import gaussian_kde
 from spatialdata import SpatialData
-from spatialdata._logging import logger as logg
 
+from squidpy._compat import SKIP_OWN_FRAMES
+from squidpy._logging import logg
 from squidpy._validators import normalize_choice
 from squidpy.experimental.im._qc_metrics import QCMetric
 
@@ -67,7 +69,7 @@ def qc_image(
     else:
         metrics_to_plot = calculated_metrics
 
-    logg.info(f"Plotting {len(metrics_to_plot)} QC metrics: {metrics_to_plot}")
+    logg.debug(f"Plotting {len(metrics_to_plot)} QC metrics: {metrics_to_plot}")
 
     n_metrics = len(metrics_to_plot)
     ncols = 3
@@ -88,7 +90,11 @@ def qc_image(
     for i, metric_name in enumerate(metrics_to_plot):
         var_name = f"qc_{metric_name}"
         if var_name not in var_name_to_idx:
-            logg.warning(f"Variable '{var_name}' not found in adata.var_names. Skipping.")
+            warnings.warn(
+                f"Variable '{var_name}' not found in adata.var_names. Skipping.",
+                UserWarning,
+                skip_file_prefixes=SKIP_OWN_FRAMES,
+            )
             continue
 
         raw_values = adata.X[:, var_name_to_idx[var_name]]

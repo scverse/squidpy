@@ -168,6 +168,7 @@ Consider enabling this option for [ruff][ruff-editors] and [biome][biome-editors
 - **Results**, returned instead of writing into the input, are {class}`~typing.NamedTuple`s.
 - **Randomness**: take `rng: SeedLike | RNGLike | None = None` ([SPEC 7](https://scientific-python.org/specs/spec-0007/)), never `seed`/`generator`/`random_state`; the exception is `random_state` on sklearn-style estimators (the clusterers), which follow sklearn's `get_params`/`set_params` protocol. Spawn one generator per independent task with `rng.spawn(n)`, and pass `legacy_random(rng)` to APIs that only take an integer seed.
 - **Warnings**: `warnings.warn` for anything about the call: deprecations (`FutureWarning`) and arguments whose effect the caller may not expect, such as clusters dropped by `min_cell_count` (`UserWarning`). What the computation is doing, such as the PCA it runs, goes through `logg`.
+- **Logging**: `from squidpy._logging import logg`, never another package's logger. `logg.warning` when the result is probably not what the caller wanted (cells dropped, NaN scores, an existing key overwritten), in one line, with any remedy in `deep=`. `logg.info` once per public call, saying what was written where, with `time=start` for the elapsed time; `squidpy.gr._utils._save_data` does this when it is given `time=` on the call's last write. Everything else, including "Calculating ..." and the code path taken, is `logg.debug`.
 
 (writing-tests)=
 

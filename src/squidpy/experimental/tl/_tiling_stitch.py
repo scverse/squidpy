@@ -33,8 +33,8 @@ from scipy.sparse.csgraph import connected_components
 from skimage.measure import find_contours, regionprops
 from skimage.measure import label as cc_label
 from skimage.morphology import disk as morph_disk
-from spatialdata._logging import logger as logg
 
+from squidpy._logging import logg
 from squidpy._validators import assert_in_range, assert_non_negative
 from squidpy.experimental.utils._labels import iter_chunked_regionprops, resolve_labels_array
 

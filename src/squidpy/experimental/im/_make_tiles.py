@@ -7,11 +7,11 @@ import spatialdata as sd
 import xarray as xr
 from dask.base import is_dask_collection
 from shapely.geometry import Polygon
-from spatialdata._logging import logger
 from spatialdata.models import ShapesModel
 from spatialdata.models._utils import SpatialElement
 from spatialdata.transformations import get_transformation, set_transformation
 
+from squidpy._logging import logg
 from squidpy._validators import assert_in_range, assert_key_in_sdata, assert_positive
 from squidpy.experimental.im._utils import (
     TileGrid,
@@ -142,7 +142,7 @@ def _save_spot_tiles_to_shapes(
         transformations = None
     if transformations:
         set_transformation(sdata.shapes[shapes_key], transformations, set_all=True)
-    logger.info(f"Saved spot-aligned tiles as 'sdata.shapes[\"{shapes_key}\"]'")
+    logg.info(f"Saved spot-aligned tiles as 'sdata.shapes[\"{shapes_key}\"]'")
 
 
 def _propagate_spot_classification(sdata: sd.SpatialData, *, tiles_key: str, spots_key: str) -> None:
@@ -151,7 +151,7 @@ def _propagate_spot_classification(sdata: sd.SpatialData, *, tiles_key: str, spo
         return
     tiles_gdf = sdata.shapes[tiles_key]
     if "spot_id" not in tiles_gdf.columns or "tile_classification" not in tiles_gdf.columns:
-        logger.warning("Spot tiles missing required columns for classification propagation.")
+        logg.warning("Spot tiles missing required columns for classification propagation.")
         return
     classification_map = dict(zip(tiles_gdf["spot_id"], tiles_gdf["tile_classification"], strict=False))
     spots_gdf = sdata.shapes[spots_key]
@@ -259,7 +259,7 @@ def make_tiles(
                     inplace=True,
                 )
             except (ImportError, KeyError, ValueError, RuntimeError) as e:  # pragma: no cover - defensive
-                logger.warning(
+                logg.warning(
                     "center_grid_on_tissue=True but no mask key provided/found; "
                     "detect_tissue failed (%s). Using default grid origin.",
                     e,
@@ -289,7 +289,7 @@ def make_tiles(
     if tg is not None:
         classification_mask_key = tissue_mask_key or f"{image_key}_tissue"
         if classification_mask_key not in sdata.labels:
-            logger.info(
+            logg.info(
                 "No tissue mask provided/found; running detect_tissue to create '%s' for classification.",
                 classification_mask_key,
             )
@@ -304,7 +304,7 @@ def make_tiles(
                     inplace=True,
                 )
             except (ImportError, KeyError, ValueError, RuntimeError) as e:  # pragma: no cover - defensive
-                logger.warning("detect_tissue failed (%s); tiles will not be classified.", e)
+                logg.warning("detect_tissue failed (%s); tiles will not be classified.", e)
         assert_key_in_sdata(sdata, classification_mask_key, attr="labels")
         # Use a mask scale that aligns with the full-resolution image; avoid coarsest "auto" selection.
         if scale == "auto":
@@ -335,7 +335,7 @@ def make_tiles(
                 .pl.show()
             )
         except (AttributeError, KeyError, ValueError) as e:
-            logger.warning(f"Could not generate preview plot: {e}")
+            logg.warning(f"Could not generate preview plot: {e}")
 
 
 def make_tiles_from_spots(
@@ -417,7 +417,7 @@ def make_tiles_from_spots(
             target_cs = _get_primary_coordinate_system(sdata.labels[mask_key])
         image_cs = _get_primary_coordinate_system(sdata.images[image_key])
         if target_cs and image_cs and target_cs != image_cs:
-            logger.warning(
+            logg.warning(
                 "Coordinate system mismatch between mask (%s) and image (%s). Tile coverage may be incorrect.",
                 target_cs,
                 image_cs,
@@ -425,7 +425,7 @@ def make_tiles_from_spots(
 
     coords, spot_ids = _get_spot_coordinates(sdata, spots_key=spots_key)
     derived_tile = _derive_tile_size_from_spots(coords)
-    logger.info(f"Derived tile size {derived_tile} from {len(coords)} Visium spots (key='{spots_key}').")
+    logg.info(f"Derived tile size {derived_tile} from {len(coords)} Visium spots (key='{spots_key}').")
 
     tg = _SpotTileGrid(centers=coords, tile_size=derived_tile, spot_ids=spot_ids)
     shapes_key = new_shapes_key or f"{spots_key}_tiles"
@@ -437,7 +437,7 @@ def make_tiles_from_spots(
     elif image_key is not None:
         classification_mask_key = f"{image_key}_tissue"
         if classification_mask_key not in sdata.labels:
-            logger.info(
+            logg.info(
                 "No tissue mask provided/found; running detect_tissue to create '%s' for classification.",
                 classification_mask_key,
             )
@@ -452,7 +452,7 @@ def make_tiles_from_spots(
                     inplace=True,
                 )
             except (ImportError, KeyError, ValueError, RuntimeError) as e:  # pragma: no cover - defensive
-                logger.warning("detect_tissue failed (%s); tiles will not be classified.", e)
+                logg.warning("detect_tissue failed (%s); tiles will not be classified.", e)
 
     if classification_mask_key is not None:
         if image_key is not None:
@@ -487,7 +487,7 @@ def make_tiles_from_spots(
             )
         _propagate_spot_classification(sdata, tiles_key=shapes_key, spots_key=spots_key)
     else:
-        logger.info("No mask provided or derived; skipping tissue classification.")
+        logg.info("No mask provided or derived; skipping tissue classification.")
 
     if preview and shapes_key in sdata.shapes:
         try:
@@ -508,7 +508,7 @@ def make_tiles_from_spots(
                     fill_alpha=0.5,
                 ).pl.show()
         except (AttributeError, KeyError, ValueError) as e:
-            logger.warning(f"Could not generate preview plot: {e}")
+            logg.warning(f"Could not generate preview plot: {e}")
 
 
 def _filter_tiles(
@@ -592,7 +592,7 @@ def _filter_tiles(
             suitable[i] = False
             tile_classification[i] = "background"
 
-    logger.info(
+    logg.info(
         f"After tissue filtering: {suitable.sum()}/{n_tiles} ({suitable.sum() / n_tiles * 100:.2f}%) tiles are fully within tissue."
     )
 
@@ -606,7 +606,7 @@ def _filter_tiles(
     if shapes_key_used in sdata.shapes:
         gdf = sdata.shapes[shapes_key_used]
         if len(gdf) != len(tile_classification):
-            logger.warning(
+            logg.warning(
                 "Tile classification length (%d) does not match GeoDataFrame length (%d); skipping write.",
                 len(tile_classification),
                 len(gdf),
@@ -668,7 +668,7 @@ def _make_tiles(
         old_shape = mask.shape
         mask = mask.squeeze()
         if mask.ndim == 2:
-            logger.warning(f"Mask had shape `{old_shape}`, squeezed to `{mask.shape}`.")
+            logg.warning(f"Mask had shape `{old_shape}`, squeezed to `{mask.shape}`.")
         else:
             raise ValueError(f"Expected 2D mask with shape `(y, x)`, got shape `{mask.shape}`.")
 
@@ -680,7 +680,7 @@ def _make_tiles(
     # Compute centroid of mask (where mask > 0)
     mask_bool = mask > 0
     if not mask_bool.any():
-        logger.warning("Mask is empty. Using regular grid starting from top-left.")
+        logg.warning("Mask is empty. Using regular grid starting from top-left.")
         return TileGrid(H, W, tile_size=tile_size)
 
     # Calculate centroid using center of mass

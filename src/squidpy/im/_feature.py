@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import pandas as pd
 from anndata import AnnData
-from scanpy import logging as logg
 
 from squidpy._compat import old_positionals
 from squidpy._docs import d
+from squidpy._logging import logg
 from squidpy._utils import Signal, SigQueue, get_n_processes, parallelize
 from squidpy._validators import normalize_choice, options_of
 from squidpy.gr._utils import _save_data
@@ -101,7 +101,7 @@ def calculate_image_features(
     features = sorted({normalize_choice(f, _FEATURES, name="features") for f in features})
 
     n_jobs = get_n_processes(n_jobs)
-    start = logg.info(f"Calculating features `{list(features)}` using `{n_jobs}` core(s)")
+    start = logg.debug(f"Calculating features `{list(features)}` using `{n_jobs}` core(s)")
 
     res = parallelize(
         _calculate_image_features_helper,
@@ -121,7 +121,7 @@ def calculate_image_features(
     )
 
     if copy:
-        logg.info("Finish", time=start)
+        logg.info("Computed image features", time=start)
         return res
 
     _save_data(adata, attr="obsm", key=key_added, data=res, time=start)

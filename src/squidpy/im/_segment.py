@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import dask.array as da
 import numpy as np
-from scanpy import logging as logg
 from scipy import ndimage as ndi
 from skimage.feature import peak_local_max
 from skimage.filters import threshold_otsu
@@ -15,6 +14,7 @@ from skimage.segmentation import watershed
 
 from squidpy._constants._pkg_constants import Key
 from squidpy._docs import d
+from squidpy._logging import logg
 from squidpy._utils import NDArrayA, singledispatchmethod
 from squidpy._validators import normalize_choice
 from squidpy.im._container import ImageContainer
@@ -342,7 +342,7 @@ def segment(
     if TYPE_CHECKING:
         assert isinstance(method, SegmentationModel)
 
-    start = logg.info(f"Segmenting an image of shape `{img[layer].shape}` using `{method}`")
+    start = logg.debug(f"Segmenting an image of shape `{img[layer].shape}` using `{method}`")
     res: ImageContainer = method.segment(
         img,
         layer=layer,
@@ -354,7 +354,7 @@ def segment(
         drop=copy,
         lazy=lazy,
     )
-    logg.info("Finish", time=start)
+    logg.info("Segmented image", time=start)
 
     if copy:
         return res.rename(layer, layer_new)

@@ -16,10 +16,10 @@ from skimage.segmentation import felzenszwalb
 from skimage.util import img_as_float
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from spatialdata._logging import logger
 from spatialdata.models import Labels2DModel
 from spatialdata.transformations import get_transformation
 
+from squidpy._logging import logg
 from squidpy._params import resolve_params
 from squidpy._utils import (
     _ensure_dim_order,
@@ -263,7 +263,7 @@ def detect_tissue(
     """
     method = normalize_choice(method, options_of(DetectTissueMethod), name="method")
 
-    logger.info(f"Detecting tissue with method: {method}")
+    logg.debug(f"Detecting tissue with method: {method}")
 
     corners = _normalize_corners(corners_are_background)
     if not 0 < corner_size_pct <= 1:
@@ -301,7 +301,7 @@ def detect_tissue(
     if method != "weka":
         img_grey_da: xr.DataArray = flatten_channels(img=img_src, channel_format=channel_format)
         if need_downscale:
-            logger.info("Downscaling for faster computation.")
+            logg.debug("Downscaling for faster computation.")
             img_grey = _downscale_with_dask(img_grey=img_grey_da, target_pixels=auto_max_pixels)
         else:
             img_grey = img_grey_da.values  # may compute
@@ -309,7 +309,7 @@ def detect_tissue(
     # Prepare color image for WEKA (keeps channels)
     if method == "weka":
         if need_downscale:
-            logger.info("Downscaling for faster computation.")
+            logg.debug("Downscaling for faster computation.")
             img_weka = _downscale_with_dask_multichannel(img_rgb=img_src, target_pixels=auto_max_pixels)
         else:
             img_weka = np.asarray(_dask_compute(_ensure_dask(img_src)))
@@ -344,7 +344,7 @@ def detect_tissue(
         )
         img_fg_mask_bool = _apply_border_margin(img_fg_mask_bool, normalized_margins)
 
-    logger.info("Finished segmentation.")
+    logg.debug("Finished segmentation.")
 
     # Solidify holes
     if close_holes_smaller_than_frac > 0:
@@ -374,7 +374,7 @@ def detect_tissue(
             transformations=get_transformation(sdata.images[image_key], get_all=True),
             scale_factors=sf,
         )
-        logger.info(f"Saved tissue mask to `sdata.labels['{lk}']`.")
+        logg.info(f"Saved tissue mask to `sdata.labels['{lk}']`.")
         return None
 
     # If dask-backed, return a NumPy array to honor the signature
@@ -389,7 +389,7 @@ def _affine_upscale_nearest(labels: np.ndarray, scale_matrix: np.ndarray, target
     """
     Nearest-neighbor affine upscaling using dask-image. Returns dask array if available, else NumPy.
     """
-    logger.info("Upscaling mask back to original size.")
+    logg.debug("Upscaling mask back to original size.")
     try:
         lbl_da = da.from_array(labels, chunks="auto")
         result = da_affine(
@@ -723,7 +723,7 @@ def _refine_with_background_classifier(
     -------
     refined_mask : bool ndarray, same shape as prior_mask.
     """
-    logger.info("Refining mask with background classifier.")
+    logg.debug("Refining mask with background classifier.")
 
     H, W, F = feats.shape
     prior_flat = prior_mask.ravel()
@@ -874,7 +874,7 @@ def _smooth_mask(mask: np.ndarray, cycles: int) -> np.ndarray:
     if cycles <= 0:
         return mask.astype(np.int32, copy=False)
 
-    logger.info(f"Smoothing mask for {cycles} cycle(s).")
+    logg.debug(f"Smoothing mask for {cycles} cycle(s).")
     binary = mask > 0
     H, W = mask.shape
     r0 = max(1, min(5, min(H, W) // 100))

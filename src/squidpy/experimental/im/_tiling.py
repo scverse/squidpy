@@ -13,6 +13,7 @@ never materialize the full image or label array.
 from __future__ import annotations
 
 import contextlib
+import warnings
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -20,9 +21,9 @@ from typing import Any, Literal
 import numpy as np
 import xarray as xr
 from skimage.measure import regionprops
-from spatialdata._logging import logger as logg
 from tqdm.auto import tqdm
 
+from squidpy._compat import SKIP_OWN_FRAMES
 from squidpy._utils import get_n_processes, thread_map
 from squidpy._validators import assert_non_negative, assert_positive
 
@@ -496,7 +497,11 @@ def _run_tiled(
         # Warn only when an explicit worker count is overridden; every negative value means
         # "the default", so none of them count as explicit.
         if n_jobs is not None and n_jobs > 1:
-            logg.warning("`n_jobs` is ignored when an active dask.distributed Client is in scope.")
+            warnings.warn(
+                "`n_jobs` is ignored when an active dask.distributed Client is in scope.",
+                UserWarning,
+                skip_file_prefixes=SKIP_OWN_FRAMES,
+            )
         return _run_on_client(get_client(), specs, process_fn, scatter, desc)
 
     workers = get_n_processes(n_jobs)

@@ -27,10 +27,10 @@ import squidpy as sq
 def capture_logs(level=logging.WARNING):
     """Capture squidpy/spatialdata log records.
 
-    The spatialdata logger has ``propagate=False``, so pytest's ``caplog`` can't
-    see it; attach a handler directly instead. Yields the record list.
+    The shared ``scverse`` logger has ``propagate=False``, so pytest's ``caplog`` can't
+    see it before pytest 9; attach a handler directly instead. Yields the record list.
     """
-    logger = logging.getLogger("spatialdata._logging")
+    logger = logging.getLogger("scverse")
     records: list[logging.LogRecord] = []
     handler = logging.Handler(level)
     handler.emit = records.append

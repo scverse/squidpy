@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Sequence
 from contextlib import contextmanager
 from typing import Any
@@ -11,12 +12,12 @@ from anndata import AnnData
 from anndata.utils import make_index_unique
 from pandas import CategoricalDtype, Series
 from pandas.api.types import infer_dtype
-from scanpy import logging as logg
 from scipy.sparse import csc_matrix, csr_matrix, spmatrix
 from spatialdata import SpatialData
 
-from squidpy._compat import ArrayView, SparseCSCView, SparseCSRView
+from squidpy._compat import SKIP_OWN_FRAMES, ArrayView, SparseCSCView, SparseCSRView
 from squidpy._docs import d
+from squidpy._logging import logg
 from squidpy._utils import NDArrayA
 from squidpy._validators import assert_non_empty_sequence
 
@@ -73,23 +74,28 @@ def _assert_spatial_basis(adata: AnnData, *, key: str) -> None:
         raise KeyError(f"Spatial basis `{key}` not found in `adata.obsm`.")
 
 
-def _save_data(adata: AnnData, *, attr: str, key: str, data: Any, prefix: bool = True, time: Any | None = None) -> None:
-    obj = getattr(adata, attr)
-    obj[key] = data
+def _save_data(adata: AnnData, *, attr: str, key: str, data: Any, time: Any | None = None) -> None:
+    """Write ``data`` to ``adata.{attr}[key]``.
 
-    if prefix:
-        logg.info(f"Adding `adata.{attr}[{key!r}]`")
+    Pass the call's start ``time`` on its last write only: that write is the call's one INFO
+    line, with the elapsed time; every other write logs at DEBUG.
+    """
+    getattr(adata, attr)[key] = data
+    if time is None:
+        logg.debug(f"Added `adata.{attr}[{key!r}]`")
     else:
-        logg.info(f"       `adata.{attr}[{key!r}]`")
-    if time is not None:
-        logg.info("Finish", time=time)
+        logg.info(f"Added `adata.{attr}[{key!r}]`", time=time)
 
 
 def _extract_expression(
     adata: AnnData, *, genes: Sequence[str] | None = None, use_raw: bool = False, layer: str | None = None
 ) -> tuple[NDArrayA | spmatrix, Sequence[str]]:
     if use_raw and adata.raw is None:
-        logg.warning("AnnData object has no attribute `raw`. Setting `use_raw=False`")
+        warnings.warn(
+            "AnnData object has no attribute `raw`. Setting `use_raw=False`",
+            UserWarning,
+            skip_file_prefixes=SKIP_OWN_FRAMES,
+        )
         use_raw = False
 
     if genes is None and "highly_variable" in adata.var:

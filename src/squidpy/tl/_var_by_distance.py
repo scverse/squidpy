@@ -8,12 +8,12 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from scanpy import logging as logg
 from sklearn.metrics import DistanceMetric
 from sklearn.neighbors import KDTree
 
 from squidpy._compat import old_positionals
 from squidpy._docs import d
+from squidpy._logging import logg
 from squidpy._utils import NDArrayA
 from squidpy.gr._utils import _save_data
 
@@ -72,7 +72,7 @@ def var_by_distance(
     If ``copy = True``, returns the design_matrix with the distances to an anchor point
     Otherwise, stores design_matrix in `.obsm`.
     """
-    start = logg.info(f"Creating {design_matrix_key}")
+    start = logg.debug(f"Creating {design_matrix_key}")
 
     if isinstance(groups, str):
         anchor = [groups]
@@ -214,7 +214,7 @@ def var_by_distance(
     if isinstance(groups, list):
         df = df.reindex(adata.obs.index)
     if copy:
-        logg.info("Finish", time=start)
+        logg.info("Computed design matrix", time=start)
         return df
     else:
         _save_data(adata, attr="obsm", key=design_matrix_key, data=df, time=start)
