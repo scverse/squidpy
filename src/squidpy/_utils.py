@@ -394,7 +394,7 @@ def deprecated_randomness_param(func: Callable[..., Any]) -> Callable[..., Any]:
             value = kwargs.pop(old)
             warnings.warn(
                 f"Parameter `{old}` of `{func.__name__}()` is deprecated in favor of `rng` and will be "
-                f"removed in squidpy v1.9.0. It is now seeding a generator, i.e. `{old}={value!r}` "
+                f"removed in squidpy v2.0.0. It is now seeding a generator, i.e. `{old}={value!r}` "
                 f"is used as `numpy.random.default_rng({value!r})`, which may change the result.",
                 FutureWarning,
                 skip_file_prefixes=SKIP_OWN_FRAMES,
