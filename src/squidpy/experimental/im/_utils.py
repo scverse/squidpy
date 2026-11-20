@@ -10,7 +10,7 @@ from shapely import box
 from spatialdata import SpatialData
 from spatialdata._logging import logger
 from spatialdata.models import Labels2DModel, ShapesModel
-from spatialdata.transformations import get_transformation, set_transformation
+from spatialdata.transformations import Scale, Sequence, get_transformation, set_transformation
 
 from squidpy._utils import _yx_from_shape
 from squidpy._validators import normalize_choice
@@ -320,6 +320,7 @@ def save_tile_grid_to_shapes(
     tg: TileGrid,
     shapes_key: str,
     copy_transforms_from_key: str | None = None,
+    scale: str = "scale0",
 ) -> None:
     """Save a TileGrid to ``sdata.shapes`` as a GeoDataFrame.
 
@@ -334,6 +335,10 @@ def save_tile_grid_to_shapes(
     copy_transforms_from_key
         If given, copy the transformations from ``sdata.images[copy_transforms_from_key]``
         onto the new shapes element.
+    scale
+        Scale level of that image whose pixels ``tg`` is laid out in. The image's
+        transformations map ``scale0`` pixels, so a grid on a coarser level first gets
+        scaled up to ``scale0`` pixels.
     """
     tile_indices = tg.indices()
     pixel_bounds = tg.bounds()
@@ -355,6 +360,12 @@ def save_tile_grid_to_shapes(
 
     sdata.shapes[shapes_key] = ShapesModel.parse(tile_gdf)
     if copy_transforms_from_key is not None:
-        transformations = get_transformation(sdata.images[copy_transforms_from_key], get_all=True)
+        image_node = sdata.images[copy_transforms_from_key]
+        transformations = get_transformation(image_node, get_all=True)
+        full = get_element_data(image_node, "scale0", "image", copy_transforms_from_key)
+        sy, sx = full.sizes["y"] / tg.H, full.sizes["x"] / tg.W
+        if scale != "scale0" and (sy, sx) != (1.0, 1.0):
+            to_scale0 = Scale([sx, sy], axes=("x", "y"))
+            transformations = {cs: Sequence([to_scale0, t]) for cs, t in transformations.items()}
         set_transformation(sdata.shapes[shapes_key], transformations, set_all=True)
     logger.info(f"- Saved tile grid as 'sdata.shapes[\"{shapes_key}\"]'")

@@ -49,12 +49,12 @@ def qc_image(
     shapes_key = f"qc_img_{image_key}_grid"
 
     if table_key not in sdata.tables:
-        raise ValueError(f"No QC data found for image '{image_key}'. Run sq.exp.im.qc_image() first.")
+        raise ValueError(f"No QC data found for image '{image_key}'. Run squidpy.experimental.im.qc_image() first.")
 
     adata = sdata.tables[table_key]
 
     if "qc_image" not in adata.uns:
-        raise ValueError("No qc_image metadata found. Run sq.exp.im.qc_image() first.")
+        raise ValueError("No qc_image metadata found. Run squidpy.experimental.im.qc_image() first.")
 
     calculated_metrics = adata.uns["qc_image"]["metrics"]
 
