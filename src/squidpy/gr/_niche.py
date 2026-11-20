@@ -47,7 +47,7 @@ __all__ = [
 
 @d.dedent
 @deprecated_randomness_param
-def calculate_niche(  # noqa: PLR0917, deprecated and removed in v1.9.0
+def calculate_niche(  # noqa: PLR0917, deprecated and removed in v2.0.0
     data: AnnData | SpatialData,
     flavor: Literal["neighborhood", "utag", "cellcharter", "spatialleiden"],
     library_key: str | None = None,
@@ -79,7 +79,7 @@ def calculate_niche(  # noqa: PLR0917, deprecated and removed in v1.9.0
 
     .. deprecated:: 1.8.4
         ``calculate_niche`` is deprecated and will be removed in squidpy
-        v1.9.0. Use one of the flavor-specific functions instead:
+        v2.0.0. Use one of the flavor-specific functions instead:
 
         - :func:`calculate_niche_neighborhood`
         - :func:`calculate_niche_utag`
@@ -103,7 +103,7 @@ def calculate_niche(  # noqa: PLR0917, deprecated and removed in v1.9.0
             - `'spatialleiden'` - cluster spatially resolved omics data using Multiplex Leiden.
             - `'cellcharter'` - a simplified version of CellCharter's approach, using PCA for dimensionality reduction. An arbitrary embedding can be used instead of PCA by setting the `use_rep` parameter which will try to find the embedding in `adata.obsm`.
     library_key
-        Deprecated, and removed with this function in v1.9.0; no flavor function takes it. Each
+        Deprecated, and removed with this function in v2.0.0; no flavor function takes it. Each
         library is fitted on its own and its labels are prefixed ``lib=<id>_``, so a niche in one
         library is unrelated to the same-numbered niche in another.
 
@@ -185,7 +185,7 @@ def calculate_niche(  # noqa: PLR0917, deprecated and removed in v1.9.0
 
     warnings.warn(
         "Calling `calculate_niche` is deprecated and will be removed in squidpy "
-        "v1.9.0. Use `calculate_niche_neighborhood`, `calculate_niche_utag`, "
+        "v2.0.0. Use `calculate_niche_neighborhood`, `calculate_niche_utag`, "
         "`calculate_niche_cellcharter`, or `calculate_niche_spatialleiden` instead.",
         FutureWarning,
         # `calculate_niche` is wrapped by `@deprecated_randomness_param`, so 2 lands in
@@ -312,7 +312,7 @@ def calculate_niche(  # noqa: PLR0917, deprecated and removed in v1.9.0
         return run(data, copy=not inplace, target_key=table_key)
 
     warnings.warn(
-        "'library_key' is deprecated and will be removed with `calculate_niche` in squidpy v1.9.0. "
+        "'library_key' is deprecated and will be removed with `calculate_niche` in squidpy v2.0.0. "
         "It fits a separate model per library, so niche labels are not shared between libraries. "
         "Either way, build the graphs per library with `spatial_neighbors(..., library_key=...)`. "
         "For niches shared across libraries, leave `library_key` unset. For niches per library, "
@@ -887,7 +887,7 @@ def calculate_niche_custom(
     return _on_table(data, table_key=table_key, copy=copy, work=run)
 
 
-def _validate_niche_args(  # noqa: PLR0917, deprecated and removed in v1.9.0
+def _validate_niche_args(  # noqa: PLR0917, deprecated and removed in v2.0.0
     data: AnnData | SpatialData,
     *,
     flavor: Literal["neighborhood", "utag", "cellcharter", "spatialleiden"],
@@ -1369,7 +1369,7 @@ def _label_order(label: str) -> tuple[bool, int, str]:
 ############
 
 
-# TODO(v1.9.0): delete with `calculate_niche`, its only caller; no flavor function takes `library_key`
+# TODO(v2.0.0): delete with `calculate_niche`, its only caller; no flavor function takes `library_key`
 def _niches_per_library(
     data: AnnData | SpatialData,
     *,

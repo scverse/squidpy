@@ -29,7 +29,7 @@ from squidpy.gr import (
 from squidpy.gr._nhood import _aggregate_over, nhood_aggregate
 from squidpy.gr._niche import _fit_clusterers, compute_hop_adjacency_matrices
 
-# Many tests here exercise the deprecated umbrella, which keeps working until v1.9.0;
+# Many tests here exercise the deprecated umbrella, which keeps working until v2.0.0;
 # `test_calculate_niche_deprecation_is_a_future_warning` checks the deprecation itself.
 pytestmark = pytest.mark.filterwarnings("ignore:Calling `calculate_niche` is deprecated:FutureWarning")
 
@@ -543,7 +543,7 @@ def test_no_flavor_takes_a_library_key(flavor, kwargs):
     ],
 )
 def test_the_umbrella_still_fits_per_library_and_warns(flavor, kwargs):
-    "Released with library_key, so until v1.9.0 it keeps v1.8.3's behaviour and says it is going."
+    "Released with library_key, so until v2.0.0 it keeps v1.8.3's behaviour and says it is going."
     adata = _tiny(n=40, libraries=["a"] * 20 + ["b"] * 18 + [None] * 2)
     with pytest.warns(FutureWarning, match=r"'library_key' is deprecated") as caught:
         calculate_niche(adata, flavor=flavor, library_key="library", rng=0, **kwargs)

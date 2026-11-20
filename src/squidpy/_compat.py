@@ -34,10 +34,10 @@ __all__ = [
 
 
 class _PositionalArgumentWarning(FutureWarning):
-    """An argument that became keyword-only was passed positionally; that stops working in v1.9.0."""
+    """An argument that became keyword-only was passed positionally; that stops working in v2.0.0."""
 
     def __init__(self, message: str) -> None:
-        super().__init__(f"{message}. Passing them positionally stops working in squidpy v1.9.0.")
+        super().__init__(f"{message}. Passing them positionally stops working in squidpy v2.0.0.")
 
 
 #: ``warnings.warn(..., skip_file_prefixes=SKIP_OWN_FRAMES)`` points at the first frame outside
