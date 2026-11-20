@@ -6,19 +6,25 @@ Squidpy requires Python version >= 3.11 to run.
 
 Install Squidpy by running::
 
-    pip install squidpy
+```
+pip install squidpy
+```
 
 ## Conda
 
 Install Squidpy via Conda as::
 
-    conda install -c conda-forge squidpy
+```
+conda install -c conda-forge squidpy
+```
 
 ## Development version
 
 To install Squidpy from GitHub, run::
 
-    pip install git+https://github.com/scverse/squidpy@main
+```
+pip install git+https://github.com/scverse/squidpy@main
+```
 
 ## Interactive visualization
 
@@ -28,4 +34,6 @@ which offers improved functionality and support for the SpatialData ecosystem.
 
 Install napari-spatialdata with::
 
-    pip install napari-spatialdata
+```
+pip install napari-spatialdata
+```

@@ -4,14 +4,14 @@
 .. module:: squidpy.experimental.im
 .. currentmodule:: squidpy.experimental
 .. autosummary::
-    :toctree: ../../api
+   :toctree: ../../api
 
-    im.calculate_image_features
-    im.make_tiles
-    im.make_tiles_from_spots
-    im.qc_image
-    im.detect_tissue
-    im.fit_stain_reference
-    im.estimate_white_point
-    im.StainFit
+   im.calculate_image_features
+   im.make_tiles
+   im.make_tiles_from_spots
+   im.qc_image
+   im.detect_tissue
+   im.fit_stain_reference
+   im.estimate_white_point
+   im.StainFit
 ```

@@ -4,9 +4,9 @@
 .. module:: squidpy.read
 .. currentmodule:: squidpy
 .. autosummary::
-    :toctree: ../api
+   :toctree: ../api
 
-    read.visium
-    read.vizgen
-    read.nanostring
+   read.visium
+   read.vizgen
+   read.nanostring
 ```

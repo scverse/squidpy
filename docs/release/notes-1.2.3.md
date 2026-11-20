@@ -22,7 +22,6 @@
   [@giovp](https://github.com/giovp)
   [#609](https://github.com/scverse/squidpy/pull/609)
 
-
 ## Miscellaneous
 
 - Better error message for handling palette in {func}`squidpy.pl.spatial_scatter`.
@@ -48,7 +47,6 @@
 - Fix release notes and misc.
   [@giovp](https://github.com/giovp)
   [#617](https://github.com/scverse/squidpy/pull/617)
-
 
 ## Documentation
 

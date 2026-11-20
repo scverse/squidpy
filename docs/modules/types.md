@@ -10,13 +10,13 @@ All {class}`~typing.TypedDict`s: pass a plain `dict` literal or build one with t
 .. module:: squidpy.types
 .. currentmodule:: squidpy
 .. autosummary::
-    :toctree: ../api
+   :toctree: ../api
 
-    types.FelzenszwalbParams
-    types.WekaParams
-    types.ReinhardParams
-    types.MacenkoParams
-    types.VahadaneParams
+   types.FelzenszwalbParams
+   types.WekaParams
+   types.ReinhardParams
+   types.MacenkoParams
+   types.VahadaneParams
 ```
 
 ## Results
@@ -24,8 +24,8 @@ All {class}`~typing.TypedDict`s: pass a plain `dict` literal or build one with t
 ```{eval-rst}
 .. currentmodule:: squidpy
 .. autosummary::
-    :toctree: ../api
+   :toctree: ../api
 
-    types.SpatialNeighborsResult
-    types.NhoodEnrichmentResult
+   types.SpatialNeighborsResult
+   types.NhoodEnrichmentResult
 ```

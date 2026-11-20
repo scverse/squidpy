@@ -6,7 +6,6 @@
   [@michalk8](https://github.com/michalk8)
   [#534](https://github.com/scverse/squidpy/pull/534)
 
-
 ## Bugfixes
 
 - Add discourse, zulip badges and links.
@@ -40,7 +39,6 @@
 - Rename default branch from `master` to `main`.
   [@giovp](https://github.com/giovp)
   [#549](https://github.com/scverse/squidpy/pull/549)
-
 
 ## Miscellaneous
 
