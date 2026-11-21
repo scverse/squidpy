@@ -308,4 +308,5 @@ def test_tissue_consumers_match_on_polygons_and_raster(sdata_hne) -> None:
 
     fit_p = sq.experimental.im.fit_stain_reference(sdata_hne, image_key="hne", tissue_mask_key="hne_tissue")
     fit_r = sq.experimental.im.fit_stain_reference(sdata_hne, image_key="hne", tissue_mask_key="hne_raster")
-    np.testing.assert_allclose(fit_p.stain_matrix, fit_r.stain_matrix, atol=1e-3)
+    # the polygons are drawn at the fit scale, the raster is downsampled to it, so edge pixels differ slightly
+    np.testing.assert_allclose(fit_p.stain_matrix, fit_r.stain_matrix, atol=5e-3)
