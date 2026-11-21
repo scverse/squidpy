@@ -4,11 +4,10 @@ from collections.abc import Iterator, Mapping, Sequence
 from typing import Any, Literal, cast
 
 import dask.array as da
+import geopandas as gpd
 import numpy as np
 import spatialdata as sd
 import xarray as xr
-from dask.base import is_dask_collection
-from dask_image.ndinterp import affine_transform as da_affine
 from skimage import feature, future, measure
 from skimage.filters import gaussian, threshold_otsu
 from skimage.morphology import closing, disk, remove_small_holes
@@ -17,13 +16,12 @@ from skimage.util import img_as_float
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from spatialdata._logging import logger
-from spatialdata.models import Labels2DModel
+from spatialdata.models import Labels2DModel, ShapesModel
 from spatialdata.transformations import get_transformation
 
 from squidpy._params import resolve_params
 from squidpy._utils import (
     _ensure_dim_order,
-    _get_scale_factors,
     _yx_from_shape,
     legacy_random,
 )
@@ -33,7 +31,7 @@ from squidpy.types import (
     WekaParams,
 )
 
-from ._utils import flatten_channels, get_element_data
+from ._utils import flatten_channels, get_element_data, labels_to_polygons, scaled_image_transformations
 
 #: The segmentation methods :func:`detect_tissue` accepts.
 DetectTissueMethod = Literal["otsu", "felzenszwalb", "weka"]
@@ -181,11 +179,13 @@ def detect_tissue(
     auto_max_pixels: int = 5_000_000,
     close_holes_smaller_than_frac: float = 0.0001,
     mask_smoothing_cycles: int = 0,
+    new_shapes_key: str | None = None,
+    as_labels: bool = False,
     new_labels_key: str | None = None,
     inplace: bool = True,
-) -> np.ndarray | None:
+) -> gpd.GeoDataFrame | np.ndarray | None:
     """
-    Detect tissue regions in an image and optionally store an integer-labeled mask.
+    Detect tissue regions in an image and store them as one polygon per specimen.
 
     Parameters
     ----------
@@ -239,27 +239,34 @@ def detect_tissue(
         Fraction of image area below which holes in the tissue mask are filled.
     mask_smoothing_cycles
         Number of morphological closing cycles to apply for boundary smoothing.
+    new_shapes_key
+        Key of the tissue polygons in ``sdata.shapes``. If `None`, uses `"{image_key}_tissue"`.
+    as_labels
+        Whether to also store the mask as integer labels in ``sdata.labels``, at the resolution it was
+        computed on (at most ``auto_max_pixels`` pixels), aligned to the image by its transformations.
     new_labels_key
-        Key to store the resulting labels in ``sdata.labels``. If `None`, uses
-        `"{image_key}_tissue"`.
+        Key of the labels when ``as_labels=True``. If `None`, uses `"{image_key}_tissue_labels"`.
     inplace
-        If `True`, stores labels in ``sdata.labels``. If `False`, returns the mask array.
+        If `True`, stores the results in ``sdata``. If `False`, returns them instead.
 
     Returns
     -------
-    If `inplace = False`, returns a NumPy array of shape `(y, x)` with integer labels
-    where `0` represents background and `1..K` represent different specimen regions.
-    Otherwise, returns `None` and stores the labels in ``sdata.labels``.
+    If ``inplace = False``, the tissue polygons as a :class:`geopandas.GeoDataFrame`, or, with
+    ``as_labels=True``, the integer label array at the working resolution. Otherwise `None`, and the
+    polygons are stored in ``sdata.shapes`` (plus the labels in ``sdata.labels`` with ``as_labels=True``).
 
     Notes
     -----
-    The function produces an integer-labeled mask where:
+    The tissue polygons have one row per specimen: column ``specimen_id`` (``1..K``), a ``Polygon`` or
+    ``MultiPolygon`` geometry with holes kept, and ``area_px``. Coordinates are in the image's ``scale0``
+    pixels and the image's transformations are copied, so the polygons line up with the image in every
+    coordinate system.
 
-        - Label `0` represents background.
-        - Labels `1..K` represent different specimen regions.
+    Segmentation runs on a downscaled copy of at most ``auto_max_pixels`` pixels. The polygons follow
+    that copy's pixel edges, simplified by one of its pixels, so no full-resolution mask is ever built.
 
-    Processing is performed at an appropriate resolution and then upscaled to match
-    the original image dimensions.
+    Before version 1.9, the default output was a full-resolution labels element at
+    `"{image_key}_tissue"`; pass ``as_labels=True`` for a labels element.
     """
     method = normalize_choice(method, options_of(DetectTissueMethod), name="method")
 
@@ -360,68 +367,34 @@ def detect_tissue(
     img_fg_labels = _smooth_mask(img_fg_labels, mask_smoothing_cycles)
     img_fg_labels = _apply_border_margin(img_fg_labels, normalized_margins)
 
-    # Upscale to full resolution
-    scale_matrix = _get_scaling_matrix(img_fg_labels.shape, target_shape)
-    img_fg_labels_up = _affine_upscale_nearest(img_fg_labels, scale_matrix, target_shape)
+    # One polygon per specimen in scale0 pixels; the mask itself stays at working resolution.
+    h, w = img_fg_labels.shape
+    scale_xy = (target_shape[1] / w, target_shape[0] / h)
+    tissue = labels_to_polygons(img_fg_labels, scale_xy=scale_xy)
 
-    if inplace:
-        lk = new_labels_key or f"{image_key}_tissue"
-        sf = _get_scale_factors(sdata.images[image_key])
+    if not inplace:
+        return img_fg_labels.astype(np.int32, copy=False) if as_labels else tissue
 
+    sk = new_shapes_key or f"{image_key}_tissue"
+    if sk in sdata.labels:
+        raise ValueError(
+            f"`sdata.labels[{sk!r}]` exists, probably a tissue mask from an older squidpy version. "
+            f"Delete it (`del sdata.labels[{sk!r}]`) or pass another `new_shapes_key`."
+        )
+    sdata.shapes[sk] = ShapesModel.parse(
+        tissue, transformations=get_transformation(sdata.images[image_key], get_all=True)
+    )
+    logger.info(f"Saved {len(tissue)} tissue polygons to `sdata.shapes['{sk}']`.")
+
+    if as_labels:
+        lk = new_labels_key or f"{image_key}_tissue_labels"
         sdata.labels[lk] = Labels2DModel.parse(
-            data=img_fg_labels_up,
+            data=img_fg_labels.astype(np.int32, copy=False),
             dims=("y", "x"),
-            transformations=get_transformation(sdata.images[image_key], get_all=True),
-            scale_factors=sf,
+            transformations=scaled_image_transformations(sdata, image_key=image_key, hw=(h, w)),
         )
-        logger.info(f"Saved tissue mask to `sdata.labels['{lk}']`.")
-        return None
-
-    # If dask-backed, return a NumPy array to honor the signature
-    if is_dask_collection(img_fg_labels_up):
-        return np.asarray(img_fg_labels_up.compute())
-
-    return np.asarray(img_fg_labels_up)
-
-
-# Line 182 - convert dask array to numpy
-def _affine_upscale_nearest(labels: np.ndarray, scale_matrix: np.ndarray, target_shape: tuple[int, int]) -> np.ndarray:
-    """
-    Nearest-neighbor affine upscaling using dask-image. Returns dask array if available, else NumPy.
-    """
-    logger.info("Upscaling mask back to original size.")
-    try:
-        lbl_da = da.from_array(labels, chunks="auto")
-        result = da_affine(
-            lbl_da,
-            matrix=scale_matrix,
-            offset=(0.0, 0.0),
-            output_shape=target_shape,
-            order=0,
-            mode="constant",
-            cval=0,
-            output=np.int32,
-        )
-
-        return np.asarray(result)
-
-    except (ImportError, AttributeError, TypeError):
-        sy = target_shape[0] / labels.shape[0]
-        sx = target_shape[1] / labels.shape[1]
-        yi = np.clip((np.arange(target_shape[0]) / sy).round().astype(int), 0, labels.shape[0] - 1)
-        xi = np.clip((np.arange(target_shape[1]) / sx).round().astype(int), 0, labels.shape[1] - 1)
-        return np.asarray(labels[yi[:, None], xi[None, :]].astype(np.int32, copy=False))
-
-
-def _get_scaling_matrix(current_shape: tuple[int, int], target_shape: tuple[int, int]) -> np.ndarray:
-    """
-    Affine matrix mapping output coords to input coords for scipy/dask-image.
-    """
-    cy, cx = current_shape
-    ty, tx = target_shape
-    scale_y = cy / float(ty)
-    scale_x = cx / float(tx)
-    return np.array([[scale_y, 0.0], [0.0, scale_x]], dtype=float)
+        logger.info(f"Saved tissue labels to `sdata.labels['{lk}']`.")
+    return None
 
 
 def _get_target_upscale_shape(sdata: sd.SpatialData, *, image_key: str) -> tuple[int, int]:

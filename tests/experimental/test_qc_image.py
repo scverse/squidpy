@@ -23,7 +23,7 @@ def _sdata_hne_with_tissue():
     it here and deepcopying per test avoids paying that cost repeatedly.
     """
     sdata = sq.datasets.visium_hne_sdata()
-    sq.experimental.im.detect_tissue(sdata, image_key="hne", scale="scale0", inplace=True, new_labels_key="hne_tissue")
+    sq.experimental.im.detect_tissue(sdata, image_key="hne", scale="scale0")
     return sdata
 
 
