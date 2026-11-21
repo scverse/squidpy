@@ -16,24 +16,17 @@ from shapely.geometry import Polygon
 from spatialdata import get_centroids
 from spatialdata._logging import logger
 from spatialdata.models import ShapesModel, TableModel
-from spatialdata.models._utils import SpatialElement
 from spatialdata.transformations import get_transformation, set_transformation
 
 from squidpy._utils import _yx_from_shape
 from squidpy._validators import assert_in_range, assert_key_in_sdata, assert_positive
-from squidpy.experimental.im._utils import (
-    TileGrid,
-    _choose_label_scale_for_image,
-    _tissue_fraction_polygons,
-    get_element_data,
-    get_mask_materialized,
-)
+from squidpy.experimental.im._utils import _tissue_fraction_polygons
 
 __all__ = ["make_tiles", "make_tiles_from_spots"]
 
 
 class _SpotTileGrid:
-    """Tile container for Visium spots, used with ``_filter_tiles``."""
+    """Tile container for Visium spots."""
 
     def __init__(self, centers: np.ndarray, tile_size: tuple[int, int], spot_ids: np.ndarray | None = None):
         if centers.ndim != 2 or centers.shape[1] != 2:
@@ -83,29 +76,6 @@ class _SpotTileGrid:
             cents.append([cy, cx])
             polys.append(Polygon([(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)]))
         return np.asarray(cents, dtype=float), polys
-
-
-def _get_largest_scale_dimensions(
-    sdata: sd.SpatialData,
-    *,
-    image_key: str,
-) -> tuple[int, int]:
-    """Get the dimensions (H, W) of the largest/finest scale of an image.
-
-    Callers must validate *image_key* before calling this helper.
-    """
-    img_node = sdata.images[image_key]
-
-    # Use get_element_data with "scale0" which is always the largest scale
-    # It handles both datatree (multiscale) and single-scale images
-    img_da = get_element_data(img_node, "scale0", "image", image_key)
-
-    # Get spatial dimensions (y, x)
-    if "y" in img_da.sizes and "x" in img_da.sizes:
-        return int(img_da.sizes["y"]), int(img_da.sizes["x"])
-    else:
-        # Fallback: assume last two dimensions are spatial
-        return int(img_da.shape[-2]), int(img_da.shape[-1])
 
 
 def _save_spot_tiles_to_shapes(
@@ -169,7 +139,7 @@ def make_tiles(
     target_mpp: float | None = None,
     image_mpp: float | Mapping[str, float] | None = None,
     mpp_from: str | Mapping[str, str] | None = None,
-    centered_on: str | None = None,
+    centered_on: str | Mapping[str, str] | None = None,
     table_key: str | None = None,
     tissue_mask_key: str | Mapping[str, str] | None = None,
     min_tissue_fraction: float = 0.25,
@@ -218,7 +188,8 @@ def make_tiles(
         relative to the image.
     centered_on
         If `None`, tile the tissue with a regular grid. Otherwise the key of a shapes element in
-        ``sdata.shapes``: one crop per shape, centred on its centroid.
+        ``sdata.shapes``, or a mapping from image key to such a key (e.g. one spots element per sample in a
+        cohort): one crop per shape, centred on its centroid.
     table_key
         Key of a table in ``sdata.tables`` whose observations get ``obs["tile_id"]``: the grid tile under each
         observation's centroid, the observation's own crop when ``centered_on`` is the element the table
@@ -288,8 +259,14 @@ def make_tiles(
     assert_positive(size_px[0], name="tile_size[0]")
     assert_positive(size_px[1], name="tile_size[1]")
     assert_in_range(min_tissue_fraction, 0, 1, name="min_tissue_fraction")
-    if centered_on is not None:
-        assert_key_in_sdata(sdata, centered_on, attr="shapes")
+    if isinstance(centered_on, Mapping):
+        missing = [k for k in keys if k not in centered_on]
+        if missing:
+            raise KeyError(f"`centered_on` has no entry for images {missing}.")
+    for key in keys:
+        shapes_for_key = centered_on[key] if isinstance(centered_on, Mapping) else centered_on
+        if shapes_for_key is not None:
+            assert_key_in_sdata(sdata, shapes_for_key, attr="shapes")
     if table_key is not None:
         assert_key_in_sdata(sdata, table_key, attr="tables")
 
@@ -304,13 +281,14 @@ def make_tiles(
         )
         tissue = _resolve_tissue(sdata, key, tissue_mask_key, scale=scale)
         H, W = levels[0][1], levels[0][2]
-        if centered_on is None:
+        crop_on = centered_on[key] if isinstance(centered_on, Mapping) else centered_on
+        if crop_on is None:
             origin = None
             if center_grid_on_tissue:
                 origin = _grid_origin_on_centroid(sdata, key, tissue, image_mask_key, side_s0)
             tiles = _grid_tiles(key, tissue.extent(H, W, levels), side_s0, origin=origin)
         else:
-            tiles = _centred_tiles(sdata, key, centered_on, side_s0)
+            tiles = _centred_tiles(sdata, key, crop_on, side_s0)
         tiles.clamp(H, W)
         fraction, specimen = tissue.fraction(tiles.full)
         downsample = levels[level][3]
@@ -346,14 +324,14 @@ def make_tiles(
         "tile_size": list(size_px),
         "tile_size_um": tile_size_um,
         "target_mpp": target_mpp,
-        "centered_on": centered_on,
+        "centered_on": dict(centered_on) if isinstance(centered_on, Mapping) else centered_on,
         "min_tissue_fraction": min_tissue_fraction,
         "center_grid_on_tissue": center_grid_on_tissue,
         "table_key": table_key,
     }
     _write_tile_table(sdata, built, table_name=table_name, params=params)
     if table_key is not None:
-        _link_observations(sdata, built, table_key=table_key, tiles_table=table_name, centered_on=centered_on)
+        _link_observations(sdata, built, table_key=table_key, tiles_table=table_name)
 
     if preview:
         first = built[0]
@@ -393,7 +371,7 @@ def _affine_to_image_frame(sdata: sd.SpatialData, element_key: str, image_key: s
     """Return the 3x3 affine that maps an element's native coordinates to the image's pixel frame."""
     element = sdata[element_key]
     el_tfs = get_transformation(element, get_all=True)
-    img_tfs = get_transformation(sdata.images[image_key], get_all=True)
+    img_tfs = get_transformation(sdata[image_key], get_all=True)
     shared = [cs for cs in el_tfs if cs in img_tfs]
     if not shared:
         raise ValueError(
@@ -472,6 +450,7 @@ class _Tiles:
         self.names = names
         self.grid = grid  # (iy, ix, (y_start, x_start, ty, tx, ny, nx)) for grid tiles
         self.centered_on_ids: np.ndarray | None = None
+        self.source_key: str | None = None  # shapes key the crops are centred on
 
     def clamp(self, H: int, W: int) -> None:
         self.bounds[:, [0, 2]] = np.clip(self.bounds[:, [0, 2]], 0, H)
@@ -518,6 +497,7 @@ def _centred_tiles(sdata: sd.SpatialData, image_key: str, shapes_key: str, side:
     ids = gdf.index.to_numpy()
     tiles = _Tiles(np.column_stack([y0, x0, y0 + ty, x0 + tx]), [f"{image_key}_{i}" for i in ids])
     tiles.centered_on_ids = ids
+    tiles.source_key = shapes_key
     return tiles
 
 
@@ -612,18 +592,27 @@ class _Tissue:
 
 
 def _resolve_tissue(
-    sdata: sd.SpatialData, image_key: str, tissue_mask_key: str | Mapping[str, str] | None, *, scale: str
+    sdata: sd.SpatialData,
+    image_key: str | None,
+    tissue_mask_key: str | Mapping[str, str] | None,
+    *,
+    scale: str,
+    frame_key: str | None = None,
 ) -> _Tissue:
     """Find the tissue of an image, preferring polygons over labels, and run ``detect_tissue`` if there is none.
 
     Order: ``tissue_mask_key`` (shapes, then labels); ``shapes[f"{image_key}_tissue"]``;
-    ``labels[f"{image_key}_tissue_labels"]``; ``labels[f"{image_key}_tissue"]`` (older objects).
+    ``labels[f"{image_key}_tissue_labels"]``; ``labels[f"{image_key}_tissue"]`` (older objects). The tissue is
+    mapped into the pixel frame of ``frame_key`` (default: the image).
     """
+    frame_key = frame_key or image_key
     given = tissue_mask_key[image_key] if isinstance(tissue_mask_key, Mapping) else tissue_mask_key
     if given is not None:
         if given not in sdata.shapes and given not in sdata.labels:
             raise KeyError(f"Tissue '{given}' not found in `sdata.shapes` or `sdata.labels`.")
-        return _tissue_from(sdata, image_key, given)
+        return _tissue_from(sdata, frame_key, given)
+    if image_key is None:
+        raise ValueError("Pass `tissue_mask_key` or `image_key` to locate the tissue.")
     candidates = [f"{image_key}_tissue", f"{image_key}_tissue_labels"]
     found = next((k for k in candidates if k in sdata.shapes or k in sdata.labels), None)
     if found is None:
@@ -634,11 +623,11 @@ def _resolve_tissue(
         found = next((k for k in candidates if k in sdata.shapes or k in sdata.labels), None)
         if found is None:
             raise KeyError(f"detect_tissue did not write any of {candidates}.")
-    return _tissue_from(sdata, image_key, found)
+    return _tissue_from(sdata, frame_key, found)
 
 
-def _tissue_from(sdata: sd.SpatialData, image_key: str, key: str) -> _Tissue:
-    A = _affine_to_image_frame(sdata, key, image_key)
+def _tissue_from(sdata: sd.SpatialData, frame_key: str, key: str) -> _Tissue:
+    A = _affine_to_image_frame(sdata, key, frame_key)
     if key in sdata.shapes:
         gdf = sdata.shapes[key]
         geoms = gdf.geometry.to_numpy()
@@ -757,9 +746,7 @@ def _drop_none(d: dict) -> dict:
     return {k: v for k, v in d.items() if v is not None}
 
 
-def _link_observations(
-    sdata: sd.SpatialData, built: list[_ImageTiles], *, table_key: str, tiles_table: str, centered_on: str | None
-) -> None:
+def _link_observations(sdata: sd.SpatialData, built: list[_ImageTiles], *, table_key: str, tiles_table: str) -> None:
     """Write ``obs["tile_id"]`` onto an omics table: the tile under each observation's centroid, else NA."""
     adata = sdata.tables[table_key]
     attrs = adata.uns[TableModel.ATTRS_KEY]
@@ -780,7 +767,7 @@ def _link_observations(
         item = matches[0]
         rows = (adata.obs[region_key] == region).to_numpy()
         instances = adata.obs.loc[rows, instance_key].to_numpy()
-        if centered_on == region:
+        if item.tiles.source_key == region:
             tile_id[rows] = [f"{item.image_key}_{i}" for i in instances]
             continue
         cs = _shared_cs(sdata, region, item.image_key)
@@ -909,19 +896,6 @@ def make_tiles_from_spots(
         assert_key_in_sdata(sdata, image_key, attr="images")
     assert_in_range(min_tissue_fraction, 0, 1, name="min_tissue_fraction")
 
-    target_cs: str | None = None
-    if image_key is not None:
-        mask_key = tissue_mask_key or f"{image_key}_tissue"
-        if mask_key in sdata.labels:
-            target_cs = _get_primary_coordinate_system(sdata.labels[mask_key])
-        image_cs = _get_primary_coordinate_system(sdata.images[image_key])
-        if target_cs and image_cs and target_cs != image_cs:
-            logger.warning(
-                "Coordinate system mismatch between mask (%s) and image (%s). Tile coverage may be incorrect.",
-                target_cs,
-                image_cs,
-            )
-
     coords, spot_ids = _get_spot_coordinates(sdata, spots_key=spots_key)
     derived_tile = _derive_tile_size_from_spots(coords)
     logger.info(f"Derived tile size {derived_tile} from {len(coords)} Visium spots (key='{spots_key}').")
@@ -930,60 +904,21 @@ def make_tiles_from_spots(
     shapes_key = new_shapes_key or f"{spots_key}_tiles"
     _save_spot_tiles_to_shapes(sdata, tg=tg, shapes_key=shapes_key, spot_ids=spot_ids, source_shapes_key=spots_key)
 
-    classification_mask_key: str | None = None
-    if tissue_mask_key is not None:
-        classification_mask_key = tissue_mask_key
-    elif image_key is not None:
-        classification_mask_key = f"{image_key}_tissue"
-        if classification_mask_key not in sdata.labels:
-            logger.info(
-                "No tissue mask provided/found; running detect_tissue to create '%s' for classification.",
-                classification_mask_key,
-            )
-            try:
-                from squidpy.experimental.im._detect_tissue import detect_tissue
-
-                detect_tissue(
-                    sdata,
-                    image_key=image_key,
-                    scale=scale,
-                    new_labels_key=classification_mask_key,
-                    inplace=True,
-                )
-            except (ImportError, KeyError, ValueError, RuntimeError) as e:  # pragma: no cover - defensive
-                logger.warning("detect_tissue failed (%s); tiles will not be classified.", e)
-
-    if classification_mask_key is not None:
-        if image_key is not None:
-            mask_key = classification_mask_key
-            if mask_key in sdata.labels:
-                target_hw = _get_largest_scale_dimensions(sdata, image_key=image_key)
-                scale = _choose_label_scale_for_image(sdata.labels[mask_key], target_hw)
-            else:
-                scale = "scale0"
-
-            _filter_tiles(
-                sdata,
-                tg=tg,
-                image_key=image_key,
-                tissue_mask_key=classification_mask_key,
-                scale=scale,
-                min_tissue_fraction=min_tissue_fraction,
-                shapes_key=shapes_key,
-            )
-        else:
-            assert_key_in_sdata(sdata, classification_mask_key, attr="labels")
-            # Without an image we cannot infer the best scale; default to finest scale unless user specified.
-            scale_used = "scale0" if scale == "auto" else scale
-            _filter_tiles(
-                sdata,
-                tg=tg,
-                image_key=None,
-                tissue_mask_key=classification_mask_key,
-                scale=scale_used,
-                min_tissue_fraction=min_tissue_fraction,
-                shapes_key=shapes_key,
-            )
+    classified = tissue_mask_key is not None or image_key is not None
+    if classified:
+        # same tissue lookup as make_tiles (polygons first, labels as fallback), mapped into the spots' frame
+        tissue = _resolve_tissue(sdata, image_key, tissue_mask_key, scale=scale, frame_key=spots_key)
+        fraction, _ = tissue.fraction(tg.bounds())
+        labels = np.where(
+            fraction >= min_tissue_fraction, "tissue", np.where(fraction > 0, "partial_tissue", "background")
+        )
+        logger.info(
+            f"After tissue filtering: {(labels == 'tissue').sum()}/{len(labels)} tiles have at least "
+            f"{min_tissue_fraction:.0%} tissue."
+        )
+        gdf = sdata.shapes[shapes_key].copy()
+        gdf["tile_classification"] = pd.Categorical(labels, categories=["background", "partial_tissue", "tissue"])
+        sdata.shapes[shapes_key] = ShapesModel.parse(gdf)
         _propagate_spot_classification(sdata, tiles_key=shapes_key, spots_key=spots_key)
     else:
         logger.info("No mask provided or derived; skipping tissue classification.")
@@ -995,7 +930,7 @@ def make_tiles_from_spots(
                     sdata.pl.render_images(image_key)
                     .pl.render_shapes(
                         shapes_key,
-                        color="tile_classification" if classification_mask_key is not None else None,
+                        color="tile_classification" if classified else None,
                         fill_alpha=0.5,
                     )
                     .pl.show()
@@ -1003,122 +938,11 @@ def make_tiles_from_spots(
             else:
                 sdata.pl.render_shapes(
                     shapes_key,
-                    color="tile_classification" if classification_mask_key is not None else None,
+                    color="tile_classification" if classified else None,
                     fill_alpha=0.5,
                 ).pl.show()
         except (AttributeError, KeyError, ValueError) as e:
             logger.warning(f"Could not generate preview plot: {e}")
-
-
-def _filter_tiles(
-    sdata: sd.SpatialData,
-    *,
-    tg: TileGrid,
-    image_key: str | None,
-    tissue_mask_key: str | None = None,
-    scale: str = "scale0",
-    min_tissue_fraction: float = 1.0,
-    shapes_key: str | None = None,
-) -> np.ndarray | None:
-    """
-    Filter tiles suitable for inference based solely on tissue coverage.
-
-    Filters out tiles that are not exclusively (100% by default) in tissue.
-
-    Tiles are classified as:
-    - "background": No tissue pixels in the tile
-    - "partial_tissue": Contains some tissue but below ``min_tissue_fraction``
-    - "tissue": Meets tissue requirements and is suitable for inference
-
-    Parameters
-    ----------
-    sdata
-        SpatialData object.
-    tg
-        TileGrid object with tiles to filter.
-    image_key
-        Key of the image in ``sdata.images``. Optional if ``tissue_mask_key`` is provided.
-    tissue_mask_key
-        Key of the tissue mask in ``sdata.labels``. If ``None``, uses ``f"{image_key}_tissue"``.
-    scale
-        Scale level to use for mask processing.
-    min_tissue_fraction
-        Minimum fraction of tile that must be in tissue. Default is 1.0 (exclusively in tissue).
-    shapes_key
-        Key of the tile grid shapes in ``sdata.shapes``. If ``None``, uses ``f"{image_key}_tiles"`` when
-        ``image_key`` is provided; otherwise must be supplied.
-    """
-    tile_bounds = tg.bounds()
-    n_tiles = len(tile_bounds)
-    suitable = np.ones(n_tiles, dtype=bool)
-
-    # Track classification info for each tile
-    # Categories: "background", "partial_tissue", "tissue"
-    tile_classification = np.full(n_tiles, "tissue", dtype=object)
-
-    # Get tissue mask
-    if tissue_mask_key is not None:
-        mask_key = tissue_mask_key
-    elif image_key is not None:
-        mask_key = f"{image_key}_tissue"
-    else:
-        raise ValueError("tissue_mask_key must be provided when image_key is None.")
-    assert_key_in_sdata(sdata, mask_key, attr="labels")
-    mask = get_mask_materialized(sdata, mask_key=mask_key, scale=scale)
-    H_mask, W_mask = mask.shape
-
-    # Check tissue coverage for each tile
-    for i, (y0, x0, y1, x1) in enumerate(tile_bounds):
-        # Clamp to mask dimensions
-        y0_clamped = max(0, min(int(y0), H_mask))
-        y1_clamped = max(0, min(int(y1), H_mask))
-        x0_clamped = max(0, min(int(x0), W_mask))
-        x1_clamped = max(0, min(int(x1), W_mask))
-
-        if y1_clamped > y0_clamped and x1_clamped > x0_clamped:
-            tile_region = mask[y0_clamped:y1_clamped, x0_clamped:x1_clamped]
-            tissue_fraction = float(np.mean(tile_region > 0))
-            if tissue_fraction < min_tissue_fraction:
-                suitable[i] = False
-                if tissue_fraction == 0.0:
-                    tile_classification[i] = "background"
-                else:
-                    tile_classification[i] = "partial_tissue"
-            else:
-                tile_classification[i] = "tissue"
-        else:
-            # Tile is outside mask bounds
-            suitable[i] = False
-            tile_classification[i] = "background"
-
-    logger.info(
-        f"After tissue filtering: {suitable.sum()}/{n_tiles} ({suitable.sum() / n_tiles * 100:.2f}%) tiles are fully within tissue."
-    )
-
-    # Always persist classification on the GeoDataFrame so users can inspect it directly
-    if shapes_key is None:
-        if image_key is None:
-            raise ValueError("shapes_key must be provided when image_key is None.")
-        shapes_key_used = f"{image_key}_tiles"
-    else:
-        shapes_key_used = shapes_key
-    if shapes_key_used in sdata.shapes:
-        gdf = sdata.shapes[shapes_key_used]
-        if len(gdf) != len(tile_classification):
-            logger.warning(
-                "Tile classification length (%d) does not match GeoDataFrame length (%d); skipping write.",
-                len(tile_classification),
-                len(gdf),
-            )
-        else:
-            gdf = gdf.copy()
-            gdf["tile_classification"] = pd.Categorical(
-                tile_classification,
-                categories=["background", "partial_tissue", "tissue"],
-            )
-            sdata.shapes[shapes_key_used] = ShapesModel.parse(gdf)
-
-    return suitable
 
 
 def _get_spot_coordinates(
@@ -1139,17 +963,6 @@ def _get_spot_coordinates(
             f"Unexpected geometry layout for '{spots_key}'. Expected point geometries with (x, y) coordinates."
         )
     return centers, gdf.index.to_numpy()
-
-
-def _get_primary_coordinate_system(element: SpatialElement) -> str | None:
-    """Return the first available coordinate system, preferring 'global'."""
-    transformations = get_transformation(element, get_all=True)
-    if not transformations:
-        return None
-    # Prefer 'global' if present
-    if "global" in transformations:
-        return "global"
-    return next(iter(transformations.keys()))
 
 
 def _derive_tile_size_from_spots(coords: np.ndarray) -> tuple[int, int]:

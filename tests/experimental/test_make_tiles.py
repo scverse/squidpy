@@ -416,3 +416,49 @@ def test_make_tiles_table_roundtrips_through_zarr(tmp_path):
     assert table.uns["make_tiles"]["per_image"]["img"]["units"] == "um"
     assert table.obs["in_tissue"].dtype == bool
     assert read.shapes["img_tiles"]["tissue_fraction"].between(0, 1).all()
+
+
+def test_make_tiles_centered_on_per_image_in_a_cohort():
+    sdata = sd.SpatialData(
+        images={"he_a": _image(512, 512, cs="cs_a"), "he_b": _image(512, 512, cs="cs_b")},
+        shapes={
+            "he_a_tissue": _tissue(box(0, 0, 512, 512), cs="cs_a"),
+            "he_b_tissue": _tissue(box(0, 0, 512, 512), cs="cs_b"),
+            "spots_a": _cells(np.array([[100.0, 100.0], [300.0, 300.0]]), cs="cs_a"),
+            "spots_b": _cells(np.array([[200.0, 50.0]]), cs="cs_b"),
+        },
+        tables={"table": _omics_table(["spots_a", "spots_b"], [2, 1])},
+    )
+
+    sq.experimental.im.make_tiles(
+        sdata,
+        image_key=["he_a", "he_b"],
+        tile_size=64,
+        centered_on={"he_a": "spots_a", "he_b": "spots_b"},
+        table_key="table",
+        preview=False,
+    )
+
+    assert list(sdata.shapes["he_a_tiles"].index) == ["he_a_0", "he_a_1"]
+    assert list(sdata.shapes["he_b_tiles"].index) == ["he_b_0"]
+    assert list(sdata.tables["table"].obs["tile_id"]) == ["he_a_0", "he_a_1", "he_b_0"]
+    with pytest.raises(KeyError, match="no entry"):
+        sq.experimental.im.make_tiles(
+            sdata, image_key=["he_a", "he_b"], tile_size=64, centered_on={"he_a": "spots_a"}, preview=False
+        )
+
+
+def test_make_tiles_from_spots_reads_tissue_polygons():
+    xy = np.array([[50.0, 50.0], [250.0, 250.0], [450.0, 450.0]])
+    sdata = sd.SpatialData(
+        images={"img": _image()},
+        shapes={"spots": _cells(xy), "img_tissue": _tissue(box(0, 0, 300, 300))},
+    )
+
+    sq.experimental.im.make_tiles_from_spots(
+        sdata, spots_key="spots", image_key="img", min_tissue_fraction=0.25, preview=False
+    )
+
+    classes = sdata.shapes["spots"]["tile_classification"].astype(str).tolist()
+    assert "img_tissue" not in sdata.labels
+    assert classes[0] == "tissue" and classes[2] == "background"
