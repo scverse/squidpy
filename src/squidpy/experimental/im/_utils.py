@@ -399,20 +399,41 @@ def rasterize_polygons(
         (y0, y1), (x0, x1) = block_info[None]["array-location"]
         out = np.zeros((y1 - y0, x1 - x0), dtype=bool)
 
-        def _fill(ring: Any, value: bool) -> None:
+        def _fill(target: np.ndarray, ring: Any, value: bool) -> None:
             c = np.asarray(ring.coords)
-            rr, cc = draw_polygon(c[:, 1] / sy - y0 - 0.5, c[:, 0] / sx - x0 - 0.5, shape=out.shape)
-            out[rr, cc] = value
+            rr, cc = draw_polygon(c[:, 1] / sy - y0 - 0.5, c[:, 0] / sx - x0 - 0.5, shape=target.shape)
+            target[rr, cc] = value
 
         for i in tree.query(shapely.box(x0 * sx, y0 * sy, x1 * sx, y1 * sy)):
             for poly in shapely.get_parts(geoms[i]):
-                _fill(poly.exterior, True)
+                # each part on its own canvas, then OR-ed in, so a part lying in another part's hole survives
+                part = np.zeros_like(out)
+                _fill(part, poly.exterior, True)
                 for hole in poly.interiors:
-                    _fill(hole, False)
+                    _fill(part, hole, False)
+                out |= part
         return out
 
     norm = da.core.normalize_chunks(chunks, hw, dtype=bool)
     return da.map_blocks(_block, chunks=norm, dtype=bool, meta=np.empty((0, 0), dtype=bool))
+
+
+def tissue_polygons_in_image_pixels(sdata: SpatialData, *, mask_key: str, image_key: str) -> gpd.GeoDataFrame:
+    """Tissue polygons from ``sdata.shapes[mask_key]`` mapped into the ``scale0`` pixel frame of an image.
+
+    The mapping goes through the coordinate systems the two elements share, so polygons stored in another
+    frame (e.g. micrometres) line up with the image.
+    """
+    import shapely
+    from spatialdata.transformations import get_transformation_between_coordinate_systems
+
+    tissue = sdata.shapes[mask_key]
+    m = get_transformation_between_coordinate_systems(sdata, tissue, sdata.images[image_key]).to_affine_matrix(
+        input_axes=("x", "y"), output_axes=("x", "y")
+    )
+    if np.allclose(m, np.eye(3)):
+        return tissue
+    return tissue.set_geometry(shapely.transform(tissue.geometry.values, lambda c: c @ m[:2, :2].T + m[:2, 2]))
 
 
 def tissue_mask_raster(
@@ -425,16 +446,8 @@ def tissue_mask_raster(
     ``target_hw``, resized with nearest neighbours if it doesn't match).
     """
     if mask_key in sdata.shapes:
-        import shapely
-        from spatialdata.transformations import get_transformation_between_coordinate_systems
-
-        image = sdata.images[image_key]
-        tissue = sdata.shapes[mask_key]
-        m = get_transformation_between_coordinate_systems(sdata, tissue, image).to_affine_matrix(
-            input_axes=("x", "y"), output_axes=("x", "y")
-        )
-        tissue = tissue.set_geometry(shapely.transform(tissue.geometry.values, lambda c: c @ m[:2, :2].T + m[:2, 2]))
-        full = get_element_data(image, "scale0", "image", image_key)
+        tissue = tissue_polygons_in_image_pixels(sdata, mask_key=mask_key, image_key=image_key)
+        full = get_element_data(sdata.images[image_key], "scale0", "image", image_key)
         scale_xy = (full.sizes["x"] / target_hw[1], full.sizes["y"] / target_hw[0])
         return rasterize_polygons(tissue, target_hw, scale_xy=scale_xy, chunks=chunks)
 

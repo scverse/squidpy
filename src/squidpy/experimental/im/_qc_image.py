@@ -26,6 +26,7 @@ from squidpy.experimental.im._utils import (
     get_mask_dask,
     resolve_tissue_mask,
     save_tile_grid_to_shapes,
+    tissue_polygons_in_image_pixels,
 )
 
 _DEFAULT_HNE_METRICS: list[QCMetric] = [
@@ -378,12 +379,13 @@ def _to_gray_dask_yx(img_yxc: xr.DataArray) -> da.Array:
 def _tile_tissue_fraction(sdata: SpatialData, *, mask_key: str, image_key: str, tg: TileGrid) -> np.ndarray:
     """Tissue fraction of each tile from the tissue polygons, in tile order.
 
-    The tiles are laid out in pixels of the scale QC runs on; the polygons are in ``scale0`` pixels.
+    The tiles are laid out in pixels of the scale QC runs on; the polygons are mapped into the image's ``scale0``
+    pixels through the coordinate systems.
     """
     full = get_element_data(sdata.images[image_key], "scale0", "image", image_key)
     sy, sx = full.sizes["y"] / tg.H, full.sizes["x"] / tg.W
     bounds = tg.bounds().astype(float) * np.array([sy, sx, sy, sx])
-    tissue = sdata.shapes[mask_key]
+    tissue = tissue_polygons_in_image_pixels(sdata, mask_key=mask_key, image_key=image_key)
     fraction, _ = _tissue_fraction_polygons(bounds, np.asarray(tissue.geometry))
     return fraction
 

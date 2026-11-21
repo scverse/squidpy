@@ -310,3 +310,47 @@ def test_tissue_consumers_match_on_polygons_and_raster(sdata_hne) -> None:
     fit_r = sq.experimental.im.fit_stain_reference(sdata_hne, image_key="hne", tissue_mask_key="hne_raster")
     # the polygons are drawn at the fit scale, the raster is downsampled to it, so edge pixels differ slightly
     np.testing.assert_allclose(fit_p.stain_matrix, fit_r.stain_matrix, atol=5e-3)
+
+
+def test_qc_image_maps_tissue_polygons_through_transformations() -> None:
+    """Tissue polygons stored in micrometres (with a Scale to global) give the same tissue tiles as in pixels."""
+    import shapely
+    from spatialdata.models import ShapesModel
+    from spatialdata.transformations import Scale
+
+    sdata = _ring_sdata()
+    sq.experimental.im.detect_tissue(sdata, image_key="img")
+    tissue_px = sdata.shapes["img_tissue"]
+    # same polygons at 0.5 um/px: coordinates halve, a Scale of 2 maps them back to global (= image pixels)
+    tissue_um = tissue_px.set_geometry(shapely.transform(tissue_px.geometry.values, lambda c: c * 0.5))
+    sdata.shapes["tissue_um"] = ShapesModel.parse(
+        tissue_um, transformations={"global": Scale([2.0, 2.0], axes=("x", "y"))}
+    )
+
+    def tissue_tiles(mask_key):
+        sq.experimental.im.qc_image(
+            sdata, image_key="img", tile_size=(50, 50), metrics=["brightness_mean"], is_hne=False,
+            tissue_mask_key=mask_key, progress=False, preview=False,
+        )  # fmt: skip
+        return (sdata.tables["qc_img_img"].obs["is_tissue"] == "True").to_numpy()
+
+    from_px = tissue_tiles("img_tissue")
+    assert from_px.any() and not from_px.all()
+    np.testing.assert_array_equal(tissue_tiles("tissue_um"), from_px)
+
+
+def test_rasterized_island_inside_a_hole_is_kept() -> None:
+    import geopandas as gpd
+    from shapely import MultiPolygon, box
+
+    from squidpy.experimental.im._utils import rasterize_polygons
+
+    frame = box(0, 0, 30, 30).difference(box(10, 10, 20, 20))  # square ring with a 10 px hole
+    island = box(13, 13, 17, 17)  # inside the hole
+    for parts in ([frame, island], [island, frame]):  # drawing order must not matter
+        mask = rasterize_polygons(
+            gpd.GeoDataFrame(geometry=[MultiPolygon(parts)]), (30, 30), scale_xy=(1.0, 1.0)
+        ).compute()
+        assert mask[15, 15]  # island
+        assert not mask[11, 11]  # hole
+        assert mask[5, 5]  # frame
