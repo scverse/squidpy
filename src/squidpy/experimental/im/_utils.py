@@ -301,7 +301,7 @@ def resolve_tissue_mask(
 
     if tissue_mask_key is not None:
         if not _exists(tissue_mask_key):
-            raise KeyError(f"Tissue mask key '{tissue_mask_key}' not found in sdata.shapes or sdata.labels")
+            raise KeyError(f"Tissue mask key '{tissue_mask_key}' not found in sdata.labels or sdata.shapes")
         return tissue_mask_key
 
     mask_key = f"{image_key}_tissue"
@@ -420,13 +420,23 @@ def tissue_mask_raster(
 ) -> da.Array:
     """Boolean tissue mask on the pixel grid of an image level of shape ``target_hw``, lazy.
 
-    Works for tissue polygons in ``sdata.shapes`` (drawn on demand) and for raster masks in ``sdata.labels``
-    (the label level closest to ``target_hw``, resized with nearest neighbours if it doesn't match).
+    Works for tissue polygons in ``sdata.shapes`` (mapped into the image's pixels through the coordinate
+    systems, then drawn on demand) and for raster masks in ``sdata.labels`` (the label level closest to
+    ``target_hw``, resized with nearest neighbours if it doesn't match).
     """
     if mask_key in sdata.shapes:
-        full = get_element_data(sdata.images[image_key], "scale0", "image", image_key)
+        import shapely
+        from spatialdata.transformations import get_transformation_between_coordinate_systems
+
+        image = sdata.images[image_key]
+        tissue = sdata.shapes[mask_key]
+        m = get_transformation_between_coordinate_systems(sdata, tissue, image).to_affine_matrix(
+            input_axes=("x", "y"), output_axes=("x", "y")
+        )
+        tissue = tissue.set_geometry(shapely.transform(tissue.geometry.values, lambda c: c @ m[:2, :2].T + m[:2, 2]))
+        full = get_element_data(image, "scale0", "image", image_key)
         scale_xy = (full.sizes["x"] / target_hw[1], full.sizes["y"] / target_hw[0])
-        return rasterize_polygons(sdata.shapes[mask_key], target_hw, scale_xy=scale_xy, chunks=chunks)
+        return rasterize_polygons(tissue, target_hw, scale_xy=scale_xy, chunks=chunks)
 
     label_node = sdata.labels[mask_key]
     mask = get_mask_dask(sdata, mask_key=mask_key, scale=_choose_label_scale_for_image(label_node, target_hw)) > 0

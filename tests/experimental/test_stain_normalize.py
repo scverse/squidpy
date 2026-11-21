@@ -10,7 +10,7 @@ import spatialdata as sd
 import spatialdata_plot as sdp
 import xarray as xr
 from spatialdata.models import Image2DModel, Labels2DModel
-from spatialdata.transformations import Scale, get_transformation, set_transformation
+from spatialdata.transformations import Scale, Sequence, get_transformation, set_transformation
 
 import squidpy as sq
 from squidpy._params import defaults_of, resolve_params
@@ -280,9 +280,16 @@ class TestStainNormalizationVisual(PlotTester, metaclass=PlotTesterMeta):
         da_rgb = get_element_data(sdata_hne.images[image_key], "auto", "image", image_key).astype("float32")
         weights = xr.DataArray([1.4, 1.0, 0.6], dims="c", coords={"c": da_rgb.coords["c"]})
         shifted = (da_rgb * weights).clip(0, 255).astype("uint8")
-        sdata_hne.images["hne_shifted"] = Image2DModel.parse(shifted.data, dims=shifted.dims)
+        # `hne_shifted` is a coarse copy of `image_key`; scale it onto the same coordinates so it can reuse
+        # its tissue mask (tissue polygons are mapped through the coordinate systems).
+        full = get_element_data(sdata_hne.images[image_key], "scale0", "image", image_key)
+        to_full = Scale([full.sizes["x"] / shifted.sizes["x"], full.sizes["y"] / shifted.sizes["y"]], axes=("x", "y"))
+        sdata_hne.images["hne_shifted"] = Image2DModel.parse(
+            shifted.data,
+            dims=shifted.dims,
+            transformations={"global": Sequence([to_full, get_transformation(sdata_hne.images[image_key], "global")])},
+        )
 
-        # `hne_shifted` shares geometry with `image_key`; reuse its tissue mask.
         reference.transform(
             sdata_hne, image_key="hne_shifted", image_key_added="hne_normalized", tissue_mask_key=f"{image_key}_tissue"
         )
