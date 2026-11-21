@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import geopandas as gpd
+import numpy as np
+import spatialdata as sd
 import spatialdata_plot as sdp
+from shapely import points
+from spatialdata.models import ShapesModel
 from spatialdata.transformations import Identity, get_transformation, set_transformation
 
 import squidpy as sq
@@ -121,3 +126,22 @@ def test_make_tiles_copies_image_transformations(sdata_hne):
     assert "custom_cs" in img_tfs and "custom_cs" in tile_tfs
     assert isinstance(img_tfs["custom_cs"], Identity)
     assert isinstance(tile_tfs["custom_cs"], Identity)
+
+
+def test_make_tiles_from_spots_tile_size_on_rotated_jittered_grid():
+    """The tile side follows the hex row spacing even when the spot grid is rotated and jittered."""
+    pitch = 100.0
+    rows, cols = np.meshgrid(np.arange(30), np.arange(30), indexing="ij")
+    xy = np.column_stack([(cols * pitch + (rows % 2) * pitch / 2).ravel(), (rows * pitch * np.sqrt(3) / 2).ravel()])
+    theta = np.deg2rad(0.5)
+    rotation = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+    xy = xy @ rotation.T + np.random.default_rng(0).normal(0, 0.3, xy.shape)
+    spots = ShapesModel.parse(gpd.GeoDataFrame({"radius": np.full(len(xy), 27.5)}, geometry=points(xy)))
+    sdata = sd.SpatialData(shapes={"spots": spots})
+
+    sq.experimental.im.make_tiles_from_spots(sdata, spots_key="spots", preview=False)
+
+    tiles = sdata.shapes["spots_tiles"]
+    widths = (tiles["pixel_x1"] - tiles["pixel_x0"]).to_numpy()
+    # row spacing is 86.6; bounds are floored/ceiled around each centre, so a tile spans 87 or 88 pixels
+    assert np.all((widths >= 87) & (widths <= 88))

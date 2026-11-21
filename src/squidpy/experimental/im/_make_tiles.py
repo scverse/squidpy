@@ -6,6 +6,7 @@ import pandas as pd
 import spatialdata as sd
 import xarray as xr
 from dask.base import is_dask_collection
+from scipy.spatial import cKDTree
 from shapely.geometry import Polygon
 from spatialdata._logging import logger
 from spatialdata.models import ShapesModel
@@ -353,7 +354,8 @@ def make_tiles_from_spots(
     Create tiles centered on Visium spots, classify them by tissue coverage, and optionally render a preview.
 
     The function reads spot coordinates from ``sdata.shapes[spots_key]``, infers a square tile size from the
-    vertical spacing between spots, and constructs one tile per spot. Tiles are then classified using a tissue
+    row spacing of the hexagonal spot grid (the median nearest-neighbour distance times ``sqrt(3) / 2``, so
+    rotated or slightly jittered grids work), and constructs one tile per spot. Tiles are then classified using a tissue
     mask in the same way as :func:`make_tiles`.
 
     Parameters
@@ -731,25 +733,18 @@ def _get_primary_coordinate_system(element: SpatialElement) -> str | None:
 
 
 def _derive_tile_size_from_spots(coords: np.ndarray) -> tuple[int, int]:
-    """Derive a square tile size from Visium spot spacing."""
+    """Derive a square tile size from the row spacing of Visium spots.
+
+    The row spacing of a hexagonal grid is ``pitch * sqrt(3) / 2``. The pitch is the median
+    nearest-neighbour distance, which does not depend on the grid being axis-aligned.
+    """
     if coords.shape[0] < 2:
         raise ValueError("Need at least 2 spots to derive tile size; ensure the spots table has multiple entries.")
-    # Spots are arranged in rows with constant vertical spacing; use this to set tile size.
-    y_coords = np.unique(np.sort(coords[:, 1]))
-    if len(y_coords) < 2:
+    pitch = float(np.median(cKDTree(coords).query(coords, k=2)[0][:, 1]))
+    if not np.isfinite(pitch) or pitch <= 0:
         raise ValueError(
-            "Unable to derive row spacing from spot coordinates; check coordinate system and spot positions."
+            "Unable to derive a valid spacing from spot coordinates; ensure spots are in consistent units "
+            "and that no two spots share a position."
         )
-    diffs = np.diff(y_coords)
-    diffs = diffs[diffs > 0]
-    if diffs.size == 0:
-        raise ValueError("Spot coordinates do not contain distinct rows; verify spot grid spacing.")
-    # Use the most frequent spacing (mode) to be robust to outliers.
-    values, counts = np.unique(np.round(diffs, decimals=6), return_counts=True)
-    row_spacing = float(values[np.argmax(counts)])
-    if not np.isfinite(row_spacing) or row_spacing <= 0:
-        raise ValueError(
-            "Unable to derive a valid spacing from spot coordinates; ensure spots are in consistent units."
-        )
-    side = max(1, int(np.floor(row_spacing)))
+    side = max(1, round(pitch * np.sqrt(3) / 2))
     return side, side
