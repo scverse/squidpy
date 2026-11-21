@@ -24,6 +24,7 @@ from squidpy._validators import assert_in_range, assert_key_in_sdata, assert_pos
 from squidpy.experimental.im._utils import (
     TileGrid,
     _choose_label_scale_for_image,
+    _tissue_fraction_polygons,
     get_element_data,
     get_mask_materialized,
 )
@@ -584,34 +585,9 @@ class _Tissue:
 
     def fraction(self, bounds: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Tissue fraction and largest-overlap specimen id for every tile."""
-        n = len(bounds)
-        specimen = np.full(n, None, dtype=object)
         if self.polygons is not None:
-            return self._fraction_polygons(bounds, specimen)
-        return self._fraction_raster(bounds), specimen
-
-    def _fraction_polygons(self, full: np.ndarray, specimen: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        n = len(full)
-        fraction = np.zeros(n)
-        if n == 0 or len(self.polygons) == 0:
-            return fraction, specimen
-        boxes = shapely.box(full[:, 1], full[:, 0], full[:, 3], full[:, 2])
-        tile_area = shapely.area(boxes)
-        tree = shapely.STRtree(self.polygons)
-        t_in, p_in = tree.query(boxes, predicate="within")
-        fraction[t_in] = 1.0
-        specimen[t_in] = self.ids[p_in]
-        t, p = tree.query(boxes, predicate="intersects")
-        boundary = ~np.isin(t, t_in)
-        t, p = t[boundary], p[boundary]
-        if len(t):
-            area = shapely.area(shapely.intersection(boxes[t], self.polygons[p]))
-            fraction += np.bincount(t, weights=area, minlength=n) / tile_area
-            order = np.lexsort((-area, t))  # per tile, largest overlap first
-            first = order[np.r_[True, t[order][1:] != t[order][:-1]]]
-            has_area = area[first] > 0
-            specimen[t[first][has_area]] = self.ids[p[first][has_area]]
-        return np.clip(fraction, 0.0, 1.0), specimen
+            return _tissue_fraction_polygons(bounds, self.polygons, self.ids)
+        return self._fraction_raster(bounds), np.full(len(bounds), None, dtype=object)
 
     def _fraction_raster(self, full: np.ndarray) -> np.ndarray:
         dims = self._label_levels()
@@ -638,25 +614,39 @@ class _Tissue:
 def _resolve_tissue(
     sdata: sd.SpatialData, image_key: str, tissue_mask_key: str | Mapping[str, str] | None, *, scale: str
 ) -> _Tissue:
-    """Find the tissue for an image: polygons in ``sdata.shapes`` first, then a labels mask, else detect it."""
+    """Find the tissue of an image, preferring polygons over labels, and run ``detect_tissue`` if there is none.
+
+    Order: ``tissue_mask_key`` (shapes, then labels); ``shapes[f"{image_key}_tissue"]``;
+    ``labels[f"{image_key}_tissue_labels"]``; ``labels[f"{image_key}_tissue"]`` (older objects).
+    """
     given = tissue_mask_key[image_key] if isinstance(tissue_mask_key, Mapping) else tissue_mask_key
-    key = given or f"{image_key}_tissue"
-    if key not in sdata.shapes and key not in sdata.labels:
-        if given is not None:
-            raise KeyError(f"Tissue '{key}' not found in `sdata.shapes` or `sdata.labels`.")
+    if given is not None:
+        if given not in sdata.shapes and given not in sdata.labels:
+            raise KeyError(f"Tissue '{given}' not found in `sdata.shapes` or `sdata.labels`.")
+        return _tissue_from(sdata, image_key, given)
+    candidates = [f"{image_key}_tissue", f"{image_key}_tissue_labels"]
+    found = next((k for k in candidates if k in sdata.shapes or k in sdata.labels), None)
+    if found is None:
         from squidpy.experimental.im._detect_tissue import detect_tissue
 
-        logger.info(f"No tissue found for '{image_key}'; running detect_tissue to create '{key}'.")
-        detect_tissue(sdata, image_key=image_key, scale=scale, new_labels_key=key, inplace=True)
+        logger.info(f"No tissue found for '{image_key}'; running detect_tissue.")
+        detect_tissue(sdata, image_key=image_key, scale=scale, inplace=True)
+        found = next((k for k in candidates if k in sdata.shapes or k in sdata.labels), None)
+        if found is None:
+            raise KeyError(f"detect_tissue did not write any of {candidates}.")
+    return _tissue_from(sdata, image_key, found)
+
+
+def _tissue_from(sdata: sd.SpatialData, image_key: str, key: str) -> _Tissue:
+    A = _affine_to_image_frame(sdata, key, image_key)
     if key in sdata.shapes:
         gdf = sdata.shapes[key]
-        A = _affine_to_image_frame(sdata, key, image_key)
         geoms = gdf.geometry.to_numpy()
         if not np.allclose(A, np.eye(3)):
             geoms = shapely.transform(geoms, lambda xy: xy @ A[:2, :2].T + A[:2, 2])
-        return _Tissue(f"shapes:{key}", polygons=np.asarray(geoms), ids=gdf.index.astype(str).to_numpy())
+        ids = gdf["specimen_id"] if "specimen_id" in gdf.columns else gdf.index.to_series()
+        return _Tissue(f"shapes:{key}", polygons=np.asarray(geoms), ids=ids.astype(str).to_numpy())
     tissue = _Tissue(f"labels:{key}", label_node=sdata.labels[key])
-    A = _affine_to_image_frame(sdata, key, image_key)
     tissue._label_scale0_factor = float(np.sqrt(abs(np.linalg.det(A[:2, :2]))))
     return tissue
 

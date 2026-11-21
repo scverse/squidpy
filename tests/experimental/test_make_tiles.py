@@ -224,7 +224,8 @@ def test_make_tiles_polygon_fraction_with_hole_and_multipolygon():
     assert pd.isna(tiles.loc["img_x1_y1", "specimen_id"])
 
 
-def test_make_tiles_raster_fallback_matches_polygons():
+@pytest.mark.parametrize("labels_key", ["img_tissue", "img_tissue_labels"])
+def test_make_tiles_raster_fallback_matches_polygons(labels_key):
     polys = [box(0, 0, 160, 96), box(200, 40, 320, 300)]
     mask = np.zeros((512, 512), dtype=np.int32)
     for i, p in enumerate(polys, start=1):
@@ -232,7 +233,7 @@ def test_make_tiles_raster_fallback_matches_polygons():
         mask[y0:y1, x0:x1] = i
     from_polys = sd.SpatialData(images={"img": _image()}, shapes={"img_tissue": _tissue(*polys)})
     from_mask = sd.SpatialData(
-        images={"img": _image()}, labels={"img_tissue": Labels2DModel.parse(mask, dims=("y", "x"))}
+        images={"img": _image()}, labels={labels_key: Labels2DModel.parse(mask, dims=("y", "x"))}
     )
 
     for sdata in (from_polys, from_mask):
@@ -242,8 +243,19 @@ def test_make_tiles_raster_fallback_matches_polygons():
     b = from_mask.shapes["img_tiles"]["tissue_fraction"]
     np.testing.assert_allclose(a.to_numpy(), b.loc[a.index].to_numpy(), atol=1e-6)
     assert from_mask.tables["img_tiles_table"].uns["make_tiles"]["per_image"]["img"]["tissue_source"] == (
-        "labels:img_tissue@scale0"
+        f"labels:{labels_key}@scale0"
     )
+
+
+def test_make_tiles_specimen_id_comes_from_detect_tissue_column():
+    tissue = _tissue(box(0, 0, 100, 100), box(100, 0, 200, 100), names=["row_a", "row_b"])
+    tissue["specimen_id"] = [1, 2]
+    sdata = sd.SpatialData(images={"img": _image(256, 256)}, shapes={"img_tissue": tissue})
+
+    sq.experimental.im.make_tiles(sdata, image_key="img", tile_size=100, preview=False)
+
+    tiles = sdata.shapes["img_tiles"]
+    assert list(tiles["specimen_id"]) == ["1", "2"]
 
 
 def test_make_tiles_physical_units_from_visium_spot_pitch():
