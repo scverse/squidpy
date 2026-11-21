@@ -407,7 +407,7 @@ def test_make_tiles_rejects_conflicting_arguments():
 
 def test_make_tiles_table_roundtrips_through_zarr(tmp_path):
     sdata = sd.SpatialData(images={"img": _image()}, shapes={"img_tissue": _tissue(box(100, 100, 400, 400))})
-    sq.experimental.im.make_tiles(sdata, image_key="img", tile_size=64, image_mpp=0.5, tile_size_um=32, preview=False)
+    sq.experimental.im.make_tiles(sdata, image_key="img", image_mpp=0.5, tile_size_um=32, preview=False)
 
     sdata.write(tmp_path / "tiles.zarr")
     read = sd.read_zarr(tmp_path / "tiles.zarr")
