@@ -194,3 +194,34 @@ def test_corner_mask_lights_only_its_corner(i, rows, cols) -> None:
     mask = _corner_mask((10, 10), tuple(j == i for j in range(4)), 0.2)
     assert mask[rows, cols].all()
     assert mask.sum() == 4
+
+
+@pytest.fixture(scope="module")
+def sdata_hne_fullres_single_scale():
+    """The Visium H&E image at full resolution as one scale, so weka works on a 5 Mpx downscale (#1342)."""
+    from spatialdata import SpatialData
+    from spatialdata.models import Image2DModel
+
+    img = sq.datasets.visium_hne_sdata().images["hne"]["scale0"]["image"]
+    return SpatialData(images={"img": Image2DModel.parse(img.values, dims=("c", "y", "x"))})
+
+
+def test_weka_mask_does_not_depend_on_thread_count(sdata_hne_fullres_single_scale) -> None:
+    from threadpoolctl import threadpool_limits
+
+    def run():
+        return sq.experimental.im.detect_tissue(
+            sdata_hne_fullres_single_scale, image_key="img", method="weka", method_params={"rng": 0}, inplace=False
+        )
+
+    default_threads = run()
+    with threadpool_limits(1):
+        one_thread = run()
+    np.testing.assert_array_equal(default_threads, one_thread)
+
+
+def test_weka_default_is_reproducible(sdata_hne) -> None:
+    def run():
+        return sq.experimental.im.detect_tissue(sdata_hne, image_key="hne", method="weka", inplace=False)
+
+    np.testing.assert_array_equal(run(), run())

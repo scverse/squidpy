@@ -19,6 +19,7 @@ from sklearn.linear_model import LogisticRegression
 from spatialdata._logging import logger
 from spatialdata.models import Labels2DModel
 from spatialdata.transformations import get_transformation
+from threadpoolctl import threadpool_limits
 
 from squidpy._params import resolve_params
 from squidpy._utils import (
@@ -670,20 +671,24 @@ def _segment_weka(
         max_samples=weka_params["rf_max_samples"],
         random_state=legacy_random(rng),
     )
-    clf = future.fit_segmenter(training_labels, feats, clf)
-    result = future.predict_segmenter(feats, clf)
+    # Multithreaded BLAS sums in a thread-dependent order, which flips near-threshold pixels of the
+    # refinement fit (#1342). One BLAS thread makes the mask independent of the machine; the forest
+    # still trains in parallel through joblib.
+    with threadpool_limits(1):
+        clf = future.fit_segmenter(training_labels, feats, clf)
+        result = future.predict_segmenter(feats, clf)
 
-    prior_mask = np.asarray(result == 2) & inner_mask
+        prior_mask = np.asarray(result == 2) & inner_mask
 
-    # Optional second-stage refinement: inside-vs-outside mask classification
-    if weka_params["refine_with_classifier"]:
-        prior_mask = _refine_with_background_classifier(
-            feats=feats,
-            prior_mask=prior_mask,
-            n_samples_per_class=weka_params["refine_n_samples_per_class"],
-            bg_prob_threshold=weka_params["refine_bg_prob_threshold"],
-            rng=rng,
-        )
+        # Optional second-stage refinement: inside-vs-outside mask classification
+        if weka_params["refine_with_classifier"]:
+            prior_mask = _refine_with_background_classifier(
+                feats=feats,
+                prior_mask=prior_mask,
+                n_samples_per_class=weka_params["refine_n_samples_per_class"],
+                bg_prob_threshold=weka_params["refine_bg_prob_threshold"],
+                rng=rng,
+            )
 
     return prior_mask
 

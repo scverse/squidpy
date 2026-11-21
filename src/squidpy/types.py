@@ -74,8 +74,9 @@ class WekaParams(TypedDict, total=False):
     rf_max_samples: Annotated[float, Default(0.05)]
     """Fraction of samples drawn to train each tree."""
 
-    rng: Annotated[SeedLike | RNGLike | None, Default(None)]
-    """Source of randomness; ``None`` draws from OS entropy."""
+    rng: Annotated[SeedLike | RNGLike | None, Default(0)]
+    """Source of randomness. The default ``0`` gives the same mask on every run and machine for the same
+    package versions; ``None`` draws from OS entropy, so masks differ slightly between runs."""
 
     refine_with_classifier: Annotated[bool, Default(True)]
     """Run the second-stage background refinement."""
