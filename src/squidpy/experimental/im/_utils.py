@@ -5,12 +5,13 @@ from typing import Any, Literal
 import dask.array as da
 import geopandas as gpd
 import numpy as np
+import shapely
 import xarray as xr
 from shapely import box
 from spatialdata import SpatialData
 from spatialdata._logging import logger
 from spatialdata.models import Labels2DModel, ShapesModel
-from spatialdata.transformations import get_transformation, set_transformation
+from spatialdata.transformations import Scale, Sequence, get_transformation, set_transformation
 
 from squidpy._utils import _yx_from_shape
 from squidpy._validators import normalize_choice
@@ -277,41 +278,186 @@ def resolve_tissue_mask(
     tissue_mask_key: str | None = None,
     auto_create: bool = True,
 ) -> str:
-    """Return the key of a tissue mask in ``sdata.labels``, creating one if needed.
+    """Return the key of a tissue mask, creating one if needed.
 
-    If *tissue_mask_key* is given and exists, it is returned as-is.
-    Otherwise falls back to ``f"{image_key}_tissue"``. When that key is missing,
-    the behaviour depends on *auto_create*: if ``True`` ``detect_tissue``
-    is run to create it; if ``False`` a :class:`KeyError` is raised asking the
-    caller to run ``detect_tissue`` first.
+    A tissue mask is either a shapes element of tissue polygons (what :func:`detect_tissue` writes) or,
+    for objects made with older versions, a labels element. If *tissue_mask_key* is given and exists, it
+    is returned as-is. Otherwise falls back to ``f"{image_key}_tissue"``. When that key is missing,
+    the behaviour depends on *auto_create*: if ``True`` ``detect_tissue`` is run to create it; if
+    ``False`` a :class:`KeyError` is raised asking the caller to run ``detect_tissue`` first.
 
     Raises
     ------
     KeyError
-        If *tissue_mask_key* is given but not found in ``sdata.labels``, or if
+        If *tissue_mask_key* is given but not found in ``sdata.shapes`` or ``sdata.labels``, or if
         *auto_create* is ``False`` and no tissue mask exists.
     Exception
         Any exception raised by ``detect_tissue`` if auto-creation fails.
         Callers needing graceful fallback should wrap this call in try/except.
     """
+
+    def _exists(key: str) -> bool:
+        return key in sdata.shapes or key in sdata.labels
+
     if tissue_mask_key is not None:
-        if tissue_mask_key not in sdata.labels:
-            raise KeyError(f"Tissue mask key '{tissue_mask_key}' not found in sdata.labels")
+        if not _exists(tissue_mask_key):
+            raise KeyError(f"Tissue mask key '{tissue_mask_key}' not found in sdata.labels or sdata.shapes")
         return tissue_mask_key
 
     mask_key = f"{image_key}_tissue"
-    if mask_key not in sdata.labels:
+    if not _exists(mask_key):
         if not auto_create:
             raise KeyError(
-                f"No tissue mask found in sdata.labels (looked for {mask_key!r}). Run "
-                f"`squidpy.experimental.im.detect_tissue(sdata, {image_key!r})` first, "
+                f"No tissue mask found (looked for {mask_key!r} in sdata.shapes and sdata.labels). Run "
+                f"`squidpy.experimental.im.detect_tissue(sdata, image_key={image_key!r})` first, "
                 "or pass an explicit `tissue_mask_key`."
             )
         from squidpy.experimental.im._detect_tissue import detect_tissue
 
-        detect_tissue(sdata=sdata, image_key=image_key, scale=scale, inplace=True, new_labels_key=mask_key)
-        logger.info(f"Saved tissue mask as 'sdata.labels[\"{mask_key}\"]'")
+        detect_tissue(sdata=sdata, image_key=image_key, scale=scale, inplace=True, new_shapes_key=mask_key)
+    elif mask_key in sdata.labels:
+        logger.info(
+            f"Using the raster tissue mask 'sdata.labels[{mask_key!r}]'. Re-run `detect_tissue` to get tissue polygons."
+        )
     return mask_key
+
+
+def scaled_image_transformations(sdata: SpatialData, *, image_key: str, hw: tuple[int, int]) -> dict[str, Any]:
+    """Transformations of ``sdata.images[image_key]`` for an element laid out in pixels of an ``hw``-sized copy.
+
+    The image's transformations map ``scale0`` pixels, so an element in coarser pixels first gets scaled up
+    to ``scale0`` pixels.
+    """
+    image_node = sdata.images[image_key]
+    transformations = get_transformation(image_node, get_all=True)
+    full = get_element_data(image_node, "scale0", "image", image_key)
+    sy, sx = full.sizes["y"] / hw[0], full.sizes["x"] / hw[1]
+    if (sy, sx) == (1.0, 1.0):
+        return transformations
+    to_scale0 = Scale([sx, sy], axes=("x", "y"))
+    return {cs: Sequence([to_scale0, t]) for cs, t in transformations.items()}
+
+
+def _polygonal(geom: Any) -> Any:
+    """Keep only the polygon parts of a geometry (``make_valid`` can return collections with lines)."""
+    import shapely
+
+    polys = []
+    for part in shapely.get_parts(geom):
+        polys.extend(p for p in shapely.get_parts(part) if p.geom_type == "Polygon")
+    return polys[0] if len(polys) == 1 else shapely.MultiPolygon(polys)
+
+
+def labels_to_polygons(
+    labels: np.ndarray, *, scale_xy: tuple[float, float], tolerance: float = 1.0
+) -> gpd.GeoDataFrame:
+    """Vectorise integer labels ``1..K`` into one (Multi)Polygon per label, holes kept.
+
+    Each row's runs of a label become unit boxes whose union follows the pixel edges exactly, so the result
+    is valid and keeps holes. It is then simplified by ``tolerance`` label pixels and scaled by ``scale_xy``
+    (``x``, ``y``) into the target pixel frame.
+    """
+    import shapely
+    from scipy import ndimage as ndi
+
+    ids: list[int] = []
+    geoms: list[Any] = []
+    for lab, sl in enumerate(ndi.find_objects(labels), start=1):
+        if sl is None:
+            continue
+        runs = np.diff(np.pad(labels[sl] == lab, ((0, 0), (1, 1))).astype(np.int8), axis=1)
+        rows, starts = np.nonzero(runs == 1)
+        _, ends = np.nonzero(runs == -1)  # row-major order, so starts and ends pair up per row
+        y0, x0 = sl[0].start, sl[1].start
+        geom = shapely.union_all(shapely.box(starts + x0, rows + y0, ends + x0, rows + y0 + 1))
+        if tolerance > 0:
+            geom = shapely.simplify(geom, tolerance, preserve_topology=True)
+        geom = _polygonal(shapely.make_valid(geom))
+        ids.append(lab)
+        geoms.append(shapely.transform(geom, lambda c: c * np.asarray(scale_xy, dtype=float)))
+    gdf = gpd.GeoDataFrame({"specimen_id": np.asarray(ids, dtype=np.int64)}, geometry=geoms, index=ids)
+    gdf["area_px"] = gdf.area
+    return gdf
+
+
+def rasterize_polygons(
+    gdf: gpd.GeoDataFrame, hw: tuple[int, int], *, scale_xy: tuple[float, float], chunks: Any = "auto"
+) -> da.Array:
+    """Lazily draw polygons given in ``scale0`` pixels onto an ``hw`` grid of coarser pixels; boolean ``(y, x)``.
+
+    One output pixel spans ``scale_xy`` (``x``, ``y``) ``scale0`` pixels; a pixel is ``True`` when its centre lies
+    inside a polygon and outside its holes. Each chunk only draws the polygons that touch it.
+    """
+    import shapely
+    from skimage.draw import polygon as draw_polygon
+
+    geoms = list(gdf.geometry)
+    tree = shapely.STRtree(geoms)
+    sx, sy = scale_xy
+
+    def _block(block_info: dict[Any, Any] | None = None) -> np.ndarray:
+        (y0, y1), (x0, x1) = block_info[None]["array-location"]
+        out = np.zeros((y1 - y0, x1 - x0), dtype=bool)
+
+        def _fill(target: np.ndarray, ring: Any, value: bool) -> None:
+            c = np.asarray(ring.coords)
+            rr, cc = draw_polygon(c[:, 1] / sy - y0 - 0.5, c[:, 0] / sx - x0 - 0.5, shape=target.shape)
+            target[rr, cc] = value
+
+        for i in tree.query(shapely.box(x0 * sx, y0 * sy, x1 * sx, y1 * sy)):
+            for poly in shapely.get_parts(geoms[i]):
+                # each part on its own canvas, then OR-ed in, so a part lying in another part's hole survives
+                part = np.zeros_like(out)
+                _fill(part, poly.exterior, True)
+                for hole in poly.interiors:
+                    _fill(part, hole, False)
+                out |= part
+        return out
+
+    norm = da.core.normalize_chunks(chunks, hw, dtype=bool)
+    return da.map_blocks(_block, chunks=norm, dtype=bool, meta=np.empty((0, 0), dtype=bool))
+
+
+def tissue_polygons_in_image_pixels(sdata: SpatialData, *, mask_key: str, image_key: str) -> gpd.GeoDataFrame:
+    """Tissue polygons from ``sdata.shapes[mask_key]`` mapped into the ``scale0`` pixel frame of an image.
+
+    The mapping goes through the coordinate systems the two elements share, so polygons stored in another
+    frame (e.g. micrometres) line up with the image.
+    """
+    import shapely
+    from spatialdata.transformations import get_transformation_between_coordinate_systems
+
+    tissue = sdata.shapes[mask_key]
+    m = get_transformation_between_coordinate_systems(sdata, tissue, sdata.images[image_key]).to_affine_matrix(
+        input_axes=("x", "y"), output_axes=("x", "y")
+    )
+    if np.allclose(m, np.eye(3)):
+        return tissue
+    return tissue.set_geometry(shapely.transform(tissue.geometry.values, lambda c: c @ m[:2, :2].T + m[:2, 2]))
+
+
+def tissue_mask_raster(
+    sdata: SpatialData, *, mask_key: str, image_key: str, target_hw: tuple[int, int], chunks: Any = "auto"
+) -> da.Array:
+    """Boolean tissue mask on the pixel grid of an image level of shape ``target_hw``, lazy.
+
+    Works for tissue polygons in ``sdata.shapes`` (mapped into the image's pixels through the coordinate
+    systems, then drawn on demand) and for raster masks in ``sdata.labels`` (the label level closest to
+    ``target_hw``, resized with nearest neighbours if it doesn't match).
+    """
+    if mask_key in sdata.shapes:
+        tissue = tissue_polygons_in_image_pixels(sdata, mask_key=mask_key, image_key=image_key)
+        full = get_element_data(sdata.images[image_key], "scale0", "image", image_key)
+        scale_xy = (full.sizes["x"] / target_hw[1], full.sizes["y"] / target_hw[0])
+        return rasterize_polygons(tissue, target_hw, scale_xy=scale_xy, chunks=chunks)
+
+    label_node = sdata.labels[mask_key]
+    mask = get_mask_dask(sdata, mask_key=mask_key, scale=_choose_label_scale_for_image(label_node, target_hw)) > 0
+    if tuple(mask.shape) != tuple(target_hw):
+        from skimage.transform import resize
+
+        mask = da.from_array(resize(np.asarray(mask), target_hw, order=0, preserve_range=True) > 0.5)
+    return mask.rechunk(chunks)
 
 
 def save_tile_grid_to_shapes(
@@ -320,6 +466,7 @@ def save_tile_grid_to_shapes(
     tg: TileGrid,
     shapes_key: str,
     copy_transforms_from_key: str | None = None,
+    scale: str = "scale0",
 ) -> None:
     """Save a TileGrid to ``sdata.shapes`` as a GeoDataFrame.
 
@@ -334,6 +481,10 @@ def save_tile_grid_to_shapes(
     copy_transforms_from_key
         If given, copy the transformations from ``sdata.images[copy_transforms_from_key]``
         onto the new shapes element.
+    scale
+        Scale level of that image whose pixels ``tg`` is laid out in. The image's
+        transformations map ``scale0`` pixels, so a grid on a coarser level first gets
+        scaled up to ``scale0`` pixels.
     """
     tile_indices = tg.indices()
     pixel_bounds = tg.bounds()
@@ -355,6 +506,55 @@ def save_tile_grid_to_shapes(
 
     sdata.shapes[shapes_key] = ShapesModel.parse(tile_gdf)
     if copy_transforms_from_key is not None:
-        transformations = get_transformation(sdata.images[copy_transforms_from_key], get_all=True)
+        if scale == "scale0":
+            transformations = get_transformation(sdata.images[copy_transforms_from_key], get_all=True)
+        else:
+            transformations = scaled_image_transformations(sdata, image_key=copy_transforms_from_key, hw=(tg.H, tg.W))
         set_transformation(sdata.shapes[shapes_key], transformations, set_all=True)
     logger.info(f"- Saved tile grid as 'sdata.shapes[\"{shapes_key}\"]'")
+
+
+def _tissue_fraction_polygons(
+    bounds: np.ndarray, polygons: np.ndarray, ids: np.ndarray | None = None
+) -> tuple[np.ndarray, np.ndarray]:
+    """Fraction of each tile covered by tissue polygons, and the specimen with the largest overlap.
+
+    Parameters
+    ----------
+    bounds
+        Tile bounds ``(y0, x0, y1, x1)``, shape ``(n, 4)``, in the same pixel frame as ``polygons``.
+    polygons
+        Tissue ``Polygon``/``MultiPolygon`` geometries, one per specimen; holes are respected.
+    ids
+        Specimen id per polygon (e.g. the ``specimen_id`` column of a ``detect_tissue`` result). Defaults
+        to the polygon position.
+
+    Returns
+    -------
+    ``(fraction, specimen_id)``: ``area(tile & tissue) / area(tile)`` clipped to ``[0, 1]``, and the id of
+    the specimen with the largest positive overlap (`None` where a tile touches no tissue).
+    """
+    n = len(bounds)
+    fraction = np.zeros(n)
+    specimen = np.full(n, None, dtype=object)
+    if n == 0 or len(polygons) == 0:
+        return fraction, specimen
+    ids = np.arange(len(polygons)) if ids is None else np.asarray(ids)
+    boxes = shapely.box(bounds[:, 1], bounds[:, 0], bounds[:, 3], bounds[:, 2])
+    tile_area = shapely.area(boxes)
+    tree = shapely.STRtree(polygons)
+    # tiles inside a specimen need no intersection; "within" excludes tiles over holes
+    t_in, p_in = tree.query(boxes, predicate="within")
+    fraction[t_in] = 1.0
+    specimen[t_in] = ids[p_in]
+    t, p = tree.query(boxes, predicate="intersects")
+    boundary = ~np.isin(t, t_in)
+    t, p = t[boundary], p[boundary]
+    if len(t):
+        area = shapely.area(shapely.intersection(boxes[t], polygons[p]))
+        fraction += np.bincount(t, weights=area, minlength=n) / tile_area
+        order = np.lexsort((-area, t))  # per tile, largest overlap first
+        first = order[np.r_[True, t[order][1:] != t[order][:-1]]]
+        has_area = area[first] > 0
+        specimen[t[first][has_area]] = ids[p[first][has_area]]
+    return np.clip(fraction, 0.0, 1.0), specimen

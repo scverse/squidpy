@@ -15,6 +15,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Any, Literal
 
+import dask.array
 import numpy as np
 import spatialdata as sd
 import xarray as xr
@@ -51,10 +52,9 @@ from squidpy.experimental.im._stain._white_point import (
     white_point_from_background,
 )
 from squidpy.experimental.im._utils import (
-    _choose_label_scale_for_image,
     get_element_data,
-    get_mask_materialized,
     resolve_tissue_mask,
+    tissue_mask_raster,
 )
 from squidpy.types import MacenkoParams, ReinhardParams, VahadaneParams
 
@@ -91,21 +91,19 @@ def _resolve_image(
     return da
 
 
-def _resolve_mask_key_and_scale(
+def _tissue_mask_for(
     sdata: sd.SpatialData, *, image_key: str, target_da: xr.DataArray, tissue_mask_key: str | None
-) -> tuple[str, str, tuple[int, int]]:
-    """Resolve the (mandatory) tissue-mask key and the label scale closest to ``target_da``.
+) -> dask.array.Array:
+    """Lazy ``(y, x)`` boolean tissue mask on ``target_da``'s pixel grid.
 
-    Shared by the two mask consumers below. Consumes a
-    :func:`!detect_tissue` labels element - raises if
-    none exists.
+    Shared by the two mask consumers below. Consumes a :func:`!detect_tissue` result (tissue polygons, or
+    a raster mask from older versions) - raises if none exists.
     """
     mask_key = resolve_tissue_mask(
         sdata, image_key=image_key, scale="auto", tissue_mask_key=tissue_mask_key, auto_create=False
     )
     target_hw = (int(target_da.sizes["y"]), int(target_da.sizes["x"]))
-    label_scale = _choose_label_scale_for_image(sdata.labels[mask_key], target_hw)
-    return mask_key, label_scale, target_hw
+    return tissue_mask_raster(sdata, mask_key=mask_key, image_key=image_key, target_hw=target_hw)
 
 
 def _resolve_tissue_bool_mask(
@@ -113,19 +111,9 @@ def _resolve_tissue_bool_mask(
 ) -> np.ndarray:
     """Return a materialised ``(y, x)`` boolean tissue mask aligned to ``fit_da``.
 
-    For the (coarse) fit: nearest-resizes to ``fit_da``'s ``(y, x)`` when the
-    closest label scale differs. The fits run on a coarse level, so the mask
-    stays small.
+    The fits run on a coarse level, so the mask stays small.
     """
-    mask_key, label_scale, target_hw = _resolve_mask_key_and_scale(
-        sdata, image_key=image_key, target_da=fit_da, tissue_mask_key=tissue_mask_key
-    )
-    mask = get_mask_materialized(sdata, mask_key=mask_key, scale=label_scale) > 0
-    if mask.shape != target_hw:
-        from skimage.transform import resize
-
-        mask = resize(mask, target_hw, order=0, preserve_range=True) > 0.5
-    return mask
+    return np.asarray(_tissue_mask_for(sdata, image_key=image_key, target_da=fit_da, tissue_mask_key=tissue_mask_key))
 
 
 def _resolve_fit_inputs(
@@ -143,21 +131,11 @@ def _resolve_output_tissue_mask(
 
     Like :func:`_resolve_tissue_bool_mask` but kept lazy and at the (full-res)
     output resolution, for compositing the original background back into the
-    normalized image without materialising the full frame. The label pyramid
-    shares the image's scale factors, so the matching level usually lines up
-    exactly; only a residual size mismatch forces a (small) eager resize.
+    normalized image without materialising the full frame.
     """
-    mask_key, label_scale, target_hw = _resolve_mask_key_and_scale(
-        sdata, image_key=image_key, target_da=target_da, tissue_mask_key=tissue_mask_key
-    )
+    mask = _tissue_mask_for(sdata, image_key=image_key, target_da=target_da, tissue_mask_key=tissue_mask_key)
     coords = {d: target_da.coords[d] for d in ("y", "x") if d in target_da.coords}
-    mask = get_element_data(sdata.labels[mask_key], label_scale, "label", mask_key).squeeze() > 0
-    if (int(mask.sizes["y"]), int(mask.sizes["x"])) == target_hw:
-        return mask.assign_coords(coords)
-    from skimage.transform import resize
-
-    resized = resize(np.asarray(mask.data) > 0, target_hw, order=0, preserve_range=True) > 0.5
-    return xr.DataArray(resized, dims=("y", "x"), coords=coords)
+    return xr.DataArray(mask, dims=("y", "x"), coords=coords)
 
 
 def _write_image(

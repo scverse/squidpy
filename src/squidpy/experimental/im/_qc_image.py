@@ -21,10 +21,12 @@ from squidpy.experimental.im._intensity_metrics import hed_metrics
 from squidpy.experimental.im._qc_metrics import _HNE_METRICS, InputKind, QCMetric, get_metric_info
 from squidpy.experimental.im._utils import (
     TileGrid,
+    _tissue_fraction_polygons,
     get_element_data,
     get_mask_dask,
     resolve_tissue_mask,
     save_tile_grid_to_shapes,
+    tissue_polygons_in_image_pixels,
 )
 
 _DEFAULT_HNE_METRICS: list[QCMetric] = [
@@ -176,12 +178,17 @@ def qc_image(
     prepared_inputs: dict[InputKind, da.Array] = {}
 
     _tissue_binary_da: da.Array | None = None
+    # tissue polygons give each tile's tissue fraction by area; old raster masks go through the pixels
+    _tile_tissue_frac: np.ndarray | None = None
     if InputKind.MASK in groups or detect_tissue:
         mask_key_resolved = resolve_tissue_mask(
             sdata, image_key=image_key, scale=scale, tissue_mask_key=tissue_mask_key
         )
-        raw_mask = get_mask_dask(sdata, mask_key=mask_key_resolved, scale=scale)
-        _tissue_binary_da = (raw_mask > 0).astype(np.float32).rechunk((tg.ty, tg.tx))
+        if mask_key_resolved in sdata.shapes:
+            _tile_tissue_frac = _tile_tissue_fraction(sdata, mask_key=mask_key_resolved, image_key=image_key, tg=tg)
+        else:
+            raw_mask = get_mask_dask(sdata, mask_key=mask_key_resolved, scale=scale)
+            _tissue_binary_da = (raw_mask > 0).astype(np.float32).rechunk((tg.ty, tg.tx))
 
     if InputKind.GRAYSCALE in groups:
         prepared_inputs[InputKind.GRAYSCALE] = gray.rechunk((tg.ty, tg.tx))
@@ -224,6 +231,10 @@ def qc_image(
             continue
 
         kind, metric_func = get_metric_info(m)
+        if kind == InputKind.MASK and _tile_tissue_frac is not None:
+            delayed_scores[m] = da.from_array(_tile_tissue_frac.reshape(tg.tiles_y, tg.tiles_x).astype(np.float32))
+            logger.info(f"- Calculating metric: '{m}'")
+            continue
         source = prepared_inputs[kind]
 
         if kind == InputKind.RGB:
@@ -261,7 +272,10 @@ def qc_image(
     unfocus_scores: np.ndarray | None = None
 
     if detect_outliers:
-        if detect_tissue:
+        if detect_tissue and _tile_tissue_frac is not None:
+            tissue = _tile_tissue_frac > 0.5
+            back = ~tissue
+        elif detect_tissue:
             tissue, back = _classify_tiles_by_tissue(
                 tg,
                 sdata=sdata,
@@ -270,6 +284,7 @@ def qc_image(
                 tissue_mask_key=tissue_mask_key,
                 binary_mask_da=_tissue_binary_da,
             )
+        if detect_tissue:
             logger.info(f"- Classified tiles: background: {back.sum()}, tissue: {tissue.sum()}.")
 
         if detect_tissue and tissue.any():
@@ -313,7 +328,7 @@ def qc_image(
     shapes_key = f"qc_img_{image_key}_grid"
 
     # Build shapes first (need the index for tile_id linkage)
-    save_tile_grid_to_shapes(sdata, tg=tg, shapes_key=shapes_key, copy_transforms_from_key=image_key)
+    save_tile_grid_to_shapes(sdata, tg=tg, shapes_key=shapes_key, copy_transforms_from_key=image_key, scale=scale)
 
     # Set spatialdata linkage on adata BEFORE TableModel.parse
     adata.obs["grid_name"] = pd.Categorical([shapes_key] * len(adata))
@@ -359,6 +374,20 @@ def _to_gray_dask_yx(img_yxc: xr.DataArray) -> da.Array:
     rgb = arr[..., :3].astype(np.float32, copy=False)
     gray = da.tensordot(rgb, _LUMINANCE_WEIGHTS, axes=([2], [0]))
     return gray.astype(np.float32, copy=False)
+
+
+def _tile_tissue_fraction(sdata: SpatialData, *, mask_key: str, image_key: str, tg: TileGrid) -> np.ndarray:
+    """Tissue fraction of each tile from the tissue polygons, in tile order.
+
+    The tiles are laid out in pixels of the scale QC runs on; the polygons are mapped into the image's ``scale0``
+    pixels through the coordinate systems.
+    """
+    full = get_element_data(sdata.images[image_key], "scale0", "image", image_key)
+    sy, sx = full.sizes["y"] / tg.H, full.sizes["x"] / tg.W
+    bounds = tg.bounds().astype(float) * np.array([sy, sx, sy, sx])
+    tissue = tissue_polygons_in_image_pixels(sdata, mask_key=mask_key, image_key=image_key)
+    fraction, _ = _tissue_fraction_polygons(bounds, np.asarray(tissue.geometry))
+    return fraction
 
 
 def _classify_tiles_by_tissue(
