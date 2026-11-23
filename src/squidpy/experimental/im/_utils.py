@@ -5,6 +5,7 @@ from typing import Any, Literal
 import dask.array as da
 import geopandas as gpd
 import numpy as np
+import shapely
 import xarray as xr
 from shapely import box
 from spatialdata import SpatialData
@@ -369,3 +370,49 @@ def save_tile_grid_to_shapes(
             transformations = {cs: Sequence([to_scale0, t]) for cs, t in transformations.items()}
         set_transformation(sdata.shapes[shapes_key], transformations, set_all=True)
     logger.info(f"- Saved tile grid as 'sdata.shapes[\"{shapes_key}\"]'")
+
+
+def _tissue_fraction_polygons(
+    bounds: np.ndarray, polygons: np.ndarray, ids: np.ndarray | None = None
+) -> tuple[np.ndarray, np.ndarray]:
+    """Fraction of each tile covered by tissue polygons, and the specimen with the largest overlap.
+
+    Parameters
+    ----------
+    bounds
+        Tile bounds ``(y0, x0, y1, x1)``, shape ``(n, 4)``, in the same pixel frame as ``polygons``.
+    polygons
+        Tissue ``Polygon``/``MultiPolygon`` geometries, one per specimen; holes are respected.
+    ids
+        Specimen id per polygon (e.g. the ``specimen_id`` column of a ``detect_tissue`` result). Defaults
+        to the polygon position.
+
+    Returns
+    -------
+    ``(fraction, specimen_id)``: ``area(tile & tissue) / area(tile)`` clipped to ``[0, 1]``, and the id of
+    the specimen with the largest positive overlap (`None` where a tile touches no tissue).
+    """
+    n = len(bounds)
+    fraction = np.zeros(n)
+    specimen = np.full(n, None, dtype=object)
+    if n == 0 or len(polygons) == 0:
+        return fraction, specimen
+    ids = np.arange(len(polygons)) if ids is None else np.asarray(ids)
+    boxes = shapely.box(bounds[:, 1], bounds[:, 0], bounds[:, 3], bounds[:, 2])
+    tile_area = shapely.area(boxes)
+    tree = shapely.STRtree(polygons)
+    # tiles inside a specimen need no intersection; "within" excludes tiles over holes
+    t_in, p_in = tree.query(boxes, predicate="within")
+    fraction[t_in] = 1.0
+    specimen[t_in] = ids[p_in]
+    t, p = tree.query(boxes, predicate="intersects")
+    boundary = ~np.isin(t, t_in)
+    t, p = t[boundary], p[boundary]
+    if len(t):
+        area = shapely.area(shapely.intersection(boxes[t], polygons[p]))
+        fraction += np.bincount(t, weights=area, minlength=n) / tile_area
+        order = np.lexsort((-area, t))  # per tile, largest overlap first
+        first = order[np.r_[True, t[order][1:] != t[order][:-1]]]
+        has_area = area[first] > 0
+        specimen[t[first][has_area]] = ids[p[first][has_area]]
+    return np.clip(fraction, 0.0, 1.0), specimen
