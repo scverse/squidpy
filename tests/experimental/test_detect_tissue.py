@@ -314,6 +314,7 @@ def test_tissue_consumers_match_on_polygons_and_raster(sdata_hne) -> None:
 
 def test_qc_image_maps_tissue_polygons_through_transformations() -> None:
     """Tissue polygons stored in micrometres (with a Scale to global) give the same tissue tiles as in pixels."""
+    import geopandas as gpd
     import shapely
     from spatialdata.models import ShapesModel
     from spatialdata.transformations import Scale
@@ -322,7 +323,7 @@ def test_qc_image_maps_tissue_polygons_through_transformations() -> None:
     sq.experimental.im.detect_tissue(sdata, image_key="img")
     tissue_px = sdata.shapes["img_tissue"]
     # same polygons at 0.5 um/px: coordinates halve, a Scale of 2 maps them back to global (= image pixels)
-    tissue_um = tissue_px.set_geometry(shapely.transform(tissue_px.geometry.values, lambda c: c * 0.5))
+    tissue_um = gpd.GeoDataFrame(geometry=shapely.transform(tissue_px.geometry.values, lambda c: c * 0.5))
     sdata.shapes["tissue_um"] = ShapesModel.parse(
         tissue_um, transformations={"global": Scale([2.0, 2.0], axes=("x", "y"))}
     )
