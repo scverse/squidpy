@@ -7,6 +7,8 @@ from collections.abc import Sequence
 from anndata import AnnData
 from spatialdata import SpatialData
 
+from squidpy.gr._utils import extract_adata_if_sdata
+
 __all__ = ["query_of", "resolve_pair", "resolve_table"]
 
 
@@ -41,22 +43,14 @@ def query_of(
 
 def resolve_table(container: AnnData | SpatialData, table_key: str | None, *, side: str) -> AnnData:
     """Resolve a container plus ``table_key`` to the AnnData holding the data."""
-    if isinstance(container, AnnData):
-        if table_key is not None:
-            raise ValueError(
-                f"`table_key` was given for the {side}, but the {side} is an AnnData, which has no tables. "
-                f"Pass `table_key=None` for it (use a `(ref, query)` pair to address mixed containers)."
-            )
-        return container
-    if not isinstance(container, SpatialData):
-        raise TypeError(f"Expected the {side} to be an AnnData or SpatialData, got {type(container).__name__}.")
-    if table_key is None:
+    if isinstance(container, AnnData) and table_key is not None:
+        raise ValueError(
+            f"`table_key` was given for the {side}, but the {side} is an AnnData, which has no tables. "
+            f"Pass `table_key=None` for it (use a `(ref, query)` pair to address mixed containers)."
+        )
+    if isinstance(container, SpatialData) and table_key is None:
         raise ValueError(
             f"The {side} is a SpatialData, which may hold several tables; pass `table_key` to say "
             f"which one holds the data. Available: {sorted(container.tables)}."
         )
-    if table_key not in container.tables:
-        raise KeyError(
-            f"`table_key={table_key!r}`: no such table in the {side}. Available: {sorted(container.tables)}."
-        )
-    return container.tables[table_key]
+    return extract_adata_if_sdata(container, table_key=table_key)

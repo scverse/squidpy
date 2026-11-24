@@ -40,7 +40,7 @@ def _impute(data_ref, data_query, **kwargs) -> pd.DataFrame | None:
     )
 
 
-@pytest.mark.parametrize("fmt", [csr_matrix, csr_array, csc_matrix])
+@pytest.mark.parametrize("fmt", [csr_matrix, csr_array, csc_matrix, csc_array])
 def test_sparse_matches_dense(fmt):
     ref, query, _ = _data()
     dense = _impute(ref, query)
@@ -237,8 +237,6 @@ def test_spage_weights(distances, expected):
         pytest.param({"n_neighbors": 0}, ValueError, "n_neighbors", id="n_neighbors-zero"),
         pytest.param({"n_neighbors": 301}, ValueError, "n_neighbors", id="n_neighbors-too-large"),
         pytest.param({"cosine_threshold": 1.0}, ValueError, "cosine_threshold", id="cosine_threshold-range"),
-        pytest.param({"cosine_threshold": 0.9999}, ValueError, "found `0`", id="no-principal-vector"),
-        pytest.param({"cosine_threshold": 0.999}, ValueError, "found `1`", id="single-principal-vector"),
         pytest.param({"layer": "foo"}, KeyError, "Layer `foo` not found", id="unknown-layer"),
         pytest.param({"layer": (None, "foo")}, KeyError, "Layer `foo` not found", id="unknown-query-layer"),
         pytest.param({"layer": ("a", "b", "c")}, ValueError, "pair", id="layer-not-a-pair"),
@@ -249,6 +247,51 @@ def test_invalid_input(kwargs, error, match):
 
     with pytest.raises(error, match=match):
         _impute(ref, query, **kwargs)
+
+
+def _principal_cosines(ref: AnnData, query: AnnData, n_pv: int = 3) -> np.ndarray:
+    """Cosine similarities between the two datasets' top ``n_pv`` PCA subspaces, largest first."""
+
+    def basis(x: np.ndarray) -> np.ndarray:
+        z = (x - x.mean(axis=0)) / x.std(axis=0)
+        return np.linalg.svd(z, full_matrices=False)[2][:n_pv]
+
+    return np.linalg.svd(basis(ref[:, query.var_names].X) @ basis(query.X).T, compute_uv=False)
+
+
+@pytest.mark.parametrize("n_above", [0, 1])
+def test_too_few_principal_vectors(n_above):
+    ref, query, _ = _data()
+    cosine = _principal_cosines(ref, query)
+    # midway between neighboring cosines, so that rounding cannot move one across the threshold
+    threshold = (np.r_[1.0, cosine][n_above] + cosine[n_above]) / 2
+
+    with pytest.raises(ValueError, match=f"found `{n_above}`"):
+        _impute(ref, query, cosine_threshold=threshold)
+
+
+@pytest.mark.parametrize(
+    "subset",
+    [
+        pytest.param(lambda ref, query: (ref, query[:2]), id="two-query-cells"),
+        pytest.param(lambda ref, query: (ref[:2], query), id="two-reference-cells"),
+        pytest.param(lambda ref, query: (ref, query[:, :1]), id="one-shared-gene"),
+    ],
+)
+def test_too_little_data(subset):
+    ref, query, _ = _data()
+    ref, query = subset(ref, query)
+
+    with pytest.raises(ValueError, match="needs at least 2 shared genes"):
+        _impute(ref, query, n_neighbors=1)
+
+
+def test_too_few_varying_genes():
+    ref, query, _ = _data()
+    query.X[:, 1:] = 1
+
+    with pytest.raises(ValueError, match="found `1` genes"):
+        _impute(ref, query)
 
 
 def test_no_shared_genes():
@@ -279,7 +322,7 @@ def test_single_spatialdata_needs_table_key_pair():
     [
         pytest.param(None, ValueError, "pass `table_key`", id="sdata-without-table-key"),
         pytest.param("t", ValueError, "the reference is an AnnData", id="table-key-for-anndata"),
-        pytest.param((None, "foo"), KeyError, "no such table in the query", id="unknown-table"),
+        pytest.param((None, "foo"), ValueError, "Table 'foo' not found", id="unknown-table"),
     ],
 )
 def test_invalid_table(table_key, error, match):

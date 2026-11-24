@@ -117,7 +117,7 @@ def impute_spage(
     if not shared:
         raise ValueError("The reference and the query have no genes in common.")
     # the bounds known before scaling; constant genes lower the gene bound below
-    assert_in_range(n_pv, 2, min(len(shared), query.n_obs - 1, ref.n_obs - 1), name="n_pv")
+    _check_n_pv(n_pv, n_genes=len(shared), n_ref=ref.n_obs, n_query=query.n_obs)
 
     start = logg.info(f"Imputing `{len(genes)}` genes with SpaGE using `{n_threads}` thread(s)")
     with threadpool_limits(None if n_jobs in (None, -1) else n_threads):
@@ -128,7 +128,7 @@ def impute_spage(
             logg.warning(f"Ignoring `{np.sum(~varies)}` shared genes that are constant in either dataset")
             ref_x, ref_offset = ref_x[:, varies], ref_offset[varies]
             query_x, query_offset = query_x[:, varies], query_offset[varies]
-        assert_in_range(n_pv, 2, min(int(np.sum(varies)), query.n_obs - 1, ref.n_obs - 1), name="n_pv")
+        _check_n_pv(n_pv, n_genes=int(np.sum(varies)), n_ref=ref.n_obs, n_query=query.n_obs)
 
         # the covariance solver is deterministic and centers sparse data implicitly; it forms
         # `x.T @ x - n * mean**2`, which loses too much precision in float32
@@ -175,6 +175,16 @@ def impute_spage(
         return res
     _save_data(query, attr="obsm", key=key_added, data=res, time=start)
     return None
+
+
+def _check_n_pv(n_pv: int, *, n_genes: int, n_ref: int, n_query: int) -> None:
+    """Check ``n_pv`` against the genes and cells available, first saying if there are too few for any ``n_pv``."""
+    if (upper := min(n_genes, n_ref - 1, n_query - 1)) < 2:
+        raise ValueError(
+            f"SpaGE needs at least 2 shared genes that vary in both datasets and 3 cells in each dataset, "
+            f"found `{n_genes}` genes, `{n_ref}` reference cells and `{n_query}` query cells."
+        )
+    assert_in_range(n_pv, 2, upper, name="n_pv")
 
 
 def _scale(x: NDArrayA | CSBase) -> tuple[NDArrayA | CSBase, NDArrayA, NDArrayA]:

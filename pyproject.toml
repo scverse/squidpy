@@ -74,7 +74,7 @@ dependencies = [
   "spatialdata>=0.7.2",                 # 0.7.2 dropped xarray-schema (pkg_resources break, #1115)
   "spatialdata-plot>=0.4.1",
   "statsmodels>=0.12",
-  "threadpoolctl>=3",                   # clamp BLAS/OpenMP threads
+  "threadpoolctl>=3",                   # clamp BLAS/OpenMP per worker in tiled featurization
   # https://github.com/scverse/squidpy/issues/526
   "tifffile!=2022.4.22",
   "tqdm>=4.50.2",
