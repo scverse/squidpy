@@ -13,7 +13,7 @@ __all__ = ["query_of", "resolve_pair", "resolve_table"]
 
 
 def resolve_pair(value: str | Sequence[str | None] | None, *, name: str) -> tuple[str | None, str | None]:
-    """Normalize a single key, applying to both sides, or a ``(ref, query)`` pair to a pair."""
+    """Turn a single key, used for both sides, or a ``(ref, query)`` pair into a ``(ref, query)`` pair."""
     if value is None or isinstance(value, str):
         return value, value
     if isinstance(value, tuple | list) and len(value) == 2:
@@ -29,7 +29,7 @@ def query_of(
     query_address: tuple[str | None, ...],
     key_name: str,
 ) -> AnnData | SpatialData:
-    """The container holding the query sample, validating the single-SpatialData form."""
+    """Return the container holding the query sample, checking the case where one SpatialData holds both."""
     if data_query is not None:
         return data_query
     if not isinstance(data_ref, SpatialData):

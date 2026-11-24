@@ -45,45 +45,45 @@ def impute_spage(
 
     Both datasets are z-scored on their shared genes, ignoring genes that are constant in either of them,
     and reduced to ``n_pv`` principal components each. Both are then projected onto the reference-side
-    principal vectors of the two PCA subspaces whose cosine similarity exceeds ``cosine_threshold``, where
-    every query cell is assigned its ``n_neighbors`` nearest reference cells by cosine distance. Neighbors at
+    principal vectors of the two PCA subspaces whose cosine similarity exceeds ``cosine_threshold``. In that
+    space, each query cell gets its ``n_neighbors`` nearest reference cells by cosine distance. Neighbors at
     cosine distance :math:`d_i < 1` are kept; with :math:`k` of them, each gets the weight
     :math:`(1 - d_i / \sum_j d_j) / (k - 1)`, and the imputed expression is the weighted sum of their
     reference expression. Cells without a kept neighbor are imputed as 0.
 
-    Unlike the `reference implementation <https://github.com/tabdelaal/SpaGE>`_, which returns `NaN` when the
-    formula is :math:`0 / 0`, a single kept neighbor gets weight 1 and kept neighbors that are all at distance 0
-    get equal weights. At least two principal vectors must pass ``cosine_threshold``, since along a single one
+    Where the formula is :math:`0 / 0`, the `reference implementation <https://github.com/tabdelaal/SpaGE>`_
+    returns `NaN`. Here, a single kept neighbor gets weight 1, and kept neighbors that are all at distance 0 get
+    equal weights. At least two principal vectors must pass ``cosine_threshold``, since along a single one
     every cosine distance is 0 or 2.
 
     Parameters
     ----------
     data_ref, data_query
         The scRNA-seq reference and the spatial query, each an :class:`~anndata.AnnData` or a
-        :class:`~spatialdata.SpatialData`. Leave ``data_query=None`` with ``data_ref`` a SpatialData
-        holding both samples, distinguished by a ``table_key`` pair. Both should be normalized the same way.
+        :class:`~spatialdata.SpatialData`. If one SpatialData holds both samples, pass it as ``data_ref`` with
+        ``data_query=None`` and a ``table_key`` pair. Both should be normalized the same way.
     genes
-        Genes of the reference to impute. They may also be measured in the query.
+        Reference genes to impute, which may also be measured in the query.
         The result is dense, with ``n_obs * len(genes)`` values for the query's ``n_obs``.
     table_key
         For SpatialData input, which table holds the data. A single key applies to both sides;
-        a ``(ref, query)`` pair addresses each side separately (use `None` for an AnnData side).
+        a ``(ref, query)`` pair gives one per side (`None` for an AnnData side).
     layer
         Layer holding the expression, or :attr:`anndata.AnnData.X` if `None`. A single value applies to
-        both sides; a ``(ref, query)`` pair addresses each side separately.
+        both sides; a ``(ref, query)`` pair gives one per side.
     n_pv
-        Number of principal components computed per dataset, and hence the maximum number of principal vectors.
+        Number of principal components per dataset, which is also the maximum number of principal vectors.
         Must be at least 2, at most the number of shared genes that vary in both datasets, and smaller than
         the number of cells in either dataset.
     n_neighbors
         Number of nearest reference cells per query cell, at most the number of reference cells.
     cosine_threshold
-        Principal vectors with a cosine similarity above this value, in :math:`[0, 1)`, are used.
+        Cosine similarity, in :math:`[0, 1)`, that a principal vector must exceed to be used.
     key_added
         Key in the query's :attr:`anndata.AnnData.obsm` where the result is stored.
     %(n_jobs_threads)s
-        A positive value also caps the BLAS and OpenMP threads (via ``threadpoolctl``), which `None` and
-        ``-1`` leave as configured.
+        A positive value also caps the BLAS and OpenMP threads via ``threadpoolctl``; `None` and ``-1`` leave
+        them as configured.
     inplace
         If `True`, store the result in the query, otherwise return it.
 
@@ -116,7 +116,7 @@ def impute_spage(
     shared = query.var_names.intersection(ref.var_names, sort=False).tolist()
     if not shared:
         raise ValueError("The reference and the query have no genes in common.")
-    # the bounds known before scaling; constant genes lower the gene bound below
+    # bounds known before scaling; the gene bound is checked again below, once constant genes are dropped
     _check_n_pv(n_pv, n_genes=len(shared), n_ref=ref.n_obs, n_query=query.n_obs)
 
     start = logg.info(f"Imputing `{len(genes)}` genes with SpaGE using `{n_threads}` thread(s)")
@@ -178,7 +178,7 @@ def impute_spage(
 
 
 def _check_n_pv(n_pv: int, *, n_genes: int, n_ref: int, n_query: int) -> None:
-    """Check ``n_pv`` against the genes and cells available, first saying if there are too few for any ``n_pv``."""
+    """Check ``n_pv`` against the available genes and cells, first raising if there are too few for any ``n_pv``."""
     if (upper := min(n_genes, n_ref - 1, n_query - 1)) < 2:
         raise ValueError(
             f"SpaGE needs at least 2 shared genes that vary in both datasets and 3 cells in each dataset, "
@@ -200,10 +200,10 @@ def _scale(x: NDArrayA | CSBase) -> tuple[NDArrayA | CSBase, NDArrayA, NDArrayA]
 def _cosine_neighbors(ref: NDArrayA, query: NDArrayA, *, n_neighbors: int) -> tuple[NDArrayA, NDArrayA]:
     """Cosine distances and indices of each query row's nearest reference rows, as sklearn's `"cosine"` metric gives.
 
-    For unit vectors the cosine distance is half the squared euclidean one, which unlike `"cosine"` takes sklearn's
-    parallel search. A (near-)zero row, which :func:`~sklearn.preprocessing.normalize` leaves as it is, has cosine
-    distance 1 to everything: as a reference row it becomes a unit vector orthogonal to every query row, and the
-    distances of a query row are set to 1.
+    For unit vectors the cosine distance is half the squared euclidean one, which sklearn searches in parallel,
+    unlike `"cosine"`. A (near-)zero row, which :func:`~sklearn.preprocessing.normalize` leaves as it is, has cosine
+    distance 1 to everything: a zero reference row becomes a unit vector orthogonal to every query row, and a zero
+    query row gets all its distances set to 1.
     """
     ref, query = normalize(ref), normalize(query)
     ref_zero = np.einsum("ij,ij->i", ref, ref) < 0.5
