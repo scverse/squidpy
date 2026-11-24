@@ -188,23 +188,11 @@ def _check_n_pv(n_pv: int, *, n_genes: int, n_ref: int, n_query: int) -> None:
 
 
 def _scale(x: NDArrayA | CSBase) -> tuple[NDArrayA | CSBase, NDArrayA, NDArrayA]:
-    """Divide each gene by its standard deviation, keeping sparse input sparse.
-
-    Return the scaled data, the scaled means ``offset`` such that ``x - offset`` is the z-scored data,
-    and a mask of the non-constant genes. Constant genes are left unscaled.
-    """
     scaler = StandardScaler(with_mean=False).fit(x)
     return scaler.transform(x), scaler.mean_ / scaler.scale_, ~stats.is_constant(x, axis=0)
 
 
 def _cosine_neighbors(ref: NDArrayA, query: NDArrayA, *, n_neighbors: int) -> tuple[NDArrayA, NDArrayA]:
-    """Cosine distances and indices of each query row's nearest reference rows, as sklearn's `"cosine"` metric gives.
-
-    For unit vectors the cosine distance is half the squared euclidean one, which sklearn searches in parallel,
-    unlike `"cosine"`. A (near-)zero row, which :func:`~sklearn.preprocessing.normalize` leaves as it is, has cosine
-    distance 1 to everything: a zero reference row becomes a unit vector orthogonal to every query row, and a zero
-    query row gets all its distances set to 1.
-    """
     ref, query = normalize(ref), normalize(query)
     ref_zero = np.einsum("ij,ij->i", ref, ref) < 0.5
     query_zero = np.einsum("ij,ij->i", query, query) < 0.5
